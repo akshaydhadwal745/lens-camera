@@ -72,6 +72,12 @@ export type MediaRecord = {
   storageClass?: string;
   /** Thumbnail + preview uploaded and verified (visible before the original finishes). */
   previewReady?: boolean;
+  /** Non-destructive edit recipe (look, adjustments, crop…); the original is never modified. */
+  edit?: Record<string, unknown>;
+  /** Version of the thumbnail/preview files (bumped when an edit re-renders them). */
+  derivVersion?: number;
+  pendingDerivVersion?: number;
+  pendingEdit?: Record<string, unknown> | null;
   width?: number;
   height?: number;
   duration?: number;
@@ -87,16 +93,20 @@ export const DERIVATIVES = ['thumb', 'preview'] as const;
 export type Derivative = (typeof DERIVATIVES)[number];
 const MAX_DERIVATIVE_BYTES = 5 * 1024 * 1024;
 
-/** d/{owner}/{mediaId}/{name}.jpg, derived from the original's key m/{owner}/{mediaId}.{ext}. */
-export function derivativeKey(originalKey: string, name: Derivative): string {
+/**
+ * d/{owner}/{mediaId}/{name}.jpg (version 0) or {name}-v{n}.jpg after edits,
+ * derived from the original's key m/{owner}/{mediaId}.{ext}. New versions get
+ * new keys so CDN caches never serve a stale look.
+ */
+export function derivativeKey(originalKey: string, name: Derivative, version = 0): string {
   const [, owner, file] = originalKey.split('/');
   const mediaId = file.slice(0, file.lastIndexOf('.'));
-  return `d/${owner}/${mediaId}/${name}.jpg`;
+  return `d/${owner}/${mediaId}/${name}${version ? `-v${version}` : ''}.jpg`;
 }
 
 type DerivativeSpec = { md5: string; size: number };
 
-function parseDerivatives(value: unknown): Partial<Record<Derivative, DerivativeSpec>> | undefined {
+export function parseDerivatives(value: unknown): Partial<Record<Derivative, DerivativeSpec>> | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const out: Partial<Record<Derivative, DerivativeSpec>> = {};
   for (const name of DERIVATIVES) {
@@ -111,8 +121,13 @@ function parseDerivatives(value: unknown): Partial<Record<Derivative, Derivative
   return Object.keys(out).length ? out : undefined;
 }
 
-async function derivativeUrls(item: MediaRecord, specs: Partial<Record<Derivative, DerivativeSpec>> | undefined) {
-  if (!specs || item.previewReady) return undefined;
+export async function derivativeUrls(
+  item: MediaRecord,
+  specs: Partial<Record<Derivative, DerivativeSpec>> | undefined,
+  version = 0,
+  force = false,
+) {
+  if (!specs || (item.previewReady && !force)) return undefined;
   const urls: Partial<Record<Derivative, string>> = {};
   for (const name of DERIVATIVES) {
     const spec = specs[name];
@@ -121,7 +136,7 @@ async function derivativeUrls(item: MediaRecord, specs: Partial<Record<Derivativ
       s3,
       new PutObjectCommand({
         Bucket: env.bucket,
-        Key: derivativeKey(item.key, name),
+        Key: derivativeKey(item.key, name, version),
         ContentType: 'image/jpeg',
         ContentMD5: spec.md5,
         CacheControl: 'private, max-age=31536000, immutable',
@@ -141,7 +156,7 @@ export async function getMedia(ownerId: string, id: string): Promise<MediaRecord
   return result.Item as MediaRecord | undefined;
 }
 
-async function requireMedia(identity: Identity, id: string): Promise<MediaRecord> {
+export async function requireMedia(identity: Identity, id: string): Promise<MediaRecord> {
   if (!MEDIA_ID.test(id)) throw new HttpError(400, 'Invalid media id');
   const item = await getMedia(identity.id, id);
   if (!item) throw new HttpError(404, 'Not found');
@@ -150,15 +165,15 @@ async function requireMedia(identity: Identity, id: string): Promise<MediaRecord
 
 type ClientFields = Pick<
   MediaRecord,
-  'id' | 'kind' | 'key' | 'size' | 'width' | 'height' | 'duration' | 'createdAt' | 'status' | 'previewReady'
+  'id' | 'kind' | 'key' | 'size' | 'width' | 'height' | 'duration' | 'createdAt' | 'status' | 'previewReady' | 'edit' | 'derivVersion'
 >;
 
 export async function toClient(item: ClientFields) {
   const originalReady = item.status === 'ready';
   const [url, thumbUrl, previewUrl] = await Promise.all([
     originalReady ? signMediaUrl(item.key) : undefined,
-    item.previewReady ? signMediaUrl(derivativeKey(item.key, 'thumb')) : undefined,
-    item.previewReady ? signMediaUrl(derivativeKey(item.key, 'preview')) : undefined,
+    item.previewReady ? signMediaUrl(derivativeKey(item.key, 'thumb', item.derivVersion)) : undefined,
+    item.previewReady ? signMediaUrl(derivativeKey(item.key, 'preview', item.derivVersion)) : undefined,
   ]);
   return {
     id: item.id,
@@ -172,6 +187,7 @@ export async function toClient(item: ClientFields) {
     url,
     thumbUrl,
     previewUrl,
+    edit: item.edit,
   };
 }
 
@@ -460,9 +476,12 @@ export async function deleteMedia(identity: Identity, id: string): Promise<Res> 
       .catch(() => {});
   }
   await s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: item.key }));
+  const versions = [...new Set([0, item.derivVersion ?? 0, item.pendingDerivVersion ?? 0])];
   await Promise.all(
-    DERIVATIVES.map((name) =>
-      s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: derivativeKey(item.key, name) })).catch(() => {}),
+    DERIVATIVES.flatMap((name) =>
+      versions.map((v) =>
+        s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: derivativeKey(item.key, name, v) })).catch(() => {}),
+      ),
     ),
   );
 

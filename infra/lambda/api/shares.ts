@@ -90,9 +90,19 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
       ExclusiveStartKey: decodeCursor(req.query.cursor),
     }),
   );
+  // Shares follow the owner's current look (edits re-render previews).
+  const shareItems = result.Items ?? [];
+  const owners = await batchGet(shareItems.map((s) => mediaKey(s.ownerId, s.mediaId)));
+  const current = new Map(owners.map((m) => [`${(m.pk as string).slice(2)}#${m.id}`, m as MediaRecord]));
   const items = await Promise.all(
-    (result.Items ?? []).map(async (s) => ({
-      ...(await toClient({ ...(s as any), id: s.mediaId, status: 'ready' })),
+    shareItems.map(async (s) => ({
+      ...(await toClient({
+        ...(s as any),
+        id: s.mediaId,
+        status: 'ready',
+        derivVersion: current.get(`${s.ownerId}#${s.mediaId}`)?.derivVersion,
+        edit: current.get(`${s.ownerId}#${s.mediaId}`)?.edit,
+      })),
       ownerId: s.ownerId,
       ownerName: s.ownerName,
       sharedAt: s.sharedAt,

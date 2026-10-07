@@ -65,9 +65,23 @@ curl -sS -X PUT "$OURL" -H 'content-type: image/heic' -H "content-md5: $OM" --da
 R=$(call POST "/media/$ID4/complete" "$TA")
 [[ $(echo "$R" | j .media.originalReady) == true && -n $(echo "$R" | j .media.url) ]] && ok "original completed; full-quality URL available"
 cmp -s <(curl -sS "$(echo "$R" | j .media.url)") "$TMP/orig.heic" && ok "original bytes identical"
+
+# --- non-destructive edit: new look, original untouched ---
+head -c 41000 /dev/urandom > "$TMP/thumb2.jpg"; head -c 251000 /dev/urandom > "$TMP/preview2.jpg"
+T2=$(md5b64 "$TMP/thumb2.jpg"); P2=$(md5b64 "$TMP/preview2.jpg")
+E=$(call POST "/media/$ID4/edit" "$TA" -d "{\"edit\":{\"v\":1,\"look\":\"film\",\"intensity\":0.8,\"adjust\":{\"exposure\":0.3}},\"derivatives\":{\"thumb\":{\"md5\":\"$T2\",\"size\":41000},\"preview\":{\"md5\":\"$P2\",\"size\":251000}}}")
+EV=$(echo "$E" | j .version)
+curl -sS -X PUT "$(echo "$E" | j .derivativeUrls.thumb)" -H 'content-type: image/jpeg' -H "content-md5: $T2" --data-binary @"$TMP/thumb2.jpg" -o /dev/null
+curl -sS -X PUT "$(echo "$E" | j .derivativeUrls.preview)" -H 'content-type: image/jpeg' -H "content-md5: $P2" --data-binary @"$TMP/preview2.jpg" -o /dev/null
+C=$(call POST "/media/$ID4/edit/commit" "$TA" -d "{\"version\":$EV}")
+[[ $(echo "$C" | j .media.edit.look) == film ]] && ok "edit saved (version $EV)" || fail "edit not saved: $C"
+[[ $(echo "$C" | j .media.previewUrl) == *preview-v$EV.jpg* ]] && ok "preview switched to the edited version"
+cmp -s <(curl -sS "$(echo "$C" | j .media.previewUrl)") "$TMP/preview2.jpg" && ok "edited preview served via CDN"
+cmp -s <(curl -sS "$(echo "$C" | j .media.url)") "$TMP/orig.heic" && ok "original still byte-identical after edit"
+[[ $(call POST "/media/$ID4/edit/commit" "$TA" -d "{\"version\":$EV}" -o /dev/null -w '%{http_code}') == 409 ]] && ok "stale commit rejected"
 call DELETE "/media/$ID4" "$TA" >/dev/null
 BUCKET=$(node -p "require('./outputs.json').Lens.MediaBucket")
-aws s3api head-object --profile lens --bucket "$BUCKET" --key "d/$(echo "$A" | j .id)/$ID4/preview.jpg" >/dev/null 2>&1 && fail "preview not deleted" || ok "delete removed thumbnail + preview"
+aws s3api head-object --profile lens --bucket "$BUCKET" --key "d/$(echo "$A" | j .id)/$ID4/preview-v$EV.jpg" >/dev/null 2>&1 && fail "preview not deleted" || ok "delete removed thumbnail + preview"
 
 # --- storage class + large-file planning ---
 BUCKET=$(node -p "require('./outputs.json').Lens.MediaBucket")

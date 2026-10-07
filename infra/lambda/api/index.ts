@@ -3,6 +3,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { authenticate, claimPairing, contacts, createPairing, me, register, searchUsers } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
 import { completeUpload, deleteMedia, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
+import { commitEdit, startEdit } from './edits';
 import { removeShared, share, sharedWithMe } from './shares';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
@@ -34,6 +35,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (seg[3] === 'parts' && method === 'POST') return await partUrls(identity, id, req);
       if (seg[3] === 'complete' && method === 'POST') return await completeUpload(identity, id);
       if (seg[3] === 'previews' && method === 'POST') return await previewsUploaded(identity, id);
+      if (seg[3] === 'edit' && method === 'POST') return await startEdit(identity, id, req);
+    }
+    if (seg[1] === 'media' && seg.length === 5 && seg[3] === 'edit' && seg[4] === 'commit' && method === 'POST') {
+      return await commitEdit(identity, seg[2], req);
     }
 
     if (route === 'POST /shares') return await share(identity, req);
