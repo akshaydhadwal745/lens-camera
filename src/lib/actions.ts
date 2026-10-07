@@ -9,8 +9,9 @@ export const saveLabel = 'Save to Photos';
 
 async function localFileUri(item: GalleryItem): Promise<string> {
   if (item.localUri) return item.localUri;
-  if (!item.remoteUrl) throw new Error('This item is not available.');
-  const ext = item.kind === 'video' ? 'mov' : 'jpg';
+  if (!item.remoteUrl) throw new Error('The full-quality original is still uploading. Try again in a moment.');
+  // Keep the original's real extension (heic, dng, mov…) so Photos imports it correctly.
+  const ext = item.remoteUrl.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? (item.kind === 'video' ? 'mov' : 'jpg');
   const dest = new File(Paths.cache, `dl-${item.id}.${ext}`);
   if (dest.exists) return dest.uri;
   const file = await File.downloadFileAsync(item.remoteUrl, dest);

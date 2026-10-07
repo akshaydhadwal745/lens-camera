@@ -9,6 +9,9 @@ export function fileFor(): never {
 export function uriFor(_entry: Pick<LocalEntry, 'fileName'>): string {
   return '';
 }
+export function captureFile(_name: string): never {
+  throw new Error('No local files on web');
+}
 export function loadEntries(): LocalEntry[] {
   return [];
 }

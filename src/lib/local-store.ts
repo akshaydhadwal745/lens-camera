@@ -71,6 +71,12 @@ export function uriFor(entry: Pick<LocalEntry, 'fileName'>): string {
   return fileFor(entry).uri;
 }
 
+/** A file next to the originals (thumbnails, previews). */
+export function captureFile(name: string): File {
+  capturesDir.create({ idempotent: true });
+  return new File(capturesDir, name);
+}
+
 export function loadEntries(): LocalEntry[] {
   capturesDir.create({ idempotent: true });
   const raw = readJson<Partial<LocalEntry>[]>(indexFile, []);
@@ -81,8 +87,11 @@ export function loadEntries(): LocalEntry[] {
       const size = e.size && e.size > 0 ? e.size : fileSize(fileFor(e));
       // Entries that failed only because their size was misread get retried.
       const sizeError = !e.uploadedAt && e.error && /invalid size/i.test(e.error);
+      const exists = (name?: string) => (name && new File(capturesDir, name).exists ? name : undefined);
       return {
         ...e,
+        thumbFile: exists(e.thumbFile),
+        previewFile: exists(e.previewFile),
         contentType: e.contentType ?? CONTENT_TYPES[extOf(e.fileName)] ?? 'image/jpeg',
         size,
         ...(sizeError ? { error: undefined, attempts: 0, nextAttemptAt: undefined } : {}),
@@ -117,8 +126,11 @@ export function importCapture(input: NewCapture): LocalEntry {
 }
 
 export function deleteFileFor(entry: LocalEntry) {
-  const file = fileFor(entry);
-  if (file.exists) file.delete();
+  for (const name of [entry.fileName, entry.thumbFile, entry.previewFile]) {
+    if (!name) continue;
+    const file = new File(capturesDir, name);
+    if (file.exists) file.delete();
+  }
 }
 
 export function loadRemoteCache(): RemoteMedia[] {

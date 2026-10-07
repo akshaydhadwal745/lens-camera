@@ -1,6 +1,6 @@
 export type MediaKind = 'photo' | 'video';
 
-/** Media stored in the cloud, as returned by the API (url is a signed CloudFront URL). */
+/** Media stored in the cloud, as returned by the API (URLs are signed CloudFront URLs). */
 export interface RemoteMedia {
   id: string;
   kind: MediaKind;
@@ -9,7 +9,14 @@ export interface RemoteMedia {
   height?: number;
   duration?: number;
   createdAt: number;
-  url: string;
+  /** True once the full-quality original is uploaded and verified. */
+  originalReady: boolean;
+  /** Original (only when originalReady). */
+  url?: string;
+  /** ~400px JPEG for grids. */
+  thumbUrl?: string;
+  /** ~2048px JPEG for full-screen viewing (works in every browser, even for HEIC/RAW). */
+  previewUrl?: string;
 }
 
 export interface SharedMedia extends RemoteMedia {
@@ -29,6 +36,11 @@ export interface LocalEntry {
   width?: number;
   height?: number;
   duration?: number;
+  /** Local derivative files (same directory as the original). */
+  thumbFile?: string;
+  previewFile?: string;
+  /** Thumbnail + preview are in the cloud (item visible on other devices). */
+  previewsUploaded?: boolean;
   /** Set once the cloud copy is confirmed; local copy becomes eligible for cleanup. */
   uploadedAt?: number;
   attempts?: number;
@@ -37,7 +49,12 @@ export interface LocalEntry {
   error?: string;
 }
 
-export type SyncState = 'queued' | 'uploading' | 'synced' | 'failed';
+/**
+ * queued: nothing in the cloud yet · uploading: transfer in progress ·
+ * partial: thumbnail/preview in the cloud, original still on its way ·
+ * synced: original verified in the cloud · failed: needs attention.
+ */
+export type SyncState = 'queued' | 'uploading' | 'partial' | 'synced' | 'failed';
 
 /** What the gallery renders: the union of local and cloud copies. */
 export interface GalleryItem {
@@ -48,8 +65,12 @@ export interface GalleryItem {
   height?: number;
   duration?: number;
   size?: number;
+  /** Local original (this device). */
   localUri?: string;
+  /** Cloud original (only once verified). */
   remoteUrl?: string;
+  thumbUri?: string;
+  previewUri?: string;
   sync: SyncState;
   error?: string;
   /** Present for items shared with me. */
@@ -65,8 +86,15 @@ export interface NewCapture {
   duration?: number;
 }
 
+/** Small image for grids and thumbnails. */
 export function displayUri(item: GalleryItem): string | undefined {
-  return item.localUri ?? item.remoteUrl;
+  return item.thumbUri ?? item.previewUri ?? (item.kind === 'photo' ? (item.localUri ?? item.remoteUrl) : undefined);
+}
+
+/** Screen-sized image: the local original if this device has it, else the preview. */
+export function viewUri(item: GalleryItem): string | undefined {
+  if (item.kind === 'photo' && item.localUri) return item.localUri;
+  return item.previewUri ?? item.thumbUri ?? item.remoteUrl;
 }
 
 /** Time-sortable id: 8 base36 chars of the timestamp + random suffix. */

@@ -20,12 +20,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
 import { formatDate } from '@/lib/format';
 import { deleteItems, removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
-import { displayUri, GalleryItem } from '@/lib/types';
+import { GalleryItem, viewUri } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const isWeb = Platform.OS === 'web';
 
-function PhotoPage({ item, width, height, onTap }: { item: GalleryItem; width: number; height: number; onTap: () => void }) {
+function PhotoPage({
+  item,
+  width,
+  height,
+  onTap,
+  loadOriginal,
+}: {
+  item: GalleryItem;
+  width: number;
+  height: number;
+  onTap: () => void;
+  /** Fetch the full-quality cloud original (Wi-Fi, or the user tapped HD). */
+  loadOriginal: boolean;
+}) {
+  // Show the preview instantly; swap in the original when allowed. A local
+  // original (this device) is always used as-is.
+  const preview = viewUri(item);
+  const original = !item.localUri && loadOriginal ? item.remoteUrl : undefined;
   // iOS ScrollView supports native pinch-to-zoom.
   return (
     <ScrollView
@@ -39,14 +56,23 @@ function PhotoPage({ item, width, height, onTap }: { item: GalleryItem; width: n
       bouncesZoom
     >
       <Pressable onPress={onTap} style={{ width, height }}>
-        <Image source={{ uri: displayUri(item) }} style={{ width, height }} contentFit="contain" cachePolicy="memory-disk" />
+        <Image
+          source={{ uri: original ?? preview }}
+          placeholder={original && preview ? { uri: preview } : undefined}
+          placeholderContentFit="contain"
+          style={{ width, height }}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          transition={200}
+        />
       </Pressable>
     </ScrollView>
   );
 }
 
 function VideoPage({ item, width, height, active }: { item: GalleryItem; width: number; height: number; active: boolean }) {
-  const player = useVideoPlayer(displayUri(item) ?? null, (p) => {
+  const source = item.localUri ?? item.remoteUrl ?? null;
+  const player = useVideoPlayer(source, (p) => {
     p.loop = false;
   });
 
@@ -54,6 +80,16 @@ function VideoPage({ item, width, height, active }: { item: GalleryItem; width: 
     if (active) player.play();
     else player.pause();
   }, [active, player]);
+
+  if (!source) {
+    // Only the poster frame is in the cloud so far.
+    return (
+      <View style={{ width, height, justifyContent: 'center' }}>
+        <Image source={{ uri: viewUri(item) }} style={{ width, height: height * 0.8 }} contentFit="contain" />
+        <Text style={styles.pendingVideo}>The video is still uploading from the other device</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ width, height, justifyContent: 'center' }}>
@@ -72,6 +108,10 @@ function SyncLine({ item }: { item: GalleryItem }) {
         : 'In the cloud'
       : item.sync === 'uploading'
         ? `Uploading ${Math.round((progress ?? 0) * 100)}%`
+        : item.sync === 'partial'
+          ? item.localUri
+            ? 'Preview in the cloud · original waiting to upload'
+            : 'Preview · full-quality original still uploading'
         : item.sync === 'failed'
           ? `Upload failed: ${item.error ?? 'unknown error'}`
           : 'Waiting to upload';
@@ -109,6 +149,11 @@ export default function ViewerScreen() {
   const initialIndex = useMemo(() => Math.max(0, items.findIndex((i) => i.id === id)), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [index, setIndex] = useState(initialIndex);
   const [chrome, setChrome] = useState(true);
+  const cellular = useStore((s) => s.cellular);
+  // On mobile data, originals load only when the user asks (HD); on Wi-Fi automatically.
+  // The web always shows previews (browsers can't decode HEIC/RAW); "Open original" downloads.
+  const [hd, setHd] = useState<Set<string>>(new Set());
+  const loadOriginalFor = (item: GalleryItem) => !isWeb && (!cellular || hd.has(item.id));
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList<GalleryItem>>(null);
 
@@ -191,7 +236,13 @@ export default function ViewerScreen() {
         maxToRenderPerBatch={2}
         renderItem={({ item, index: i }) =>
           item.kind === 'photo' ? (
-            <PhotoPage item={item} width={width} height={height} onTap={() => setChrome((c) => !c)} />
+            <PhotoPage
+              item={item}
+              width={width}
+              height={height}
+              onTap={() => setChrome((c) => !c)}
+              loadOriginal={loadOriginalFor(item)}
+            />
           ) : (
             <VideoPage item={item} width={width} height={height} active={i === index} />
           )
@@ -208,9 +259,19 @@ export default function ViewerScreen() {
               <Text style={styles.date}>{formatDate(current.createdAt)}</Text>
               <SyncLine item={current} />
             </View>
-            <Text style={[styles.sub, styles.barButton, { textAlign: 'center' }]}>
-              {index + 1}/{items.length}
-            </Text>
+            {current.kind === 'photo' && !current.localUri && current.remoteUrl && !loadOriginalFor(current) && !isWeb ? (
+              <Pressable
+                onPress={() => setHd((prev) => new Set(prev).add(current.id))}
+                style={styles.barButton}
+                accessibilityLabel="Load full quality"
+              >
+                <Text style={styles.hd}>HD</Text>
+              </Pressable>
+            ) : (
+              <Text style={[styles.sub, styles.barButton, { textAlign: 'center' }]}>
+                {index + 1}/{items.length}
+              </Text>
+            )}
           </View>
 
           <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
@@ -266,6 +327,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   barButton: { width: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  hd: {
+    color: '#000',
+    backgroundColor: '#FACC15',
+    fontWeight: '800',
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  pendingVideo: { color: '#ccc', textAlign: 'center', marginTop: 12, fontSize: 13 },
   date: { color: '#fff', fontSize: 15, fontWeight: '600' },
   sub: { color: '#aaa', fontSize: 12, marginTop: 2 },
   bottomBar: {

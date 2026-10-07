@@ -504,7 +504,7 @@ export function ProCamera() {
         <View style={styles.captureRow}>
           <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
             {latest ? (
-              latest.kind === 'photo' ? (
+              displayUri(latest) ? (
                 <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
               ) : (
                 <View style={[styles.thumbImage, styles.center, { backgroundColor: '#222' }]}>

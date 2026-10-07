@@ -47,10 +47,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export type IdentityResponse = { id: string; name: string; token: string };
-export type UploadPlan =
-  | { mode: 'done'; media: RemoteMedia }
-  | { mode: 'single'; url: string; contentType: string }
-  | { mode: 'multipart'; uploadId: string; partSize: number };
+type DerivativeUrls = { thumb?: string; preview?: string };
+type PlanExtras = { derivativeUrls?: DerivativeUrls; previewReady?: boolean };
+export type UploadPlan = PlanExtras &
+  (
+    | { mode: 'done'; media: RemoteMedia }
+    | { mode: 'single'; url: string; contentType: string }
+    | { mode: 'multipart'; uploadId: string; partSize: number }
+  );
 export type Person = { id: string; name: string };
 export type Contact = Person & { lastSharedAt: number };
 type Page<T> = { items: T[]; cursor: string | null };
@@ -65,6 +69,8 @@ export const api = {
   startUpload: (body: {
     /** Base64 MD5 of the whole file (single-PUT uploads); S3 verifies it. */
     md5?: string;
+    /** Thumbnail + preview to upload first (base64 MD5 + bytes). */
+    derivatives?: { thumb: { md5: string; size: number }; preview: { md5: string; size: number } };
     id: string;
     kind: string;
     contentType: string;
@@ -78,6 +84,7 @@ export const api = {
   partUrls: (id: string, parts: { n: number; md5: string }[]) =>
     request<{ urls: Record<string, string> }>('POST', `/media/${id}/parts`, { parts }),
   complete: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/complete`),
+  previewsUploaded: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/previews`),
   deleteMedia: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}`),
 
   searchUsers: (query: string) => request<{ users: Person[] }>('GET', `/users?q=${encodeURIComponent(query)}`),

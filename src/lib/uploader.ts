@@ -9,7 +9,7 @@
 import { File, FileMode, Paths, UploadType } from 'expo-file-system';
 
 import { api } from './api';
-import { fileFor, fileSize } from './local-store';
+import { captureFile, fileFor, fileSize } from './local-store';
 import { LocalEntry, RemoteMedia } from './types';
 
 export class UploadCancelled extends Error {}
@@ -19,7 +19,22 @@ type Options = {
   isCancelled: () => boolean;
   /** Parts uploaded in parallel (multipart only). */
   concurrency?: number;
+  /** False when only thumbnail + preview may go up now (e.g. big file on mobile data). */
+  includeOriginal?: boolean;
+  /** Called as soon as the item is visible in the cloud (previews verified). */
+  onPreviews?: (media: RemoteMedia) => void;
 };
+
+export type UploadResult = { media: RemoteMedia; originalDone: boolean };
+
+type DerivativeName = 'thumb' | 'preview';
+
+function derivativeFiles(entry: LocalEntry): Partial<Record<DerivativeName, File>> {
+  const out: Partial<Record<DerivativeName, File>> = {};
+  if (entry.thumbFile) out.thumb = captureFile(entry.thumbFile);
+  if (entry.previewFile) out.preview = captureFile(entry.previewFile);
+  return out;
+}
 
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
@@ -78,8 +93,8 @@ function writeChunk(source: File, entry: LocalEntry, n: number, partSize: number
 
 export async function uploadEntry(
   original: LocalEntry,
-  { onProgress, isCancelled, concurrency = 3 }: Options,
-): Promise<RemoteMedia> {
+  { onProgress, isCancelled, concurrency = 3, includeOriginal = true, onPreviews }: Options,
+): Promise<UploadResult> {
   const source = fileFor(original);
   if (!source.exists) throw new Error('Local file is missing');
   // Always measure the file itself; the stored size may be stale or missing.
@@ -89,8 +104,19 @@ export async function uploadEntry(
   // Small files go up in one request; checksum them whole (native, fast).
   const singleMd5 = entry.size <= 16 * 1024 * 1024 ? md5Of(source) : undefined;
 
+  // Thumbnail + preview (small) go first, so the item shows up everywhere quickly.
+  const derivatives = original.previewsUploaded ? {} : derivativeFiles(original);
+  const derivativeSpecs =
+    derivatives.thumb?.exists && derivatives.preview?.exists
+      ? {
+          thumb: { md5: md5Of(derivatives.thumb), size: fileSize(derivatives.thumb) },
+          preview: { md5: md5Of(derivatives.preview), size: fileSize(derivatives.preview) },
+        }
+      : undefined;
+
   const plan = await api.startUpload({
     md5: singleMd5,
+    derivatives: derivativeSpecs,
     id: entry.id,
     kind: entry.kind,
     contentType: entry.contentType,
@@ -101,7 +127,25 @@ export async function uploadEntry(
     createdAt: entry.createdAt,
   });
 
-  if (plan.mode === 'done') return plan.media;
+  let latest: RemoteMedia | undefined = plan.mode === 'done' ? plan.media : undefined;
+  if (plan.derivativeUrls && derivativeSpecs) {
+    for (const name of ['thumb', 'preview'] as const) {
+      const url = plan.derivativeUrls[name];
+      const file = derivatives[name];
+      if (!url || !file) continue;
+      await put(file, url, { 'Content-Type': 'image/jpeg', 'Content-MD5': derivativeSpecs[name].md5 }, () => {});
+    }
+    latest = (await api.previewsUploaded(entry.id)).media;
+    onPreviews?.(latest);
+  } else if (plan.previewReady && !original.previewsUploaded) {
+    onPreviews?.(latest ?? (await api.previewsUploaded(entry.id)).media);
+  }
+
+  if (plan.mode === 'done') return { media: latest ?? plan.media, originalDone: true };
+  if (!includeOriginal) {
+    if (!latest) throw new Error('Nothing could be uploaded on this network yet');
+    return { media: latest, originalDone: false };
+  }
 
   if (plan.mode === 'single') {
     const headers: Record<string, string> = { 'Content-Type': plan.contentType };
@@ -153,5 +197,5 @@ export async function uploadEntry(
   if (isCancelled()) throw new UploadCancelled();
   const { media } = await api.complete(entry.id);
   onProgress(1);
-  return media;
+  return { media, originalDone: true };
 }

@@ -19,6 +19,14 @@ type Props = {
 
 function SyncBadge({ item }: { item: GalleryItem }) {
   const progress = useStore((s) => (s.uploadingId === item.id ? s.progress : null));
+  if (item.sync === 'partial') {
+    // Visible everywhere already; the full-quality original is still on its way.
+    return (
+      <View style={[styles.badge, styles.badgeQuiet]}>
+        <Ionicons name="cloud-upload-outline" size={12} color="#93C5FD" />
+      </View>
+    );
+  }
   if (item.sync === 'synced') {
     // Synced items that are cloud-only get a subtle cloud mark.
     return item.localUri ? null : (
@@ -59,11 +67,16 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
       accessibilityState={{ selected }}
       style={{ width: size, height: size }}
     >
-      {item.kind === 'photo' && uri ? (
+      {uri ? (
         <Image source={{ uri }} style={styles.image} contentFit="cover" transition={150} recyclingKey={item.id} cachePolicy="memory-disk" />
       ) : (
         <View style={[styles.image, styles.videoTile]}>
           <Ionicons name={item.kind === 'video' ? 'play-circle' : 'image-outline'} size={36} color="rgba(255,255,255,0.85)" />
+        </View>
+      )}
+      {uri && item.kind === 'video' && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.playOverlay]}>
+          <Ionicons name="play" size={26} color="rgba(255,255,255,0.9)" />
         </View>
       )}
 
@@ -88,6 +101,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
 const styles = StyleSheet.create({
   image: { width: '100%', height: '100%', backgroundColor: '#111' },
   videoTile: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#1c1c1e' },
+  playOverlay: { alignItems: 'center', justifyContent: 'center' },
   duration: {
     position: 'absolute',
     right: 6,

@@ -7,6 +7,7 @@ import { AppState, Platform } from 'react-native';
 import { api, ApiError, setAuth } from './api';
 import { ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity';
 import {
+  captureFile,
   clearChunkFiles,
   deleteFileFor,
   importCapture,
@@ -19,6 +20,7 @@ import {
   uriFor,
 } from './local-store';
 import { GalleryItem, LocalEntry, NewCapture, RemoteMedia, SharedMedia } from './types';
+import { makeDerivatives } from './derivatives';
 import { UploadCancelled, uploadEntry } from './uploader';
 
 const isWeb = Platform.OS === 'web';
@@ -132,12 +134,23 @@ export function selectGallery(s: State): GalleryItem[] {
       duration: r.duration,
       size: r.size,
       remoteUrl: r.url,
-      sync: 'synced',
+      thumbUri: r.thumbUrl,
+      previewUri: r.previewUrl,
+      sync: r.originalReady ? 'synced' : 'partial',
     });
   }
   for (const e of s.entries) {
     const cloud = map.get(e.id);
-    const sync = e.uploadedAt || cloud ? 'synced' : s.uploadingId === e.id ? 'uploading' : e.error ? 'failed' : 'queued';
+    const originalInCloud = !!e.uploadedAt || cloud?.sync === 'synced';
+    const sync: GalleryItem['sync'] = originalInCloud
+      ? 'synced'
+      : s.uploadingId === e.id
+        ? 'uploading'
+        : e.error
+          ? 'failed'
+          : e.previewsUploaded || cloud
+            ? 'partial'
+            : 'queued';
     map.set(e.id, {
       ...cloud,
       id: e.id,
@@ -148,6 +161,9 @@ export function selectGallery(s: State): GalleryItem[] {
       duration: e.duration,
       size: e.size,
       localUri: uriFor(e),
+      // Local derivative files are faster than the network; fall back to cloud ones.
+      thumbUri: e.thumbFile ? captureFile(e.thumbFile).uri : cloud?.thumbUri,
+      previewUri: e.previewFile ? captureFile(e.previewFile).uri : cloud?.previewUri,
       sync,
       error: e.error,
     });
@@ -170,6 +186,8 @@ export function selectShared(s: State): GalleryItem[] {
     duration: m.duration,
     size: m.size,
     remoteUrl: m.url,
+    thumbUri: m.thumbUrl,
+    previewUri: m.previewUrl,
     sync: 'synced',
     ownerId: m.ownerId,
     ownerName: m.ownerName,
@@ -179,6 +197,13 @@ export function selectShared(s: State): GalleryItem[] {
 }
 
 export const selectPendingCount = (s: State) => s.entries.filter((e) => !e.uploadedAt && !e.error).length;
+
+/** Previews always go up (tiny); originals follow the mobile-data setting. */
+function needsWork(e: LocalEntry, s: State, now: number): boolean {
+  if (e.error || (e.nextAttemptAt ?? 0) > now) return false;
+  if (!e.previewsUploaded && e.thumbFile && e.previewFile) return true; // includes backfill for old items
+  return !e.uploadedAt && allowedOnThisNetwork(e, s);
+}
 
 function allowedOnThisNetwork(e: LocalEntry, s: State): boolean {
   if (!s.cellular) return true;
@@ -236,6 +261,7 @@ export async function boot() {
   }
 
   runCleanup();
+  if (!isWeb) void backfillDerivatives();
   if (state.identity || !isWeb) {
     void ensureCloudIdentity().then((ok) => {
       if (!ok) return;
@@ -400,8 +426,30 @@ function updateEntry(id: string, patch: Partial<LocalEntry>) {
 export function capture(input: NewCapture): LocalEntry {
   const entry = importCapture(input);
   setEntries([entry, ...state.entries]);
-  kickSync();
+  void ensureDerivatives(entry).finally(kickSync);
   return entry;
+}
+
+/** Older captures (before previews existed): make their previews one at a time. */
+async function backfillDerivatives() {
+  for (const entry of state.entries) {
+    if (entry.thumbFile && entry.previewFile) continue;
+    await ensureDerivatives(entry);
+  }
+  kickSync();
+}
+
+/** Makes thumbnail + preview if missing. Failure is non-fatal: the original still uploads. */
+async function ensureDerivatives(entry: LocalEntry): Promise<LocalEntry> {
+  if (entry.thumbFile && entry.previewFile) return entry;
+  try {
+    const files = await makeDerivatives(entry);
+    updateEntry(entry.id, files);
+    return { ...entry, ...files };
+  } catch (error) {
+    console.warn('Could not make previews', entry.id, error);
+    return entry;
+  }
 }
 
 let syncing = false;
@@ -418,9 +466,7 @@ async function syncLoop() {
     while (state.online) {
       const now = Date.now();
       // Newest first, so the shot you just took reaches the cloud first.
-      const next = state.entries.find(
-        (e) => !e.uploadedAt && !e.error && (e.nextAttemptAt ?? 0) <= now && allowedOnThisNetwork(e, state),
-      );
+      const next = state.entries.find((e) => needsWork(e, state, now));
       if (!next) break;
       if (!(await ensureCloudIdentity())) {
         updateEntry(next.id, { nextAttemptAt: Date.now() + BACKOFF_MS[2] });
@@ -430,7 +476,8 @@ async function syncLoop() {
       set({ uploadingId: next.id, progress: 0 });
       let lastEmit = 0;
       try {
-        const media = await uploadEntry(next, {
+        const entry = await ensureDerivatives(next);
+        const result = await uploadEntry(entry, {
           onProgress: (p) => {
             const t = Date.now();
             if (t - lastEmit > 150 || p >= 1) {
@@ -440,9 +487,20 @@ async function syncLoop() {
           },
           isCancelled: () => cancelled.has(next.id),
           concurrency: state.cellular ? 2 : 3,
+          includeOriginal: !entry.uploadedAt && allowedOnThisNetwork(entry, state),
+          onPreviews: (media) => {
+            updateEntry(next.id, { previewsUploaded: true });
+            upsertRemote(media);
+          },
         });
-        updateEntry(next.id, { uploadedAt: Date.now(), attempts: 0, nextAttemptAt: undefined, error: undefined });
-        upsertRemote(media);
+        updateEntry(next.id, {
+          previewsUploaded: !!(entry.thumbFile && entry.previewFile) || entry.previewsUploaded,
+          ...(result.originalDone ? { uploadedAt: entry.uploadedAt ?? Date.now() } : {}),
+          attempts: 0,
+          nextAttemptAt: undefined,
+          error: undefined,
+        });
+        upsertRemote(result.media);
       } catch (error) {
         if (error instanceof UploadCancelled) continue;
         const attempts = (next.attempts ?? 0) + 1;

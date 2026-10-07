@@ -264,7 +264,7 @@ export function BasicCamera() {
       style={styles.thumb}
     >
       {latest ? (
-        latest.kind === 'photo' ? (
+        displayUri(latest) ? (
           <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
         ) : (
           <View style={[styles.thumbImage, styles.center, { backgroundColor: '#222' }]}>

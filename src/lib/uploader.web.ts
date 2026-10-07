@@ -3,6 +3,8 @@ import { LocalEntry, RemoteMedia } from './types';
 
 export class UploadCancelled extends Error {}
 
-export async function uploadEntry(_entry: LocalEntry, _options: unknown): Promise<RemoteMedia> {
+export type UploadResult = { media: RemoteMedia; originalDone: boolean };
+
+export async function uploadEntry(_entry: LocalEntry, _options: unknown): Promise<UploadResult> {
   throw new Error('Uploading is not available on web');
 }
