@@ -104,6 +104,8 @@ function handler(event) {
 }`),
     });
 
+    const mediaOrigin = origins.S3BucketOrigin.withOriginAccessControl(mediaBucket);
+
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: 'Lens web viewer + signed media',
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200, // includes India edges
@@ -114,14 +116,18 @@ function handler(event) {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         functionAssociations: [{ function: spaRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
-      additionalBehaviors: {
-        'm/*': {
-          origin: origins.S3BucketOrigin.withOriginAccessControl(mediaBucket),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          trustedKeyGroups: [keyGroup],
-        },
-      },
+      // m/* originals, d/* derivatives (thumbnail/preview): both private, signed URLs only.
+      additionalBehaviors: Object.fromEntries(
+        ['m/*', 'd/*'].map((pattern) => [
+          pattern,
+          {
+            origin: mediaOrigin,
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+            trustedKeyGroups: [keyGroup],
+          },
+        ]),
+      ),
     });
 
     // ---------- API ----------

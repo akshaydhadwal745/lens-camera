@@ -63,6 +63,7 @@ export async function share(identity: Identity, req: Req): Promise<Res> {
         height: m.height,
         duration: m.duration,
         createdAt: m.createdAt,
+        previewReady: !!m.previewReady,
         sharedAt: now,
         gsi1pk: `SM#${identity.id}#${m.id}`,
         gsi1sk: `D#${rid}`,
@@ -91,7 +92,7 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
   );
   const items = await Promise.all(
     (result.Items ?? []).map(async (s) => ({
-      ...(await toClient({ ...(s as any), id: s.mediaId })),
+      ...(await toClient({ ...(s as any), id: s.mediaId, status: 'ready' })),
       ownerId: s.ownerId,
       ownerName: s.ownerName,
       sharedAt: s.sharedAt,

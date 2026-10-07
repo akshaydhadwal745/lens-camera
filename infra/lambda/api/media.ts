@@ -70,12 +70,67 @@ export type MediaRecord = {
   uploadId?: string;
   partSize?: number;
   storageClass?: string;
+  /** Thumbnail + preview uploaded and verified (visible before the original finishes). */
+  previewReady?: boolean;
   width?: number;
   height?: number;
   duration?: number;
   createdAt: number;
   uploadedAt?: number;
 };
+
+// ---------- Derivatives (thumbnail + preview) ----------
+// Small JPEGs made on the phone, uploaded before the original so the item shows
+// up everywhere within seconds. Stored next to (never instead of) the original.
+
+export const DERIVATIVES = ['thumb', 'preview'] as const;
+export type Derivative = (typeof DERIVATIVES)[number];
+const MAX_DERIVATIVE_BYTES = 5 * 1024 * 1024;
+
+/** d/{owner}/{mediaId}/{name}.jpg, derived from the original's key m/{owner}/{mediaId}.{ext}. */
+export function derivativeKey(originalKey: string, name: Derivative): string {
+  const [, owner, file] = originalKey.split('/');
+  const mediaId = file.slice(0, file.lastIndexOf('.'));
+  return `d/${owner}/${mediaId}/${name}.jpg`;
+}
+
+type DerivativeSpec = { md5: string; size: number };
+
+function parseDerivatives(value: unknown): Partial<Record<Derivative, DerivativeSpec>> | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const out: Partial<Record<Derivative, DerivativeSpec>> = {};
+  for (const name of DERIVATIVES) {
+    const spec = (value as Record<string, any>)[name];
+    if (!spec) continue;
+    const md5 = md5Param(spec.md5);
+    if (!md5 || !Number.isInteger(spec.size) || spec.size <= 0 || spec.size > MAX_DERIVATIVE_BYTES) {
+      throw new HttpError(400, `Invalid ${name}`);
+    }
+    out[name] = { md5, size: spec.size };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+async function derivativeUrls(item: MediaRecord, specs: Partial<Record<Derivative, DerivativeSpec>> | undefined) {
+  if (!specs || item.previewReady) return undefined;
+  const urls: Partial<Record<Derivative, string>> = {};
+  for (const name of DERIVATIVES) {
+    const spec = specs[name];
+    if (!spec) continue;
+    urls[name] = await presign(
+      s3,
+      new PutObjectCommand({
+        Bucket: env.bucket,
+        Key: derivativeKey(item.key, name),
+        ContentType: 'image/jpeg',
+        ContentMD5: spec.md5,
+        CacheControl: 'private, max-age=31536000, immutable',
+      }),
+      { expiresIn: PRESIGN_SECONDS },
+    );
+  }
+  return urls;
+}
 
 export function mediaKey(ownerId: string, id: string) {
   return { pk: `D#${ownerId}`, sk: `M#${id}` };
@@ -93,7 +148,18 @@ async function requireMedia(identity: Identity, id: string): Promise<MediaRecord
   return item;
 }
 
-export async function toClient(item: Pick<MediaRecord, 'id' | 'kind' | 'key' | 'size' | 'width' | 'height' | 'duration' | 'createdAt'>) {
+type ClientFields = Pick<
+  MediaRecord,
+  'id' | 'kind' | 'key' | 'size' | 'width' | 'height' | 'duration' | 'createdAt' | 'status' | 'previewReady'
+>;
+
+export async function toClient(item: ClientFields) {
+  const originalReady = item.status === 'ready';
+  const [url, thumbUrl, previewUrl] = await Promise.all([
+    originalReady ? signMediaUrl(item.key) : undefined,
+    item.previewReady ? signMediaUrl(derivativeKey(item.key, 'thumb')) : undefined,
+    item.previewReady ? signMediaUrl(derivativeKey(item.key, 'preview')) : undefined,
+  ]);
   return {
     id: item.id,
     kind: item.kind,
@@ -102,7 +168,10 @@ export async function toClient(item: Pick<MediaRecord, 'id' | 'kind' | 'key' | '
     height: item.height,
     duration: item.duration,
     createdAt: item.createdAt,
-    url: await signMediaUrl(item.key),
+    originalReady,
+    url,
+    thumbUrl,
+    previewUrl,
   };
 }
 
@@ -135,6 +204,7 @@ function multipartPlan(item: MediaRecord) {
 export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   const { id, contentType, size, width, height, duration, createdAt } = req.body;
   const md5 = md5Param(req.body.md5);
+  const derivatives = parseDerivatives(req.body.derivatives);
   if (typeof id !== 'string' || !MEDIA_ID.test(id)) throw new HttpError(400, 'Invalid media id');
   const type = CONTENT_TYPES[contentType];
   if (!type) throw new HttpError(400, 'Unsupported content type');
@@ -143,9 +213,10 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
 
   const existing = await getMedia(identity.id, id);
   if (existing) {
-    if (existing.status === 'ready') return json(200, { mode: 'done', media: await toClient(existing) });
-    if (existing.uploadId) return json(200, multipartPlan(existing));
-    return json(200, { mode: 'single', url: await singlePutUrl(existing, md5), contentType: existing.contentType });
+    const extra = { derivativeUrls: await derivativeUrls(existing, derivatives), previewReady: !!existing.previewReady };
+    if (existing.status === 'ready') return json(200, { mode: 'done', media: await toClient(existing), ...extra });
+    if (existing.uploadId) return json(200, { ...multipartPlan(existing), ...extra });
+    return json(200, { mode: 'single', url: await singlePutUrl(existing, md5), contentType: existing.contentType, ...extra });
   }
 
   if (identity.usedBytes + size > env.quotaBytes) throw new HttpError(413, 'Storage quota exceeded');
@@ -185,8 +256,9 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     throw error;
   }
 
-  if (item.uploadId) return json(201, multipartPlan(item));
-  return json(201, { mode: 'single', url: await singlePutUrl(item, md5), contentType });
+  const extra = { derivativeUrls: await derivativeUrls(item, derivatives), previewReady: false };
+  if (item.uploadId) return json(201, { ...multipartPlan(item), ...extra });
+  return json(201, { mode: 'single', url: await singlePutUrl(item, md5), contentType, ...extra });
 }
 
 function num(value: unknown): number | undefined {
@@ -206,12 +278,63 @@ async function listAllParts(item: MediaRecord): Promise<Part[]> {
   return parts;
 }
 
+/**
+ * POST /v1/media/:id/previews: the phone uploaded thumbnail + preview; verify
+ * they exist and make the item visible on other devices (before the original).
+ */
+export async function previewsUploaded(identity: Identity, id: string): Promise<Res> {
+  const item = await requireMedia(identity, id);
+  if (!item.previewReady) {
+    for (const name of DERIVATIVES) {
+      try {
+        await s3.send(new HeadObjectCommand({ Bucket: env.bucket, Key: derivativeKey(item.key, name) }));
+      } catch (error: any) {
+        if (error?.name === 'NotFound') throw new HttpError(409, `${name} not uploaded yet`);
+        throw error;
+      }
+    }
+    await ddb.send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: mediaKey(identity.id, id),
+        UpdateExpression: 'SET previewReady = :t',
+        ExpressionAttributeValues: { ':t': true },
+      }),
+    );
+    item.previewReady = true;
+  }
+  return json(200, { media: await toClient(item) });
+}
+
 /** GET /v1/media/:id/parts: which parts S3 already has (for resuming). */
 export async function uploadedParts(identity: Identity, id: string): Promise<Res> {
   const item = await requireMedia(identity, id);
   if (!item.uploadId) throw new HttpError(400, 'Not a multipart upload');
-  const parts = await listAllParts(item);
-  return json(200, { parts: parts.map((p) => ({ n: p.PartNumber, size: p.Size })) });
+  try {
+    const parts = await listAllParts(item);
+    return json(200, { parts: parts.map((p) => ({ n: p.PartNumber, size: p.Size })) });
+  } catch (error: any) {
+    // The bucket aborts multipart uploads idle for 7 days (e.g. a big video
+    // waiting for Wi-Fi). Start a fresh one transparently.
+    if (error?.name !== 'NoSuchUpload') throw error;
+    const mpu = await s3.send(
+      new CreateMultipartUploadCommand({
+        Bucket: env.bucket,
+        Key: item.key,
+        ContentType: item.contentType,
+        StorageClass: ORIGINAL_STORAGE_CLASS,
+      }),
+    );
+    await ddb.send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: mediaKey(identity.id, id),
+        UpdateExpression: 'SET uploadId = :u',
+        ExpressionAttributeValues: { ':u': mpu.UploadId },
+      }),
+    );
+    return json(200, { parts: [] });
+  }
 }
 
 /**
@@ -306,7 +429,7 @@ export async function completeUpload(identity: Identity, id: string): Promise<Re
     // Another request completed it first; that's fine.
     if (error?.name !== 'TransactionCanceledException') throw error;
   }
-  return json(200, { media: await toClient(item) });
+  return json(200, { media: await toClient({ ...item, status: 'ready' }) });
 }
 
 /** GET /v1/media?cursor=: this identity's uploaded media, newest first. */
@@ -315,9 +438,9 @@ export async function listMedia(identity: Identity, req: Req): Promise<Res> {
     new QueryCommand({
       TableName: env.table,
       KeyConditionExpression: 'pk = :p AND begins_with(sk, :m)',
-      FilterExpression: '#s = :ready',
+      FilterExpression: '#s = :ready OR previewReady = :t',
       ExpressionAttributeNames: { '#s': 'status' },
-      ExpressionAttributeValues: { ':p': `D#${identity.id}`, ':m': 'M#', ':ready': 'ready' },
+      ExpressionAttributeValues: { ':p': `D#${identity.id}`, ':m': 'M#', ':ready': 'ready', ':t': true },
       ScanIndexForward: false,
       Limit: 100,
       ExclusiveStartKey: decodeCursor(req.query.cursor),
@@ -337,6 +460,11 @@ export async function deleteMedia(identity: Identity, id: string): Promise<Res> 
       .catch(() => {});
   }
   await s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: item.key }));
+  await Promise.all(
+    DERIVATIVES.map((name) =>
+      s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: derivativeKey(item.key, name) })).catch(() => {}),
+    ),
+  );
 
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: mediaKey(identity.id, id) }));
   if (item.status === 'ready') {
