@@ -63,6 +63,8 @@ export const api = {
 
   listMedia: (cursor?: string | null) => request<Page<RemoteMedia>>('GET', `/media${q(cursor)}`),
   startUpload: (body: {
+    /** Base64 MD5 of the whole file (single-PUT uploads); S3 verifies it. */
+    md5?: string;
     id: string;
     kind: string;
     contentType: string;
@@ -73,8 +75,8 @@ export const api = {
     createdAt: number;
   }) => request<UploadPlan>('POST', '/media', body),
   uploadedParts: (id: string) => request<{ parts: { n: number; size: number }[] }>('GET', `/media/${id}/parts`),
-  partUrls: (id: string, partNumbers: number[]) =>
-    request<{ urls: Record<string, string> }>('POST', `/media/${id}/parts`, { partNumbers }),
+  partUrls: (id: string, parts: { n: number; md5: string }[]) =>
+    request<{ urls: Record<string, string> }>('POST', `/media/${id}/parts`, { parts }),
   complete: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/complete`),
   deleteMedia: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}`),
 

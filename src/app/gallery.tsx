@@ -25,6 +25,7 @@ import {
   selectGallery,
   selectPendingCount,
   selectShared,
+  selectWaitingForWifi,
   useStore,
 } from '@/lib/store';
 import { GalleryItem } from '@/lib/types';
@@ -46,6 +47,7 @@ export default function GalleryScreen() {
   const shared = useStore(selectShared);
   const pending = useStore(selectPendingCount);
   const failed = useStore(selectFailedCount);
+  const waitingForWifi = useStore(selectWaitingForWifi);
   const online = useStore((s) => s.online);
   const name = useStore((s) => s.identity?.name);
   const remoteLoading = useStore((s) => s.remoteLoading);
@@ -135,6 +137,11 @@ export default function GalleryScreen() {
       <Ionicons name="alert-circle-outline" size={16} color="#fff" />
       <Text style={styles.bannerText}>{failed} failed to upload. Tap to retry</Text>
     </Pressable>
+  ) : pending && waitingForWifi === pending ? (
+    <View style={[styles.banner, { backgroundColor: '#334155' }]}>
+      <Ionicons name="wifi-outline" size={16} color="#fff" />
+      <Text style={styles.bannerText}>{waitingForWifi} waiting for Wi-Fi (big files). Change in Settings</Text>
+    </View>
   ) : pending ? (
     <View style={[styles.banner, { backgroundColor: '#1E3A8A' }]}>
       <ActivityIndicator size="small" color="#fff" />

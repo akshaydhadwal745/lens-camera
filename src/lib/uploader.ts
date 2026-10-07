@@ -2,30 +2,58 @@
 // start call is idempotent per media id and reports which multipart parts S3
 // already holds, so after a crash, kill or network loss we just call
 // uploadEntry() again and it continues where it stopped.
+//
+// Integrity: every request carries the MD5 of exactly the bytes being sent
+// (computed natively), and that MD5 is part of the presigned signature, so S3
+// rejects anything that arrives altered. Originals are never re-encoded.
 import { File, FileMode, Paths, UploadType } from 'expo-file-system';
 
 import { api } from './api';
 import { fileFor, fileSize } from './local-store';
 import { LocalEntry, RemoteMedia } from './types';
 
-const URL_BATCH = 10;
-
 export class UploadCancelled extends Error {}
 
 type Options = {
   onProgress: (fraction: number) => void;
   isCancelled: () => boolean;
+  /** Parts uploaded in parallel (multipart only). */
+  concurrency?: number;
 };
 
-async function put(file: File, url: string, contentType: string | undefined, onBytes: (sent: number) => void) {
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** Hex MD5 (as returned natively) → base64, the form the Content-MD5 header wants. */
+export function md5HexToBase64(hex: string): string {
+  const bytes: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const [a, b = 0, c = 0] = bytes.slice(i, i + 3);
+    const n = (a << 16) | (b << 8) | c;
+    out += BASE64[(n >> 18) & 63] + BASE64[(n >> 12) & 63];
+    out += i + 1 < bytes.length ? BASE64[(n >> 6) & 63] : '=';
+    out += i + 2 < bytes.length ? BASE64[n & 63] : '=';
+  }
+  return out;
+}
+
+function md5Of(file: File): string {
+  const hex = file.md5;
+  if (!hex) throw new Error('Could not checksum the file');
+  return md5HexToBase64(hex);
+}
+
+async function put(file: File, url: string, headers: Record<string, string>, onBytes: (sent: number) => void) {
   const result = await file.upload(url, {
     httpMethod: 'PUT',
     uploadType: UploadType.BINARY_CONTENT,
-    headers: contentType ? { 'Content-Type': contentType } : {},
+    headers,
     onProgress: ({ bytesSent }) => onBytes(bytesSent),
   });
   if (result.status < 200 || result.status >= 300) {
-    throw new Error(`Storage rejected upload (${result.status})`);
+    const reason = /BadDigest|InvalidDigest/.test(result.body) ? 'checksum mismatch' : `status ${result.status}`;
+    throw new Error(`Storage rejected upload (${reason})`);
   }
 }
 
@@ -48,14 +76,21 @@ function writeChunk(source: File, entry: LocalEntry, n: number, partSize: number
   return chunk;
 }
 
-export async function uploadEntry(original: LocalEntry, { onProgress, isCancelled }: Options): Promise<RemoteMedia> {
+export async function uploadEntry(
+  original: LocalEntry,
+  { onProgress, isCancelled, concurrency = 3 }: Options,
+): Promise<RemoteMedia> {
   const source = fileFor(original);
   if (!source.exists) throw new Error('Local file is missing');
   // Always measure the file itself; the stored size may be stale or missing.
   const entry = { ...original, size: fileSize(source) };
   if (entry.size <= 0) throw new Error('Could not read the file size');
 
+  // Small files go up in one request; checksum them whole (native, fast).
+  const singleMd5 = entry.size <= 16 * 1024 * 1024 ? md5Of(source) : undefined;
+
   const plan = await api.startUpload({
+    md5: singleMd5,
     id: entry.id,
     kind: entry.kind,
     contentType: entry.contentType,
@@ -69,7 +104,9 @@ export async function uploadEntry(original: LocalEntry, { onProgress, isCancelle
   if (plan.mode === 'done') return plan.media;
 
   if (plan.mode === 'single') {
-    await put(source, plan.url, plan.contentType, (sent) => onProgress(sent / entry.size));
+    const headers: Record<string, string> = { 'Content-Type': plan.contentType };
+    if (singleMd5) headers['Content-MD5'] = singleMd5;
+    await put(source, plan.url, headers, (sent) => onProgress(sent / entry.size));
   } else {
     const { partSize } = plan;
     const total = Math.ceil(entry.size / partSize);
@@ -80,21 +117,37 @@ export async function uploadEntry(original: LocalEntry, { onProgress, isCancelle
     onProgress(doneBytes / entry.size);
 
     const missing = Array.from({ length: total }, (_, i) => i + 1).filter((n) => !done.has(n));
-    for (let i = 0; i < missing.length; i += URL_BATCH) {
-      const batch = missing.slice(i, i + URL_BATCH);
-      const { urls } = await api.partUrls(entry.id, batch);
-      for (const n of batch) {
+    const inFlight = new Map<number, number>();
+    const report = () => {
+      let sending = 0;
+      inFlight.forEach((b) => (sending += b));
+      onProgress(Math.min(1, (doneBytes + sending) / entry.size));
+    };
+
+    // A small pool of workers, each taking the next missing part.
+    let next = 0;
+    const worker = async () => {
+      while (next < missing.length) {
         if (isCancelled()) throw new UploadCancelled();
+        const n = missing[next++];
         const chunk = writeChunk(source, entry, n, partSize);
         try {
-          await put(chunk, urls[n], undefined, (sent) => onProgress((doneBytes + sent) / entry.size));
+          const md5 = md5Of(chunk);
+          const { urls } = await api.partUrls(entry.id, [{ n, md5 }]);
+          inFlight.set(n, 0);
+          await put(chunk, urls[n], { 'Content-MD5': md5 }, (sent) => {
+            inFlight.set(n, sent);
+            report();
+          });
         } finally {
+          inFlight.delete(n);
           if (chunk.exists) chunk.delete();
         }
         doneBytes += expected(n);
-        onProgress(doneBytes / entry.size);
+        report();
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, missing.length)) }, worker));
   }
 
   if (isCancelled()) throw new UploadCancelled();

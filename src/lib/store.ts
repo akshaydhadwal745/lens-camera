@@ -26,10 +26,22 @@ const DAY = 24 * 3600 * 1000;
 const BACKOFF_MS = [2_000, 5_000, 15_000, 30_000, 60_000, 120_000, 300_000];
 const REMOTE_STALE_MS = 30 * 60 * 1000;
 
+export type CellularPolicy = 'all' | 'small' | 'off';
+
 export type Settings = {
   /** Days to keep a local copy after it's safely in the cloud; -1 = forever. */
   retentionDays: number;
+  /** What may upload over mobile data: everything, files ≤ 100 MB, or nothing. */
+  cellularUploads: CellularPolicy;
 };
+
+export const CELLULAR_OPTIONS: { value: CellularPolicy; label: string }[] = [
+  { value: 'all', label: 'Everything' },
+  { value: 'small', label: 'Up to 100 MB' },
+  { value: 'off', label: 'Wi-Fi only' },
+];
+
+const SMALL_FILE_BYTES = 100 * 1024 * 1024;
 
 export const RETENTION_OPTIONS = [
   { days: 1, label: '1 day' },
@@ -39,7 +51,7 @@ export const RETENTION_OPTIONS = [
   { days: -1, label: 'Always' },
 ];
 
-const DEFAULT_SETTINGS: Settings = { retentionDays: 7 };
+const DEFAULT_SETTINGS: Settings = { retentionDays: 7, cellularUploads: 'small' };
 
 export type State = {
   status: 'booting' | 'ready' | 'needs-link';
@@ -53,6 +65,8 @@ export type State = {
   uploadingId: string | null;
   progress: number;
   online: boolean;
+  /** Connected over mobile data (uploads follow `settings.cellularUploads`). */
+  cellular: boolean;
   settings: Settings;
   usage: { usedBytes: number; quotaBytes: number } | null;
 };
@@ -69,6 +83,7 @@ let state: State = {
   uploadingId: null,
   progress: 0,
   online: true,
+  cellular: false,
   settings: DEFAULT_SETTINGS,
   usage: null,
 };
@@ -164,6 +179,16 @@ export function selectShared(s: State): GalleryItem[] {
 }
 
 export const selectPendingCount = (s: State) => s.entries.filter((e) => !e.uploadedAt && !e.error).length;
+
+function allowedOnThisNetwork(e: LocalEntry, s: State): boolean {
+  if (!s.cellular) return true;
+  const policy = s.settings.cellularUploads;
+  return policy === 'all' || (policy === 'small' && e.size <= SMALL_FILE_BYTES);
+}
+
+/** Items held back until Wi-Fi by the mobile-data setting. */
+export const selectWaitingForWifi = (s: State) =>
+  s.entries.filter((e) => !e.uploadedAt && !e.error && !allowedOnThisNetwork(e, s)).length;
 export const selectFailedCount = (s: State) => s.entries.filter((e) => !e.uploadedAt && e.error).length;
 
 let usageMemo: { entries: LocalEntry[]; out: ReturnType<typeof computeLocalUsage> } | null = null;
@@ -225,7 +250,10 @@ function watchConnectivity() {
   NetInfo.addEventListener((net) => {
     const online = net.isConnected !== false && net.isInternetReachable !== false;
     const wasOnline = state.online;
-    set({ online });
+    const wasCellular = state.cellular;
+    const cellular = net.type === 'cellular';
+    set({ online, cellular });
+    if (wasCellular && !cellular) kickSync(); // Wi-Fi arrived: release held-back items
     if (online && !wasOnline) {
       kickSync();
       refreshRemote();
@@ -390,7 +418,9 @@ async function syncLoop() {
     while (state.online) {
       const now = Date.now();
       // Newest first, so the shot you just took reaches the cloud first.
-      const next = state.entries.find((e) => !e.uploadedAt && !e.error && (e.nextAttemptAt ?? 0) <= now);
+      const next = state.entries.find(
+        (e) => !e.uploadedAt && !e.error && (e.nextAttemptAt ?? 0) <= now && allowedOnThisNetwork(e, state),
+      );
       if (!next) break;
       if (!(await ensureCloudIdentity())) {
         updateEntry(next.id, { nextAttemptAt: Date.now() + BACKOFF_MS[2] });
@@ -409,6 +439,7 @@ async function syncLoop() {
             }
           },
           isCancelled: () => cancelled.has(next.id),
+          concurrency: state.cellular ? 2 : 3,
         });
         updateEntry(next.id, { uploadedAt: Date.now(), attempts: 0, nextAttemptAt: undefined, error: undefined });
         upsertRemote(media);
@@ -520,4 +551,11 @@ export function setRetention(days: number) {
   savePrefs(settings);
   set({ settings });
   runCleanup();
+}
+
+export function setCellularUploads(policy: CellularPolicy) {
+  const settings = { ...state.settings, cellularUploads: policy };
+  savePrefs(settings);
+  set({ settings });
+  kickSync();
 }

@@ -9,12 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, WEB_URL } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import {
+  CELLULAR_OPTIONS,
   freeUpSpace,
   RETENTION_OPTIONS,
   retryFailed,
   selectFailedCount,
   selectLocalUsage,
   selectPendingCount,
+  selectWaitingForWifi,
+  setCellularUploads,
   setRetention,
   unlinkBrowser,
   useStore,
@@ -104,6 +107,9 @@ export default function SettingsScreen() {
   const local = useStore(selectLocalUsage);
   const pending = useStore(selectPendingCount);
   const failed = useStore(selectFailedCount);
+  const waitingForWifi = useStore(selectWaitingForWifi);
+  const cellularPolicy = useStore((s) => s.settings.cellularUploads);
+  const cellular = useStore((s) => s.cellular);
 
   const usedPct = usage ? Math.min(1, usage.usedBytes / usage.quotaBytes) : 0;
 
@@ -189,10 +195,27 @@ export default function SettingsScreen() {
               </Pressable>
             </Section>
 
-            <Section title="Uploads">
-              <Row label="Connection" value={online ? 'Online' : 'Offline'} />
+            <Section
+              title="Uploads"
+              footer="Originals always upload at full quality, never compressed. On mobile data you can hold back big files (usually videos) until you're on Wi-Fi."
+            >
+              <Row label="Connection" value={!online ? 'Offline' : cellular ? 'Mobile data' : 'Wi-Fi'} />
               <View style={styles.divider} />
-              <Row label="Waiting" value={String(pending)} />
+              <Row label="Waiting" value={waitingForWifi ? `${pending} (${waitingForWifi} for Wi-Fi)` : String(pending)} />
+              <View style={styles.divider} />
+              <Text style={[styles.rowLabel, { paddingHorizontal: 16, paddingTop: 12 }]}>Upload over mobile data</Text>
+              <View style={styles.chips}>
+                {CELLULAR_OPTIONS.map((o) => (
+                  <Pressable
+                    key={o.value}
+                    onPress={() => setCellularUploads(o.value)}
+                    style={[styles.chip, cellularPolicy === o.value && styles.chipOn]}
+                    accessibilityState={{ selected: cellularPolicy === o.value }}
+                  >
+                    <Text style={[styles.chipText, cellularPolicy === o.value && styles.chipTextOn]}>{o.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
               {failed > 0 && (
                 <>
                   <View style={styles.divider} />

@@ -38,9 +38,14 @@ enum CameraError: LocalizedError {
 
 private final class PhotoRequest {
   let completion: (Result<[String: Any], Error>) -> Void
+  /** File extension for the processed (non-RAW) photo. */
+  let processedExtension: String
   var result: [String: Any]?
   var error: Error?
-  init(_ completion: @escaping (Result<[String: Any], Error>) -> Void) { self.completion = completion }
+  init(processedExtension: String, _ completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    self.processedExtension = processedExtension
+    self.completion = completion
+  }
 }
 
 /// Owns the AVCaptureSession. All session/device work happens on `sessionQueue`;
@@ -430,12 +435,17 @@ final class CameraController: NSObject {
 
       let settings: AVCapturePhotoSettings
       var isRaw = false
+      var processedExtension = "jpg"
       if raw, let rawFormat = self.preferredRawFormat() {
         settings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
         isRaw = true
       } else {
-        settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+        // HEIC is the camera's native output on iPhone: about half the size of
+        // JPEG at the same quality. JPEG only if HEVC isn't available.
+        let codec: AVVideoCodecType = self.photoOutput.availablePhotoCodecTypes.contains(.hevc) ? .hevc : .jpeg
+        settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
         settings.photoQualityPrioritization = .quality
+        processedExtension = codec == .hevc ? "heic" : "jpg"
       }
       let maxDimensions = self.photoOutput.maxPhotoDimensions
       if maxDimensions.width > 0 && maxDimensions.height > 0 {
@@ -460,7 +470,7 @@ final class CameraController: NSObject {
       }
 
       self.lock.lock()
-      self.photoRequests[settings.uniqueID] = PhotoRequest(completion)
+      self.photoRequests[settings.uniqueID] = PhotoRequest(processedExtension: processedExtension, completion)
       self.lock.unlock()
       self.photoOutput.capturePhoto(with: settings, delegate: self)
     }
@@ -525,7 +535,7 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
       request.error = CameraError.message("Could not encode the photo.")
       return
     }
-    let ext = photo.isRawPhoto ? "dng" : "jpg"
+    let ext = photo.isRawPhoto ? "dng" : request.processedExtension
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("lens-\(UUID().uuidString).\(ext)")
     do {
       try data.write(to: url)

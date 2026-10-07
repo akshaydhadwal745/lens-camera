@@ -25,8 +25,26 @@ import { ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3, si
 
 /** Files up to this size use a single PUT; larger ones use S3 multipart. */
 const SINGLE_PUT_MAX = 16 * 1024 * 1024;
-const PART_SIZE = 8 * 1024 * 1024;
+const MIN_PART_SIZE = 8 * 1024 * 1024;
+/** S3 allows 10,000 parts; stay well under so part size never has to change mid-upload. */
+const TARGET_MAX_PARTS = 9000;
+const MIB = 1024 * 1024;
 const PRESIGN_SECONDS = 3600;
+/** Originals are written once and read rarely: let S3 move them to cheaper
+ * instant-access tiers automatically (no retrieval fees, millisecond access). */
+const ORIGINAL_STORAGE_CLASS = 'INTELLIGENT_TIERING' as const;
+const MD5_BASE64 = /^[A-Za-z0-9+/]{22}==$/;
+
+/** Part size for a file: at least 8 MiB, whole MiB, and never more than ~9,000 parts. */
+export function partSizeFor(size: number): number {
+  return Math.max(MIN_PART_SIZE, Math.ceil(size / TARGET_MAX_PARTS / MIB) * MIB);
+}
+
+function md5Param(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string' || !MD5_BASE64.test(value)) throw new HttpError(400, 'Invalid md5');
+  return value;
+}
 
 const CONTENT_TYPES: Record<string, { ext: string; kind: 'photo' | 'video' }> = {
   'image/jpeg': { ext: 'jpg', kind: 'photo' },
@@ -50,6 +68,8 @@ export type MediaRecord = {
   size: number;
   status: 'pending' | 'ready';
   uploadId?: string;
+  partSize?: number;
+  storageClass?: string;
   width?: number;
   height?: number;
   duration?: number;
@@ -86,12 +106,26 @@ export async function toClient(item: Pick<MediaRecord, 'id' | 'kind' | 'key' | '
   };
 }
 
-function singlePutUrl(item: MediaRecord) {
+/**
+ * Single-PUT URL. When the client sends the file's MD5, it is part of the
+ * signature: S3 rejects the upload (BadDigest) unless the bytes match.
+ */
+function singlePutUrl(item: MediaRecord, md5?: string) {
   return presign(
     s3,
-    new PutObjectCommand({ Bucket: env.bucket, Key: item.key, ContentType: item.contentType }),
+    new PutObjectCommand({
+      Bucket: env.bucket,
+      Key: item.key,
+      ContentType: item.contentType,
+      ContentMD5: md5,
+      StorageClass: ORIGINAL_STORAGE_CLASS,
+    }),
     { expiresIn: PRESIGN_SECONDS },
   );
+}
+
+function multipartPlan(item: MediaRecord) {
+  return { mode: 'multipart' as const, uploadId: item.uploadId, partSize: item.partSize ?? partSizeFor(item.size) };
 }
 
 /**
@@ -100,6 +134,7 @@ function singlePutUrl(item: MediaRecord) {
  */
 export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   const { id, contentType, size, width, height, duration, createdAt } = req.body;
+  const md5 = md5Param(req.body.md5);
   if (typeof id !== 'string' || !MEDIA_ID.test(id)) throw new HttpError(400, 'Invalid media id');
   const type = CONTENT_TYPES[contentType];
   if (!type) throw new HttpError(400, 'Unsupported content type');
@@ -109,8 +144,8 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   const existing = await getMedia(identity.id, id);
   if (existing) {
     if (existing.status === 'ready') return json(200, { mode: 'done', media: await toClient(existing) });
-    if (existing.uploadId) return json(200, { mode: 'multipart', uploadId: existing.uploadId, partSize: PART_SIZE });
-    return json(200, { mode: 'single', url: await singlePutUrl(existing), contentType: existing.contentType });
+    if (existing.uploadId) return json(200, multipartPlan(existing));
+    return json(200, { mode: 'single', url: await singlePutUrl(existing, md5), contentType: existing.contentType });
   }
 
   if (identity.usedBytes + size > env.quotaBytes) throw new HttpError(413, 'Storage quota exceeded');
@@ -129,11 +164,18 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     createdAt: num(createdAt) ?? Date.now(),
   };
 
+  item.storageClass = ORIGINAL_STORAGE_CLASS;
   if (size > SINGLE_PUT_MAX) {
     const mpu = await s3.send(
-      new CreateMultipartUploadCommand({ Bucket: env.bucket, Key: item.key, ContentType: contentType }),
+      new CreateMultipartUploadCommand({
+        Bucket: env.bucket,
+        Key: item.key,
+        ContentType: contentType,
+        StorageClass: ORIGINAL_STORAGE_CLASS,
+      }),
     );
     item.uploadId = mpu.UploadId;
+    item.partSize = partSizeFor(size);
   }
 
   try {
@@ -143,8 +185,8 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     throw error;
   }
 
-  if (item.uploadId) return json(201, { mode: 'multipart', uploadId: item.uploadId, partSize: PART_SIZE });
-  return json(201, { mode: 'single', url: await singlePutUrl(item), contentType });
+  if (item.uploadId) return json(201, multipartPlan(item));
+  return json(201, { mode: 'single', url: await singlePutUrl(item, md5), contentType });
 }
 
 function num(value: unknown): number | undefined {
@@ -172,18 +214,32 @@ export async function uploadedParts(identity: Identity, id: string): Promise<Res
   return json(200, { parts: parts.map((p) => ({ n: p.PartNumber, size: p.Size })) });
 }
 
-/** POST /v1/media/:id/parts {partNumbers}: presigned URLs for the given parts. */
+/**
+ * POST /v1/media/:id/parts {parts: [{n, md5}]}: presigned URLs for the given
+ * parts. Each part's MD5 is signed in, so S3 verifies every part on arrival.
+ * (`partNumbers: number[]` without checksums is still accepted.)
+ */
 export async function partUrls(identity: Identity, id: string, req: Req): Promise<Res> {
   const item = await requireMedia(identity, id);
   if (!item.uploadId || item.status !== 'pending') throw new HttpError(400, 'Upload is not in progress');
-  const numbers: unknown[] = Array.isArray(req.body.partNumbers) ? req.body.partNumbers.slice(0, 50) : [];
-  const maxPart = Math.ceil(item.size / PART_SIZE);
+  const requested: { n: unknown; md5?: unknown }[] = Array.isArray(req.body.parts)
+    ? req.body.parts
+    : Array.isArray(req.body.partNumbers)
+      ? req.body.partNumbers.map((n: unknown) => ({ n }))
+      : [];
+  const maxPart = Math.ceil(item.size / (item.partSize ?? partSizeFor(item.size)));
   const urls: Record<number, string> = {};
-  for (const n of numbers) {
+  for (const { n, md5 } of requested.slice(0, 50)) {
     if (!Number.isInteger(n) || (n as number) < 1 || (n as number) > maxPart) throw new HttpError(400, 'Invalid part number');
     urls[n as number] = await presign(
       s3,
-      new UploadPartCommand({ Bucket: env.bucket, Key: item.key, UploadId: item.uploadId, PartNumber: n as number }),
+      new UploadPartCommand({
+        Bucket: env.bucket,
+        Key: item.key,
+        UploadId: item.uploadId,
+        PartNumber: n as number,
+        ContentMD5: md5Param(md5),
+      }),
       { expiresIn: PRESIGN_SECONDS },
     );
   }
@@ -197,7 +253,7 @@ export async function completeUpload(identity: Identity, id: string): Promise<Re
 
   if (item.uploadId) {
     const parts = await listAllParts(item);
-    const expected = Math.ceil(item.size / PART_SIZE);
+    const expected = Math.ceil(item.size / (item.partSize ?? partSizeFor(item.size)));
     const total = parts.reduce((sum, p) => sum + (p.Size ?? 0), 0);
     if (parts.length !== expected || total !== item.size) {
       throw new HttpError(409, `Upload incomplete: ${parts.length}/${expected} parts`);

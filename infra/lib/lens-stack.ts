@@ -16,6 +16,7 @@ import {
   aws_logs as logs,
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
+  aws_budgets as budgets,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -49,7 +50,14 @@ export class LensStack extends Stack {
           maxAge: 3600,
         },
       ],
-      lifecycleRules: [{ abortIncompleteMultipartUploadAfter: Duration.days(3) }],
+      // Versioning makes deletes/overwrites recoverable for 30 days; originals
+      // are never overwritten, so this costs nothing until something is deleted.
+      versioned: true,
+      lifecycleRules: [
+        // Big uploads can pause for days (phone offline); give them a week.
+        { abortIncompleteMultipartUploadAfter: Duration.days(7) },
+        { noncurrentVersionExpiration: Duration.days(30), expiredObjectDeleteMarker: true },
+      ],
     });
 
     const webBucket = new s3.Bucket(this, 'Web', {
@@ -66,6 +74,8 @@ export class LensStack extends Stack {
       sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
       billing: dynamodb.Billing.onDemand(),
       timeToLiveAttribute: 'ttl',
+      // Metadata is what makes the media findable; keep 35 days of restore points.
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       removalPolicy: RemovalPolicy.RETAIN,
       globalSecondaryIndexes: [
         {
@@ -120,6 +130,9 @@ function handler(event) {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+    // Per-identity storage quota (testing default 100 GB; becomes the free tier later).
+    const quotaGb = Number(this.node.tryGetContext('quotaGb') ?? 100);
+
     const api = new nodejs.NodejsFunction(this, 'Api', {
       entry: path.join(__dirname, '../lambda/api/index.ts'),
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -133,8 +146,8 @@ function handler(event) {
         CDN_DOMAIN: distribution.distributionDomainName,
         CF_KEY_PAIR_ID: publicKey.publicKeyId,
         CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
-        QUOTA_BYTES: String(5 * 1024 ** 3), // 5 GB per identity
-        MAX_FILE_BYTES: String(2 * 1024 ** 3),
+        QUOTA_BYTES: String(quotaGb * 1024 ** 3),
+        MAX_FILE_BYTES: String(1024 ** 4), // 1 TiB per file
       },
       bundling: { minify: true, sourceMap: true, target: 'node24' },
     });
@@ -166,6 +179,28 @@ function handler(event) {
         distribution,
         distributionPaths: ['/*'],
         memoryLimit: 256,
+      });
+    }
+
+    // ---------- Cost guardrails ----------
+    // AWS Budgets: the first two budgets are free. Alerts at 50/80/100% of
+    // actual spend and when the month is forecast to exceed the limit.
+    const alertEmail = this.node.tryGetContext('alertEmail') as string | undefined;
+    const monthlyBudgetUsd = Number(this.node.tryGetContext('monthlyBudgetUsd') ?? 10);
+    if (alertEmail) {
+      const subscribers = [{ subscriptionType: 'EMAIL', address: alertEmail }];
+      const notify = (threshold: number, notificationType: 'ACTUAL' | 'FORECASTED') => ({
+        notification: { comparisonOperator: 'GREATER_THAN', threshold, thresholdType: 'PERCENTAGE', notificationType },
+        subscribers,
+      });
+      new budgets.CfnBudget(this, 'MonthlyBudget', {
+        budget: {
+          budgetName: 'lens-monthly',
+          budgetType: 'COST',
+          timeUnit: 'MONTHLY',
+          budgetLimit: { amount: monthlyBudgetUsd, unit: 'USD' },
+        },
+        notificationsWithSubscribers: [notify(50, 'ACTUAL'), notify(80, 'ACTUAL'), notify(100, 'ACTUAL'), notify(100, 'FORECASTED')],
       });
     }
 

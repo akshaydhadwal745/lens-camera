@@ -1,6 +1,9 @@
 {
   "app": "npx tsx bin/lens.ts",
   "context": {
-    "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": true
+    "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": true,
+    "quotaGb": 100,
+    "monthlyBudgetUsd": 10,
+    "alertEmail": "akshaydhadwal2@gmail.com"
   }
 }
