@@ -1,3 +1,4 @@
+import type { EditRecipe } from './edits';
 import { RemoteMedia, SharedMedia } from './types';
 
 export const API_URL = `${process.env.EXPO_PUBLIC_API_URL ?? ''}/v1`;
@@ -69,6 +70,8 @@ export const api = {
   startUpload: (body: {
     /** Base64 MD5 of the whole file (single-PUT uploads); S3 verifies it. */
     md5?: string;
+    /** Look/edit chosen at capture (non-destructive). */
+    edit?: EditRecipe;
     /** Thumbnail + preview to upload first (base64 MD5 + bytes). */
     derivatives?: { thumb: { md5: string; size: number }; preview: { md5: string; size: number } };
     id: string;
@@ -85,6 +88,13 @@ export const api = {
     request<{ urls: Record<string, string> }>('POST', `/media/${id}/parts`, { parts }),
   complete: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/complete`),
   previewsUploaded: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/previews`),
+  startEdit: (
+    id: string,
+    edit: EditRecipe | null,
+    derivatives: { thumb: { md5: string; size: number }; preview: { md5: string; size: number } },
+  ) => request<{ version: number; derivativeUrls?: DerivativeUrls }>('POST', `/media/${id}/edit`, { edit, derivatives }),
+  commitEdit: (id: string, version: number) =>
+    request<{ media: RemoteMedia }>('POST', `/media/${id}/edit/commit`, { version }),
   deleteMedia: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}`),
 
   searchUsers: (query: string) => request<{ users: Person[] }>('GET', `/users?q=${encodeURIComponent(query)}`),

@@ -4,20 +4,24 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useIsFocused } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   AnalysisResult,
+  CameraMode,
   Capabilities,
   CameraStats,
   LensCameraHandle,
   LensCameraView,
+  LensImaging,
+  PhotoResult,
 } from '../../../modules/lens-camera';
 import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
 import { ValueDial } from './ValueDial';
+import { compact, EditRecipe, LOOKS } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
 import {
   BUILT_IN_PRESETS,
@@ -39,6 +43,8 @@ import { capture, selectGallery, selectPendingCount, useStore } from '@/lib/stor
 import { displayUri } from '@/lib/types';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+
+const INTENSITY = Array.from({ length: 21 }, (_, i) => i / 20);
 
 function haptic(style = Haptics.ImpactFeedbackStyle.Medium) {
   Haptics.impactAsync(style).catch(() => {});
@@ -75,6 +81,8 @@ export function ProCamera() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [focusMark, setFocusMark] = useState<{ x: number; y: number; key: number } | null>(null);
   const [previewSize, setPreviewSize] = useState({ width, height });
+  const [processing, setProcessing] = useState<string | null>(null);
+  const [lookDial, setLookDial] = useState(false);
 
   const items = useStore(selectGallery);
   const pending = useStore(selectPendingCount);
@@ -161,6 +169,17 @@ export function ProCamera() {
 
   // ---------- Capture ----------
 
+  /** Look (+ portrait blur) attached to a new shot, as a non-destructive recipe. */
+  const captureRecipe = (depth?: boolean, kind: 'photo' | 'video' = 'photo'): EditRecipe | undefined => {
+    const recipe: EditRecipe = {};
+    if (s.look) {
+      recipe.look = s.look;
+      if (s.lookIntensity < 1) recipe.intensity = s.lookIntensity;
+    }
+    if (kind === 'photo' && depth && s.mode === 'portrait') recipe.portrait = { aperture: s.portraitAperture };
+    return compact(recipe) ?? undefined;
+  };
+
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
     setBusy(true);
@@ -168,11 +187,26 @@ export function ProCamera() {
     flash.setValue(1);
     Animated.timing(flash, { toValue: 0, duration: 220, useNativeDriver: true }).start();
     try {
-      const photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw, flash: s.flash });
-      capture({ kind: 'photo', sourceUri: photo.uri, width: photo.width, height: photo.height });
+      let photo: PhotoResult;
+      if (s.mode === 'night') {
+        setProcessing('Hold still…');
+        photo = await cameraRef.current.takeNightPhoto(s.nightFrames);
+      } else {
+        photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
+      }
+      const recipe = captureRecipe(photo.depth);
+      if (recipe && s.bakeLooks && LensImaging && !photo.raw) {
+        // "Bake": write the look into the file itself (no removable edit).
+        setProcessing('Applying look…');
+        const baked = await LensImaging.renderImage(photo.uri, recipe, { format: 'heic', quality: 0.95 });
+        capture({ kind: 'photo', sourceUri: baked.uri, width: baked.width, height: baked.height });
+      } else {
+        capture({ kind: 'photo', sourceUri: photo.uri, width: photo.width, height: photo.height, edit: recipe });
+      }
     } catch (error) {
       Alert.alert('Could not take photo', error instanceof Error ? error.message : String(error));
     } finally {
+      setProcessing(null);
       setBusy(false);
     }
   };
@@ -187,8 +221,20 @@ export function ProCamera() {
     setRecording(true);
     cameraRef.current
       .startRecording()
-      .then((video) => {
-        capture({ kind: 'video', sourceUri: video.uri, duration: video.duration });
+      .then(async (video) => {
+        const recipe = captureRecipe(false, 'video');
+        if (recipe && s.bakeLooks && LensImaging) {
+          // Baking a look into video re-encodes it (takes a while, uses battery).
+          setProcessing('Applying look to video…');
+          try {
+            const exported = await LensImaging.exportVideo(video.uri, recipe);
+            capture({ kind: 'video', sourceUri: exported.uri, duration: video.duration });
+            return;
+          } finally {
+            setProcessing(null);
+          }
+        }
+        capture({ kind: 'video', sourceUri: video.uri, duration: video.duration, edit: recipe });
       })
       .catch((error) => Alert.alert('Recording failed', error instanceof Error ? error.message : String(error)))
       .finally(() => setRecording(false));
@@ -218,7 +264,7 @@ export function ProCamera() {
     }, 1000);
   };
 
-  const switchMode = async (mode: 'photo' | 'video') => {
+  const switchMode = async (mode: CameraMode) => {
     if (mode === s.mode || recording) return;
     // Ask for the mic before the session is rebuilt for video, so audio is attached.
     if (mode === 'video' && !micPermission?.granted) await requestMicPermission();
@@ -331,10 +377,15 @@ export function ProCamera() {
             style={StyleSheet.absoluteFill}
             active={isFocused}
             position={s.position}
-            lens={s.position === 'front' ? 'wide' : s.lens}
+            lens={s.position === 'front' || s.mode === 'portrait' ? 'wide' : s.lens}
             mode={s.mode}
             videoResolution={s.videoResolution}
             appleLog={s.mode === 'video' && s.appleLog}
+            hdrVideo={s.mode === 'video' && s.hdrVideo}
+            fps={s.fps}
+            stabilization={s.stabilization}
+            look={s.look}
+            lookIntensity={s.lookIntensity}
             torch={s.mode === 'video' && s.torch}
             zoom={s.zoom}
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
@@ -371,6 +422,15 @@ export function ProCamera() {
             <View pointerEvents="none" style={[styles.focusMark, { left: focusMark.x - 36, top: focusMark.y - 36 }]} />
           )}
 
+          {processing && (
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
+              <View style={styles.processing}>
+                <ActivityIndicator color="#FACC15" />
+                <Text style={styles.processingText}>{processing}</Text>
+              </View>
+            </View>
+          )}
+
           {countdown !== null && (
             <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
               <Text style={styles.countdown}>{countdown}</Text>
@@ -392,7 +452,7 @@ export function ProCamera() {
           </View>
         ) : (
           <>
-            {s.mode === 'photo' ? (
+            {s.mode === 'photo' || s.mode === 'portrait' ? (
               caps?.flash !== false && (
                 <TopButton
                   icon={s.flash === 'off' ? 'flash-off' : s.flash === 'auto' ? 'flash-outline' : 'flash'}
@@ -401,7 +461,7 @@ export function ProCamera() {
                   onPress={() => update({ flash: s.flash === 'off' ? 'auto' : s.flash === 'auto' ? 'on' : 'off' })}
                 />
               )
-            ) : (
+            ) : s.mode === 'night' ? null : (
               caps?.torch !== false && (
                 <TopButton icon={s.torch ? 'flashlight' : 'flashlight-outline'} label="TORCH" active={s.torch} onPress={() => update({ torch: !s.torch })} />
               )
@@ -413,7 +473,17 @@ export function ProCamera() {
               <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
             )}
             {s.mode === 'video' && caps?.appleLog && <TopButton label="LOG" active={s.appleLog} onPress={() => update({ appleLog: !s.appleLog })} />}
-            {s.mode === 'photo' && (
+            {s.mode === 'video' && caps?.hdrVideo && !s.appleLog && (
+              <TopButton label="HDR" active={s.hdrVideo} onPress={() => update({ hdrVideo: !s.hdrVideo })} />
+            )}
+            {s.mode === 'video' && (
+              <TopButton
+                label={`${s.fps}`}
+                active={s.fps !== 30}
+                onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
+              />
+            )}
+            {s.mode !== 'video' && (
               <TopButton
                 icon="timer-outline"
                 label={s.timer ? `${s.timer}s` : 'OFF'}
@@ -473,7 +543,40 @@ export function ProCamera() {
           })}
         </View>
 
-        {s.position === 'back' && lenses.length > 1 && (
+        {lookDial && s.look && (
+          <ValueDial
+            title="LOOK"
+            values={INTENSITY}
+            index={nearestIndex(INTENSITY, s.lookIntensity)}
+            label={(v) => `${Math.round(v * 100)}%`}
+            onIndex={(i) => update({ lookIntensity: INTENSITY[i] })}
+            auto={s.lookIntensity === 1}
+            autoLabel="100%"
+            autoText="FULL"
+            onAuto={() => update({ lookIntensity: 1 })}
+          />
+        )}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looksRow}>
+          <Pressable onPress={() => { update({ look: null }); setLookDial(false); }} style={[styles.lookChip, !s.look && styles.lookChipOn]}>
+            <Text style={[styles.lookChipText, !s.look && styles.lookChipTextOn]}>No look</Text>
+          </Pressable>
+          {LOOKS.map((l) => (
+            <Pressable
+              key={l.id}
+              onPress={() => {
+                haptic(Haptics.ImpactFeedbackStyle.Light);
+                if (s.look === l.id) setLookDial((d) => !d);
+                else update({ look: l.id });
+              }}
+              style={[styles.lookChip, s.look === l.id && styles.lookChipOn]}
+              accessibilityLabel={l.description}
+            >
+              <Text style={[styles.lookChipText, s.look === l.id && styles.lookChipTextOn]}>{l.name}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {s.position === 'back' && s.mode !== 'portrait' && lenses.length > 1 && (
           <View style={styles.lenses}>
             {lenses.map((l) => (
               <Pressable
@@ -494,8 +597,8 @@ export function ProCamera() {
         )}
 
         <View style={styles.modes}>
-          {(['video', 'photo'] as const).map((m) => (
-            <Pressable key={m} onPress={() => switchMode(m)} disabled={recording} hitSlop={8}>
+          {(['night', 'video', 'photo', 'portrait'] as const).map((m) => (
+            <Pressable key={m} onPress={() => switchMode(m)} disabled={recording || busy} hitSlop={8}>
               <Text style={[styles.modeText, s.mode === m && styles.modeOn]}>{m.toUpperCase()}</Text>
             </Pressable>
           ))}
@@ -563,6 +666,41 @@ export function ProCamera() {
           )}
           <Toggle label="False color" hint="Purple/blue = dark · green = mid-grey · pink = skin · yellow/red = clipping" value={s.falseColor} onChange={(v) => update({ falseColor: v })} />
           <Toggle label="Level" value={s.level} onChange={(v) => update({ level: v })} />
+          <Toggle
+            label="Save looks into the file"
+            hint={
+              s.bakeLooks
+                ? 'On: the look is permanently part of the photo/video (videos are re-encoded after recording).'
+                : 'Off (recommended): the look is a removable edit; the untouched original is kept.'
+            }
+            value={s.bakeLooks}
+            onChange={(v) => update({ bakeLooks: v })}
+          />
+          {caps && caps.nightFrames >= 2 && (
+            <Choice
+              label="Night mode frames"
+              value={Math.min(s.nightFrames, caps.nightFrames)}
+              options={[2, 4, 6, 8].filter((n) => n <= caps.nightFrames).map((n) => ({ value: n, label: `${n}` }))}
+              onChange={(v) => update({ nightFrames: v })}
+            />
+          )}
+          <Choice
+            label="Portrait blur (default)"
+            value={s.portraitAperture}
+            options={[1.4, 2, 2.8, 4, 5.6].map((v) => ({ value: v, label: `f/${v}` }))}
+            onChange={(v) => update({ portraitAperture: v })}
+          />
+          <Choice
+            label="Video stabilization"
+            value={s.stabilization}
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'standard', label: 'Standard' },
+              { value: 'cinematic', label: 'Cinematic' },
+              { value: 'extended', label: 'Extended' },
+            ]}
+            onChange={(v) => update({ stabilization: v })}
+          />
           <Choice
             label="Grid"
             value={s.grid}
@@ -664,6 +802,13 @@ const styles = StyleSheet.create({
   },
   zoomText: { color: '#FACC15', fontWeight: '700', fontSize: 13 },
 
+  processing: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  processingText: { color: '#fff', fontWeight: '600' },
+  looksRow: { paddingHorizontal: 12, gap: 8, paddingVertical: 6 },
+  lookChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.12)' },
+  lookChipOn: { backgroundColor: '#FACC15' },
+  lookChipText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  lookChipTextOn: { color: '#000' },
   focusMark: { position: 'absolute', width: 72, height: 72, borderWidth: 1.5, borderColor: '#FACC15', borderRadius: 4 },
   countdown: { color: '#fff', fontSize: 120, fontWeight: '200' },
 

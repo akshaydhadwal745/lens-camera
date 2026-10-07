@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isImagingAvailable } from '../../modules/lens-camera';
 import { MediaTile } from '@/components/MediaTile';
 import {
   deleteItems,
+  pasteEdit,
   refreshRemote,
   refreshShared,
   removeSharedItem,
@@ -56,6 +58,8 @@ export default function GalleryScreen() {
   const [tab, setTab] = useState<Tab>(params.tab === 'shared' ? 'shared' : 'mine');
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const copiedEdit = useStore((s) => s.copiedEdit);
+  const [pasting, setPasting] = useState(false);
 
   const items = tab === 'mine' ? mine : shared;
   const contentWidth = Math.min(width, MAX_CONTENT_WIDTH);
@@ -119,6 +123,19 @@ export default function GalleryScreen() {
     if (!ids.length) return;
     router.push({ pathname: '/share', params: { ids: ids.join(',') } });
     exitSelect();
+  };
+
+  const pasteSelected = async () => {
+    const ids = mine.filter((m) => selected.has(m.id)).map((m) => m.id);
+    if (!ids.length) return;
+    setPasting(true);
+    try {
+      const done = await pasteEdit(ids);
+      notify('Edit pasted', `Applied to ${done} of ${ids.length}. Originals are unchanged.`);
+      exitSelect();
+    } finally {
+      setPasting(false);
+    }
   };
 
   const onRefresh = () => {
@@ -250,6 +267,16 @@ export default function GalleryScreen() {
 
       {selecting && (
         <View style={[styles.actionBar, { paddingBottom: insets.bottom + 10 }]}>
+          {tab === 'mine' && copiedEdit && isImagingAvailable && (
+            <Pressable onPress={pasteSelected} disabled={!selected.size || pasting} style={styles.actionButton}>
+              {pasting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Ionicons name="clipboard-outline" size={22} color={selected.size ? '#fff' : '#555'} />
+              )}
+              <Text style={[styles.actionText, !selected.size && { color: '#555' }]}>Paste edit</Text>
+            </Pressable>
+          )}
           {tab === 'mine' && (
             <Pressable onPress={shareSelected} disabled={!selected.size} style={styles.actionButton}>
               <Ionicons name="paper-plane-outline" size={22} color={selected.size ? '#fff' : '#555'} />

@@ -1,3 +1,5 @@
+import type { EditRecipe } from './edits';
+
 export type MediaKind = 'photo' | 'video';
 
 /** Media stored in the cloud, as returned by the API (URLs are signed CloudFront URLs). */
@@ -17,6 +19,8 @@ export interface RemoteMedia {
   thumbUrl?: string;
   /** ~2048px JPEG for full-screen viewing (works in every browser, even for HEIC/RAW). */
   previewUrl?: string;
+  /** Non-destructive edit (previews already show it). */
+  edit?: EditRecipe;
 }
 
 export interface SharedMedia extends RemoteMedia {
@@ -41,6 +45,10 @@ export interface LocalEntry {
   previewFile?: string;
   /** Thumbnail + preview are in the cloud (item visible on other devices). */
   previewsUploaded?: boolean;
+  /** Non-destructive edit; the original file is never modified. */
+  edit?: EditRecipe;
+  /** Edit changed after previews were uploaded: push the new look to the cloud. */
+  editDirty?: boolean;
   /** Set once the cloud copy is confirmed; local copy becomes eligible for cleanup. */
   uploadedAt?: number;
   attempts?: number;
@@ -73,6 +81,7 @@ export interface GalleryItem {
   previewUri?: string;
   sync: SyncState;
   error?: string;
+  edit?: EditRecipe;
   /** Present for items shared with me. */
   ownerId?: string;
   ownerName?: string;
@@ -81,6 +90,8 @@ export interface GalleryItem {
 export interface NewCapture {
   kind: MediaKind;
   sourceUri: string;
+  /** Look chosen in the camera (non-destructive). */
+  edit?: EditRecipe;
   width?: number;
   height?: number;
   duration?: number;

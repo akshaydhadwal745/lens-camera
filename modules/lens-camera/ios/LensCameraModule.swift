@@ -43,6 +43,21 @@ public class LensCameraModule: Module {
       Prop("appleLog") { (view: LensCameraView, value: Bool) in
         view.config.appleLog = value
       }
+      Prop("hdrVideo") { (view: LensCameraView, value: Bool) in
+        view.config.hdrVideo = value
+      }
+      Prop("fps") { (view: LensCameraView, value: Int) in
+        view.config.fps = value
+      }
+      Prop("stabilization") { (view: LensCameraView, value: String) in
+        view.config.stabilization = value
+      }
+      Prop("look") { (view: LensCameraView, value: String?) in
+        view.look = value
+      }
+      Prop("lookIntensity") { (view: LensCameraView, value: Double) in
+        view.lookIntensity = value
+      }
       Prop("torch") { (view: LensCameraView, value: Bool) in
         view.config.torch = value
       }
@@ -88,6 +103,10 @@ public class LensCameraModule: Module {
 
       AsyncFunction("takePhoto") { (view: LensCameraView, options: PhotoOptions, promise: Promise) in
         view.takePhoto(raw: options.raw, flash: options.flash, promise: promise)
+      }.runOnQueue(.main)
+
+      AsyncFunction("takeNightPhoto") { (view: LensCameraView, frames: Int, promise: Promise) in
+        view.takeNightPhoto(frames: frames, promise: promise)
       }.runOnQueue(.main)
 
       AsyncFunction("startRecording") { (view: LensCameraView, promise: Promise) in

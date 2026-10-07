@@ -29,6 +29,7 @@ export default function RootLayout() {
         <Stack.Screen name="share" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="link" />
+        <Stack.Screen name="edit/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack>
       {introVisible && <BrandIntro done={status !== 'booting'} onFinished={() => setIntroVisible(false)} />}
     </GestureHandlerRootView>

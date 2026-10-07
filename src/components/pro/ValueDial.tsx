@@ -16,10 +16,12 @@ type Props = {
   onAuto: () => void;
   /** Value to show while in auto (what the camera is doing right now). */
   autoLabel?: string;
+  /** Text of the reset button (default AUTO). */
+  autoText?: string;
 };
 
 /** Horizontal ruler: drag to step through values, tap AUTO to hand back control. */
-export function ValueDial({ title, values, index, label, onIndex, auto, onAuto, autoLabel }: Props) {
+export function ValueDial({ title, values, index, label, onIndex, auto, onAuto, autoLabel, autoText = 'AUTO' }: Props) {
   const [width, setWidth] = useState(0);
   const indexRef = useRef(index);
   const startRef = useRef(index);
@@ -66,8 +68,8 @@ export function ValueDial({ title, values, index, label, onIndex, auto, onAuto, 
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Text style={[styles.value, auto && styles.valueAuto]}>{auto ? (autoLabel ?? 'AUTO') : label(values[index])}</Text>
-        <Pressable onPress={onAuto} style={[styles.auto, auto && styles.autoOn]} hitSlop={8} accessibilityLabel={`${title} auto`}>
-          <Text style={[styles.autoText, auto && styles.autoTextOn]}>AUTO</Text>
+        <Pressable onPress={onAuto} style={[styles.auto, auto && styles.autoOn]} hitSlop={8} accessibilityLabel={`${title} ${autoText.toLowerCase()}`}>
+          <Text style={[styles.autoText, auto && styles.autoTextOn]}>{autoText}</Text>
         </Pressable>
       </View>
       <GestureDetector gesture={pan}>

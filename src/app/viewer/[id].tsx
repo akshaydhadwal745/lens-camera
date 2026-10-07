@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
 import { formatDate } from '@/lib/format';
 import { deleteItems, removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
@@ -275,6 +276,13 @@ export default function ViewerScreen() {
           </View>
 
           <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+            {!shared && isImagingAvailable && (
+              <Action
+                icon="color-wand-outline"
+                label="Edit"
+                onPress={() => router.push({ pathname: '/edit/[id]', params: { id: current.id } })}
+              />
+            )}
             {!shared && (
               <Action
                 icon="paper-plane-outline"

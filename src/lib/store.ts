@@ -21,7 +21,9 @@ import {
 } from './local-store';
 import { GalleryItem, LocalEntry, NewCapture, RemoteMedia, SharedMedia } from './types';
 import { makeDerivatives } from './derivatives';
-import { UploadCancelled, uploadEntry } from './uploader';
+import { renderCloudDerivatives } from './edit-remote';
+import { compact, EditRecipe, forPaste } from './edits';
+import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
 
 const isWeb = Platform.OS === 'web';
 const DAY = 24 * 3600 * 1000;
@@ -71,6 +73,8 @@ export type State = {
   cellular: boolean;
   settings: Settings;
   usage: { usedBytes: number; quotaBytes: number } | null;
+  /** "Copy edit" clipboard (looks + adjustments, never crop). */
+  copiedEdit: EditRecipe | null;
 };
 
 let state: State = {
@@ -88,6 +92,7 @@ let state: State = {
   cellular: false,
   settings: DEFAULT_SETTINGS,
   usage: null,
+  copiedEdit: null,
 };
 
 const listeners = new Set<() => void>();
@@ -137,6 +142,7 @@ export function selectGallery(s: State): GalleryItem[] {
       thumbUri: r.thumbUrl,
       previewUri: r.previewUrl,
       sync: r.originalReady ? 'synced' : 'partial',
+      edit: r.edit,
     });
   }
   for (const e of s.entries) {
@@ -166,6 +172,7 @@ export function selectGallery(s: State): GalleryItem[] {
       previewUri: e.previewFile ? captureFile(e.previewFile).uri : cloud?.previewUri,
       sync,
       error: e.error,
+      edit: e.edit ?? cloud?.edit,
     });
   }
   const out = [...map.values()].sort((a, b) => b.createdAt - a.createdAt);
@@ -189,6 +196,7 @@ export function selectShared(s: State): GalleryItem[] {
     thumbUri: m.thumbUrl,
     previewUri: m.previewUrl,
     sync: 'synced',
+    edit: m.edit,
     ownerId: m.ownerId,
     ownerName: m.ownerName,
   }));
@@ -202,6 +210,7 @@ export const selectPendingCount = (s: State) => s.entries.filter((e) => !e.uploa
 function needsWork(e: LocalEntry, s: State, now: number): boolean {
   if (e.error || (e.nextAttemptAt ?? 0) > now) return false;
   if (!e.previewsUploaded && e.thumbFile && e.previewFile) return true; // includes backfill for old items
+  if (e.editDirty && e.previewsUploaded && e.thumbFile && e.previewFile) return true;
   return !e.uploadedAt && allowedOnThisNetwork(e, s);
 }
 
@@ -476,6 +485,15 @@ async function syncLoop() {
       set({ uploadingId: next.id, progress: 0 });
       let lastEmit = 0;
       try {
+        if (next.editDirty && next.previewsUploaded && next.thumbFile && next.previewFile) {
+          const media = await pushEdit(next.id, next.edit ?? null, {
+            thumb: captureFile(next.thumbFile),
+            preview: captureFile(next.previewFile),
+          });
+          updateEntry(next.id, { editDirty: false, attempts: 0, nextAttemptAt: undefined });
+          upsertRemote(media);
+          continue;
+        }
         const entry = await ensureDerivatives(next);
         const result = await uploadEntry(entry, {
           onProgress: (p) => {
@@ -538,6 +556,68 @@ export function retryFailed() {
     state.entries.map((e) => (e.error && !e.uploadedAt ? { ...e, error: undefined, attempts: 0, nextAttemptAt: undefined } : e)),
   );
   kickSync();
+}
+
+// ---------- Edits (non-destructive) ----------
+
+function deleteDerivativeFiles(names: (string | undefined)[], keep: (string | undefined)[]) {
+  for (const name of names) {
+    if (!name || keep.includes(name)) continue;
+    const file = captureFile(name);
+    if (file.exists) file.delete();
+  }
+}
+
+/**
+ * Saves a look/edit for an item. The original is untouched: we store the
+ * recipe, re-render this device's thumbnail + preview, and push the new look
+ * to the cloud (immediately if online, otherwise later via the sync loop).
+ */
+export async function saveEdit(id: string, recipe: EditRecipe | null): Promise<void> {
+  const edit = recipe ? (compact(recipe) ?? undefined) : undefined;
+  const entry = state.entries.find((e) => e.id === id);
+
+  if (entry) {
+    const files = await makeDerivatives({ ...entry, edit });
+    deleteDerivativeFiles([entry.thumbFile, entry.previewFile], [files.thumbFile, files.previewFile]);
+    updateEntry(id, { ...files, edit, editDirty: !!entry.previewsUploaded });
+    kickSync();
+    return;
+  }
+
+  // Cloud-only item (e.g. taken on another device): render from the original.
+  const remote = state.remote.find((r) => r.id === id);
+  if (!remote?.url) throw new Error('The original is still uploading. Try again when it has finished.');
+  const files = await renderCloudDerivatives(remote, edit ?? null);
+  try {
+    const media = await pushEdit(id, edit ?? null, files);
+    upsertRemote(media);
+  } finally {
+    if (files.thumb.exists) files.thumb.delete();
+    if (files.preview.exists) files.preview.delete();
+  }
+}
+
+export function copyEdit(recipe: EditRecipe | undefined) {
+  set({ copiedEdit: recipe ? forPaste(recipe) : null });
+}
+
+/** Applies the copied look/adjustments to several items (keeps each one's crop). */
+export async function pasteEdit(ids: string[]): Promise<number> {
+  const copied = state.copiedEdit;
+  if (!copied) return 0;
+  let done = 0;
+  for (const id of ids) {
+    const item = selectGallery(state).find((g) => g.id === id);
+    if (!item) continue;
+    try {
+      await saveEdit(id, { ...copied, crop: item.edit?.crop, portrait: item.edit?.portrait });
+      done++;
+    } catch {
+      // Skip items that can't be edited right now.
+    }
+  }
+  return done;
 }
 
 // ---------- Delete / cleanup ----------

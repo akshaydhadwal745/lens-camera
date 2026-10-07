@@ -8,3 +8,7 @@ export type UploadResult = { media: RemoteMedia; originalDone: boolean };
 export async function uploadEntry(_entry: LocalEntry, _options: unknown): Promise<UploadResult> {
   throw new Error('Uploading is not available on web');
 }
+
+export async function pushEdit(): Promise<RemoteMedia> {
+  throw new Error('Editing is not available on web');
+}

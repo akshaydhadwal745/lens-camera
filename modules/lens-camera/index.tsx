@@ -3,11 +3,13 @@ import { ComponentType, forwardRef, Ref } from 'react';
 import { NativeSyntheticEvent, Platform, ViewProps } from 'react-native';
 
 export type Lens = 'ultraWide' | 'wide' | 'telephoto';
+export type CameraMode = 'photo' | 'video' | 'night' | 'portrait';
+export type Stabilization = 'off' | 'standard' | 'cinematic' | 'extended';
 
 export type Capabilities = {
   position: 'front' | 'back';
   lens: Lens;
-  mode: 'photo' | 'video';
+  mode: CameraMode;
   lenses: { id: Lens; factor: number }[];
   minISO: number;
   maxISO: number;
@@ -23,6 +25,12 @@ export type Capabilities = {
   raw: boolean;
   proRaw: boolean;
   appleLog: boolean;
+  hdrVideo: boolean;
+  fps60: boolean;
+  /** Portrait depth capture available on this camera. */
+  depth: boolean;
+  /** Max frames for a Night burst (0 = not supported). */
+  nightFrames: number;
   flash: boolean;
   torch: boolean;
 };
@@ -57,9 +65,15 @@ export type LensCameraProps = ViewProps & {
   active: boolean;
   position: 'front' | 'back';
   lens: Lens;
-  mode: 'photo' | 'video';
+  mode: CameraMode;
   videoResolution: '1080p' | '4k';
   appleLog: boolean;
+  hdrVideo: boolean;
+  fps: number;
+  stabilization: Stabilization;
+  /** Live look in the viewfinder (null = none). */
+  look: string | null;
+  lookIntensity: number;
   torch: boolean;
   zoom: number;
   exposureMode: 'auto' | 'manual';
@@ -78,11 +92,13 @@ export type LensCameraProps = ViewProps & {
   onError?: (e: NativeSyntheticEvent<{ message: string }>) => void;
 };
 
-export type PhotoResult = { uri: string; width: number; height: number; raw: boolean };
+export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };
 export type VideoResult = { uri: string; duration: number };
 
 export type LensCameraHandle = {
   takePhoto(options: { raw: boolean; flash: 'off' | 'on' | 'auto' }): Promise<PhotoResult>;
+  /** Night mode: burst of `frames`, aligned and merged on the device. */
+  takeNightPhoto(frames: number): Promise<PhotoResult>;
   /** Resolves when recording stops. */
   startRecording(): Promise<VideoResult>;
   stopRecording(): Promise<void>;
@@ -101,3 +117,35 @@ export const LensCameraView = forwardRef<LensCameraHandle, LensCameraProps>(func
   if (!NativeView) return null;
   return <NativeView {...props} ref={ref} />;
 });
+
+// ---------- Imaging (edits, looks, export) ----------
+
+export type RenderResult = { uri: string; width: number; height: number };
+
+type ImagingModule = {
+  looks: string[];
+  renderImage(uri: string, recipe: object | null, options: { maxPixel?: number; format?: 'heic' | 'jpeg'; quality?: number }): Promise<RenderResult>;
+  exportVideo(uri: string, recipe: object | null): Promise<{ uri: string }>;
+  hasDepth(uri: string): Promise<boolean>;
+};
+
+const imaging = Platform.OS === 'ios' ? requireOptionalNativeModule<ImagingModule>('LensImaging') : null;
+
+/** True when on-device editing/looks are available (dev/production iOS builds). */
+export const isImagingAvailable = imaging != null;
+
+export const LensImaging = imaging;
+
+export type LensEditViewProps = ViewProps & {
+  uri: string;
+  recipe: object | null;
+  showOriginal?: boolean;
+  onRenderError?: (e: NativeSyntheticEvent<{ message: string }>) => void;
+};
+
+const NativeEditView: ComponentType<LensEditViewProps> | null = isImagingAvailable ? requireNativeView('LensImaging') : null;
+
+export function LensEditView(props: LensEditViewProps) {
+  if (!NativeEditView) return null;
+  return <NativeEditView {...props} />;
+}

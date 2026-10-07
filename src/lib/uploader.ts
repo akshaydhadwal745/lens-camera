@@ -117,6 +117,7 @@ export async function uploadEntry(
   const plan = await api.startUpload({
     md5: singleMd5,
     derivatives: derivativeSpecs,
+    edit: entry.edit,
     id: entry.id,
     kind: entry.kind,
     contentType: entry.contentType,
@@ -198,4 +199,27 @@ export async function uploadEntry(
   const { media } = await api.complete(entry.id);
   onProgress(1);
   return { media, originalDone: true };
+}
+
+/**
+ * Pushes a new look for an item whose previews are already in the cloud:
+ * uploads the re-rendered thumbnail + preview under a new version, then
+ * switches the item to it. The original is never touched.
+ */
+export async function pushEdit(
+  id: string,
+  edit: LocalEntry['edit'] | null,
+  files: { thumb: File; preview: File },
+): Promise<RemoteMedia> {
+  const specs = {
+    thumb: { md5: md5Of(files.thumb), size: fileSize(files.thumb) },
+    preview: { md5: md5Of(files.preview), size: fileSize(files.preview) },
+  };
+  const { version, derivativeUrls } = await api.startEdit(id, edit ?? null, specs);
+  for (const name of ['thumb', 'preview'] as const) {
+    const url = derivativeUrls?.[name];
+    if (!url) throw new Error('Missing upload URL');
+    await put(files[name], url, { 'Content-Type': 'image/jpeg', 'Content-MD5': specs[name].md5 }, () => {});
+  }
+  return (await api.commitEdit(id, version)).media;
 }

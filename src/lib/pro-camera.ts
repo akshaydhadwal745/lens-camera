@@ -1,5 +1,5 @@
 // Pro camera settings, value scales and presets.
-import type { Capabilities, Lens } from '../../modules/lens-camera';
+import type { CameraMode, Capabilities, Lens, Stabilization } from '../../modules/lens-camera';
 import { loadDoc, saveDoc } from './local-store';
 
 export type Grid = 'off' | 'thirds' | 'cross';
@@ -7,7 +7,7 @@ export type Guide = 'off' | '1:1' | '4:5' | '16:9' | '2.39:1';
 export type ManualParam = 'iso' | 'shutter' | 'wb' | 'focus' | 'ev';
 
 export type ProSettings = {
-  mode: 'photo' | 'video';
+  mode: CameraMode;
   position: 'front' | 'back';
   lens: Lens;
   zoom: number;
@@ -17,6 +17,17 @@ export type ProSettings = {
   appleLog: boolean;
   videoResolution: '4k' | '1080p';
   timer: 0 | 3 | 10;
+  hdrVideo: boolean;
+  fps: 24 | 30 | 60;
+  stabilization: Stabilization;
+
+  /** Look shown live and attached to new shots (null = none). */
+  look: string | null;
+  lookIntensity: number;
+  /** Save looks into the file instead of as a removable edit. */
+  bakeLooks: boolean;
+  nightFrames: number;
+  portraitAperture: number;
 
   exposureMode: 'auto' | 'manual';
   iso: number;
@@ -49,6 +60,15 @@ export const DEFAULT_SETTINGS: ProSettings = {
   appleLog: false,
   videoResolution: '4k',
   timer: 0,
+  hdrVideo: false,
+  fps: 30,
+  stabilization: 'cinematic',
+
+  look: null,
+  lookIntensity: 1,
+  bakeLooks: false,
+  nightFrames: 6,
+  portraitAperture: 2.8,
 
   exposureMode: 'auto',
   iso: 100,
@@ -76,6 +96,11 @@ export const PRESET_KEYS = [
   'raw',
   'appleLog',
   'videoResolution',
+  'hdrVideo',
+  'fps',
+  'stabilization',
+  'look',
+  'lookIntensity',
   'exposureMode',
   'iso',
   'shutter',

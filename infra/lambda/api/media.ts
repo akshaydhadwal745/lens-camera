@@ -106,6 +106,16 @@ export function derivativeKey(originalKey: string, name: Derivative, version = 0
 
 type DerivativeSpec = { md5: string; size: number };
 
+const MAX_EDIT_BYTES = 8 * 1024;
+
+/** Edit recipe JSON (≤ 8 KB); null = reset to original. */
+export function parseEdit(value: unknown): Record<string, unknown> | null {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Invalid edit');
+  if (JSON.stringify(value).length > MAX_EDIT_BYTES) throw new HttpError(413, 'Edit too large');
+  return value as Record<string, unknown>;
+}
+
 export function parseDerivatives(value: unknown): Partial<Record<Derivative, DerivativeSpec>> | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const out: Partial<Record<Derivative, DerivativeSpec>> = {};
@@ -221,6 +231,7 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   const { id, contentType, size, width, height, duration, createdAt } = req.body;
   const md5 = md5Param(req.body.md5);
   const derivatives = parseDerivatives(req.body.derivatives);
+  const edit = req.body.edit === undefined ? undefined : parseEdit(req.body.edit) ?? undefined;
   if (typeof id !== 'string' || !MEDIA_ID.test(id)) throw new HttpError(400, 'Invalid media id');
   const type = CONTENT_TYPES[contentType];
   if (!type) throw new HttpError(400, 'Unsupported content type');
@@ -249,6 +260,7 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     height: num(height),
     duration: num(duration),
     createdAt: num(createdAt) ?? Date.now(),
+    edit,
   };
 
   item.storageClass = ORIGINAL_STORAGE_CLASS;

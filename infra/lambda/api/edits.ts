@@ -12,18 +12,11 @@ import {
   derivativeUrls,
   mediaKey,
   parseDerivatives,
+  parseEdit,
   requireMedia,
   toClient,
 } from './media';
 
-const MAX_EDIT_BYTES = 8 * 1024;
-
-function parseEdit(value: unknown): Record<string, unknown> | null {
-  if (value === null) return null; // reset to original
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Invalid edit');
-  if (JSON.stringify(value).length > MAX_EDIT_BYTES) throw new HttpError(413, 'Edit too large');
-  return value as Record<string, unknown>;
-}
 
 /**
  * POST /v1/media/:id/edit {edit, derivatives:{thumb,preview}}: start saving an

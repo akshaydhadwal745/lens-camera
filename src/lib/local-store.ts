@@ -122,6 +122,7 @@ export function importCapture(input: NewCapture): LocalEntry {
     width: input.width,
     height: input.height,
     duration: input.duration,
+    edit: input.edit,
   };
 }
 

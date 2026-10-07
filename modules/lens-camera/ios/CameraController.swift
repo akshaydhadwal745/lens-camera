@@ -1,14 +1,20 @@
 import AVFoundation
+import CoreImage
+import ImageIO
 import UIKit
+import Vision
 
 /// Everything the JS side can configure. Structural fields (position, lens,
 /// mode, resolution, log) rebuild the session; the rest are applied live.
 struct CameraConfig: Equatable {
   var position: AVCaptureDevice.Position = .back
   var lens = "wide"            // ultraWide | wide | telephoto
-  var mode = "photo"           // photo | video
+  var mode = "photo"           // photo | video | night | portrait
   var videoResolution = "4k"   // 1080p | 4k
   var appleLog = false
+  var hdrVideo = false         // 10-bit HLG (Dolby Vision–compatible) when supported
+  var fps = 30                 // 24 | 30 | 60
+  var stabilization = "cinematic" // off | standard | cinematic | extended
   var torch = false
   var zoom: Double = 1
   var exposureMode = "auto"    // auto | manual
@@ -24,7 +30,11 @@ struct CameraConfig: Equatable {
   func needsRebuild(from old: CameraConfig) -> Bool {
     position != old.position || lens != old.lens || mode != old.mode
       || videoResolution != old.videoResolution || appleLog != old.appleLog
+      || hdrVideo != old.hdrVideo || fps != old.fps || stabilization != old.stabilization
   }
+
+  /// Photo, Night and Portrait all use the still-photo pipeline.
+  var isStillMode: Bool { mode != "video" }
 }
 
 enum CameraError: LocalizedError {
@@ -34,6 +44,14 @@ enum CameraError: LocalizedError {
     case .message(let m): return m
     }
   }
+}
+
+/// Several frames captured for Night mode, merged when all have arrived.
+private final class NightRequest {
+  let completion: (Result<[String: Any], Error>) -> Void
+  var frames: [CIImage] = []
+  var error: Error?
+  init(_ completion: @escaping (Result<[String: Any], Error>) -> Void) { self.completion = completion }
 }
 
 private final class PhotoRequest {
@@ -56,6 +74,8 @@ final class CameraController: NSObject {
   var onReady: (([String: Any]) -> Void)?
   var onError: ((String) -> Void)?
   var onAnalysis: ((FrameAnalysis) -> Void)?
+  /// Live preview frames (upright, mirrored like the preview) while a look is active.
+  var onPreviewFrame: ((CIImage) -> Void)?
 
   private let sessionQueue = DispatchQueue(label: "lens.camera.session")
   private let analysisQueue = DispatchQueue(label: "lens.camera.analysis", qos: .userInitiated)
@@ -72,6 +92,8 @@ final class CameraController: NSObject {
 
   private let lock = NSLock()
   private var photoRequests: [Int64: PhotoRequest] = [:]
+  private var nightRequests: [Int64: NightRequest] = [:]
+  private var liveFrames = false
   private var recordingCompletion: ((Result<[String: Any], Error>) -> Void)?
 
   // Analysis state (touched only on analysisQueue).
@@ -117,9 +139,24 @@ final class CameraController: NSObject {
     analysisQueue.async { self.analysisOptions = options }
   }
 
+  /// Turns on per-frame delivery for the live look preview.
+  func setLiveFrames(_ enabled: Bool) {
+    analysisQueue.async { self.liveFrames = enabled }
+  }
+
   // MARK: Session building
 
   private func findDevice() -> AVCaptureDevice? {
+    if config.mode == "portrait" {
+      // Depth needs a multi-camera (or TrueDepth) device.
+      if config.position == .front {
+        return AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front)
+          ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+      }
+      return AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+        ?? AVCaptureDevice.default(.builtInDualCamera, for: .video, position: .back)
+        ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+    }
     if config.position == .front {
       return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
     }
@@ -162,9 +199,10 @@ final class CameraController: NSObject {
     }
 
     let useLog = config.mode == "video" && config.appleLog
-    session.automaticallyConfiguresCaptureDeviceForWideColor = !useLog
+    let useHDR = config.mode == "video" && config.hdrVideo && !useLog
+    session.automaticallyConfiguresCaptureDeviceForWideColor = !(useLog || useHDR)
 
-    if config.mode == "photo" {
+    if config.isStillMode {
       if session.outputs.contains(movieOutput) { session.removeOutput(movieOutput) }
       if let mic = audioInput {
         session.removeInput(mic)
@@ -201,7 +239,7 @@ final class CameraController: NSObject {
 
     session.commitConfiguration()
 
-    if useLog { enableAppleLog(on: newDevice) }
+    if config.mode == "video" { configureVideoFormat(on: newDevice) }
     configureOutputs(for: newDevice)
     built = true
 
@@ -209,24 +247,45 @@ final class CameraController: NSObject {
     DispatchQueue.main.async { self.onReady?(capabilities) }
   }
 
-  private func enableAppleLog(on device: AVCaptureDevice) {
-    guard #available(iOS 17.0, *) else { return }
-    let wanted: Int32 = config.videoResolution == "4k" ? 3840 : 1920
-    let candidates = device.formats.filter {
-      $0.supportedColorSpaces.contains(.appleLog)
-        && CMVideoFormatDescriptionGetDimensions($0.formatDescription).width == wanted
+  /// Picks a capture format for the requested resolution / frame rate /
+  /// colour (Apple Log or HDR). Without special requests the session preset is used.
+  private func configureVideoFormat(on device: AVCaptureDevice) {
+    let wantedWidth: Int32 = config.videoResolution == "4k" ? 3840 : 1920
+    let fps = Double(max(1, config.fps))
+    let wantLog = config.appleLog
+    let wantHDR = config.hdrVideo && !wantLog
+    guard wantLog || wantHDR || fps > 30 || fps < 30 else { return }
+
+    var candidates = device.formats.filter { format in
+      CMVideoFormatDescriptionGetDimensions(format.formatDescription).width == wantedWidth
+        && format.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= fps && $0.minFrameRate <= fps }
     }
-    guard let format = candidates.last ?? device.formats.last(where: { $0.supportedColorSpaces.contains(.appleLog) }) else {
-      report("Apple Log isn't supported on this camera.")
+    var colorSpace: AVCaptureColorSpace?
+    if wantLog {
+      if #available(iOS 17.0, *) {
+        candidates = candidates.filter { $0.supportedColorSpaces.contains(.appleLog) }
+        colorSpace = .appleLog
+      } else {
+        candidates = []
+      }
+    } else if wantHDR {
+      candidates = candidates.filter { $0.supportedColorSpaces.contains(.HLG_BT2020) }
+      colorSpace = .HLG_BT2020
+    }
+    guard let format = candidates.last else {
+      report("This camera can't record \(config.videoResolution == "4k" ? "4K" : "1080p") at \(Int(fps)) fps\(wantLog ? " in Apple Log" : wantHDR ? " in HDR" : ""). Using the closest available setting.")
       return
     }
     do {
       try device.lockForConfiguration()
       device.activeFormat = format
-      device.activeColorSpace = .appleLog
+      if let colorSpace { device.activeColorSpace = colorSpace }
+      let duration = CMTime(value: 1, timescale: CMTimeScale(fps))
+      device.activeVideoMinFrameDuration = duration
+      device.activeVideoMaxFrameDuration = duration
       device.unlockForConfiguration()
     } catch {
-      report("Could not enable Apple Log: \(error.localizedDescription)")
+      report("Could not set the video format: \(error.localizedDescription)")
     }
   }
 
@@ -245,8 +304,11 @@ final class CameraController: NSObject {
 
     if session.outputs.contains(photoOutput) {
       photoOutput.maxPhotoQualityPrioritization = .quality
+      let portrait = config.mode == "portrait"
+      photoOutput.isDepthDataDeliveryEnabled = portrait && photoOutput.isDepthDataDeliverySupported
+      photoOutput.isPortraitEffectsMatteDeliveryEnabled = portrait && photoOutput.isPortraitEffectsMatteDeliverySupported
       if photoOutput.isAppleProRAWSupported {
-        photoOutput.isAppleProRAWEnabled = true
+        photoOutput.isAppleProRAWEnabled = !portrait
       }
       if let largest = device.activeFormat.supportedMaxPhotoDimensions.last {
         photoOutput.maxPhotoDimensions = largest
@@ -258,7 +320,16 @@ final class CameraController: NSObject {
         movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: connection)
       }
       if connection.isVideoStabilizationSupported {
-        connection.preferredVideoStabilizationMode = .auto
+        let wanted: AVCaptureVideoStabilizationMode
+        switch config.stabilization {
+        case "off": wanted = .off
+        case "standard": wanted = .standard
+        case "extended": wanted = .cinematicExtended
+        default: wanted = .cinematic
+        }
+        let fallbacks: [AVCaptureVideoStabilizationMode] = [wanted, .cinematic, .standard, .auto]
+        let mode = fallbacks.first { device.activeFormat.isVideoStabilizationModeSupported($0) } ?? .auto
+        connection.preferredVideoStabilizationMode = wanted == .off ? .off : mode
       }
     }
   }
@@ -320,6 +391,10 @@ final class CameraController: NSObject {
       "raw": session.outputs.contains(photoOutput) && !photoOutput.availableRawPhotoPixelFormatTypes.isEmpty,
       "proRaw": session.outputs.contains(photoOutput) && photoOutput.isAppleProRAWSupported,
       "appleLog": supportsLog,
+      "hdrVideo": d.formats.contains { $0.supportedColorSpaces.contains(.HLG_BT2020) },
+      "fps60": d.formats.contains { $0.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= 60 } },
+      "depth": session.outputs.contains(photoOutput) && photoOutput.isDepthDataDeliverySupported,
+      "nightFrames": session.outputs.contains(photoOutput) ? photoOutput.maxBracketedCapturePhotoCount : 0,
       "flash": d.hasFlash,
       "torch": d.hasTorch,
     ]
@@ -436,7 +511,7 @@ final class CameraController: NSObject {
       let settings: AVCapturePhotoSettings
       var isRaw = false
       var processedExtension = "jpg"
-      if raw, let rawFormat = self.preferredRawFormat() {
+      if raw, self.config.mode != "portrait", let rawFormat = self.preferredRawFormat() {
         settings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
         isRaw = true
       } else {
@@ -446,6 +521,16 @@ final class CameraController: NSObject {
         settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
         settings.photoQualityPrioritization = .quality
         processedExtension = codec == .hevc ? "heic" : "jpg"
+      }
+      if self.config.mode == "portrait", !isRaw {
+        if self.photoOutput.isDepthDataDeliveryEnabled {
+          settings.isDepthDataDeliveryEnabled = true
+          settings.embedsDepthDataInPhoto = true
+        }
+        if self.photoOutput.isPortraitEffectsMatteDeliveryEnabled {
+          settings.isPortraitEffectsMatteDeliveryEnabled = true
+          settings.embedsPortraitEffectsMatteInPhoto = true
+        }
       }
       let maxDimensions = self.photoOutput.maxPhotoDimensions
       if maxDimensions.width > 0 && maxDimensions.height > 0 {
@@ -474,6 +559,87 @@ final class CameraController: NSObject {
       self.lock.unlock()
       self.photoOutput.capturePhoto(with: settings, delegate: self)
     }
+  }
+
+  // MARK: Night mode
+
+  /// Captures a burst of frames and merges them (aligned + averaged) into one
+  /// low-noise photo. Hold the phone steady; works best with a slow shutter.
+  func captureNight(frames requested: Int, rotation: CGFloat?, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    sessionQueue.async {
+      guard self.session.isRunning, self.session.outputs.contains(self.photoOutput) else {
+        completion(.failure(CameraError.message("Switch to Night mode to take a night photo.")))
+        return
+      }
+      let maxCount = self.photoOutput.maxBracketedCapturePhotoCount
+      let count = max(2, min(requested, maxCount))
+      guard maxCount >= 2 else {
+        completion(.failure(CameraError.message("This camera can't capture bursts for Night mode.")))
+        return
+      }
+      let brackets = (0..<count).map { _ in
+        AVCaptureAutoExposureBracketedStillImageSettings.autoExposureSettings(exposureTargetBias: 0)
+      }
+      let settings = AVCapturePhotoBracketSettings(
+        rawPixelFormatType: 0,
+        processedFormat: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA],
+        bracketedSettings: brackets
+      )
+      if self.photoOutput.isLensStabilizationDuringBracketedCaptureSupported {
+        settings.isLensStabilizationEnabled = true
+      }
+      if let connection = self.photoOutput.connection(with: .video) {
+        if let rotation {
+          if #available(iOS 17.0, *) {
+            if connection.isVideoRotationAngleSupported(rotation) { connection.videoRotationAngle = rotation }
+          }
+        }
+        if connection.isVideoMirroringSupported {
+          connection.automaticallyAdjustsVideoMirroring = false
+          connection.isVideoMirrored = self.config.position == .front
+        }
+      }
+      self.lock.lock()
+      self.nightRequests[settings.uniqueID] = NightRequest(completion)
+      self.lock.unlock()
+      self.photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+  }
+
+  private static func mergeNight(_ frames: [CIImage]) throws -> [String: Any] {
+    guard let reference = frames.first else { throw CameraError.message("No frames captured.") }
+    var sum = reference
+    for frame in frames.dropFirst() {
+      var aligned = frame
+      let request = VNTranslationalImageRegistrationRequest(targetedCIImage: frame)
+      try? VNImageRequestHandler(ciImage: reference).perform([request])
+      if let observation = request.results?.first as? VNImageTranslationAlignmentObservation {
+        aligned = frame.transformed(by: observation.alignmentTransform)
+      }
+      sum = aligned.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: sum])
+    }
+    let n = CGFloat(frames.count)
+    let averaged = sum.applyingFilter("CIColorMatrix", parameters: [
+      "inputRVector": CIVector(x: 1 / n, y: 0, z: 0, w: 0),
+      "inputGVector": CIVector(x: 0, y: 1 / n, z: 0, w: 0),
+      "inputBVector": CIVector(x: 0, y: 0, z: 1 / n, w: 0),
+      "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1 / n),
+    ])
+    // Trim the edges where shifted frames don't overlap.
+    let inset = reference.extent.insetBy(dx: reference.extent.width * 0.015, dy: reference.extent.height * 0.015)
+    let merged = averaged.cropped(to: inset)
+      .applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": 0.01, "inputSharpness": 0.5])
+      .transformed(by: CGAffineTransform(translationX: -inset.minX, y: -inset.minY))
+
+    let pipeline = ImagePipeline.shared
+    let space = CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()
+    let quality = CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String)
+    guard let data = pipeline.context.heifRepresentation(of: merged, format: .RGBA8, colorSpace: space, options: [quality: 0.92]) else {
+      throw CameraError.message("Could not encode the night photo.")
+    }
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("lens-night-\(UUID().uuidString).heic")
+    try data.write(to: url)
+    return ["uri": url.absoluteString, "width": Int(merged.extent.width), "height": Int(merged.extent.height), "raw": false, "depth": false, "frames": frames.count]
   }
 
   // MARK: Video
@@ -523,8 +689,18 @@ final class CameraController: NSObject {
 extension CameraController: AVCapturePhotoCaptureDelegate {
   func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
     lock.lock()
+    let night = nightRequests[photo.resolvedSettings.uniqueID]
     let request = photoRequests[photo.resolvedSettings.uniqueID]
     lock.unlock()
+    if let night {
+      if let error {
+        night.error = error
+      } else if let buffer = photo.pixelBuffer {
+        let orientation = (photo.metadata[kCGImagePropertyOrientation as String] as? NSNumber)?.int32Value ?? 1
+        night.frames.append(CIImage(cvPixelBuffer: buffer).oriented(forExifOrientation: orientation))
+      }
+      return
+    }
     guard let request else { return }
 
     if let error {
@@ -549,13 +725,30 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
       "width": Int(dims.width),
       "height": Int(dims.height),
       "raw": photo.isRawPhoto,
+      "depth": photo.depthData != nil,
     ]
   }
 
   func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
     lock.lock()
+    let night = nightRequests.removeValue(forKey: resolvedSettings.uniqueID)
     let request = photoRequests.removeValue(forKey: resolvedSettings.uniqueID)
     lock.unlock()
+    if let night {
+      if let failure = error ?? night.error, night.frames.isEmpty {
+        night.completion(.failure(failure))
+        return
+      }
+      let frames = night.frames
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          night.completion(.success(try CameraController.mergeNight(frames)))
+        } catch {
+          night.completion(.failure(error))
+        }
+      }
+      return
+    }
     guard let request else { return }
 
     if let result = request.result {
@@ -592,6 +785,9 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
 
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
   func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    if liveFrames, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+      onPreviewFrame?(CIImage(cvPixelBuffer: buffer))
+    }
     let options = analysisOptions
     guard options.needsAnything else { return }
     let now = CACurrentMediaTime()

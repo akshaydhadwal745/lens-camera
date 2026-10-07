@@ -1,5 +1,7 @@
 import AVFoundation
+import CoreImage
 import ExpoModulesCore
+import MetalKit
 import UIKit
 
 /// Native preview + analysis overlay. Configuration arrives as props; the
@@ -13,6 +15,9 @@ final class LensCameraView: ExpoView {
   var config = CameraConfig()
   var analysis = AnalysisOptions()
   var active = true
+  /// Live look shown in the viewfinder (nil = none).
+  var look: String?
+  var lookIntensity: Double = 1
 
   private let controller = CameraController()
   private let previewLayer: AVCaptureVideoPreviewLayer
@@ -22,6 +27,26 @@ final class LensCameraView: ExpoView {
   private var rotationCoordinator: AnyObject?
   private var rotationObservation: NSKeyValueObservation?
 
+  // Live look rendering (Metal + Core Image). Frames come from the analysis
+  // data output; the plain preview layer stays underneath as a fallback.
+  private let metalDevice = MTLCreateSystemDefaultDevice()
+  private lazy var commandQueue = metalDevice?.makeCommandQueue()
+  private lazy var lookContext: CIContext? = metalDevice.map { CIContext(mtlDevice: $0, options: [.cacheIntermediates: false]) }
+  private lazy var lookView: MTKView = {
+    let view = MTKView(frame: .zero, device: metalDevice)
+    view.framebufferOnly = false
+    view.isPaused = true
+    view.enableSetNeedsDisplay = false
+    view.isHidden = true
+    view.isUserInteractionEnabled = false
+    view.delegate = self
+    return view
+  }()
+  private let frameLock = NSLock()
+  private var latestFrame: CIImage?
+  private var latestFrameTime: CFTimeInterval = 0
+  private var lookDisplayLink: CADisplayLink?
+
   required init(appContext: AppContext? = nil) {
     previewLayer = AVCaptureVideoPreviewLayer(session: controller.session)
     super.init(appContext: appContext)
@@ -30,6 +55,8 @@ final class LensCameraView: ExpoView {
 
     previewLayer.videoGravity = .resizeAspectFill
     layer.addSublayer(previewLayer)
+
+    addSubview(lookView)
 
     overlayView.contentMode = .scaleAspectFill
     overlayView.clipsToBounds = true
@@ -48,10 +75,18 @@ final class LensCameraView: ExpoView {
     controller.onAnalysis = { [weak self] result in
       self?.show(result)
     }
+    controller.onPreviewFrame = { [weak self] frame in
+      guard let self else { return }
+      self.frameLock.lock()
+      self.latestFrame = frame
+      self.latestFrameTime = CACurrentMediaTime()
+      self.frameLock.unlock()
+    }
   }
 
   deinit {
     statsTimer?.invalidate()
+    lookDisplayLink?.invalidate()
     controller.stop()
   }
 
@@ -61,6 +96,7 @@ final class LensCameraView: ExpoView {
     CATransaction.setDisableActions(true)
     previewLayer.frame = bounds
     CATransaction.commit()
+    lookView.frame = bounds
     overlayView.frame = bounds
   }
 
@@ -91,6 +127,38 @@ final class LensCameraView: ExpoView {
       controller.stop()
       stopStats()
     }
+    updateLiveLook()
+  }
+
+  // MARK: Live look
+
+  private var lookActive: Bool { look != nil && lookIntensity > 0.001 && metalDevice != nil }
+
+  private func updateLiveLook() {
+    let enabled = lookActive && running
+    controller.setLiveFrames(enabled)
+    if enabled, lookDisplayLink == nil {
+      let link = CADisplayLink(target: self, selector: #selector(renderLookFrame))
+      link.preferredFramesPerSecond = 30
+      link.add(to: .main, forMode: .common)
+      lookDisplayLink = link
+    } else if !enabled {
+      lookDisplayLink?.invalidate()
+      lookDisplayLink = nil
+      lookView.isHidden = true
+      frameLock.lock()
+      latestFrame = nil
+      frameLock.unlock()
+    }
+  }
+
+  @objc private func renderLookFrame() {
+    frameLock.lock()
+    let fresh = latestFrame != nil && CACurrentMediaTime() - latestFrameTime < 0.5
+    frameLock.unlock()
+    // No frames (e.g. this device can't record and analyse at once): plain preview.
+    lookView.isHidden = !fresh
+    if fresh { lookView.draw() }
   }
 
   // MARK: Rotation (keeps preview, overlay and captures upright)
@@ -168,6 +236,15 @@ final class LensCameraView: ExpoView {
     }
   }
 
+  func takeNightPhoto(frames: Int, promise: Promise) {
+    controller.captureNight(frames: frames, rotation: captureAngle()) { result in
+      switch result {
+      case .success(let photo): promise.resolve(photo)
+      case .failure(let error): promise.reject("ERR_CAPTURE", error.localizedDescription)
+      }
+    }
+  }
+
   func startRecording(promise: Promise) {
     controller.startRecording(rotation: captureAngle()) { result in
       switch result {
@@ -186,5 +263,40 @@ final class LensCameraView: ExpoView {
     let layerPoint = CGPoint(x: x * Double(bounds.width), y: y * Double(bounds.height))
     let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
     controller.focus(at: devicePoint)
+  }
+}
+
+// MARK: - Live look drawing
+
+extension LensCameraView: MTKViewDelegate {
+  func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+
+  func draw(in view: MTKView) {
+    frameLock.lock()
+    let frame = latestFrame
+    frameLock.unlock()
+    guard let frame, let look, let context = lookContext,
+          let drawable = view.currentDrawable, let buffer = commandQueue?.makeCommandBuffer() else { return }
+
+    // Aspect-fill the frame into the drawable, like the preview layer.
+    let size = view.drawableSize
+    let scale = max(size.width / frame.extent.width, size.height / frame.extent.height)
+    var image = frame.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    image = image.transformed(by: CGAffineTransform(
+      translationX: (size.width - image.extent.width) / 2 - image.extent.minX,
+      y: (size.height - image.extent.height) / 2 - image.extent.minY
+    ))
+    image = Looks.applyLUT(look, intensity: lookIntensity, to: image, context: context)
+
+    let destination = CIRenderDestination(
+      width: Int(size.width),
+      height: Int(size.height),
+      pixelFormat: view.colorPixelFormat,
+      commandBuffer: buffer,
+      mtlTextureProvider: { drawable.texture }
+    )
+    _ = try? context.startTask(toRender: image, from: CGRect(origin: .zero, size: size), to: destination, at: .zero)
+    buffer.present(drawable)
+    buffer.commit()
   }
 }
