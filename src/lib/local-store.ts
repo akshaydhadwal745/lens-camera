@@ -16,6 +16,7 @@ const CONTENT_TYPES: Record<string, string> = {
   jpeg: 'image/jpeg',
   heic: 'image/heic',
   png: 'image/png',
+  dng: 'image/x-adobe-dng',
   mov: 'video/quicktime',
   mp4: 'video/mp4',
 };
@@ -134,6 +135,15 @@ export function loadPrefs<T extends object>(fallback: T): T {
 
 export function savePrefs(prefs: object) {
   writeJson(prefsFile, prefs);
+}
+
+/** Small JSON documents in the documents directory (camera settings, presets…). */
+export function loadDoc<T>(name: string, fallback: T): T {
+  return readJson<T>(new File(Paths.document, `${name}.json`), fallback);
+}
+
+export function saveDoc(name: string, value: unknown) {
+  writeJson(new File(Paths.document, `${name}.json`), value);
 }
 
 /** Removes leftover multipart chunk files from the cache directory. */

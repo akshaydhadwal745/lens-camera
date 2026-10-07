@@ -36,3 +36,18 @@ export function savePrefs(prefs: object) {
   }
 }
 export function clearChunkFiles() {}
+export function loadDoc<T>(name: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(`lens.${name}`);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+export function saveDoc(name: string, value: unknown) {
+  try {
+    localStorage.setItem(`lens.${name}`, JSON.stringify(value));
+  } catch {
+    // Storage may be unavailable.
+  }
+}

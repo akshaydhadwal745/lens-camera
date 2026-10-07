@@ -1,8 +1,10 @@
-# Builds an UNSIGNED iOS development build (.ipa) on a GitHub macOS runner.
-# SideStore re-signs it with a free Apple ID when installing on the device.
+# Builds development builds of the app:
+#  - iOS: UNSIGNED .ipa on a GitHub macOS runner; SideStore re-signs it with a
+#    free Apple ID when installing.
+#  - Android: debug-signed .apk on a Linux runner; installs directly.
 # JS/UI changes load live from Metro (npm run tunnel); only native changes
-# (new native modules, app.json/plugins) need a new build.
-name: iOS build
+# (modules/, app.json, dependencies) need a new build.
+name: App builds
 
 on:
   workflow_dispatch:
@@ -15,20 +17,22 @@ on:
       - 'package-lock.json'
       - '.github/workflows/ios-build.yml'
 
-# Least privilege: only this job may create releases.
+# Least privilege; only the release job can write.
 permissions:
   contents: read
 
 concurrency:
-  group: ios-build-${{ github.ref }}
+  group: app-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  ios:
     runs-on: macos-latest
     timeout-minutes: 60
-    permissions:
-      contents: write
+    env:
+      USE_CCACHE: '1'
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,6 +50,25 @@ jobs:
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
+      - name: Install ccache
+        run: brew install ccache
+
+      - name: Restore compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-ios-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-ios-${{ hashFiles('package-lock.json') }}-
+            ccache-ios-
+
+      - name: Restore CocoaPods cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ hashFiles('package-lock.json') }}
+          restore-keys: pods-
+
       - name: Install JS dependencies
         run: npm ci
 
@@ -62,7 +85,6 @@ jobs:
         run: |
           WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
           set -o pipefail
           xcodebuild \
             -workspace "$WORKSPACE" \
@@ -72,7 +94,9 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tail -n 200
+            build 2>&1 | grep -E "error:|warning: .*LensCamera|BUILD (SUCCEEDED|FAILED)|\*\* " || true
+          test -d build/Build/Products/Debug-iphoneos/*.app
+          ccache -s || true
 
       - name: Package .ipa
         run: |
@@ -84,18 +108,76 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Lens-dev-ipa
+          name: ios
           path: Lens-dev.ipa
           retention-days: 14
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Generate native project
+        run: npx expo prebuild --platform android --clean --no-install
+        env:
+          CI: 1
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+      - name: Collect APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Lens-dev.apk && ls -lh Lens-dev.apk
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android
+          path: Lens-dev.apk
+          retention-days: 14
+
+  release:
+    needs: [ios, android]
+    if: ${{ always() && (needs.ios.result == 'success' || needs.android.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IOS: ${{ needs.ios.result }}
+          ANDROID: ${{ needs.android.result }}
         run: |
+          ls -lh dist
           TAG="dev-${{ github.run_number }}"
-          gh release create "$TAG" Lens-dev.ipa \
+          gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Lens dev build #${{ github.run_number }}" \
-            --notes "Unsigned development build from ${GITHUB_SHA::7}. Install with SideStore; JS loads from Metro (npm run tunnel)." \
+            --notes "Development builds from ${GITHUB_SHA::7} (iOS: $IOS, Android: $ANDROID).
+          - iPhone/iPad: install Lens-dev.ipa with SideStore.
+          - Android: open Lens-dev.apk on the phone and install.
+          JS loads from Metro: run npm run tunnel on the computer." \
             --prerelease

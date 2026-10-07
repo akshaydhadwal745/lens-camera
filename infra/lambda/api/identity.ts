@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto';
+
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, hashSecret, HttpError, json, randomId, Req, Res, safeEqual } from './lib';
@@ -118,7 +120,61 @@ export async function contacts(identity: Identity): Promise<Res> {
   return json(200, { contacts: list });
 }
 
+// ---------- Pairing codes (current web sign-in) ----------
+
+const PAIR_TTL_SECONDS = 300;
+const PAIR_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
+const PAIR_LENGTH = 8;
+
+function pairingCode(): string {
+  let code = '';
+  for (let i = 0; i < PAIR_LENGTH; i++) code += PAIR_ALPHABET[randomInt(PAIR_ALPHABET.length)];
+  return code;
+}
+
+/** POST /v1/pairing: short code that lets the web viewer sign in as this identity. */
+export async function createPairing(identity: Identity): Promise<Res> {
+  const code = pairingCode();
+  const expiresAt = Math.floor(Date.now() / 1000) + PAIR_TTL_SECONDS;
+  await ddb.send(
+    new PutCommand({
+      TableName: env.table,
+      Item: { pk: `P#${code}`, sk: 'PAIR', deviceId: identity.id, ttl: expiresAt },
+      ConditionExpression: 'attribute_not_exists(pk)',
+    }),
+  );
+  return json(201, { code, expiresAt: expiresAt * 1000 });
+}
+
+/** POST /v1/pairing/claim {code}: exchanges a pairing code for a web token. */
+export async function claimPairing(req: Req): Promise<Res> {
+  const code = String(req.body.code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== PAIR_LENGTH) throw new HttpError(400, `Enter the ${PAIR_LENGTH}-character code`);
+  let item: Record<string, any> | undefined;
+  try {
+    const result = await ddb.send(
+      new DeleteCommand({
+        TableName: env.table,
+        Key: { pk: `P#${code}`, sk: 'PAIR' },
+        ConditionExpression: 'attribute_exists(pk) AND #ttl > :now',
+        ExpressionAttributeNames: { '#ttl': 'ttl' },
+        ExpressionAttributeValues: { ':now': Math.floor(Date.now() / 1000) },
+        ReturnValues: 'ALL_OLD',
+      }),
+    );
+    item = result.Attributes;
+  } catch (error: any) {
+    if (error?.name === 'ConditionalCheckFailedException') throw new HttpError(400, 'Code is invalid or expired');
+    throw error;
+  }
+  const deviceId = item!.deviceId as string;
+  const profile = await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${deviceId}`, sk: 'PROFILE' } }));
+  const token = await issueToken(deviceId, 'web');
+  return json(200, { id: deviceId, name: profile.Item!.name, token });
+}
+
 // ---------- QR sign-in for the website (WhatsApp Web style) ----------
+// ON HOLD: implemented but not routed yet (see index.ts).
 // 1. Browser: POST /login-sessions -> {id, secret}; shows a QR containing id.
 // 2. Phone (signed in) scans it: GET /login-sessions/:id/info, then POST .../approve.
 // 3. Browser polls GET /login-sessions/:id with its secret; once approved it

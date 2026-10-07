@@ -32,6 +32,7 @@ const CONTENT_TYPES: Record<string, { ext: string; kind: 'photo' | 'video' }> = 
   'image/jpeg': { ext: 'jpg', kind: 'photo' },
   'image/heic': { ext: 'heic', kind: 'photo' },
   'image/png': { ext: 'png', kind: 'photo' },
+  'image/x-adobe-dng': { ext: 'dng', kind: 'photo' },
   'video/quicktime': { ext: 'mov', kind: 'video' },
   'video/mp4': { ext: 'mp4', kind: 'video' },
 };
