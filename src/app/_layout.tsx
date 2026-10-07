@@ -1,0 +1,36 @@
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { BrandIntro } from '@/components/BrandIntro';
+import { boot, useStore } from '@/lib/store';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+export default function RootLayout() {
+  const status = useStore((s) => s.status);
+  const [introVisible, setIntroVisible] = useState(true);
+
+  useEffect(() => {
+    // The animated intro takes over from the static native splash.
+    SplashScreen.hideAsync().catch(() => {});
+    boot();
+  }, []);
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#000' } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="gallery" />
+        <Stack.Screen name="viewer/[id]" options={{ animation: 'fade' }} />
+        <Stack.Screen name="share" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="link" />
+      </Stack>
+      {introVisible && <BrandIntro done={status !== 'booting'} onFinished={() => setIntroVisible(false)} />}
+    </GestureHandlerRootView>
+  );
+}

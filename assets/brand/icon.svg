@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="0.38" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#1E3A8A"/>
+      <stop offset="1" stop-color="#0B1020"/>
+    </radialGradient>
+  
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g transform="translate(512 512) scale(0.98) translate(-512 -560)">
+  <!-- Cloud body (doubles as the camera body) -->
+  <g fill="#FFFFFF">
+    <circle cx="372" cy="540" r="150"/>
+    <circle cx="560" cy="462" r="196"/>
+    <circle cx="726" cy="574" r="124"/>
+    <rect x="212" y="520" width="640" height="224" rx="112"/>
+  </g>
+  <!-- Viewfinder bump -->
+  <rect x="300" y="430" width="96" height="44" rx="16" fill="#E2E8F0"/>
+  <!-- Lens -->
+  <circle cx="540" cy="584" r="138" fill="#0B1020"/>
+  <circle cx="540" cy="584" r="116" fill="url(#lens)"/>
+  <circle cx="540" cy="584" r="82" fill="url(#glass)"/>
+  <circle cx="508" cy="552" r="24" fill="#FFFFFF" opacity="0.85"/>
+  <circle cx="568" cy="614" r="9" fill="#FFFFFF" opacity="0.5"/>
+  <!-- Flash -->
+  <circle cx="744" cy="560" r="24" fill="#FACC15"/>
+</g>
+</svg>

@@ -1,0 +1,31 @@
+{
+  "name": "lens-infra",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "synth": "cdk synth --profile lens",
+    "deploy": "cdk deploy --profile lens --require-approval never --outputs-file outputs.json",
+    "diff": "cdk diff --profile lens",
+    "keys": "./scripts/cloudfront-keys.sh"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
+    "@types/node": "^26.6.4",
+    "aws-cdk": "^2.1144.0",
+    "aws-cdk-lib": "^2.272.0",
+    "constructs": "^10.8.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1147.0",
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/client-ssm": "^3.1147.0",
+    "@aws-sdk/cloudfront-signer": "^3.1138.0",
+    "@aws-sdk/lib-dynamodb": "^3.1147.0",
+    "@aws-sdk/s3-request-presigner": "^3.1147.0"
+  }
+}
