@@ -85,18 +85,40 @@ jobs:
         run: |
           WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          set -o pipefail
-          xcodebuild \
-            -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
-            -configuration Debug \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build 2>&1 | grep -E "error:|warning: .*LensCamera|BUILD (SUCCEEDED|FAILED)|\*\* " || true
-          test -d build/Build/Products/Debug-iphoneos/*.app
+          # Full log goes to a file; on failure print every error and fail the job.
+          if ! xcodebuild \
+              -workspace "$WORKSPACE" \
+              -scheme "$SCHEME" \
+              -configuration Debug \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              build > xcodebuild.log 2>&1; then
+            echo "::group::Compiler errors"
+            grep -E "error:" xcodebuild.log | sort -u | head -100
+            echo "::endgroup::"
+            tail -40 xcodebuild.log
+            exit 1
+          fi
+          grep -E "warning: .*modules/lens-camera" xcodebuild.log | sort -u | head -50 || true
           ccache -s || true
+
+      - name: Verify app binary
+        run: |
+          # An .app folder can exist even when compilation failed; check the executable.
+          APP=$(ls -d build/Build/Products/Debug-iphoneos/*.app | head -1)
+          EXE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP/Info.plist")
+          test -s "$APP/$EXE" || { echo "::error::$APP/$EXE missing"; exit 1; }
+          ls -lh "$APP/$EXE"
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          retention-days: 7
 
       - name: Package .ipa
         run: |

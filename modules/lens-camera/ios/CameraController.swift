@@ -162,7 +162,7 @@ final class CameraController: NSObject {
     }
 
     let useLog = config.mode == "video" && config.appleLog
-    session.automaticallyConfiguresCaptureDeviceWideColor = !useLog
+    session.automaticallyConfiguresCaptureDeviceForWideColor = !useLog
 
     if config.mode == "photo" {
       if session.outputs.contains(movieOutput) { session.removeOutput(movieOutput) }
