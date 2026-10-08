@@ -26,11 +26,13 @@ import {
   selectGallery,
   selectPendingCount,
   selectShared,
+  selectStorageIndicator,
   selectStorageStuck,
   selectWaitingForWifi,
   useStore,
 } from '@/lib/store';
 import { confirmAndDelete } from '@/lib/delete-flow';
+import { providerInfo } from '@/lib/storage/providers';
 import { GalleryItem } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
@@ -52,6 +54,7 @@ export default function GalleryScreen() {
   const failed = useStore(selectFailedCount);
   const waitingForWifi = useStore(selectWaitingForWifi);
   const storageStuck = useStore(selectStorageStuck);
+  const indicator = useStore(selectStorageIndicator);
   const online = useStore((s) => s.online);
   const name = useStore((s) => s.identity?.name);
   const remoteLoading = useStore((s) => s.remoteLoading);
@@ -265,13 +268,34 @@ export default function GalleryScreen() {
             />
           )}
           columnWrapperStyle={{ gap: GAP }}
-          contentContainerStyle={{ gap: GAP, paddingBottom: insets.bottom + (selecting ? 90 : 16), width: contentWidth, alignSelf: 'center' }}
+          contentContainerStyle={{ gap: GAP, paddingBottom: insets.bottom + (selecting ? 90 : 64), width: contentWidth, alignSelf: 'center' }}
           initialNumToRender={columns * 8}
           windowSize={7}
           refreshControl={
             <RefreshControl refreshing={tab === 'mine' ? remoteLoading : sharedLoading} onRefresh={onRefresh} tintColor="#fff" />
           }
         />
+      )}
+
+      {!selecting && tab === 'mine' && indicator && (
+        // Where new shots go + its health; opens Storage settings.
+        <Pressable
+          onPress={() => router.push('/storage')}
+          style={[styles.storagePill, { bottom: insets.bottom + 12 }]}
+          accessibilityLabel={`Storage: ${indicator.label}, ${indicator.detail}`}
+        >
+          <Ionicons
+            name={indicator.target === 'lens' ? 'cloud-outline' : providerInfo(indicator.target).icon}
+            size={15}
+            color="#fff"
+          />
+          <Text style={styles.storagePillText}>
+            {indicator.label} · {indicator.detail}
+          </Text>
+          {indicator.level !== 'ok' && (
+            <View style={[styles.storageDot, { backgroundColor: indicator.level === 'low' ? '#FBBF24' : colors.danger }]} />
+          )}
+        </Pressable>
       )}
 
       {selecting && (
@@ -332,6 +356,22 @@ const styles = StyleSheet.create({
 
   emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16, textAlign: 'center' },
   emptyBody: { color: '#888', fontSize: 15, textAlign: 'center', marginTop: 8, maxWidth: 360 },
+
+  storagePill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    minHeight: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(28,28,30,0.95)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#3A3A3C',
+  },
+  storagePillText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  storageDot: { width: 8, height: 8, borderRadius: 4 },
 
   actionBar: {
     position: 'absolute',

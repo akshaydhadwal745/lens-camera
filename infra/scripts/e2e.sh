@@ -157,4 +157,44 @@ call DELETE "/shared/$IA/$ID1" "$TB" >/dev/null
 [[ $(vcount "m/$IA/$ID1.") == 0 ]] && ok "purge removed every version"
 call DELETE "/media/$ID2?scope=everyone" "$TA" >/dev/null; call DELETE "/media/$ID2/forever" "$TA" >/dev/null
 [[ $(used) == 0 && $(call GET /media "$TA" | j .items.length) == 0 ]] && ok "delete forever releases quota"
+# --- storage settings ---
+S=$(call GET /storage "$TA")
+[[ $(echo "$S" | j .lens.quotaBytes) == $((100*1024*1024*1024)) && $(echo "$S" | j .lens.recentBytes) == $((20*1024*1024*1024)) ]] && ok "Lens storage: 100 GB, Recent 20 GB"
+[[ $(echo "$S" | j .storages.length) == 0 ]] && ok "no storage connected yet"
+[[ $(call PUT /storages/gdrive-test1 "$TA" -d '{"provider":"gdrive","label":"Google Drive","account":"a@example.com","status":"ok","usedBytes":1000,"totalBytes":16106127360}' | j .storage.provider) == gdrive ]] && ok "storage connected"
+[[ $(call PUT /storages/gdrive-test1 "$TA" -d '{"provider":"gdrive","status":"low"}' | j .storage.account) == a@example.com ]] && ok "health report keeps account details"
+[[ $(call PUT /storages/dropbox-test2 "$TA" -d '{"provider":"dropbox","label":"Dropbox"}' | j .code) == plan-limit ]] && ok "free plan: one storage"
+[[ $(call PUT /storages/gdrive-test1 "$TA" -d '{"provider":"nope"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "unknown provider rejected"
+[[ $(call GET /storage "$TA" | j '.storages[0].status') == low ]] && ok "status visible"
+call DELETE /storages/gdrive-test1 "$TA" >/dev/null
+[[ $(call GET /storage "$TA" | j .storages.length) == 0 ]] && ok "storage disconnected"
+[[ $(call POST /provider-requests "$TA" -d '{"provider":"pCloud","note":"e2e"}' -o /dev/null -w '%{http_code}') == 201 ]] && ok "provider request saved"
+[[ $(call POST /provider-requests "$TA" -d '{}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "empty request rejected"
+# --- originals in the user's own storage ---
+call PUT /storages/gdrive-ext1 "$TA" -d '{"provider":"gdrive","label":"Google Drive"}' >/dev/null
+IDX="$(node -p "Date.now().toString(36).padStart(8,'0')")-extern1"
+U1=$(used)
+R=$(call POST /media "$TA" -d "{\"id\":\"$IDX\",\"contentType\":\"image/heic\",\"size\":5000000,\"kind\":\"photo\",\"location\":{\"storageId\":\"gdrive-ext1\",\"provider\":\"gdrive\"}}")
+[[ $(echo "$R" | j .mode) == external ]] && ok "upload plan: original goes to their storage"
+[[ $(call POST "/media/$IDX/complete" "$TA" -o /dev/null -w '%{http_code}') == 400 ]] && ok "can't complete it as a Lens upload"
+R=$(call POST "/media/$IDX/external" "$TA" -d '{"ref":"drive-file-123","checksum":"abc"}')
+[[ $(echo "$R" | j .media.originalReady) == true && $(echo "$R" | j .media.location.ref) == drive-file-123 && -z $(echo "$R" | j .media.url) ]] && ok "verified in their storage; no Lens URL"
+[[ $(used) == "$U1" ]] && ok "doesn't use Lens storage"
+[[ $(call POST /media "$TA" -d "{\"id\":\"${IDX%-*}-unknown1\",\"contentType\":\"image/heic\",\"size\":5000,\"kind\":\"photo\",\"location\":{\"storageId\":\"nope-123\",\"provider\":\"gdrive\"}}" -o /dev/null -w '%{http_code}') == 409 ]] && ok "unknown storage rejected"
+IDS="$(node -p "Date.now().toString(36).padStart(8,'0')")-switch1"
+call POST /media "$TA" -d "{\"id\":\"$IDS\",\"contentType\":\"image/jpeg\",\"size\":300000,\"kind\":\"photo\",\"location\":{\"storageId\":\"gdrive-ext1\",\"provider\":\"gdrive\"}}" >/dev/null
+[[ $(call POST /media "$TA" -d "{\"id\":\"$IDS\",\"contentType\":\"image/jpeg\",\"size\":300000,\"kind\":\"photo\"}" | j .mode) == single ]] && ok "their storage full → same item switches to Lens"
+call DELETE "/media/$IDS/forever" "$TA" >/dev/null
+[[ $(call DELETE "/media/$IDX?scope=everyone" "$TA" | j .phase) == trash ]] && ok "own-storage item → Trash"
+[[ $(maint 31 | j .purged) == 1 ]] && ok "after 30 days: removed (their storage keeps its own trash)"
+call DELETE /storages/gdrive-ext1 "$TA" >/dev/null
+
+# --- OAuth relay ---
+[[ $(call GET /oauth/providers "$TA" | j .providers.gdrive) =~ ^(true|false)$ ]] && ok "provider setup status"
+loc() { curl -sS -D - -o /dev/null "$1" | tr -d '\r' | sed -n 's/^location: //Ip'; }
+LOC=$(loc "$API/oauth/callback?error=access_denied")
+[[ "$LOC" == lens://oauth?error=access_denied* ]] && ok "cancelled sign-in returns to the app"
+LOC=$(loc "$API/oauth/callback?code=x&state=forged.state")
+[[ "$LOC" == lens://oauth?error=* ]] && ok "forged state rejected"
+[[ $(call POST /oauth/nope/start "$TA" -d '{}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "unknown provider rejected"
 echo "ALL PASSED"

@@ -30,9 +30,11 @@
 | Profile | `D#{id}` | `PROFILE` | name, usedBytes; `gsi1` NAME/name for search |
 | Name reservation | `N#{name}` | `NAME` | uniqueness |
 | Token | `D#{id}` | `T#{tokenId}` | sha256(secret), label device/web |
-| Media | `D#{owner}` | `M#{mediaId}` | key, kind, size, status pending/ready, uploadId, partSize, storageClass, previewReady, edit, derivVersion; when deleted: deletedAt, archived, recoveringSince, gsi1 `TRASH`/`{deletedAt}#{owner}#{id}`; ownerHidden ("only for me") |
+| Media | `D#{owner}` | `M#{mediaId}` | key, kind, size, status pending/ready, uploadId, partSize, storageClass, previewReady, edit, derivVersion; when deleted: deletedAt, archived, recoveringSince, gsi1 `TRASH`/`{deletedAt}#{owner}#{id}`; ownerHidden ("only for me"); location `{storageId, provider, ref, checksum}` when the original is in the user's own storage |
 | Share | `D#{recipient}` | `S#{mediaId}#{owner}` | gsi1 `SM#{owner}#{mediaId}` for cascade delete |
 | Contact | `D#{me}` | `C#{other}` | share history (both directions) |
+| Connected storage | `D#{id}` | `ST#{storageId}` | provider, label, account, status ok/low/full/signed-out/error, used/total bytes (no tokens) |
+| Provider request | `D#{id}` | `RQ#{ts}` | provider, note; gsi1 `PROVIDER_REQUEST` |
 | Pairing code | `P#{code}` | `PAIR` | TTL 5 min |
 
 Media ids are client-generated and time-sortable (`<base36 ms>-<random>`).
@@ -51,6 +53,9 @@ Media ids are client-generated and time-sortable (`<base36 ms>-<random>`).
 | `GET /media` | List (ready or preview-ready, not deleted/hidden) |
 | `DELETE /media/:id?scope=everyone\|me` | To Trash (shared items need a scope: 409 `code: shared`); unfinished uploads are deleted outright |
 | `GET /trash`, `POST /media/:id/restore`, `DELETE /media/:id/forever` | Trash/Archive list, restore or recover (~12 h), permanent delete (all versions) |
+| `POST /media/:id/external {ref, checksum}` | Original verified in the user's own storage (POST /media with `location` returns mode `external`) |
+| `GET /storage`, `PUT/DELETE /storages/:id`, `POST /provider-requests` | Lens 100 GB (Recent/Saver), connected storages + health, provider requests |
+| `POST /oauth/:provider/start\|token\|refresh`, `GET /oauth/callback`, `GET /oauth/providers` | OAuth relay for Google Drive / Dropbox / OneDrive / Box (adds client secret from SSM, stores no tokens) |
 | `GET /users?q=`, `GET /contacts` | Find people, share history |
 | `POST /shares`, `GET /shared`, `DELETE /shared/:owner/:id` | Sharing |
 | `POST /pairing`, `POST /pairing/claim` | Web viewer sign-in code |

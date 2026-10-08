@@ -1,0 +1,15 @@
+host: 127.0.0.1
+port: 8899
+provider_mapping:
+  "/": /tmp/lens-webdav-test
+http_authenticator:
+  domain_controller: null
+  accept_basic: true
+  accept_digest: false
+  default_to_digest: false
+simple_dc:
+  user_mapping:
+    "*":
+      "lens":
+        password: "pa ss:word!"
+verbose: 1

@@ -1,5 +1,14 @@
 import type { EditRecipe } from './edits';
-import { DeleteScope, RemoteMedia, SharedMedia, TrashItem } from './types';
+import {
+  ConnectedStorage,
+  DeleteScope,
+  ProviderId,
+  RemoteMedia,
+  SharedMedia,
+  StorageLocation,
+  StorageOverview,
+  TrashItem,
+} from './types';
 
 export const API_URL = `${process.env.EXPO_PUBLIC_API_URL ?? ''}/v1`;
 export const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? '';
@@ -57,7 +66,9 @@ export type UploadPlan = PlanExtras &
     | { mode: 'done'; media: RemoteMedia }
     | { mode: 'single'; url: string; contentType: string }
     | { mode: 'multipart'; uploadId: string; partSize: number }
+    | { mode: 'external'; location: StorageLocation }
   );
+export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
 export type Person = { id: string; name: string };
 export type Contact = Person & { lastSharedAt: number };
 type Page<T> = { items: T[]; cursor: string | null };
@@ -84,7 +95,11 @@ export const api = {
     height?: number;
     duration?: number;
     createdAt: number;
+    /** Original goes to this connected storage instead of Lens. */
+    location?: Pick<StorageLocation, 'storageId' | 'provider'>;
   }) => request<UploadPlan>('POST', '/media', body),
+  completeExternal: (id: string, ref: string, checksum: string) =>
+    request<{ media: RemoteMedia }>('POST', `/media/${id}/external`, { ref, checksum }),
   uploadedParts: (id: string) => request<{ parts: { n: number; size: number }[] }>('GET', `/media/${id}/parts`),
   partUrls: (id: string, parts: { n: number; md5: string }[]) =>
     request<{ urls: Record<string, string> }>('POST', `/media/${id}/parts`, { parts }),
@@ -105,6 +120,20 @@ export const api = {
   restore: (id: string) =>
     request<{ phase: 'restored'; media: RemoteMedia } | { phase: 'recovering'; item: TrashItem }>('POST', `/media/${id}/restore`),
   deleteForever: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}/forever`),
+
+  storage: () => request<StorageOverview>('GET', '/storage'),
+  /** Connect or report health. Free plan allows one (ApiError code "plan-limit"). */
+  putStorage: (id: string, body: Omit<ConnectedStorage, 'id' | 'checkedAt' | 'createdAt'>) =>
+    request<{ storage: ConnectedStorage }>('PUT', `/storages/${id}`, body),
+  deleteStorage: (id: string) => request<unknown>('DELETE', `/storages/${id}`),
+  requestProvider: (provider: string, note?: string) => request<unknown>('POST', '/provider-requests', { provider, note }),
+  oauthProviders: () => request<{ providers: Partial<Record<ProviderId, boolean>> }>('GET', '/oauth/providers'),
+  oauthStart: (provider: ProviderId, codeChallenge: string) =>
+    request<{ url: string; state: string; redirect: string }>('POST', `/oauth/${provider}/start`, { codeChallenge }),
+  oauthToken: (provider: ProviderId, body: { code: string; state: string; codeVerifier: string }) =>
+    request<OAuthTokens>('POST', `/oauth/${provider}/token`, body),
+  oauthRefresh: (provider: ProviderId, refreshToken: string) =>
+    request<OAuthTokens>('POST', `/oauth/${provider}/refresh`, { refreshToken }),
 
   searchUsers: (query: string) => request<{ users: Person[] }>('GET', `/users?q=${encodeURIComponent(query)}`),
   contacts: () => request<{ contacts: Contact[] }>('GET', '/contacts'),

@@ -1,4 +1,5 @@
 import {
+  AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
   HeadObjectCommand,
@@ -18,6 +19,7 @@ import {
 
 import { Identity } from './identity';
 import { ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3, signMediaUrl } from './lib';
+import { listStorages, PROVIDERS, Provider } from './storage';
 
 /** Files up to this size use a single PUT; larger ones use S3 multipart. */
 const SINGLE_PUT_MAX = 16 * 1024 * 1024;
@@ -89,6 +91,20 @@ export type MediaRecord = {
   recoveringSince?: number;
   gsi1pk?: string;
   gsi1sk?: string;
+  /**
+   * The original lives in the user's own storage (Google Drive, Dropbox…), not
+   * in Lens S3. Previews are still in Lens. Doesn't count toward Lens quota.
+   */
+  location?: StorageLocation;
+};
+
+export type StorageLocation = {
+  storageId: string;
+  provider: Provider;
+  /** Provider file id/path, set when the upload is verified. */
+  ref?: string;
+  /** Provider checksum the phone verified against (e.g. Drive md5, Dropbox content_hash). */
+  checksum?: string;
 };
 
 // ---------- Derivatives (thumbnail + preview) ----------
@@ -181,13 +197,26 @@ export async function requireMedia(identity: Identity, id: string): Promise<Medi
 
 type ClientFields = Pick<
   MediaRecord,
-  'id' | 'kind' | 'key' | 'size' | 'width' | 'height' | 'duration' | 'createdAt' | 'status' | 'previewReady' | 'edit' | 'derivVersion'
->;
+  | 'id'
+  | 'kind'
+  | 'key'
+  | 'size'
+  | 'width'
+  | 'height'
+  | 'duration'
+  | 'createdAt'
+  | 'status'
+  | 'previewReady'
+  | 'edit'
+  | 'derivVersion'
+  | 'location'
+> & { contentType?: string };
 
 export async function toClient(item: ClientFields) {
   const originalReady = item.status === 'ready';
   const [url, thumbUrl, previewUrl] = await Promise.all([
-    originalReady ? signMediaUrl(item.key) : undefined,
+    // Originals in the user's own storage are opened through their provider, not a Lens URL.
+    originalReady && !item.location ? signMediaUrl(item.key) : undefined,
     item.previewReady ? signMediaUrl(derivativeKey(item.key, 'thumb', item.derivVersion)) : undefined,
     item.previewReady ? signMediaUrl(derivativeKey(item.key, 'preview', item.derivVersion)) : undefined,
   ]);
@@ -204,7 +233,23 @@ export async function toClient(item: ClientFields) {
     thumbUrl,
     previewUrl,
     edit: item.edit,
+    contentType: item.contentType,
+    location: item.location?.ref
+      ? { storageId: item.location.storageId, provider: item.location.provider, ref: item.location.ref }
+      : undefined,
   };
+}
+
+/** Validates `{storageId, provider}` from the app against the identity's connected storages. */
+async function parseLocation(identity: Identity, value: unknown): Promise<StorageLocation | undefined> {
+  if (value === undefined || value === null) return undefined;
+  const v = value as Record<string, unknown>;
+  if (typeof v.storageId !== 'string' || !PROVIDERS.includes(v.provider as Provider)) throw new HttpError(400, 'Invalid location');
+  const connected = await listStorages(identity.id);
+  if (!connected.some((s) => s.storageId === v.storageId && s.provider === v.provider)) {
+    throw new HttpError(409, 'That storage isn’t connected');
+  }
+  return { storageId: v.storageId, provider: v.provider as Provider };
 }
 
 /**
@@ -244,15 +289,25 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, 'Invalid size');
   if (size > env.maxFileBytes) throw new HttpError(413, 'File too large');
 
+  const location = await parseLocation(identity, req.body.location);
+
   const existing = await getMedia(identity.id, id);
   if (existing) {
+    if (existing.status !== 'ready' && existing.location?.storageId !== location?.storageId) {
+      // Destination changed before the original finished (e.g. their storage is full → Lens).
+      await switchDestination(identity, existing, location);
+      return startUpload(identity, req);
+    }
     const extra = { derivativeUrls: await derivativeUrls(existing, derivatives), previewReady: !!existing.previewReady };
     if (existing.status === 'ready') return json(200, { mode: 'done', media: await toClient(existing), ...extra });
+    if (existing.location) return json(200, { mode: 'external', location: existing.location, ...extra });
     if (existing.uploadId) return json(200, { ...multipartPlan(existing), ...extra });
     return json(200, { mode: 'single', url: await singlePutUrl(existing, md5), contentType: existing.contentType, ...extra });
   }
 
-  if (identity.usedBytes + size > env.quotaBytes) throw new HttpError(413, 'Storage quota exceeded');
+  if (!location && identity.usedBytes + size > env.quotaBytes) {
+    return json(413, { error: 'Lens storage is full', code: 'quota' });
+  }
 
   const item: MediaRecord = {
     ...mediaKey(identity.id, id),
@@ -269,8 +324,9 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     edit,
   };
 
-  item.storageClass = ORIGINAL_STORAGE_CLASS;
-  if (size > SINGLE_PUT_MAX) {
+  if (location) item.location = location;
+  else item.storageClass = ORIGINAL_STORAGE_CLASS;
+  if (!location && size > SINGLE_PUT_MAX) {
     const mpu = await s3.send(
       new CreateMultipartUploadCommand({
         Bucket: env.bucket,
@@ -291,8 +347,82 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   }
 
   const extra = { derivativeUrls: await derivativeUrls(item, derivatives), previewReady: false };
+  if (item.location) return json(201, { mode: 'external', location: item.location, ...extra });
   if (item.uploadId) return json(201, { ...multipartPlan(item), ...extra });
   return json(201, { mode: 'single', url: await singlePutUrl(item, md5), contentType, ...extra });
+}
+
+/** Re-points an unfinished upload at another destination (Lens ↔ their storage). */
+async function switchDestination(identity: Identity, item: MediaRecord, location: StorageLocation | undefined) {
+  if (item.uploadId) {
+    await s3
+      .send(new AbortMultipartUploadCommand({ Bucket: env.bucket, Key: item.key, UploadId: item.uploadId }))
+      .catch(() => {});
+  }
+  const toLens = !location;
+  if (toLens && identity.usedBytes + item.size > env.quotaBytes) throw new HttpError(413, 'Lens storage is full');
+  let uploadId: string | undefined;
+  if (toLens && item.size > SINGLE_PUT_MAX) {
+    const mpu = await s3.send(
+      new CreateMultipartUploadCommand({
+        Bucket: env.bucket,
+        Key: item.key,
+        ContentType: item.contentType,
+        StorageClass: ORIGINAL_STORAGE_CLASS,
+      }),
+    );
+    uploadId = mpu.UploadId;
+  }
+  await ddb.send(
+    new UpdateCommand({
+      TableName: env.table,
+      Key: mediaKey(identity.id, item.id),
+      UpdateExpression: toLens
+        ? `SET storageClass = :sc${uploadId ? ', uploadId = :u, partSize = :ps' : ''} REMOVE #loc${uploadId ? '' : ', uploadId'}`
+        : 'SET #loc = :loc REMOVE uploadId, partSize, storageClass',
+      ConditionExpression: '#s = :pending',
+      ExpressionAttributeNames: { '#loc': 'location', '#s': 'status' },
+      ExpressionAttributeValues: {
+        ':pending': 'pending',
+        ...(toLens
+          ? { ':sc': ORIGINAL_STORAGE_CLASS, ...(uploadId ? { ':u': uploadId, ':ps': partSizeFor(item.size) } : {}) }
+          : { ':loc': location }),
+      },
+    }),
+  );
+}
+
+/**
+ * POST /v1/media/:id/external {ref, checksum}: the phone uploaded the original
+ * to the user's own storage and verified the provider's checksum. Lens quota
+ * is not used.
+ */
+export async function completeExternal(identity: Identity, id: string, req: Req): Promise<Res> {
+  const item = await requireMedia(identity, id);
+  if (!item.location) throw new HttpError(400, 'This item is stored in Lens');
+  if (item.status === 'ready') return json(200, { media: await toClient(item) });
+  const ref = req.body.ref;
+  const checksum = req.body.checksum;
+  if (typeof ref !== 'string' || !ref || ref.length > 1024) throw new HttpError(400, 'Invalid ref');
+  if (checksum !== undefined && (typeof checksum !== 'string' || checksum.length > 200)) throw new HttpError(400, 'Invalid checksum');
+  const location: StorageLocation = { ...item.location, ref, checksum };
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: mediaKey(identity.id, id),
+        UpdateExpression: 'SET #s = :ready, uploadedAt = :now, #loc = :loc',
+        ConditionExpression: '#s = :pending AND #loc.storageId = :sid',
+        ExpressionAttributeNames: { '#s': 'status', '#loc': 'location' },
+        ExpressionAttributeValues: { ':ready': 'ready', ':pending': 'pending', ':now': Date.now(), ':loc': location, ':sid': location.storageId },
+      }),
+    );
+  } catch (error: any) {
+    if (error?.name !== 'ConditionalCheckFailedException') throw error;
+    const latest = await requireMedia(identity, id);
+    return json(latest.status === 'ready' ? 200 : 409, { media: await toClient(latest) });
+  }
+  return json(200, { media: await toClient({ ...item, status: 'ready', location }) });
 }
 
 function num(value: unknown): number | undefined {
@@ -406,6 +536,7 @@ export async function partUrls(identity: Identity, id: string, req: Req): Promis
 /** POST /v1/media/:id/complete: verify the object in S3 and mark it ready. */
 export async function completeUpload(identity: Identity, id: string): Promise<Res> {
   const item = await requireMedia(identity, id);
+  if (item.location) throw new HttpError(400, 'This item goes to your own storage');
   if (item.status === 'ready') return json(200, { media: await toClient(item) });
 
   if (item.uploadId) {

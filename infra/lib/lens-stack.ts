@@ -199,7 +199,11 @@ function handler(event) {
       fn.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['ssm:GetParameter'],
-          resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PRIVATE_KEY_PARAM}`],
+          resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter${PRIVATE_KEY_PARAM}`,
+          // OAuth client ids/secrets for connecting user storages (set with scripts/set-oauth-client.sh).
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/oauth/*`,
+        ],
         }),
       );
     }

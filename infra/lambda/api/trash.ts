@@ -39,6 +39,7 @@ const trashSortKey = (deletedAt: number, ownerId: string, id: string) =>
 
 /** Bytes this item currently adds to its owner's quota. */
 function countedBytes(item: MediaRecord): number {
+  if (item.location) return 0; // original is in the user's own storage
   return item.status === 'ready' && !item.ownerHidden && !item.archived ? item.size : 0;
 }
 
@@ -375,6 +376,10 @@ export async function runMaintenance(now = Date.now(), onlyOwner?: string) {
         if (item.recoveringSince) {
           if (await finishRecoveryIfReady(item)) stats.recovered++;
         } else if (item.deletedAt < purgeBefore) {
+          await destroy(item);
+          stats.purged++;
+        } else if (item.location && item.deletedAt < archiveBefore) {
+          // Their storage keeps its own trash; we don't hold the bytes to archive.
           await destroy(item);
           stats.purged++;
         } else if (!item.archived && item.deletedAt < archiveBefore) {

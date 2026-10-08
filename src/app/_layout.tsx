@@ -29,6 +29,8 @@ export default function RootLayout() {
         <Stack.Screen name="share" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="storage" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="oauth" options={{ animation: 'none' }} />
         <Stack.Screen name="link" />
         <Stack.Screen name="edit/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack>

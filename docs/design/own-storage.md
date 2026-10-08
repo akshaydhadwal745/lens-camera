@@ -1,7 +1,15 @@
 # Design: Connect your own storage (+ Lens storage tiers)
 
-Status: **proposed, waiting for approval**, so no code yet. Decisions were agreed
-with the founder on 2026-10-08.
+Status: **free plan built (2026-10-08)**: steps 1–5 below. Paid features and
+iCloud later. User guide: [features/own-storage.md](../features/own-storage.md);
+provider setup: [setup/storage-providers.md](../setup/storage-providers.md).
+Decisions were agreed with the founder on 2026-10-08.
+
+Changes while building: provider sign-in goes through a small **OAuth relay**
+on the Lens API (holds each provider's client secret, stores no tokens),
+because Google doesn't allow app-scheme redirects on Android and Box needs a
+secret. S3/WebDAV have no trash we can control: deleting in Lens keeps their
+file until Delete forever.
 
 ## 1. What we're building
 

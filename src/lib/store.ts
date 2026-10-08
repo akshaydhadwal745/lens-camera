@@ -22,11 +22,24 @@ import {
   saveRemoteCache,
   uriFor,
 } from './local-store';
-import { DeleteScope, GalleryItem, LocalEntry, NewCapture, RemoteMedia, SharedMedia, TrashItem } from './types';
+import {
+  DeleteScope,
+  GalleryItem,
+  LocalEntry,
+  NewCapture,
+  ProviderId,
+  RemoteMedia,
+  SharedMedia,
+  ConnectedStorage,
+  StorageOverview,
+  TrashItem,
+} from './types';
 import { makeDerivatives } from './derivatives';
 import { renderCloudDerivatives } from './edit-remote';
 import { compact, EditRecipe, forPaste } from './edits';
 import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
+import { authForLocation, checkStorage, chooseDestination, storageAction } from './storage';
+import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 
 const isWeb = Platform.OS === 'web';
 const DAY = 24 * 3600 * 1000;
@@ -97,6 +110,8 @@ export type State = {
   /** Deleted items (Trash + Archive), loaded when the Trash screen opens. */
   trash: TrashItem[];
   trashLoading: boolean;
+  /** Lens storage usage + connected storages (null until loaded). */
+  storage: StorageOverview | null;
 };
 
 let state: State = {
@@ -118,6 +133,7 @@ let state: State = {
   freeBytes: null,
   trash: [],
   trashLoading: false,
+  storage: null,
 };
 
 const listeners = new Set<() => void>();
@@ -168,6 +184,8 @@ export function selectGallery(s: State): GalleryItem[] {
       previewUri: r.previewUrl,
       sync: r.originalReady ? 'synced' : 'partial',
       edit: r.edit,
+      location: r.location,
+      contentType: r.contentType,
     });
   }
   for (const e of s.entries) {
@@ -337,10 +355,15 @@ function watchConnectivity() {
       refreshRemote();
     }
   });
+  // Connected storage health while the app is open (sign-in, space).
+  setInterval(() => {
+    if (AppState.currentState === 'active') void checkStorages();
+  }, 5 * 60 * 1000);
   AppState.addEventListener('change', (next) => {
     if (next !== 'active') return;
     runCleanup();
     kickSync();
+    void checkStorages();
     if (Date.now() - state.remoteFetchedAt > REMOTE_STALE_MS) {
       refreshRemote();
       refreshShared();
@@ -360,7 +383,7 @@ async function handleUnauthorized() {
   await saveIdentity(null);
   applyIdentity(null);
   saveRemoteCache([]);
-  set({ remote: [], shared: [], trash: [], usage: null, ...(isWeb ? { status: 'needs-link' as const } : {}) });
+  set({ remote: [], shared: [], trash: [], storage: null, usage: null, ...(isWeb ? { status: 'needs-link' as const } : {}) });
 }
 
 let identityInflight: Promise<boolean> | null = null;
@@ -394,7 +417,7 @@ export async function linkWithCode(code: string) {
 export async function unlinkBrowser() {
   await saveIdentity(null);
   applyIdentity(null);
-  set({ status: 'needs-link', remote: [], shared: [], trash: [], usage: null });
+  set({ status: 'needs-link', remote: [], shared: [], trash: [], storage: null, usage: null });
 }
 
 // ---------- Cloud listings ----------
@@ -420,6 +443,7 @@ export function refreshRemote(): Promise<void> {
         .me()
         .then((me) => set({ usage: { usedBytes: me.usedBytes, quotaBytes: me.quotaBytes } }))
         .catch(() => {});
+      void refreshStorage();
     } catch {
       // Keep showing the cached listing.
     } finally {
@@ -539,7 +563,28 @@ async function syncLoop() {
           continue;
         }
         const entry = await ensureDerivatives(next);
+        // Their own storage first (if connected, signed in on this phone and healthy), else Lens.
+        const location = entry.uploadedAt ? undefined : await chooseDestination(state.storage?.storages, entry);
         const result = await uploadEntry(entry, {
+          location,
+          uploadExternal: async (loc, source, e, onBytes) => {
+            const { connector, auth } = await authForLocation(loc);
+            return connector.upload(auth, {
+              file: source,
+              name: storageFileName(e),
+              contentType: e.contentType,
+              size: e.size,
+              md5Hex: () => {
+                const md5 = source.md5;
+                if (!md5) throw new Error('Could not checksum the file');
+                return md5;
+              },
+              onProgress: onBytes,
+              isCancelled: () => cancelled.has(e.id),
+              resume: e.externalUpload?.storageId === loc.storageId ? e.externalUpload.resume : undefined,
+              saveResume: (resume) => updateEntry(e.id, { externalUpload: { storageId: loc.storageId, resume } }),
+            });
+          },
           onProgress: (p) => {
             const t = Date.now();
             if (t - lastEmit > 150 || p >= 1) {
@@ -561,11 +606,21 @@ async function syncLoop() {
           attempts: 0,
           nextAttemptAt: undefined,
           error: undefined,
+          externalUpload: undefined,
         });
         upsertRemote(result.media);
         if (result.originalDone) guardSpace(); // this original may now be offloaded
       } catch (error) {
         if (error instanceof UploadCancelled) continue;
+        if (error instanceof FileTooLarge) {
+          updateEntry(next.id, { forceLens: true, externalUpload: undefined }); // just this file → Lens storage
+          continue;
+        }
+        if (error instanceof StorageFull || error instanceof SignedOut) {
+          // Their storage can't take it: mark it, and the next pass sends this item to Lens storage.
+          await markStorage(error instanceof StorageFull ? 'full' : 'signed-out');
+          continue;
+        }
         const attempts = (next.attempts ?? 0) + 1;
         if (error instanceof ApiError && error.permanent) {
           updateEntry(next.id, { attempts, error: error.message });
@@ -635,7 +690,7 @@ export async function saveEdit(id: string, recipe: EditRecipe | null): Promise<v
 
   // Cloud-only or offloaded item: render from the cloud original.
   const remote = state.remote.find((r) => r.id === id);
-  if (!remote?.url) throw new Error('The original is still uploading. Try again when it has finished.');
+  if (!remote?.url && !remote?.location?.ref) throw new Error('The original is still uploading. Try again when it has finished.');
   const files = await renderCloudDerivatives(remote, edit ?? null);
   let kept = false;
   try {
@@ -708,12 +763,15 @@ export async function deleteItems(
   const needsScope: string[] = [];
   for (const id of ids) {
     const entry = state.entries.find((e) => e.id === id);
-    const inCloud = state.remote.some((r) => r.id === id);
+    const cloud = state.remote.find((r) => r.id === id);
+    const inCloud = !!cloud;
     const touchedServer = inCloud || !!entry?.uploadedAt || !!entry?.attempts || state.uploadingId === id;
 
     if (touchedServer) {
       try {
         await api.deleteMedia(id, scope);
+        // Original in their storage: their trash keeps it ~30 days ("only for me" leaves it for recipients).
+        if (scope !== 'me') void storageAction(cloud?.location, 'trash').catch(() => {});
       } catch (error) {
         if (error instanceof ApiError && error.code === 'shared') {
           needsScope.push(id);
@@ -741,6 +799,113 @@ export async function deleteItems(
     void refreshTrash();
   }
   return { failed, needsScope };
+}
+
+// ---------- Storage (Lens + connected) ----------
+
+/** "Lens 2026-10-08 14.30.05 <id>.heic": readable and unique in their storage. */
+function storageFileName(e: LocalEntry): string {
+  const d = new Date(e.createdAt);
+  const p = (n: number) => String(n).padStart(2, '0');
+  const ext = e.fileName.split('.').pop() ?? 'bin';
+  return `Lens ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())} ${e.id.slice(-8)}.${ext}`;
+}
+
+function replaceStorage(updated: ConnectedStorage) {
+  if (!state.storage) return;
+  set({ storage: { ...state.storage, storages: state.storage.storages.map((s) => (s.id === updated.id ? updated : s)) } });
+}
+
+/** Marks the connected storage full / signed out (reported to Lens so other devices see it). */
+async function markStorage(status: 'full' | 'signed-out') {
+  const own = state.storage?.storages[0];
+  if (!own) return;
+  replaceStorage({ ...own, status });
+  await api
+    .putStorage(own.id, { provider: own.provider, label: own.label, account: own.account, status })
+    .then(({ storage }) => replaceStorage(storage))
+    .catch(() => {});
+}
+
+let lastStorageCheck = 0;
+const STORAGE_CHECK_MS = 30 * 60 * 1000;
+
+/** Health check of connected storages (space, sign-in); at most every 30 minutes unless forced. */
+export async function checkStorages(force = false): Promise<void> {
+  if (isWeb || !state.storage?.storages.length) return;
+  if (!force && Date.now() - lastStorageCheck < STORAGE_CHECK_MS) return;
+  lastStorageCheck = Date.now();
+  for (const s of state.storage.storages) {
+    const updated = await checkStorage(s).catch(() => null);
+    if (updated) replaceStorage(updated);
+  }
+  kickSync(); // e.g. storage freed up again
+}
+
+export function refreshStorage(): Promise<void> {
+  if (!state.identity) return Promise.resolve();
+  return api
+    .storage()
+    .then((storage) => {
+      set({ storage, usage: { usedBytes: storage.lens.usedBytes, quotaBytes: storage.lens.quotaBytes } });
+      void checkStorages();
+    })
+    .catch(() => {});
+}
+
+export async function requestProvider(provider: string, note?: string): Promise<void> {
+  await api.requestProvider(provider, note);
+}
+
+export type StorageIndicator = {
+  /** Where new shots go. */
+  target: 'lens' | ProviderId;
+  label: string;
+  /** ok · low (warning) · attention (full / signed out / error). */
+  level: 'ok' | 'low' | 'attention';
+  detail: string;
+};
+
+let indicatorMemo: { storage: StorageOverview | null; usage: State['usage']; out: StorageIndicator | null } | null = null;
+
+/** What the gallery's storage pill shows. */
+export function selectStorageIndicator(s: State): StorageIndicator | null {
+  if (indicatorMemo && indicatorMemo.storage === s.storage && indicatorMemo.usage === s.usage) return indicatorMemo.out;
+  const out = computeIndicator(s);
+  indicatorMemo = { storage: s.storage, usage: s.usage, out };
+  return out;
+}
+
+function computeIndicator(s: State): StorageIndicator | null {
+  const own = s.storage?.storages[0];
+  if (own) {
+    const level = own.status === 'ok' ? 'ok' : own.status === 'low' ? 'low' : 'attention';
+    const detail =
+      own.status === 'signed-out'
+        ? 'Sign in again'
+        : own.status === 'full'
+          ? 'Full: using Lens storage'
+          : own.status === 'error'
+            ? 'Can’t reach it'
+            : own.totalBytes
+              ? `${formatGB(own.usedBytes ?? 0)} of ${formatGB(own.totalBytes)}`
+              : 'Connected';
+    return { target: own.provider, label: own.label, level, detail };
+  }
+  const usage = s.usage;
+  if (!usage) return null;
+  const ratio = usage.usedBytes / usage.quotaBytes;
+  return {
+    target: 'lens',
+    label: 'Lens',
+    level: ratio >= 1 ? 'attention' : ratio >= 0.9 ? 'low' : 'ok',
+    detail: `${formatGB(usage.usedBytes)} of ${formatGB(usage.quotaBytes)}`,
+  };
+}
+
+function formatGB(bytes: number): string {
+  const gb = bytes / 1024 ** 3;
+  return gb >= 10 || gb === 0 ? `${Math.round(gb)} GB` : `${gb.toFixed(1)} GB`;
 }
 
 // ---------- Trash & Archive ----------
@@ -774,6 +939,7 @@ export function refreshTrash(): Promise<void> {
 /** Trash: back in the library now. Archive: recovery started (~12 hours). */
 export async function restoreItem(id: string): Promise<'restored' | 'recovering'> {
   const result = await api.restore(id);
+  void storageAction(state.trash.find((t) => t.id === id)?.location, 'untrash').catch(() => {});
   if (result.phase === 'restored') {
     set({ trash: state.trash.filter((t) => t.id !== id) });
     upsertRemote(result.media);
@@ -786,6 +952,7 @@ export async function restoreItem(id: string): Promise<'restored' | 'recovering'
 
 /** Gone everywhere, every copy. Cannot be undone. */
 export async function deleteForever(id: string): Promise<void> {
+  await storageAction(state.trash.find((t) => t.id === id)?.location, 'remove').catch(() => {});
   await api.deleteForever(id);
   set({ trash: state.trash.filter((t) => t.id !== id) });
   api.me().then((me) => set({ usage: me })).catch(() => {});

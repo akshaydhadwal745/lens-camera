@@ -21,6 +21,8 @@ import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
 import { formatDate } from '@/lib/format';
 import { confirmAndDelete } from '@/lib/delete-flow';
+import { providerInfo } from '@/lib/storage/providers';
+import { useOriginal } from '@/lib/storage/useOriginal';
 import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -44,7 +46,9 @@ function PhotoPage({
   // Show the preview instantly; swap in the original when allowed. A local
   // original (this device) is always used as-is.
   const preview = viewUri(item);
-  const original = !item.localUri && loadOriginal ? item.remoteUrl : undefined;
+  // Lens URL or the user's own storage (with auth headers).
+  const original = useOriginal(item, !item.localUri && loadOriginal);
+  const showOriginal = !item.localUri && loadOriginal && original ? original : null;
   // iOS ScrollView supports native pinch-to-zoom.
   return (
     <ScrollView
@@ -59,8 +63,8 @@ function PhotoPage({
     >
       <Pressable onPress={onTap} style={{ width, height }}>
         <Image
-          source={{ uri: original ?? preview }}
-          placeholder={original && preview ? { uri: preview } : undefined}
+          source={showOriginal ?? { uri: preview }}
+          placeholder={showOriginal && preview ? { uri: preview } : undefined}
           placeholderContentFit="contain"
           style={{ width, height }}
           contentFit="contain"
@@ -73,7 +77,7 @@ function PhotoPage({
 }
 
 function VideoPage({ item, width, height, active }: { item: GalleryItem; width: number; height: number; active: boolean }) {
-  const source = item.localUri ?? item.remoteUrl ?? null;
+  const source = useOriginal(item);
   const player = useVideoPlayer(source, (p) => {
     p.loop = false;
   });
@@ -88,7 +92,13 @@ function VideoPage({ item, width, height, active }: { item: GalleryItem; width: 
     return (
       <View style={{ width, height, justifyContent: 'center' }}>
         <Image source={{ uri: viewUri(item) }} style={{ width, height: height * 0.8 }} contentFit="contain" />
-        <Text style={styles.pendingVideo}>The video is still uploading from the other device</Text>
+        <Text style={styles.pendingVideo}>
+          {item.location
+            ? item.ownerName
+              ? 'The full video is in the sender’s own storage'
+              : `The video is in your ${providerInfo(item.location.provider).name}. Sign in to it on this phone to play it.`
+            : 'The video is still uploading from the other device'}
+        </Text>
       </View>
     );
   }
@@ -105,7 +115,9 @@ function SyncLine({ item }: { item: GalleryItem }) {
   if (item.ownerName) return <Text style={styles.sub}>From {item.ownerName}</Text>;
   const where =
     item.sync === 'synced'
-      ? item.localUri
+      ? item.location
+        ? `In your ${providerInfo(item.location.provider).name}${item.localUri ? ' · on this device' : ''}`
+        : item.localUri
         ? 'In the cloud · on this device'
         : item.previewUri?.startsWith('file:')
           ? 'In the cloud · preview on this device'
@@ -263,7 +275,7 @@ export default function ViewerScreen() {
               <Text style={styles.date}>{formatDate(current.createdAt)}</Text>
               <SyncLine item={current} />
             </View>
-            {current.kind === 'photo' && !current.localUri && current.remoteUrl && !loadOriginalFor(current) && !isWeb ? (
+            {current.kind === 'photo' && !current.localUri && (current.remoteUrl || current.location) && !loadOriginalFor(current) && !isWeb ? (
               <Pressable
                 onPress={() => setHd((prev) => new Set(prev).add(current.id))}
                 style={styles.barButton}

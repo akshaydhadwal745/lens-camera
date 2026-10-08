@@ -120,6 +120,34 @@ function getPrivateKey(): Promise<string> {
   return privateKey;
 }
 
+/** Key for signing short-lived values (e.g. OAuth state), derived from the CloudFront key. */
+export async function derivedKey(purpose: string): Promise<Buffer> {
+  return createHash('sha256').update(`${await getPrivateKey()}:${purpose}`).digest();
+}
+
+const params = new Map<string, Promise<string | undefined>>();
+
+/** SSM SecureString (cached); undefined if it doesn't exist (feature not configured). */
+export function getParam(name: string): Promise<string | undefined> {
+  let value = params.get(name);
+  if (!value) {
+    value = ssm
+      .send(new GetParameterCommand({ Name: name, WithDecryption: true }))
+      .then((r) => r.Parameter?.Value)
+      .catch((e) => {
+        if (e?.name === 'ParameterNotFound') return undefined;
+        params.delete(name);
+        throw e;
+      })
+      .then((v) => {
+        if (v === undefined) params.delete(name); // look again next time (it may get configured)
+        return v;
+      });
+    params.set(name, value);
+  }
+  return value;
+}
+
 export const URL_TTL_SECONDS = 6 * 3600;
 
 export async function signMediaUrl(key: string): Promise<string> {

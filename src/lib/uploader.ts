@@ -10,9 +10,11 @@ import { File, FileMode, Paths, UploadType } from 'expo-file-system';
 
 import { api } from './api';
 import { captureFile, fileFor, fileSize } from './local-store';
-import { LocalEntry, RemoteMedia } from './types';
+import { LocalEntry, RemoteMedia, StorageLocation } from './types';
 
-export class UploadCancelled extends Error {}
+import { UploadCancelled } from './storage/types';
+
+export { UploadCancelled };
 
 type Options = {
   onProgress: (fraction: number) => void;
@@ -23,6 +25,15 @@ type Options = {
   includeOriginal?: boolean;
   /** Called as soon as the item is visible in the cloud (previews verified). */
   onPreviews?: (media: RemoteMedia) => void;
+  /** Send the original to this connected storage instead of Lens. */
+  location?: Pick<StorageLocation, 'storageId' | 'provider'>;
+  /** Uploads + verifies the original in the user's storage; returns where it is. */
+  uploadExternal?: (
+    location: StorageLocation,
+    source: File,
+    entry: LocalEntry,
+    onBytes: (sent: number) => void,
+  ) => Promise<{ ref: string; checksum: string }>;
 };
 
 export type UploadResult = { media: RemoteMedia; originalDone: boolean };
@@ -93,7 +104,7 @@ function writeChunk(source: File, entry: LocalEntry, n: number, partSize: number
 
 export async function uploadEntry(
   original: LocalEntry,
-  { onProgress, isCancelled, concurrency = 3, includeOriginal = true, onPreviews }: Options,
+  { onProgress, isCancelled, concurrency = 3, includeOriginal = true, onPreviews, location, uploadExternal }: Options,
 ): Promise<UploadResult> {
   const source = fileFor(original);
   if (!source.exists) throw new Error('Local file is missing');
@@ -102,7 +113,7 @@ export async function uploadEntry(
   if (entry.size <= 0) throw new Error('Could not read the file size');
 
   // Small files go up in one request; checksum them whole (native, fast).
-  const singleMd5 = entry.size <= 16 * 1024 * 1024 ? md5Of(source) : undefined;
+  const singleMd5 = !location && entry.size <= 16 * 1024 * 1024 ? md5Of(source) : undefined;
 
   // Thumbnail + preview (small) go first, so the item shows up everywhere quickly.
   const derivatives = original.previewsUploaded ? {} : derivativeFiles(original);
@@ -126,6 +137,7 @@ export async function uploadEntry(
     height: entry.height,
     duration: entry.duration,
     createdAt: entry.createdAt,
+    location,
   });
 
   let latest: RemoteMedia | undefined = plan.mode === 'done' ? plan.media : undefined;
@@ -146,6 +158,15 @@ export async function uploadEntry(
   if (!includeOriginal) {
     if (!latest) throw new Error('Nothing could be uploaded on this network yet');
     return { media: latest, originalDone: false };
+  }
+
+  if (plan.mode === 'external') {
+    if (!uploadExternal) throw new Error('This phone can’t reach that storage');
+    const { ref, checksum } = await uploadExternal(plan.location, source, entry, (sent) => onProgress(sent / entry.size));
+    if (isCancelled()) throw new UploadCancelled();
+    const { media } = await api.completeExternal(entry.id, ref, checksum);
+    onProgress(1);
+    return { media, originalDone: true };
   }
 
   if (plan.mode === 'single') {

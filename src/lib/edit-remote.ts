@@ -5,9 +5,17 @@ import { File, Paths } from 'expo-file-system';
 import { LensImaging } from '../../modules/lens-camera';
 import { PREVIEW_PX, THUMB_PX } from './derivatives';
 import { EditRecipe } from './edits';
+import { downloadFromStorage } from './storage';
+import { extensionFor } from './storage/useOriginal';
 import { RemoteMedia } from './types';
 
-export async function cachedOriginal(remote: Pick<RemoteMedia, 'id' | 'url' | 'kind'>): Promise<string> {
+export async function cachedOriginal(
+  remote: Pick<RemoteMedia, 'id' | 'url' | 'kind' | 'location' | 'contentType'>,
+): Promise<string> {
+  if (!remote.url && remote.location?.ref) {
+    // Original in the user's own storage.
+    return downloadFromStorage(remote.id, remote.location, extensionFor(remote.contentType, remote.kind));
+  }
   if (!remote.url) throw new Error('The original is still uploading.');
   const ext = remote.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? (remote.kind === 'video' ? 'mov' : 'jpg');
   const dest = new File(Paths.cache, `orig-${remote.id}.${ext}`);

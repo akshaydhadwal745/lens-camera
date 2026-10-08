@@ -14,6 +14,7 @@ module), Android app (basic camera for now), and a web viewer.
 | Looks & editing (non-destructive) | [features/looks-and-editing.md](features/looks-and-editing.md) |
 | Cloud upload, previews & storage | [features/cloud-and-storage.md](features/cloud-and-storage.md) |
 | Delete, Trash & Archive | [features/trash-and-archive.md](features/trash-and-archive.md) |
+| Storage: Lens + your own (Drive, OneDrive, Dropbox, Box, S3, WebDAV) | [features/own-storage.md](features/own-storage.md) |
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 
@@ -24,6 +25,8 @@ module), Android app (basic camera for now), and a web viewer.
 | System architecture, data model, API, costs | [architecture.md](architecture.md) |
 | Setup, running on devices, builds, deploys, tests | [development.md](development.md) |
 | What's next | [roadmap.md](roadmap.md) |
+| Registering storage providers (Google, Dropbox, Microsoft, Box) | [setup/storage-providers.md](setup/storage-providers.md) |
+| Design: own storage + Lens tiers | [design/own-storage.md](design/own-storage.md) |
 
 ## Feature status
 
@@ -55,6 +58,10 @@ module), Android app (basic camera for now), and a web viewer.
 | Storage guardian (keep X GB free, oldest first, low-space banner) | iOS, Android | ✅ | No | Works in Expo Go |
 | Delete for everyone / only for me | All | ✅ | No | Server side tested (e2e) |
 | Trash (30 days) + Archive (1 year, recover ~12 h) | All | ✅ | No | Server side tested (e2e, simulated dates); payment not built |
+| Storage screen, gallery storage pill, Recent/Saver, request a provider | All | ✅ | No | Server side tested (e2e) |
+| Own storage: Google Drive, OneDrive, Dropbox, Box | iOS, Android | ✅ | No | Needs provider registration ([setup](setup/storage-providers.md)) + a dev build (APK) |
+| Own storage: S3-compatible, WebDAV | iOS, Android | ✅ | No | Connector code tested against real S3 + a WebDAV server |
+| iCloud Drive | iOS | ❌ | — | Needs the paid Apple Developer account |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

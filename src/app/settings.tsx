@@ -164,7 +164,7 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        <Section title="Cloud storage">
+        <Section title="Storage">
           <View style={{ padding: 16 }}>
             <View style={styles.bar}>
               <View style={[styles.barFill, { width: `${usedPct * 100}%` }]} />
@@ -175,6 +175,12 @@ export default function SettingsScreen() {
           </View>
           {identity && (
             <>
+              <View style={styles.divider} />
+              <Pressable style={styles.rowButton} onPress={() => router.push('/storage')}>
+                <Ionicons name="server-outline" size={18} color={colors.accent} />
+                <Text style={[styles.rowButtonText, { flex: 1 }]}>Storage: Lens & your own</Text>
+                <Ionicons name="chevron-forward" size={16} color="#555" />
+              </Pressable>
               <View style={styles.divider} />
               <Pressable style={styles.rowButton} onPress={() => router.push('/trash')}>
                 <Ionicons name="trash-outline" size={18} color={colors.accent} />

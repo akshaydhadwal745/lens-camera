@@ -2,10 +2,12 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { authenticate, claimPairing, contacts, createPairing, me, register, searchUsers } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
-import { completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
+import { completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
 import { removeShared, share, sharedWithMe } from './shares';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
+import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
+import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth } from './oauth';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -19,6 +21,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /devices') return await register();
     if (route === 'POST /pairing/claim') return await claimPairing(req);
     if (route === 'GET /health') return json(200, { ok: true });
+    if (route === 'GET /oauth/callback') return await oauthCallback(req);
 
     const identity = await authenticate(req);
 
@@ -36,6 +39,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (seg[3] === 'parts' && method === 'GET') return await uploadedParts(identity, id);
       if (seg[3] === 'parts' && method === 'POST') return await partUrls(identity, id, req);
       if (seg[3] === 'complete' && method === 'POST') return await completeUpload(identity, id);
+      if (seg[3] === 'external' && method === 'POST') return await completeExternal(identity, id, req);
       if (seg[3] === 'previews' && method === 'POST') return await previewsUploaded(identity, id);
       if (seg[3] === 'edit' && method === 'POST') return await startEdit(identity, id, req);
       if (seg[3] === 'restore' && method === 'POST') return await restoreMedia(identity, id);
@@ -43,6 +47,17 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     }
     if (seg[1] === 'media' && seg.length === 5 && seg[3] === 'edit' && seg[4] === 'commit' && method === 'POST') {
       return await commitEdit(identity, seg[2], req);
+    }
+
+    if (route === 'GET /storage') return await getStorage(identity);
+    if (seg[1] === 'storages' && seg.length === 3 && method === 'PUT') return await putStorage(identity, seg[2], req);
+    if (seg[1] === 'storages' && seg.length === 3 && method === 'DELETE') return await deleteStorage(identity, seg[2]);
+    if (route === 'POST /provider-requests') return await requestProvider(identity, req);
+    if (route === 'GET /oauth/providers') return await oauthProviders();
+    if (seg[1] === 'oauth' && seg.length === 4 && method === 'POST') {
+      if (seg[3] === 'start') return await startOAuth(identity, seg[2], req);
+      if (seg[3] === 'token') return await exchangeOAuth(identity, seg[2], req);
+      if (seg[3] === 'refresh') return await refreshOAuth(identity, seg[2], req);
     }
 
     if (route === 'POST /shares') return await share(identity, req);

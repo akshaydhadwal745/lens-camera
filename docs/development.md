@@ -34,7 +34,8 @@ npx tsc --noEmit                         # app
 (cd infra && npx tsc --noEmit)           # backend
 npx expo export --platform ios|android|web
 npx expo-doctor
-infra/scripts/e2e.sh                      # live API end-to-end (~50 checks)
+infra/scripts/e2e.sh                      # live API end-to-end (~95 checks)
+tests/connectors/run.sh                   # real S3 + WebDAV connector code in Node (needs `pip install wsgidav cheroot`)
 ```
 
 ## Deploy backend + web viewer

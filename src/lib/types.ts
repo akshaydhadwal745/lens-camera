@@ -21,6 +21,42 @@ export interface RemoteMedia {
   previewUrl?: string;
   /** Non-destructive edit (previews already show it). */
   edit?: EditRecipe;
+  /** e.g. image/heic; absent on older shares. */
+  contentType?: string;
+  /** The original lives in the owner's own storage (no `url`); previews are in Lens. */
+  location?: StorageLocation;
+}
+
+/** An original stored in a connected storage (Google Drive file id, Dropbox path…). */
+export interface StorageLocation {
+  storageId: string;
+  provider: ProviderId;
+  ref?: string;
+}
+
+/** Where originals can live besides Lens storage. */
+export type ProviderId = 'gdrive' | 'dropbox' | 'onedrive' | 'box' | 's3' | 'webdav' | 'icloud';
+export type StorageStatus = 'ok' | 'low' | 'full' | 'signed-out' | 'error';
+
+/** A storage the user connected (health as last reported by their phone). */
+export interface ConnectedStorage {
+  id: string;
+  provider: ProviderId;
+  label: string;
+  account?: string;
+  status: StorageStatus;
+  usedBytes?: number;
+  totalBytes?: number;
+  checkedAt: number;
+  createdAt: number;
+}
+
+export interface StorageOverview {
+  plan: 'free';
+  /** Lens storage: newest `recentBytes` are "Recent", the rest "Saver" (all instant). */
+  lens: { usedBytes: number; quotaBytes: number; recentBytes: number };
+  storages: ConnectedStorage[];
+  limits: { storages: number; routing: boolean };
 }
 
 /** Deleting a shared item: remove it for everyone, or only hide it from me. */
@@ -64,6 +100,10 @@ export interface LocalEntry {
   edit?: EditRecipe;
   /** Edit changed after previews were uploaded: push the new look to the cloud. */
   editDirty?: boolean;
+  /** Too big for their storage plan (e.g. Box free 250 MB): this one goes to Lens storage. */
+  forceLens?: boolean;
+  /** Resumable upload state in the user's own storage (e.g. a Drive session URL). */
+  externalUpload?: { storageId: string; resume?: string };
   /** Set once the cloud copy is confirmed; local copy becomes eligible for cleanup. */
   uploadedAt?: number;
   /**
@@ -102,6 +142,9 @@ export interface GalleryItem {
   sync: SyncState;
   error?: string;
   edit?: EditRecipe;
+  /** Original in the user's own storage (opened through their provider). */
+  location?: StorageLocation;
+  contentType?: string;
   /** Present for items shared with me. */
   ownerId?: string;
   ownerName?: string;

@@ -106,6 +106,7 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
         id: s.mediaId,
         status: 'ready',
         derivVersion: current.get(`${s.ownerId}#${s.mediaId}`)?.derivVersion,
+        location: current.get(`${s.ownerId}#${s.mediaId}`)?.location, // own storage: preview only (free plan)
         edit: current.get(`${s.ownerId}#${s.mediaId}`)?.edit,
       })),
       ownerId: s.ownerId,

@@ -61,7 +61,15 @@ export default function EditScreen() {
         if (!entry) throw new Error('Video looks can be changed only while the video is still on the phone that recorded it.');
         uri = await posterUri(entry);
       } else {
-        uri = entry ? uriFor(entry) : await cachedOriginal({ id: item.id, url: item.remoteUrl, kind: item.kind });
+        uri = entry
+          ? uriFor(entry)
+          : await cachedOriginal({
+              id: item.id,
+              url: item.remoteUrl,
+              kind: item.kind,
+              location: item.location,
+              contentType: item.contentType,
+            });
       }
       const base = await LensImaging!.renderImage(uri, null, { maxPixel: 320, format: 'jpeg', quality: 0.8 });
       const hasDepth = item.kind === 'photo' ? await LensImaging!.hasDepth(uri) : false;

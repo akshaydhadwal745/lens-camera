@@ -42,3 +42,7 @@ yarn-error.*
 
 # API endpoints (kept out of the public repo)
 .env
+
+# connector test bundle
+tests/connectors/*.mjs
+!tests/connectors/build.mjs
