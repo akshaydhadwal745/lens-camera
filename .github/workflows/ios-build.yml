@@ -171,17 +171,27 @@ jobs:
         env:
           CI: 1
 
-      - name: Build debug APK
+      # Debug = dev client (JS from Metro). Release = standalone app with the
+      # JS bundled in, signed with the template's debug key (fine for sideloading).
+      - name: Build APKs
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew assembleDebug assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
 
-      - name: Collect APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk Lens-dev.apk && ls -lh Lens-dev.apk
+      - name: Collect APKs
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Lens-dev.apk
+          cp android/app/build/outputs/apk/release/app-release.apk Lens.apk
+          ls -lh Lens-dev.apk Lens.apk
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android
-          path: Lens-dev.apk
+          path: |
+            Lens.apk
+            Lens-dev.apk
           retention-days: 14
 
   release:
@@ -208,8 +218,8 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Lens dev build #${{ github.run_number }}" \
-            --notes "Development builds from ${GITHUB_SHA::7} (iOS: $IOS, Android: $ANDROID).
-          - iPhone/iPad: install Lens-dev.ipa with SideStore.
-          - Android: open Lens-dev.apk on the phone and install.
-          JS loads from Metro: run npm run tunnel on the computer." \
+            --notes "Builds from ${GITHUB_SHA::7} (iOS: $IOS, Android: $ANDROID).
+          - Android: **Lens.apk** is the normal app, open it on the phone and install.
+          - Android (developers): Lens-dev.apk loads JS from Metro (npm run tunnel).
+          - iPhone/iPad: install Lens-dev.ipa with SideStore (loads JS from Metro)." \
             --prerelease
