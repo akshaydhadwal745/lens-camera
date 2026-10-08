@@ -7,5 +7,5 @@ P=${1:?provider}; ID=${2:?client id}; SECRET=${3:?client secret}
 case "$P" in gdrive|dropbox|onedrive|box) ;; *) echo "unknown provider $P"; exit 1;; esac
 aws ssm put-parameter --profile lens --name "/lens/oauth/$P/client-id" --type SecureString --value "$ID" --overwrite >/dev/null
 aws ssm put-parameter --profile lens --name "/lens/oauth/$P/client-secret" --type SecureString --value "$SECRET" --overwrite >/dev/null
-API=$(node -p "require('$(dirname "$0")/../outputs.json').Lens.ApiUrl.replace(/\/$/, '')")
+API=$(node -p "require('$(cd "$(dirname "$0")/.." && pwd)/outputs.json').Lens.ApiUrl.replace(/\/$/, '')")
 echo "Saved $P credentials. Redirect URI to register: $API/v1/oauth/callback"
