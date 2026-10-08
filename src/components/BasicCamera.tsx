@@ -94,24 +94,36 @@ export function BasicCamera() {
     }
   }, [isFocused]);
 
+  // Latest zoom for the pinch handler, so the gesture isn't rebuilt (and
+  // re-attached) on every zoom step, which made pinching stutter.
+  const zoomRef = useRef(0);
+  const recordingRef = useRef(false);
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+
+  // The refs below are read in gesture callbacks (event time), not during render.
+  /* eslint-disable react-hooks/refs */
   const gesture = useMemo(() => {
     const pinch = Gesture.Pinch()
       .runOnJS(true)
       .onStart(() => {
-        zoomStart.current = zoom;
+        zoomStart.current = zoomRef.current;
       })
       .onUpdate((e) => {
         const next = Math.min(1, Math.max(0, zoomStart.current + (e.scale - 1) * 0.25));
+        zoomRef.current = next;
         setZoom(next);
       });
     const doubleTap = Gesture.Tap()
       .runOnJS(true)
       .numberOfTaps(2)
       .onEnd(() => {
-        if (!recording) setFacing((f) => (f === 'back' ? 'front' : 'back'));
+        if (!recordingRef.current) setFacing((f) => (f === 'back' ? 'front' : 'back'));
       });
     return Gesture.Simultaneous(pinch, doubleTap);
-  }, [zoom, recording]);
+  }, []);
+  /* eslint-enable react-hooks/refs */
 
   const flashScreen = () => {
     shutterOpacity.setValue(1);

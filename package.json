@@ -39,6 +39,7 @@
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
+    "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -52,7 +53,8 @@
     "tunnel": "./scripts/tunnel.sh",
     "deploy": "expo export --platform web && npm --prefix infra run deploy",
     "test:api": "cd infra && ./scripts/e2e.sh",
-    "tunnel:ngrok": "expo start --tunnel"
+    "tunnel:ngrok": "expo start --tunnel",
+    "postinstall": "patch-package"
   },
   "private": true
 }

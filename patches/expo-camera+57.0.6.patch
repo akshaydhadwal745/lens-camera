@@ -1,0 +1,36 @@
+diff --git a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+index 999a22c..2060c3e 100644
+--- a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
++++ b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+@@ -27,6 +27,7 @@ import androidx.camera.core.CameraSelector
+ import androidx.camera.core.CameraState
+ import androidx.camera.core.DisplayOrientedMeteringPointFactory
+ import androidx.camera.core.FocusMeteringAction
++import android.util.Range
+ import androidx.camera.core.ImageAnalysis
+ import androidx.camera.core.ImageCapture
+ import androidx.camera.core.ImageCaptureException
+@@ -467,8 +468,11 @@ class ExpoCameraView(
+     }
+ 
+     val resolutionSelector = buildResolutionSelector()
++    // Lens patch: ask for a steady 30 fps preview so auto-exposure doesn't drop
++    // the frame rate (and add motion lag) in ordinary indoor light.
+     val preview = Preview.Builder()
+       .setResolutionSelector(resolutionSelector)
++      .setTargetFrameRate(Range(30, 30))
+       .build()
+       .also {
+         it.surfaceProvider = previewView.surfaceProvider
+@@ -514,7 +518,10 @@ class ExpoCameraView(
+     imageCaptureUseCase = imageCaptureBuilder.build()
+ 
+     val videoCapture = createVideoCapture()
+-    imageAnalysisUseCase = createImageAnalyzer()
++    // Lens patch: only bind the (full-resolution) analysis stream when barcodes are
++    // actually being scanned. Binding it unconditionally forces a third stream that
++    // most devices can't run alongside preview + still capture at full frame rate.
++    imageAnalysisUseCase = if (shouldScanBarcodes) createImageAnalyzer() else null
+ 
+     val useCases = UseCaseGroup.Builder().apply {
+       addUseCase(preview)
