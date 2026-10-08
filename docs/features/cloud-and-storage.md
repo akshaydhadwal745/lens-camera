@@ -14,8 +14,43 @@ the phone keeps only what it needs.
 3. Thumbnail + preview upload **first, on any network** — the item appears on your
    other devices and the website within seconds.
 4. The **original** uploads next, following the mobile-data setting.
-5. The server checks the stored file and marks it verified. Then the local copy
-   becomes eligible for cleanup.
+5. The server checks the stored file and marks it verified. Then the local original
+   becomes eligible for the storage guardian.
+
+## Storage guardian (the phone never fills up)
+
+Once an original is verified in the cloud, the phone may drop its full-size
+file and keep only the thumbnail + preview. The gallery stays complete and
+works offline; opening the item shows the preview, and the full-quality
+original loads from the cloud (automatically on Wi-Fi, HD button on mobile data).
+
+The original is removed from the phone when **any** of these is true:
+
+| Trigger | What happens |
+|---|---|
+| Older than "Keep originals on phone for" | Removed on app start / return to the app |
+| Free space below "Always keep free on phone" | First deletes re-downloadable cached files (shared/saved/edited cloud originals), then removes the **oldest** verified originals until there's enough room |
+| You tap "Free up space now" | Removes every verified original |
+
+When the guardian checks free space: app start, every return to the app, after
+every capture, after every original finishes uploading, and when Settings opens.
+
+**Rules:** anything not yet verified in the cloud is never touched. Items with
+no local preview (rare: preview creation failed) are removed entirely and show
+from the cloud listing instead.
+
+**Phone almost full:** if free space drops under 500 MB and nothing can be
+removed yet (everything left is still waiting to upload), the gallery shows an
+orange "Phone almost full" banner until uploads catch up.
+
+**After an original is removed:** share / Save to Photos downloads it from the
+cloud first. Photo edits render from the cloud original. Video looks can only be
+changed while the video is still on the phone that recorded it.
+
+**Code:** `guardSpace`, `runCleanup`, `freeUpSpace`, `offloadOriginals` in
+`src/lib/store.ts`; `deleteOriginal`, `freeDiskBytes`, `clearDownloadCache` in
+`src/lib/local-store.ts`. A removed item keeps its `LocalEntry` with
+`offloadedAt` set.
 
 ## Integrity (zero quality loss)
 
@@ -32,8 +67,12 @@ the phone keeps only what it needs.
 | Setting | Options | Default |
 |---|---|---|
 | Upload over mobile data | Everything · Up to 100 MB · Wi-Fi only | Up to 100 MB (big videos wait for Wi-Fi) |
-| Keep local copies for | 1 · 3 · 7 · 30 days · Always | 7 days |
-| Free up space now | Removes local copies already safe in the cloud | — |
+| Keep originals on phone for | 1 · 3 · 7 · 30 days · Always | 7 days |
+| Always keep free on phone | Off · 1 · 2 · 5 · 10 GB | 2 GB |
+| Free up space now | Removes originals already safe in the cloud (previews stay) | — |
+
+Settings → On this device also shows how many originals are on the phone, how
+many items are preview-only, and the phone's free space.
 
 Thumbnails/previews always upload, even on mobile data (they're tiny).
 
@@ -44,7 +83,7 @@ Thumbnails/previews always upload, even on mobile data (they're tiny).
 | Cloud with arrow (grey) | Waiting to upload |
 | Percentage | Uploading |
 | Cloud with arrow (blue) | Visible everywhere; full-quality original still uploading |
-| Cloud with tick | Only in the cloud (not on this phone) |
+| Cloud with tick | Original only in the cloud (this phone may keep just the preview) |
 | Red ! | Upload failed — tap the banner to retry |
 
 ## Cloud storage

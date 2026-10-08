@@ -51,6 +51,11 @@ export interface LocalEntry {
   editDirty?: boolean;
   /** Set once the cloud copy is confirmed; local copy becomes eligible for cleanup. */
   uploadedAt?: number;
+  /**
+   * The original was removed from this device to save space (it's verified in
+   * the cloud). Thumbnail + preview stay so the gallery still works offline.
+   */
+  offloadedAt?: number;
   attempts?: number;
   nextAttemptAt?: number;
   /** Permanent failure (won't retry automatically). */

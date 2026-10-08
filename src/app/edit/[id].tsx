@@ -53,10 +53,12 @@ export default function EditScreen() {
     if (!item || !LensImaging) return;
     let cancelled = false;
     (async () => {
-      const entry = getState().entries.find((e) => e.id === item.id);
+      const found = getState().entries.find((e) => e.id === item.id);
+      // Offloaded entries only have previews here; photos edit from the cloud original.
+      const entry = found?.offloadedAt ? undefined : found;
       let uri: string;
       if (item.kind === 'video') {
-        if (!entry) throw new Error('Edit video looks on the device that recorded it.');
+        if (!entry) throw new Error('Video looks can be changed only while the video is still on the phone that recorded it.');
         uri = await posterUri(entry);
       } else {
         uri = entry ? uriFor(entry) : await cachedOriginal({ id: item.id, url: item.remoteUrl, kind: item.kind });

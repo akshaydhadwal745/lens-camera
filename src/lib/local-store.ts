@@ -80,23 +80,30 @@ export function captureFile(name: string): File {
 export function loadEntries(): LocalEntry[] {
   capturesDir.create({ idempotent: true });
   const raw = readJson<Partial<LocalEntry>[]>(indexFile, []);
-  // Drop entries whose file is gone; fill fields missing from older versions.
-  return raw
-    .filter((e): e is LocalEntry => !!e.id && !!e.fileName && fileFor(e as LocalEntry).exists)
-    .map((e) => {
-      const size = e.size && e.size > 0 ? e.size : fileSize(fileFor(e));
-      // Entries that failed only because their size was misread get retried.
-      const sizeError = !e.uploadedAt && e.error && /invalid size/i.test(e.error);
-      const exists = (name?: string) => (name && new File(capturesDir, name).exists ? name : undefined);
-      return {
-        ...e,
-        thumbFile: exists(e.thumbFile),
-        previewFile: exists(e.previewFile),
-        contentType: e.contentType ?? CONTENT_TYPES[extOf(e.fileName)] ?? 'image/jpeg',
-        size,
-        ...(sizeError ? { error: undefined, attempts: 0, nextAttemptAt: undefined } : {}),
-      };
+  const exists = (name?: string) => (name && new File(capturesDir, name).exists ? name : undefined);
+  const out: LocalEntry[] = [];
+  for (const e of raw) {
+    if (!e.id || !e.fileName) continue;
+    const hasOriginal = fileFor(e as LocalEntry).exists;
+    const thumbFile = exists(e.thumbFile);
+    const previewFile = exists(e.previewFile);
+    // Without the original, an entry is only worth keeping if it's safe in the
+    // cloud and we still have its previews (offloaded by the storage guardian).
+    if (!hasOriginal && !(e.uploadedAt && (thumbFile || previewFile))) continue;
+    const size = e.size && e.size > 0 ? e.size : hasOriginal ? fileSize(fileFor(e as LocalEntry)) : 0;
+    // Entries that failed only because their size was misread get retried.
+    const sizeError = !e.uploadedAt && e.error && /invalid size/i.test(e.error);
+    out.push({
+      ...(e as LocalEntry),
+      thumbFile,
+      previewFile,
+      contentType: e.contentType ?? CONTENT_TYPES[extOf(e.fileName)] ?? 'image/jpeg',
+      size,
+      offloadedAt: hasOriginal ? undefined : (e.offloadedAt ?? Date.now()),
+      ...(sizeError ? { error: undefined, attempts: 0, nextAttemptAt: undefined } : {}),
     });
+  }
+  return out;
 }
 
 export function saveEntries(entries: LocalEntry[]) {
@@ -111,7 +118,7 @@ export function importCapture(input: NewCapture): LocalEntry {
   const ext = extOf(source.name) || (input.kind === 'video' ? 'mov' : 'jpg');
   const fileName = `${id}.${ext}`;
   const dest = new File(capturesDir, fileName);
-  source.move(dest);
+  source.moveSync(dest);
   return {
     id,
     kind: input.kind,
@@ -132,6 +139,43 @@ export function deleteFileFor(entry: LocalEntry) {
     const file = new File(capturesDir, name);
     if (file.exists) file.delete();
   }
+}
+
+/** Removes only the original (thumbnail + preview stay). Returns bytes freed. */
+export function deleteOriginal(entry: LocalEntry): number {
+  const file = fileFor(entry);
+  if (!file.exists) return 0;
+  const bytes = fileSize(file) || entry.size;
+  file.delete();
+  return bytes;
+}
+
+/** Free space on the phone in bytes, or null if the OS doesn't tell us. */
+export function freeDiskBytes(): number | null {
+  try {
+    const free = Paths.availableDiskSpace;
+    return Number.isFinite(free) && free > 0 ? free : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Cloud originals downloaded for sharing, saving or editing (re-downloadable). */
+const DOWNLOAD_PREFIXES = ['dl-', 'orig-', 'poster-'];
+
+/** Deletes cached downloads of cloud originals. Returns bytes freed. */
+export function clearDownloadCache(): number {
+  let bytes = 0;
+  try {
+    for (const item of new Directory(Paths.cache).list()) {
+      if (!(item instanceof File) || !DOWNLOAD_PREFIXES.some((p) => item.name.startsWith(p))) continue;
+      bytes += fileSize(item);
+      item.delete();
+    }
+  } catch {
+    // Best effort.
+  }
+  return bytes;
 }
 
 export function loadRemoteCache(): RemoteMedia[] {

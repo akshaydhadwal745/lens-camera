@@ -106,7 +106,9 @@ function SyncLine({ item }: { item: GalleryItem }) {
     item.sync === 'synced'
       ? item.localUri
         ? 'In the cloud · on this device'
-        : 'In the cloud'
+        : item.previewUri?.startsWith('file:')
+          ? 'In the cloud · preview on this device'
+          : 'In the cloud'
       : item.sync === 'uploading'
         ? `Uploading ${Math.round((progress ?? 0) * 100)}%`
         : item.sync === 'partial'

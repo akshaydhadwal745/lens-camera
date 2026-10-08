@@ -3,13 +3,12 @@
 ## Next
 
 1. **Device testing** of the pro camera, looks, Night/Portrait, editor (needs the
-   SideStore install on iPhone) and fixes from it.
-2. **Storage guardian:** free phone space automatically by replacing verified
-   originals with previews (by age, and when space runs low).
-3. **Live upload while recording:** record in segments and upload them during
+   SideStore install on iPhone) and fixes from it. The storage guardian (built,
+   see [cloud-and-storage](features/cloud-and-storage.md)) can be tested in Expo Go.
+2. **Live upload while recording:** record in segments and upload them during
    recording, so videos are in the cloud seconds after you stop (setting:
    Wi-Fi only / Wi-Fi + mobile / off).
-4. **Thermal guard:** reduce live analysis and pause uploads when the phone is hot.
+3. **Thermal guard:** reduce live analysis and pause uploads when the phone is hot.
 
 ## Later
 

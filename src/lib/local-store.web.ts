@@ -20,6 +20,15 @@ export function importCapture(_input: NewCapture): LocalEntry {
   throw new Error('Capturing is not available on web');
 }
 export function deleteFileFor(_entry: LocalEntry) {}
+export function deleteOriginal(_entry: LocalEntry): number {
+  return 0;
+}
+export function freeDiskBytes(): number | null {
+  return null;
+}
+export function clearDownloadCache(): number {
+  return 0;
+}
 export function loadRemoteCache(): RemoteMedia[] {
   return [];
 }

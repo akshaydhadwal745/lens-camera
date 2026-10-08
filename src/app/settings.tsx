@@ -11,6 +11,8 @@ import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
   freeUpSpace,
+  guardSpace,
+  KEEP_FREE_OPTIONS,
   RETENTION_OPTIONS,
   retryFailed,
   selectFailedCount,
@@ -18,6 +20,7 @@ import {
   selectPendingCount,
   selectWaitingForWifi,
   setCellularUploads,
+  setKeepFree,
   setRetention,
   unlinkBrowser,
   useStore,
@@ -104,6 +107,8 @@ export default function SettingsScreen() {
   const usage = useStore((s) => s.usage);
   const online = useStore((s) => s.online);
   const retentionDays = useStore((s) => s.settings.retentionDays);
+  const keepFreeGB = useStore((s) => s.settings.keepFreeGB);
+  const freeBytes = useStore((s) => s.freeBytes);
   const local = useStore(selectLocalUsage);
   const pending = useStore(selectPendingCount);
   const failed = useStore(selectFailedCount);
@@ -113,11 +118,16 @@ export default function SettingsScreen() {
 
   const usedPct = usage ? Math.min(1, usage.usedBytes / usage.quotaBytes) : 0;
 
+  // Fresh free-space reading (and a guardian pass) whenever Settings opens.
+  useEffect(() => {
+    if (!isWeb) guardSpace();
+  }, []);
+
   const onFreeUp = async () => {
     if (!local.freeableCount) return;
     const ok = await confirmDestructive(
       'Free up space?',
-      `Removes ${local.freeableCount} item${local.freeableCount === 1 ? '' : 's'} (${formatBytes(local.freeable)}) from this device. They stay safe in the cloud.`,
+      `Removes the originals of ${local.freeableCount} item${local.freeableCount === 1 ? '' : 's'} (${formatBytes(local.freeable)}) from this device. They stay safe in the cloud, and their previews stay in your gallery.`,
       'Free up',
     );
     if (!ok) return;
@@ -169,11 +179,23 @@ export default function SettingsScreen() {
           <>
             <Section
               title="On this device"
-              footer="Every shot uploads to the cloud right away. A local copy is kept for quick viewing and removed automatically after this time, but only once it's safely in the cloud."
+              footer="Every shot uploads to the cloud right away. The full-size original stays on the phone for the time you choose, and sooner if the phone runs low on space (oldest first). Nothing is removed until it's safely in the cloud, and previews always stay so your gallery works offline."
             >
-              <Row label="Stored here" value={`${local.count} items · ${formatBytes(local.bytes)}`} />
+              <Row label="Originals here" value={`${local.count} items · ${formatBytes(local.bytes)}`} />
+              {local.offloaded > 0 && (
+                <>
+                  <View style={styles.divider} />
+                  <Row label="Preview only (in the cloud)" value={`${local.offloaded} items`} />
+                </>
+              )}
+              {freeBytes !== null && (
+                <>
+                  <View style={styles.divider} />
+                  <Row label="Free on this phone" value={formatBytes(freeBytes)} />
+                </>
+              )}
               <View style={styles.divider} />
-              <Text style={[styles.rowLabel, { paddingHorizontal: 16, paddingTop: 12 }]}>Keep local copies for</Text>
+              <Text style={[styles.rowLabel, { paddingHorizontal: 16, paddingTop: 12 }]}>Keep originals on phone for</Text>
               <View style={styles.chips}>
                 {RETENTION_OPTIONS.map((o) => (
                   <Pressable
@@ -183,6 +205,20 @@ export default function SettingsScreen() {
                     accessibilityState={{ selected: retentionDays === o.days }}
                   >
                     <Text style={[styles.chipText, retentionDays === o.days && styles.chipTextOn]}>{o.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.divider} />
+              <Text style={[styles.rowLabel, { paddingHorizontal: 16, paddingTop: 12 }]}>Always keep free on phone</Text>
+              <View style={styles.chips}>
+                {KEEP_FREE_OPTIONS.map((o) => (
+                  <Pressable
+                    key={o.gb}
+                    onPress={() => setKeepFree(o.gb)}
+                    style={[styles.chip, keepFreeGB === o.gb && styles.chipOn]}
+                    accessibilityState={{ selected: keepFreeGB === o.gb }}
+                  >
+                    <Text style={[styles.chipText, keepFreeGB === o.gb && styles.chipTextOn]}>{o.label}</Text>
                   </Pressable>
                 ))}
               </View>

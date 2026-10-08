@@ -32,7 +32,7 @@ async function save(image: ImageRef, name: string): Promise<string> {
   const result = await image.saveAsync({ format: SaveFormat.JPEG, compress: QUALITY });
   const target = captureFile(name);
   if (target.exists) target.delete();
-  new File(result.uri).move(target);
+  new File(result.uri).moveSync(target);
   return name;
 }
 
@@ -56,7 +56,7 @@ const inflight = new Map<string, Promise<Pick<LocalEntry, 'thumbFile' | 'preview
 function moveInto(uri: string, name: string): string {
   const target = captureFile(name);
   if (target.exists) target.delete();
-  new File(uri).move(target);
+  new File(uri).moveSync(target);
   return name;
 }
 

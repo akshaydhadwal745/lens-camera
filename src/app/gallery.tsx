@@ -27,6 +27,7 @@ import {
   selectGallery,
   selectPendingCount,
   selectShared,
+  selectStorageStuck,
   selectWaitingForWifi,
   useStore,
 } from '@/lib/store';
@@ -50,6 +51,7 @@ export default function GalleryScreen() {
   const pending = useStore(selectPendingCount);
   const failed = useStore(selectFailedCount);
   const waitingForWifi = useStore(selectWaitingForWifi);
+  const storageStuck = useStore(selectStorageStuck);
   const online = useStore((s) => s.online);
   const name = useStore((s) => s.identity?.name);
   const remoteLoading = useStore((s) => s.remoteLoading);
@@ -144,7 +146,16 @@ export default function GalleryScreen() {
 
   if (status === 'needs-link') return <Redirect href="/link" />;
 
-  const banner = !online ? (
+  const banner = storageStuck ? (
+    // Phone nearly full and nothing is safe to remove yet: uploads must finish first.
+    <View style={[styles.banner, { backgroundColor: '#7C2D12' }]}>
+      <Ionicons name="warning-outline" size={16} color="#fff" />
+      <Text style={styles.bannerText}>
+        Phone almost full. Space frees up as {storageStuck} item{storageStuck === 1 ? '' : 's'} finish uploading
+        {!online ? ' (offline now)' : ''}
+      </Text>
+    </View>
+  ) : !online ? (
     <View style={[styles.banner, { backgroundColor: '#334155' }]}>
       <Ionicons name="cloud-offline-outline" size={16} color="#fff" />
       <Text style={styles.bannerText}>Offline{pending ? `: ${pending} waiting to upload` : ''}</Text>

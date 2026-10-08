@@ -50,7 +50,8 @@ module), Android app (basic camera for now), and a web viewer.
 | Verified cloud upload (MD5 per part, resumable, up to 1 TB) | iOS, Android | ✅ | Partly | Server side fully tested (e2e) |
 | Mobile-data policy (everything / ≤100 MB / Wi-Fi only) | iOS, Android | ✅ | No | |
 | Thumbnails + previews uploaded first | iOS, Android | ✅ | No | Web verified in Chrome |
-| Local copy retention + free up space | iOS, Android | ✅ | No | |
+| Local copy retention + free up space | iOS, Android | ✅ | No | Removes originals, keeps previews |
+| Storage guardian (keep X GB free, oldest first, low-space banner) | iOS, Android | ✅ | No | Works in Expo Go |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

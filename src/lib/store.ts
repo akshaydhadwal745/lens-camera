@@ -9,7 +9,10 @@ import { ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity
 import {
   captureFile,
   clearChunkFiles,
+  clearDownloadCache,
   deleteFileFor,
+  deleteOriginal,
+  freeDiskBytes,
   importCapture,
   loadEntries,
   loadPrefs,
@@ -37,7 +40,21 @@ export type Settings = {
   retentionDays: number;
   /** What may upload over mobile data: everything, files ≤ 100 MB, or nothing. */
   cellularUploads: CellularPolicy;
+  /** Storage guardian: keep at least this much free on the phone; 0 = off. */
+  keepFreeGB: number;
 };
+
+export const KEEP_FREE_OPTIONS = [
+  { gb: 0, label: 'Off' },
+  { gb: 1, label: '1 GB' },
+  { gb: 2, label: '2 GB' },
+  { gb: 5, label: '5 GB' },
+  { gb: 10, label: '10 GB' },
+];
+
+const GB = 1024 ** 3;
+/** Below this the phone is nearly full (warn if nothing more can be freed). */
+const CRITICAL_FREE_BYTES = 500 * 1024 ** 2;
 
 export const CELLULAR_OPTIONS: { value: CellularPolicy; label: string }[] = [
   { value: 'all', label: 'Everything' },
@@ -55,7 +72,7 @@ export const RETENTION_OPTIONS = [
   { days: -1, label: 'Always' },
 ];
 
-const DEFAULT_SETTINGS: Settings = { retentionDays: 7, cellularUploads: 'small' };
+const DEFAULT_SETTINGS: Settings = { retentionDays: 7, cellularUploads: 'small', keepFreeGB: 2 };
 
 export type State = {
   status: 'booting' | 'ready' | 'needs-link';
@@ -75,6 +92,8 @@ export type State = {
   usage: { usedBytes: number; quotaBytes: number } | null;
   /** "Copy edit" clipboard (looks + adjustments, never crop). */
   copiedEdit: EditRecipe | null;
+  /** Free space on the phone (null = unknown, e.g. web). */
+  freeBytes: number | null;
 };
 
 let state: State = {
@@ -93,6 +112,7 @@ let state: State = {
   settings: DEFAULT_SETTINGS,
   usage: null,
   copiedEdit: null,
+  freeBytes: null,
 };
 
 const listeners = new Set<() => void>();
@@ -166,7 +186,7 @@ export function selectGallery(s: State): GalleryItem[] {
       height: e.height,
       duration: e.duration,
       size: e.size,
-      localUri: uriFor(e),
+      localUri: e.offloadedAt ? undefined : uriFor(e),
       // Local derivative files are faster than the network; fall back to cloud ones.
       thumbUri: e.thumbFile ? captureFile(e.thumbFile).uri : cloud?.thumbUri,
       previewUri: e.previewFile ? captureFile(e.previewFile).uri : cloud?.previewUri,
@@ -233,17 +253,35 @@ export function selectLocalUsage(s: State) {
 }
 
 function computeLocalUsage(s: State) {
+  let count = 0;
   let bytes = 0;
   let freeable = 0;
   let freeableCount = 0;
+  let offloaded = 0;
   for (const e of s.entries) {
+    if (e.offloadedAt) {
+      offloaded += 1;
+      continue;
+    }
+    count += 1;
     bytes += e.size;
     if (e.uploadedAt) {
       freeable += e.size;
       freeableCount += 1;
     }
   }
-  return { count: s.entries.length, bytes, freeable, freeableCount };
+  /** count/bytes: originals on this phone · offloaded: only the preview is here. */
+  return { count, bytes, freeable, freeableCount, offloaded };
+}
+
+/**
+ * Phone is nearly full and the guardian can't help: everything left on the
+ * phone is still waiting to upload. Returns how many items are waiting.
+ */
+export function selectStorageStuck(s: State): number {
+  if (s.freeBytes === null || s.freeBytes >= CRITICAL_FREE_BYTES) return 0;
+  if (s.entries.some((e) => e.uploadedAt && !e.offloadedAt)) return 0;
+  return s.entries.filter((e) => !e.uploadedAt).length;
 }
 
 // ---------- Boot ----------
@@ -436,13 +474,14 @@ export function capture(input: NewCapture): LocalEntry {
   const entry = importCapture(input);
   setEntries([entry, ...state.entries]);
   void ensureDerivatives(entry).finally(kickSync);
+  guardSpace(); // make room for the next shot if the phone is filling up
   return entry;
 }
 
 /** Older captures (before previews existed): make their previews one at a time. */
 async function backfillDerivatives() {
   for (const entry of state.entries) {
-    if (entry.thumbFile && entry.previewFile) continue;
+    if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt) continue;
     await ensureDerivatives(entry);
   }
   kickSync();
@@ -450,7 +489,7 @@ async function backfillDerivatives() {
 
 /** Makes thumbnail + preview if missing. Failure is non-fatal: the original still uploads. */
 async function ensureDerivatives(entry: LocalEntry): Promise<LocalEntry> {
-  if (entry.thumbFile && entry.previewFile) return entry;
+  if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt) return entry;
   try {
     const files = await makeDerivatives(entry);
     updateEntry(entry.id, files);
@@ -519,6 +558,7 @@ async function syncLoop() {
           error: undefined,
         });
         upsertRemote(result.media);
+        if (result.originalDone) guardSpace(); // this original may now be offloaded
       } catch (error) {
         if (error instanceof UploadCancelled) continue;
         const attempts = (next.attempts ?? 0) + 1;
@@ -577,24 +617,42 @@ export async function saveEdit(id: string, recipe: EditRecipe | null): Promise<v
   const edit = recipe ? (compact(recipe) ?? undefined) : undefined;
   const entry = state.entries.find((e) => e.id === id);
 
-  if (entry) {
+  if (entry && !entry.offloadedAt) {
     const files = await makeDerivatives({ ...entry, edit });
     deleteDerivativeFiles([entry.thumbFile, entry.previewFile], [files.thumbFile, files.previewFile]);
     updateEntry(id, { ...files, edit, editDirty: !!entry.previewsUploaded });
     kickSync();
     return;
   }
+  if (entry?.kind === 'video') {
+    throw new Error('Video looks can be changed only while the video is still on this phone.');
+  }
 
-  // Cloud-only item (e.g. taken on another device): render from the original.
+  // Cloud-only or offloaded item: render from the cloud original.
   const remote = state.remote.find((r) => r.id === id);
   if (!remote?.url) throw new Error('The original is still uploading. Try again when it has finished.');
   const files = await renderCloudDerivatives(remote, edit ?? null);
+  let kept = false;
   try {
     const media = await pushEdit(id, edit ?? null, files);
     upsertRemote(media);
+    if (entry) {
+      // Offloaded: keep this phone's previews in step with the new look.
+      const stamp = Date.now().toString(36);
+      const thumbFile = `${id}.thumb.${stamp}.jpg`;
+      const previewFile = `${id}.preview.${stamp}.jpg`;
+      files.thumb.moveSync(captureFile(thumbFile));
+      files.preview.moveSync(captureFile(previewFile));
+      kept = true;
+      deleteDerivativeFiles([entry.thumbFile, entry.previewFile], [thumbFile, previewFile]);
+      updateEntry(id, { thumbFile, previewFile, edit, editDirty: false });
+    }
   } finally {
-    if (files.thumb.exists) files.thumb.delete();
-    if (files.preview.exists) files.preview.delete();
+    // moveSync re-points the File objects, so only clean up temp renders we didn't keep.
+    if (!kept) {
+      if (files.thumb.exists) files.thumb.delete();
+      if (files.preview.exists) files.preview.delete();
+    }
   }
 }
 
@@ -661,27 +719,89 @@ export async function removeSharedItem(item: GalleryItem) {
   set({ shared: state.shared.filter((s) => !(s.id === item.id && s.ownerId === item.ownerId)) });
 }
 
-function dropLocalCopies(predicate: (e: LocalEntry) => boolean): { count: number; bytes: number } {
-  // Only ever drop copies that are confirmed in the cloud.
-  const drop = state.entries.filter((e) => e.uploadedAt && predicate(e));
+type Freed = { count: number; bytes: number };
+
+/** Originals that may be removed from this phone: verified in the cloud, still here. */
+const offloadable = (e: LocalEntry) => !!e.uploadedAt && !e.offloadedAt;
+
+/**
+ * Removes local originals that are confirmed in the cloud, keeping their
+ * thumbnail + preview so the gallery still shows them (even offline). Items
+ * without local previews are removed entirely; the cloud listing covers them.
+ */
+function offloadOriginals(drop: LocalEntry[]): Freed {
+  drop = drop.filter(offloadable);
   if (!drop.length) return { count: 0, bytes: 0 };
-  drop.forEach(deleteFileFor);
-  const ids = new Set(drop.map((e) => e.id));
-  setEntries(state.entries.filter((e) => !ids.has(e.id)));
-  return { count: drop.length, bytes: drop.reduce((sum, e) => sum + e.size, 0) };
+  let bytes = 0;
+  const now = Date.now();
+  const patched = new Map<string, LocalEntry | null>();
+  for (const e of drop) {
+    if (e.thumbFile || e.previewFile) {
+      bytes += deleteOriginal(e);
+      patched.set(e.id, { ...e, offloadedAt: now });
+    } else {
+      bytes += e.size;
+      deleteFileFor(e);
+      patched.set(e.id, null);
+    }
+  }
+  setEntries(
+    state.entries.flatMap((e) => {
+      const p = patched.get(e.id);
+      return p === undefined ? [e] : p ? [p] : [];
+    }),
+  );
+  return { count: drop.length, bytes };
 }
 
-/** Removes local copies older than the retention window. */
-export function runCleanup() {
+/**
+ * Storage guardian: if the phone has less free space than the setting, first
+ * drop re-downloadable cache files, then offload the oldest originals that are
+ * safe in the cloud until there's enough room. Never touches anything that
+ * isn't verified in the cloud.
+ */
+export function guardSpace(): Freed {
+  if (isWeb) return { count: 0, bytes: 0 };
+  const free = freeDiskBytes();
+  set({ freeBytes: free });
+  const target = state.settings.keepFreeGB * GB;
+  if (free === null || !target || free >= target) return { count: 0, bytes: 0 };
+
+  let need = target - free;
+  const cacheBytes = clearDownloadCache();
+  need -= cacheBytes;
+  const drop: LocalEntry[] = [];
+  if (need > 0) {
+    const oldestFirst = state.entries.filter(offloadable).sort((a, b) => a.createdAt - b.createdAt);
+    for (const e of oldestFirst) {
+      if (need <= 0) break;
+      drop.push(e);
+      need -= e.size;
+    }
+  }
+  const result = offloadOriginals(drop);
+  if (result.count || cacheBytes) set({ freeBytes: freeDiskBytes() });
+  return { count: result.count, bytes: result.bytes + cacheBytes };
+}
+
+/** Offloads originals older than the retention window, then checks free space. */
+export function runCleanup(): Freed {
   const days = state.settings.retentionDays;
-  if (days < 0) return { count: 0, bytes: 0 };
-  const cutoff = Date.now() - days * DAY;
-  return dropLocalCopies((e) => e.uploadedAt! < cutoff);
+  let byAge: Freed = { count: 0, bytes: 0 };
+  if (days >= 0) {
+    const cutoff = Date.now() - days * DAY;
+    byAge = offloadOriginals(state.entries.filter((e) => offloadable(e) && e.uploadedAt! < cutoff));
+  }
+  const bySpace = guardSpace();
+  return { count: byAge.count + bySpace.count, bytes: byAge.bytes + bySpace.bytes };
 }
 
-/** Removes every local copy that is already safe in the cloud. */
-export function freeUpSpace() {
-  return dropLocalCopies(() => true);
+/** Removes every local original that is already safe in the cloud (previews stay). */
+export function freeUpSpace(): Freed {
+  const cacheBytes = clearDownloadCache();
+  const result = offloadOriginals(state.entries);
+  set({ freeBytes: freeDiskBytes() });
+  return { count: result.count, bytes: result.bytes + cacheBytes };
 }
 
 export function setRetention(days: number) {
@@ -689,6 +809,13 @@ export function setRetention(days: number) {
   savePrefs(settings);
   set({ settings });
   runCleanup();
+}
+
+export function setKeepFree(gb: number) {
+  const settings = { ...state.settings, keepFreeGB: gb };
+  savePrefs(settings);
+  set({ settings });
+  guardSpace();
 }
 
 export function setCellularUploads(policy: CellularPolicy) {
