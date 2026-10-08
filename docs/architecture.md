@@ -30,7 +30,7 @@
 | Profile | `D#{id}` | `PROFILE` | name, usedBytes; `gsi1` NAME/name for search |
 | Name reservation | `N#{name}` | `NAME` | uniqueness |
 | Token | `D#{id}` | `T#{tokenId}` | sha256(secret), label device/web |
-| Media | `D#{owner}` | `M#{mediaId}` | key, kind, size, status pending/ready, uploadId, partSize, storageClass, previewReady, edit, derivVersion |
+| Media | `D#{owner}` | `M#{mediaId}` | key, kind, size, status pending/ready, uploadId, partSize, storageClass, previewReady, edit, derivVersion; when deleted: deletedAt, archived, recoveringSince, gsi1 `TRASH`/`{deletedAt}#{owner}#{id}`; ownerHidden ("only for me") |
 | Share | `D#{recipient}` | `S#{mediaId}#{owner}` | gsi1 `SM#{owner}#{mediaId}` for cascade delete |
 | Contact | `D#{me}` | `C#{other}` | share history (both directions) |
 | Pairing code | `P#{code}` | `PAIR` | TTL 5 min |
@@ -48,7 +48,9 @@ Media ids are client-generated and time-sortable (`<base36 ms>-<random>`).
 | `POST /media/:id/previews` | Verify thumb+preview → item visible everywhere |
 | `POST /media/:id/complete` | Verify original (sizes/parts) → ready |
 | `POST /media/:id/edit`, `/edit/commit` | New edit: upload re-rendered previews as version N, then switch |
-| `GET /media`, `DELETE /media/:id` | List (ready or preview-ready), delete (cascades shares, derivatives) |
+| `GET /media` | List (ready or preview-ready, not deleted/hidden) |
+| `DELETE /media/:id?scope=everyone\|me` | To Trash (shared items need a scope: 409 `code: shared`); unfinished uploads are deleted outright |
+| `GET /trash`, `POST /media/:id/restore`, `DELETE /media/:id/forever` | Trash/Archive list, restore or recover (~12 h), permanent delete (all versions) |
 | `GET /users?q=`, `GET /contacts` | Find people, share history |
 | `POST /shares`, `GET /shared`, `DELETE /shared/:owner/:id` | Sharing |
 | `POST /pairing`, `POST /pairing/claim` | Web viewer sign-in code |

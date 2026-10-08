@@ -9,7 +9,7 @@
   videos show a poster frame with a play icon and duration.
 - Banner shows offline / uploading / waiting for Wi-Fi / failed (tap to retry).
 - Pull to refresh.
-- **Select** (or long-press) → Send to friends · Paste edit (when an edit is copied) · Delete / Remove.
+- **Select** (or long-press) → Send to friends · Paste edit (when an edit is copied) · Delete (to Trash; see [trash-and-archive.md](trash-and-archive.md)) / Remove.
 
 ## Viewer
 

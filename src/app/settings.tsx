@@ -173,6 +173,16 @@ export default function SettingsScreen() {
               {usage ? `${formatBytes(usage.usedBytes)} of ${formatBytes(usage.quotaBytes)} used` : 'Loading…'}
             </Text>
           </View>
+          {identity && (
+            <>
+              <View style={styles.divider} />
+              <Pressable style={styles.rowButton} onPress={() => router.push('/trash')}>
+                <Ionicons name="trash-outline" size={18} color={colors.accent} />
+                <Text style={[styles.rowButtonText, { flex: 1 }]}>Trash & Archive</Text>
+                <Ionicons name="chevron-forward" size={16} color="#555" />
+              </Pressable>
+            </>
+          )}
         </Section>
 
         {!isWeb && (

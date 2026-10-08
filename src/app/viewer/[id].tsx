@@ -20,7 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
 import { formatDate } from '@/lib/format';
-import { deleteItems, removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
+import { confirmAndDelete } from '@/lib/delete-flow';
+import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
@@ -208,13 +209,13 @@ export default function ViewerScreen() {
 
   const onDelete = () =>
     run(async () => {
-      const ok = shared
-        ? await confirmDestructive('Remove from Shared?', 'Only removes it from your list.', 'Remove')
-        : await confirmDestructive('Delete this item?', 'It will be deleted from the cloud and this device.');
-      if (!ok) return;
       const deletingLast = index >= items.length - 1;
-      if (shared) await removeSharedItem(current);
-      else if ((await deleteItems([current.id])).length) throw new Error('Could not delete. Check your connection.');
+      if (shared) {
+        if (!(await confirmDestructive('Remove from Shared?', 'Only removes it from your list.', 'Remove'))) return;
+        await removeSharedItem(current);
+      } else if (!(await confirmAndDelete([current.id]))) {
+        return;
+      }
       if (deletingLast) setIndex((i) => Math.max(0, i - 1));
     });
 

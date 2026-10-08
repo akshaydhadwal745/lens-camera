@@ -14,7 +14,7 @@
 
 - Multiple devices per account and QR sign-in for the website ("scan from your phone").
 - Long-video streaming (HLS) generated in the cloud only when needed.
-- Delete for everyone / only for me; Trash (30 days).
+- Payment for Archive recovery (Apple in-app purchase or web); multi-select restore.
 - Video looks during in-app playback; free-form crop handles.
 - Trips & events: auto albums, shared event albums joined by QR, highlights, search.
 - AI features (planned with Google): scene-aware auto settings, subject tracking,

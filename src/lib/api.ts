@@ -1,5 +1,5 @@
 import type { EditRecipe } from './edits';
-import { RemoteMedia, SharedMedia } from './types';
+import { DeleteScope, RemoteMedia, SharedMedia, TrashItem } from './types';
 
 export const API_URL = `${process.env.EXPO_PUBLIC_API_URL ?? ''}/v1`;
 export const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? '';
@@ -8,6 +8,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Machine-readable reason from the server (e.g. "shared"). */
+    public code?: string,
   ) {
     super(message);
   }
@@ -42,7 +44,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && authToken) onUnauthorized?.();
-    throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`);
+    throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`, data.code);
   }
   return data as T;
 }
@@ -95,7 +97,14 @@ export const api = {
   ) => request<{ version: number; derivativeUrls?: DerivativeUrls }>('POST', `/media/${id}/edit`, { edit, derivatives }),
   commitEdit: (id: string, version: number) =>
     request<{ media: RemoteMedia }>('POST', `/media/${id}/edit/commit`, { version }),
-  deleteMedia: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}`),
+  /** Moves to Trash. Shared items need a scope (ApiError code "shared" without one). */
+  deleteMedia: (id: string, scope?: DeleteScope) =>
+    request<{ deleted: string; phase: string }>('DELETE', `/media/${id}${scope ? `?scope=${scope}` : ''}`),
+  trash: (cursor?: string | null) => request<Page<TrashItem>>('GET', `/trash${q(cursor)}`),
+  /** Trash: back instantly. Archive: starts a recovery (~12 hours) unless already possible. */
+  restore: (id: string) =>
+    request<{ phase: 'restored'; media: RemoteMedia } | { phase: 'recovering'; item: TrashItem }>('POST', `/media/${id}/restore`),
+  deleteForever: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}/forever`),
 
   searchUsers: (query: string) => request<{ users: Person[] }>('GET', `/users?q=${encodeURIComponent(query)}`),
   contacts: () => request<{ contacts: Contact[] }>('GET', '/contacts'),

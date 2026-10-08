@@ -10,6 +10,8 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_dynamodb as dynamodb,
+  aws_events as events,
+  aws_events_targets as targets,
   aws_iam as iam,
   aws_lambda as lambda,
   aws_lambda_nodejs as nodejs,
@@ -57,6 +59,16 @@ export class LensStack extends Stack {
         // Big uploads can pause for days (phone offline); give them a week.
         { abortIncompleteMultipartUploadAfter: Duration.days(7) },
         { noncurrentVersionExpiration: Duration.days(30), expiredObjectDeleteMarker: true },
+      ],
+      // Deleted items whose 30-day Trash ended are tagged lens-archive=1 and
+      // sink to the Deep Archive Access tier (~$0.002/GB-month) after 180 days
+      // unread. Free to restore (~12 h); no transition or retrieval fees.
+      intelligentTieringConfigurations: [
+        {
+          name: 'deleted-archive',
+          tags: [{ key: 'lens-archive', value: '1' }],
+          deepArchiveAccessTierTime: Duration.days(180),
+        },
       ],
     });
 
@@ -139,6 +151,16 @@ function handler(event) {
     // Per-identity storage quota (testing default 100 GB; becomes the free tier later).
     const quotaGb = Number(this.node.tryGetContext('quotaGb') ?? 100);
 
+    const apiEnv = {
+      TABLE: table.tableName,
+      BUCKET: mediaBucket.bucketName,
+      CDN_DOMAIN: distribution.distributionDomainName,
+      CF_KEY_PAIR_ID: publicKey.publicKeyId,
+      CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
+      QUOTA_BYTES: String(quotaGb * 1024 ** 3),
+      MAX_FILE_BYTES: String(1024 ** 4), // 1 TiB per file
+    };
+
     const api = new nodejs.NodejsFunction(this, 'Api', {
       entry: path.join(__dirname, '../lambda/api/index.ts'),
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -146,26 +168,41 @@ function handler(event) {
       memorySize: 512,
       timeout: Duration.seconds(15),
       logGroup,
-      environment: {
-        TABLE: table.tableName,
-        BUCKET: mediaBucket.bucketName,
-        CDN_DOMAIN: distribution.distributionDomainName,
-        CF_KEY_PAIR_ID: publicKey.publicKeyId,
-        CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
-        QUOTA_BYTES: String(quotaGb * 1024 ** 3),
-        MAX_FILE_BYTES: String(1024 ** 4), // 1 TiB per file
-      },
+      environment: apiEnv,
       bundling: { minify: true, sourceMap: true, target: 'node24' },
     });
 
-    table.grantReadWriteData(api);
-    mediaBucket.grantReadWrite(api); // presigned PUT/multipart + HeadObject/Delete
-    api.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['ssm:GetParameter'],
-        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PRIVATE_KEY_PARAM}`],
-      }),
-    );
+    // Daily: Trash → Archive after 30 days, finish recoveries, purge after a year.
+    const maintenance = new nodejs.NodejsFunction(this, 'Maintenance', {
+      entry: path.join(__dirname, '../lambda/api/maintenance.ts'),
+      runtime: lambda.Runtime.NODEJS_24_X,
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: 512,
+      timeout: Duration.minutes(10),
+      logGroup,
+      environment: apiEnv,
+      bundling: { minify: true, sourceMap: true, target: 'node24' },
+    });
+    // The e2e test runs it with a simulated date for its own throwaway identity.
+    maintenance.addPermission('DeveloperInvoke', {
+      principal: new iam.ArnPrincipal(`arn:aws:iam::${this.account}:role/lens-developer`),
+    });
+    new events.Rule(this, 'DailyMaintenance', {
+      schedule: events.Schedule.rate(Duration.days(1)),
+      targets: [new targets.LambdaFunction(maintenance)],
+    });
+
+    for (const fn of [api, maintenance]) {
+      table.grantReadWriteData(fn);
+      mediaBucket.grantReadWrite(fn); // presigned PUT/multipart, Head, Delete, tagging, versions
+      fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:RestoreObject'], resources: [mediaBucket.arnForObjects('m/*')] }));
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ssm:GetParameter'],
+          resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PRIVATE_KEY_PARAM}`],
+        }),
+      );
+    }
 
     const apiUrl = api.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE, // auth is the device token, checked in the handler
@@ -213,5 +250,6 @@ function handler(event) {
     new CfnOutput(this, 'ApiUrl', { value: apiUrl.url });
     new CfnOutput(this, 'WebUrl', { value: `https://${distribution.distributionDomainName}` });
     new CfnOutput(this, 'MediaBucket', { value: mediaBucket.bucketName });
+    new CfnOutput(this, 'MaintenanceFunction', { value: maintenance.functionName });
   }
 }

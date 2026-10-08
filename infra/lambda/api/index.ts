@@ -2,9 +2,10 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { authenticate, claimPairing, contacts, createPairing, me, register, searchUsers } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
-import { completeUpload, deleteMedia, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
+import { completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
 import { removeShared, share, sharedWithMe } from './shares';
+import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -28,7 +29,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
 
     if (route === 'GET /media') return await listMedia(identity, req);
     if (route === 'POST /media') return await startUpload(identity, req);
-    if (seg[1] === 'media' && seg.length === 3 && method === 'DELETE') return await deleteMedia(identity, seg[2]);
+    if (seg[1] === 'media' && seg.length === 3 && method === 'DELETE') return await deleteMedia(identity, seg[2], req);
+    if (route === 'GET /trash') return await listTrash(identity, req);
     if (seg[1] === 'media' && seg.length === 4) {
       const id = seg[2];
       if (seg[3] === 'parts' && method === 'GET') return await uploadedParts(identity, id);
@@ -36,6 +38,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (seg[3] === 'complete' && method === 'POST') return await completeUpload(identity, id);
       if (seg[3] === 'previews' && method === 'POST') return await previewsUploaded(identity, id);
       if (seg[3] === 'edit' && method === 'POST') return await startEdit(identity, id, req);
+      if (seg[3] === 'restore' && method === 'POST') return await restoreMedia(identity, id);
+      if (seg[3] === 'forever' && method === 'DELETE') return await deleteForever(identity, id);
     }
     if (seg[1] === 'media' && seg.length === 5 && seg[3] === 'edit' && seg[4] === 'commit' && method === 'POST') {
       return await commitEdit(identity, seg[2], req);

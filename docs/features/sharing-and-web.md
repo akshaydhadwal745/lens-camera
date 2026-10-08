@@ -14,8 +14,9 @@ token stored in the iOS Keychain (survives reinstalling). Settings shows your na
 Select items → **Send to friends** (or Send in the viewer) → search by name or
 pick from **Recent** → Send. Only items whose original has finished uploading can
 be sent. Friends see them under **Shared**, with your name on each tile; edits
-you make later show up for them too. Deleting an item removes it for everyone
-(planned: choose "delete for everyone" or "only for me").
+you make later show up for them too. Deleting a shared item asks **Delete for
+everyone** or **Only for me** (they keep it); see
+[trash-and-archive.md](trash-and-archive.md).
 
 ## Web viewer
 

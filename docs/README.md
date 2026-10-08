@@ -13,6 +13,7 @@ module), Android app (basic camera for now), and a web viewer.
 | Capture modes (Night, Portrait, live looks, HDR / fps / stabilization video) | [features/capture-modes.md](features/capture-modes.md) |
 | Looks & editing (non-destructive) | [features/looks-and-editing.md](features/looks-and-editing.md) |
 | Cloud upload, previews & storage | [features/cloud-and-storage.md](features/cloud-and-storage.md) |
+| Delete, Trash & Archive | [features/trash-and-archive.md](features/trash-and-archive.md) |
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 
@@ -52,6 +53,8 @@ module), Android app (basic camera for now), and a web viewer.
 | Thumbnails + previews uploaded first | iOS, Android | ✅ | No | Web verified in Chrome |
 | Local copy retention + free up space | iOS, Android | ✅ | No | Removes originals, keeps previews |
 | Storage guardian (keep X GB free, oldest first, low-space banner) | iOS, Android | ✅ | No | Works in Expo Go |
+| Delete for everyone / only for me | All | ✅ | No | Server side tested (e2e) |
+| Trash (30 days) + Archive (1 year, recover ~12 h) | All | ✅ | No | Server side tested (e2e, simulated dates); payment not built |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

@@ -3,6 +3,7 @@ import { BatchGetCommand, BatchWriteCommand, DeleteCommand, QueryCommand } from 
 import { Identity } from './identity';
 import { ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res } from './lib';
 import { MediaRecord, mediaKey, toClient } from './media';
+import { archiveIfOrphaned } from './trash';
 
 const MAX_MEDIA = 50;
 const MAX_RECIPIENTS = 20;
@@ -39,7 +40,7 @@ export async function share(identity: Identity, req: Req): Promise<Res> {
   if (!mediaIds.length || !to.length) throw new HttpError(400, 'Choose media and at least one person');
 
   const media = (await batchGet(mediaIds.map((id) => mediaKey(identity.id, id)))) as MediaRecord[];
-  const ready = media.filter((m) => m.status === 'ready');
+  const ready = media.filter((m) => m.status === 'ready' && !m.deletedAt && !m.ownerHidden);
   if (!ready.length) throw new HttpError(404, 'Nothing to share yet: items must finish uploading first');
 
   const recipients = await batchGet(to.map((id) => ({ pk: `D#${id}`, sk: 'PROFILE' })));
@@ -91,9 +92,13 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
     }),
   );
   // Shares follow the owner's current look (edits re-render previews).
-  const shareItems = result.Items ?? [];
-  const owners = await batchGet(shareItems.map((s) => mediaKey(s.ownerId, s.mediaId)));
+  const owners = await batchGet((result.Items ?? []).map((s) => mediaKey(s.ownerId, s.mediaId)));
   const current = new Map(owners.map((m) => [`${(m.pk as string).slice(2)}#${m.id}`, m as MediaRecord]));
+  // Items the owner deleted for everyone (Trash/Archive) disappear for recipients too.
+  const shareItems = (result.Items ?? []).filter((s) => {
+    const m = current.get(`${s.ownerId}#${s.mediaId}`);
+    return m && !m.deletedAt;
+  });
   const items = await Promise.all(
     shareItems.map(async (s) => ({
       ...(await toClient({
@@ -116,6 +121,7 @@ export async function removeShared(identity: Identity, ownerId: string, mediaId:
   await ddb.send(
     new DeleteCommand({ TableName: env.table, Key: { pk: `D#${identity.id}`, sk: `S#${mediaId}#${ownerId}` } }),
   );
+  await archiveIfOrphaned(ownerId, mediaId); // owner deleted it "only for me" and nobody else has it now
   return json(200, { removed: mediaId });
 }
 

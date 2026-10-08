@@ -1,8 +1,6 @@
 import {
-  AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
-  DeleteObjectCommand,
   HeadObjectCommand,
   ListPartsCommand,
   Part,
@@ -11,8 +9,6 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import {
-  BatchWriteCommand,
-  DeleteCommand,
   GetCommand,
   PutCommand,
   QueryCommand,
@@ -83,6 +79,16 @@ export type MediaRecord = {
   duration?: number;
   createdAt: number;
   uploadedAt?: number;
+  /** Deleted: in the Trash for 30 days, then the Archive (see trash.ts). */
+  deletedAt?: number;
+  /** "Delete only for me" on a shared item: hidden from the owner, recipients keep it. */
+  ownerHidden?: boolean;
+  /** Tagged for the Intelligent-Tiering archive tier; off the owner's quota. */
+  archived?: boolean;
+  /** Archive recovery requested (S3 restore in progress). */
+  recoveringSince?: number;
+  gsi1pk?: string;
+  gsi1sk?: string;
 };
 
 // ---------- Derivatives (thumbnail + preview) ----------
@@ -466,7 +472,8 @@ export async function listMedia(identity: Identity, req: Req): Promise<Res> {
     new QueryCommand({
       TableName: env.table,
       KeyConditionExpression: 'pk = :p AND begins_with(sk, :m)',
-      FilterExpression: '#s = :ready OR previewReady = :t',
+      FilterExpression:
+        '(#s = :ready OR previewReady = :t) AND attribute_not_exists(deletedAt) AND attribute_not_exists(ownerHidden)',
       ExpressionAttributeNames: { '#s': 'status' },
       ExpressionAttributeValues: { ':p': `D#${identity.id}`, ':m': 'M#', ':ready': 'ready', ':t': true },
       ScanIndexForward: false,
@@ -476,53 +483,4 @@ export async function listMedia(identity: Identity, req: Req): Promise<Res> {
   );
   const items = await Promise.all((result.Items as MediaRecord[]).map(toClient));
   return json(200, { items, cursor: encodeCursor(result.LastEvaluatedKey) });
-}
-
-/** DELETE /v1/media/:id: removes the object, the record and any shares of it. */
-export async function deleteMedia(identity: Identity, id: string): Promise<Res> {
-  const item = await requireMedia(identity, id);
-
-  if (item.uploadId) {
-    await s3
-      .send(new AbortMultipartUploadCommand({ Bucket: env.bucket, Key: item.key, UploadId: item.uploadId }))
-      .catch(() => {});
-  }
-  await s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: item.key }));
-  const versions = [...new Set([0, item.derivVersion ?? 0, item.pendingDerivVersion ?? 0])];
-  await Promise.all(
-    DERIVATIVES.flatMap((name) =>
-      versions.map((v) =>
-        s3.send(new DeleteObjectCommand({ Bucket: env.bucket, Key: derivativeKey(item.key, name, v) })).catch(() => {}),
-      ),
-    ),
-  );
-
-  await ddb.send(new DeleteCommand({ TableName: env.table, Key: mediaKey(identity.id, id) }));
-  if (item.status === 'ready') {
-    await ddb.send(
-      new UpdateCommand({
-        TableName: env.table,
-        Key: { pk: `D#${identity.id}`, sk: 'PROFILE' },
-        UpdateExpression: 'ADD usedBytes :neg',
-        ExpressionAttributeValues: { ':neg': -item.size },
-      }),
-    );
-  }
-
-  // Remove the item from everyone it was shared with.
-  const shares = await ddb.send(
-    new QueryCommand({
-      TableName: env.table,
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :g',
-      ExpressionAttributeValues: { ':g': `SM#${identity.id}#${id}` },
-      ProjectionExpression: 'pk, sk',
-    }),
-  );
-  const keys = (shares.Items ?? []).map((s) => ({ DeleteRequest: { Key: { pk: s.pk, sk: s.sk } } }));
-  for (let i = 0; i < keys.length; i += 25) {
-    await ddb.send(new BatchWriteCommand({ RequestItems: { [env.table]: keys.slice(i, i + 25) } }));
-  }
-
-  return json(200, { deleted: id });
 }

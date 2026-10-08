@@ -23,6 +23,21 @@ export interface RemoteMedia {
   edit?: EditRecipe;
 }
 
+/** Deleting a shared item: remove it for everyone, or only hide it from me. */
+export type DeleteScope = 'everyone' | 'me';
+
+/**
+ * A deleted item. trash: restorable instantly until `trashUntil`. archive:
+ * recoverable (takes ~12 hours) until `purgeAt`. recovering: on its way back.
+ */
+export interface TrashItem extends RemoteMedia {
+  phase: 'trash' | 'archive' | 'recovering';
+  deletedAt: number;
+  trashUntil: number;
+  purgeAt: number;
+  recoveringSince?: number;
+}
+
 export interface SharedMedia extends RemoteMedia {
   ownerId: string;
   ownerName: string;

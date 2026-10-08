@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isImagingAvailable } from '../../modules/lens-camera';
 import { MediaTile } from '@/components/MediaTile';
 import {
-  deleteItems,
   pasteEdit,
   refreshRemote,
   refreshShared,
@@ -31,6 +30,7 @@ import {
   selectWaitingForWifi,
   useStore,
 } from '@/lib/store';
+import { confirmAndDelete } from '@/lib/delete-flow';
 import { GalleryItem } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
@@ -113,9 +113,7 @@ export default function GalleryScreen() {
       const chosen = shared.filter((s) => selected.has(s.id));
       await Promise.all(chosen.map((item) => removeSharedItem(item).catch(() => {})));
     } else {
-      if (!(await confirmDestructive(`Delete ${ids.length} ${noun}?`, 'They will be deleted from the cloud and this device.'))) return;
-      const failedIds = await deleteItems(ids);
-      if (failedIds.length) notify('Some items could not be deleted', 'Check your connection and try again.');
+      if (!(await confirmAndDelete(ids))) return;
     }
     exitSelect();
   };

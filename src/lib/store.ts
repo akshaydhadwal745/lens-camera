@@ -22,7 +22,7 @@ import {
   saveRemoteCache,
   uriFor,
 } from './local-store';
-import { GalleryItem, LocalEntry, NewCapture, RemoteMedia, SharedMedia } from './types';
+import { DeleteScope, GalleryItem, LocalEntry, NewCapture, RemoteMedia, SharedMedia, TrashItem } from './types';
 import { makeDerivatives } from './derivatives';
 import { renderCloudDerivatives } from './edit-remote';
 import { compact, EditRecipe, forPaste } from './edits';
@@ -94,6 +94,9 @@ export type State = {
   copiedEdit: EditRecipe | null;
   /** Free space on the phone (null = unknown, e.g. web). */
   freeBytes: number | null;
+  /** Deleted items (Trash + Archive), loaded when the Trash screen opens. */
+  trash: TrashItem[];
+  trashLoading: boolean;
 };
 
 let state: State = {
@@ -113,6 +116,8 @@ let state: State = {
   usage: null,
   copiedEdit: null,
   freeBytes: null,
+  trash: [],
+  trashLoading: false,
 };
 
 const listeners = new Set<() => void>();
@@ -355,7 +360,7 @@ async function handleUnauthorized() {
   await saveIdentity(null);
   applyIdentity(null);
   saveRemoteCache([]);
-  set({ remote: [], shared: [], usage: null, ...(isWeb ? { status: 'needs-link' as const } : {}) });
+  set({ remote: [], shared: [], trash: [], usage: null, ...(isWeb ? { status: 'needs-link' as const } : {}) });
 }
 
 let identityInflight: Promise<boolean> | null = null;
@@ -389,7 +394,7 @@ export async function linkWithCode(code: string) {
 export async function unlinkBrowser() {
   await saveIdentity(null);
   applyIdentity(null);
-  set({ status: 'needs-link', remote: [], shared: [], usage: null });
+  set({ status: 'needs-link', remote: [], shared: [], trash: [], usage: null });
 }
 
 // ---------- Cloud listings ----------
@@ -680,25 +685,47 @@ export async function pasteEdit(ids: string[]): Promise<number> {
 
 // ---------- Delete / cleanup ----------
 
-/** Deletes items everywhere (cloud + this device). Returns ids that failed. */
-export async function deleteItems(ids: string[]): Promise<string[]> {
+/** Items whose original isn't in the cloud yet: deleting them can't be undone. */
+export function selectUnsafeToDelete(s: State, ids: string[]): number {
+  return ids.filter((id) => {
+    const entry = s.entries.find((e) => e.id === id);
+    const remote = s.remote.find((r) => r.id === id);
+    return !entry?.uploadedAt && !remote?.originalReady;
+  }).length;
+}
+
+/**
+ * Deletes items from this device and moves them to the cloud Trash (30 days,
+ * then the Archive). Items whose original never finished uploading are deleted
+ * outright. Shared items need a `scope`; without one they're returned in
+ * `needsScope` untouched so the UI can ask "for everyone" or "only for me".
+ */
+export async function deleteItems(
+  ids: string[],
+  scope?: DeleteScope,
+): Promise<{ failed: string[]; needsScope: string[] }> {
   const failed: string[] = [];
+  const needsScope: string[] = [];
   for (const id of ids) {
     const entry = state.entries.find((e) => e.id === id);
     const inCloud = state.remote.some((r) => r.id === id);
     const touchedServer = inCloud || !!entry?.uploadedAt || !!entry?.attempts || state.uploadingId === id;
 
-    if (state.uploadingId === id) cancelled.add(id);
     if (touchedServer) {
       try {
-        await api.deleteMedia(id);
+        await api.deleteMedia(id, scope);
       } catch (error) {
+        if (error instanceof ApiError && error.code === 'shared') {
+          needsScope.push(id);
+          continue;
+        }
         if (!(error instanceof ApiError && error.status === 404)) {
           failed.push(id);
           continue;
         }
       }
     }
+    if (state.uploadingId === id) cancelled.add(id);
     if (entry) {
       deleteFileFor(entry);
       setEntries(state.entries.filter((e) => e.id !== id));
@@ -709,8 +736,59 @@ export async function deleteItems(ids: string[]): Promise<string[]> {
       saveRemoteCache(remote);
     }
   }
-  if (failed.length < ids.length) api.me().then((me) => set({ usage: me })).catch(() => {});
-  return failed;
+  if (failed.length + needsScope.length < ids.length) {
+    api.me().then((me) => set({ usage: me })).catch(() => {});
+    void refreshTrash();
+  }
+  return { failed, needsScope };
+}
+
+// ---------- Trash & Archive ----------
+
+let trashInflight: Promise<void> | null = null;
+
+export function refreshTrash(): Promise<void> {
+  if (!state.identity) return Promise.resolve();
+  trashInflight ??= (async () => {
+    set({ trashLoading: true });
+    try {
+      const all: TrashItem[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < 20; page++) {
+        const result = await api.trash(cursor);
+        all.push(...result.items);
+        cursor = result.cursor;
+        if (!cursor) break;
+      }
+      set({ trash: all });
+    } catch {
+      // Keep the previous list.
+    } finally {
+      set({ trashLoading: false });
+      trashInflight = null;
+    }
+  })();
+  return trashInflight;
+}
+
+/** Trash: back in the library now. Archive: recovery started (~12 hours). */
+export async function restoreItem(id: string): Promise<'restored' | 'recovering'> {
+  const result = await api.restore(id);
+  if (result.phase === 'restored') {
+    set({ trash: state.trash.filter((t) => t.id !== id) });
+    upsertRemote(result.media);
+  } else {
+    set({ trash: state.trash.map((t) => (t.id === id ? result.item : t)) });
+  }
+  api.me().then((me) => set({ usage: me })).catch(() => {});
+  return result.phase;
+}
+
+/** Gone everywhere, every copy. Cannot be undone. */
+export async function deleteForever(id: string): Promise<void> {
+  await api.deleteForever(id);
+  set({ trash: state.trash.filter((t) => t.id !== id) });
+  api.me().then((me) => set({ usage: me })).catch(() => {});
 }
 
 export async function removeSharedItem(item: GalleryItem) {
