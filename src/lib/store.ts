@@ -2,7 +2,7 @@
 // items and settings. Components read it with useStore(selector).
 import NetInfo from '@react-native-community/netinfo';
 import { useSyncExternalStore } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import { api, ApiError, setAuth, SignInResult } from './api';
 import { deviceLabel, ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity';
@@ -43,7 +43,8 @@ import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
 import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 import { LiveUpload } from './live-upload';
-import { onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
+import { registerBackgroundBackup } from './background';
+import { backupService, onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
 
 const isWeb = Platform.OS === 'web';
 const DAY = 24 * 3600 * 1000;
@@ -290,6 +291,8 @@ function allowedOnThisNetwork(e: LocalEntry, s: State): boolean {
 export const selectWaitingForWifi = (s: State) =>
   s.entries.filter((e) => !e.uploadedAt && !e.error && !allowedOnThisNetwork(e, s)).length;
 export const selectFailedCount = (s: State) => s.entries.filter((e) => !e.uploadedAt && e.error).length;
+/** Uploads stopped because free guest storage is full (signing in lifts the limit). */
+export const selectGuestFull = (s: State) => s.entries.some((e) => !e.uploadedAt && e.errorCode === 'guest-quota');
 
 let usageMemo: { entries: LocalEntry[]; out: ReturnType<typeof computeLocalUsage> } | null = null;
 
@@ -354,6 +357,7 @@ export async function boot() {
   }
 
   runCleanup();
+  if (!isWeb) void registerBackgroundBackup();
   if (!isWeb) watchThermal();
   if (!isWeb) void backfillDerivatives();
   if (state.identity || !isWeb) {
@@ -393,6 +397,21 @@ function watchConnectivity() {
       refreshShared();
     }
   });
+}
+
+// ---------- Background run (OS-scheduled) ----------
+
+/** Called by the periodic background task: upload for up to `ms`, then return. */
+export async function runBackgroundSync(ms: number) {
+  await boot();
+  const deadline = Date.now() + ms;
+  kickSync();
+  // Wait while the loop works; give up at the deadline (the OS will call again).
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const now = Date.now();
+    if (!syncing && !state.entries.some((e) => needsWork(e, state, now))) return;
+  }
 }
 
 // ---------- Heat guard ----------
@@ -470,6 +489,7 @@ async function applySignIn(first: SignInResult) {
   await saveIdentity(identity);
   applyIdentity(identity);
   setSignedOut(false);
+  retryFailed(); // e.g. uploads that stopped at the guest storage limit
   if (identity.id !== before?.id) {
     saveRemoteCache([]);
     set({ remote: [], shared: [], trash: [], storage: null });
@@ -649,6 +669,49 @@ export function kickSync() {
   if (!syncing && !isWeb && !state.signedOut) void syncLoop();
 }
 
+/**
+ * Android background backup: while originals are uploading, a foreground
+ * service ("Backing up 3 of 12") keeps the app running when you leave it or
+ * turn the screen off. Started only while the app is visible (Android rule).
+ */
+const backup = {
+  active: false,
+  total: 0,
+  done: 0,
+  lastUpdate: 0,
+  begin(pending: number) {
+    if (this.active || Platform.OS !== 'android') return;
+    this.total = pending;
+    this.done = 0;
+    this.active = backupService.start(backupText(1, pending));
+    if (this.active) void askNotificationPermission();
+  },
+  progress(fraction: number) {
+    if (!this.active || Date.now() - this.lastUpdate < 1000) return;
+    this.lastUpdate = Date.now();
+    backupService.update(backupText(this.done + 1, this.total), fraction * 100);
+  },
+  itemDone() {
+    this.done += 1;
+  },
+  end() {
+    if (!this.active) return;
+    backupService.stop();
+    this.active = false;
+  },
+};
+
+function backupText(n: number, total: number) {
+  return total > 1 ? `Backing up ${Math.min(n, total)} of ${total}` : 'Backing up 1 item';
+}
+
+/** Android 13+: the backup notification needs permission (asked once). */
+async function askNotificationPermission() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 33 || loadDoc('asked-notifications', false)) return;
+  saveDoc('asked-notifications', true);
+  await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS' as never).catch(() => {});
+}
+
 async function syncLoop() {
   syncing = true;
   try {
@@ -658,6 +721,8 @@ async function syncLoop() {
       // Newest first, so the shot you just took reaches the cloud first.
       const next = state.entries.find((e) => needsWork(e, state, now));
       if (!next) break;
+      // Real uploads (not just a small edit push): keep running in the background.
+      if (!next.uploadedAt) backup.begin(state.entries.filter((e) => !e.uploadedAt && !e.error).length);
       if (!(await ensureCloudIdentity())) {
         updateEntry(next.id, { nextAttemptAt: Date.now() + BACKOFF_MS[2] });
         break;
@@ -704,6 +769,7 @@ async function syncLoop() {
               lastEmit = t;
               set({ progress: p });
             }
+            backup.progress(p);
           },
           isCancelled: () => cancelled.has(next.id),
           concurrency: state.cellular ? 2 : 3,
@@ -722,7 +788,10 @@ async function syncLoop() {
           externalUpload: undefined,
         });
         upsertRemote(result.media);
-        if (result.originalDone) guardSpace(); // this original may now be offloaded
+        if (result.originalDone) {
+          backup.itemDone();
+          guardSpace(); // this original may now be offloaded
+        }
       } catch (error) {
         if (error instanceof UploadCancelled) continue;
         if (error instanceof FileTooLarge) {
@@ -736,7 +805,7 @@ async function syncLoop() {
         }
         const attempts = (next.attempts ?? 0) + 1;
         if (error instanceof ApiError && error.permanent) {
-          updateEntry(next.id, { attempts, error: error.message });
+          updateEntry(next.id, { attempts, error: error.message, errorCode: error.code });
         } else {
           updateEntry(next.id, {
             attempts,
@@ -750,6 +819,7 @@ async function syncLoop() {
     }
   } finally {
     syncing = false;
+    backup.end();
     scheduleRetry();
   }
 }
@@ -766,7 +836,9 @@ function scheduleRetry() {
 
 export function retryFailed() {
   setEntries(
-    state.entries.map((e) => (e.error && !e.uploadedAt ? { ...e, error: undefined, attempts: 0, nextAttemptAt: undefined } : e)),
+    state.entries.map((e) =>
+      e.error && !e.uploadedAt ? { ...e, error: undefined, errorCode: undefined, attempts: 0, nextAttemptAt: undefined } : e,
+    ),
   );
   kickSync();
 }

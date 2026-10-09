@@ -21,7 +21,7 @@ import {
 import { BatchWriteCommand, DeleteCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3 } from './lib';
+import { checkQuota as quotaCheck, ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3 } from './lib';
 import { derivativeKey, getMedia, mediaKey, MediaRecord, requireMedia, toClient } from './media';
 import { streamPrefix } from './stream';
 
@@ -166,12 +166,6 @@ async function updateWithQuota(
   }
 }
 
-function checkQuota(identity: Identity, bytes: number) {
-  if (bytes > 0 && identity.usedBytes + bytes > env.quotaBytes) {
-    throw new HttpError(413, 'Not enough cloud storage to bring this back. Free up some space first.');
-  }
-}
-
 /**
  * DELETE /v1/media/:id?scope=everyone|me
  * Shared items need a scope (409 code "shared" without one):
@@ -310,7 +304,7 @@ export async function restoreMedia(identity: Identity, id: string): Promise<Res>
   if (!item.deletedAt) return json(200, { phase: 'restored', media: await toClient(item) });
 
   const regained = item.status === 'ready' ? item.size - countedBytes(item) : 0;
-  if (!item.recoveringSince) checkQuota(identity, regained);
+  if (!item.recoveringSince) quotaCheck(identity, regained, 'Not enough cloud storage to bring this back. Free up some space first.');
 
   if (!item.archived) {
     await undelete(item);

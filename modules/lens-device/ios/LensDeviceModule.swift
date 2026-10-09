@@ -13,6 +13,11 @@ public class LensDeviceModule: Module {
       Self.level()
     }
 
+    // Background backup is Android-only for now (iOS needs background URLSessions).
+    Function("startBackup") { (_: String) -> Bool in false }
+    Function("updateBackup") { (_: String, _: Int) in }
+    Function("stopBackup") {}
+
     OnStartObserving {
       self.observer = NotificationCenter.default.addObserver(
         forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main

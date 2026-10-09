@@ -2,6 +2,8 @@
 // first launch; signing in (email code / Google) turns it into an account, or
 // swaps in the account's session. Kept in the iOS Keychain / Android Keystore.
 // Web: obtained by linking with a code from the phone, kept in localStorage.
+import * as Application from 'expo-application';
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
@@ -51,11 +53,35 @@ export function deviceLabel(): string {
   return 'Browser';
 }
 
-/** Native: returns the stored identity or registers a new (guest) one. */
+/**
+ * A stable, anonymous fingerprint of this phone (only a hash leaves the device).
+ * Android: the app-scoped Android ID (survives reinstalls). iPhone: a random ID
+ * kept in the Keychain (also survives reinstalls). Lets Lens give a reinstalled
+ * phone its guest account back instead of a fresh free quota.
+ */
+async function deviceFingerprint(): Promise<string | undefined> {
+  try {
+    let raw: string | null = null;
+    if (Platform.OS === 'android') raw = Application.getAndroidId();
+    else if (Platform.OS === 'ios') {
+      raw = await SecureStore.getItemAsync('lens.device-id');
+      if (!raw) {
+        raw = Crypto.randomUUID();
+        await SecureStore.setItemAsync('lens.device-id', raw);
+      }
+    }
+    if (!raw) return undefined;
+    return await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `lens-device:${raw}`);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Native: returns the stored identity or registers (or gets back) this phone's guest. */
 export async function ensureIdentity(): Promise<Identity> {
   const existing = await loadIdentity();
   if (existing) return existing;
-  const created = await api.register(deviceLabel());
+  const created = await api.register(deviceLabel(), await deviceFingerprint());
   await saveIdentity(created);
   return created;
 }

@@ -1,6 +1,8 @@
 package expo.modules.lensdevice
 
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.PowerManager
 import expo.modules.kotlin.modules.Module
@@ -21,6 +23,31 @@ class LensDeviceModule : Module() {
     Events("onThermalChange")
 
     Function("thermalLevel") { currentLevel() }
+
+    // Background backup (foreground service). Must be started while the app is
+    // in the foreground (Android 12+ rule); returns false if Android refused.
+    Function("startBackup") { text: String ->
+      val context = appContext.reactContext ?: return@Function false
+      try {
+        val intent = Intent(context, BackupService::class.java).putExtra(BackupService.EXTRA_TEXT, text)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+        true
+      } catch (e: Exception) {
+        false
+      }
+    }
+
+    Function("updateBackup") { text: String, progress: Int ->
+      val context = appContext.reactContext ?: return@Function
+      if (!BackupService.running) return@Function
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      manager.notify(BackupService.NOTIFICATION_ID, BackupService.notification(context, text, progress))
+    }
+
+    Function("stopBackup") {
+      val context = appContext.reactContext ?: return@Function
+      context.stopService(Intent(context, BackupService::class.java))
+    }
 
     OnStartObserving {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

@@ -6,7 +6,7 @@
 import { DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { ddb, env, HttpError, json, Req, Res } from './lib';
+import { ddb, env, HttpError, json, quotaFor, Req, Res } from './lib';
 
 export const PROVIDERS = ['gdrive', 'dropbox', 'onedrive', 'box', 's3', 'webdav', 'icloud'] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -78,7 +78,9 @@ export async function getStorage(identity: Identity): Promise<Res> {
   const storages = await listStorages(identity.id);
   return json(200, {
     plan: 'free',
-    lens: { usedBytes: identity.usedBytes, quotaBytes: env.quotaBytes, recentBytes: RECENT_BYTES },
+    // Guests: 5 GB until they sign in (then signedInQuotaBytes).
+    lens: { usedBytes: identity.usedBytes, quotaBytes: quotaFor(identity), recentBytes: RECENT_BYTES, signedInQuotaBytes: env.quotaBytes },
+    signedIn: !!identity.email,
     storages: storages.sort((a, b) => a.createdAt - b.createdAt).map(toClient),
     limits: { storages: FREE_STORAGE_LIMIT, routing: false },
   });

@@ -27,6 +27,7 @@ import {
   selectPendingCount,
   selectShared,
   isHot,
+  selectGuestFull,
   selectStorageIndicator,
   selectStorageStuck,
   selectWaitingForWifi,
@@ -59,6 +60,7 @@ export default function GalleryScreen() {
   const indicator = useStore(selectStorageIndicator);
   const signedOut = useStore((s) => s.signedOut);
   const hot = useStore((s) => isHot(s.thermal));
+  const guestFull = useStore(selectGuestFull);
   const isGuest = useStore((s) => !!s.identity && !s.identity.email);
   const [nudgeDismissed, setNudgeDismissed] = useState(() => loadDoc('signin-nudge-dismissed', false));
   const online = useStore((s) => s.online);
@@ -162,6 +164,11 @@ export default function GalleryScreen() {
     <Pressable style={[styles.banner, { backgroundColor: '#7F1D1D' }]} onPress={() => router.push('/signin')}>
       <Ionicons name="person-circle-outline" size={16} color="#fff" />
       <Text style={styles.bannerText}>You were signed out. Tap to sign in and keep uploading</Text>
+    </Pressable>
+  ) : guestFull && !isWeb ? (
+    <Pressable style={[styles.banner, { backgroundColor: '#7C2D12' }]} onPress={() => router.push('/signin')}>
+      <Ionicons name="cloud-outline" size={16} color="#fff" />
+      <Text style={styles.bannerText}>Free guest storage is full. Tap to sign in and get 100 GB free</Text>
     </Pressable>
   ) : hot && !isWeb ? (
     <View style={[styles.banner, { backgroundColor: '#9A3412' }]}>

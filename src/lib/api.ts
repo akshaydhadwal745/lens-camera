@@ -87,7 +87,9 @@ type Page<T> = { items: T[]; cursor: string | null };
 const q = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '');
 
 export const api = {
-  register: (device?: string) => request<IdentityResponse>('POST', '/devices', { device }),
+  /** Guest for this phone; `fingerprint` (hash) gets a reinstalled phone its guest back. */
+  register: (device?: string, fingerprint?: string) =>
+    request<IdentityResponse & { restored?: boolean }>('POST', '/devices', { device, fingerprint }),
   me: () => request<{ id: string; name: string; email?: string; usedBytes: number; quotaBytes: number }>('GET', '/me'),
 
   // Accounts (guest → signed in)

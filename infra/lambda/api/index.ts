@@ -76,7 +76,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
 
     throw new HttpError(404, 'Not found');
   } catch (error) {
-    if (error instanceof HttpError) return json(error.status, { error: error.message });
+    if (error instanceof HttpError) return json(error.status, { error: error.message, code: error.code });
     console.error(error);
     return json(500, { error: 'Internal error' });
   }

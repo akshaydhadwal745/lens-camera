@@ -46,6 +46,25 @@ Very large guest libraries move in rounds; the app continues automatically.
   "You were signed out — tap to sign in" (the phone does **not** become a new
   guest, which would split your photos). This survives app restarts.
 
+## Free storage: guests vs signed in
+
+| | Lens storage |
+|---|---|
+| Guest (not signed in) | **5 GB** |
+| Signed in | **100 GB** |
+
+- Each phone sends a **device fingerprint**: a SHA-256 hash of the Android ID
+  (app-scoped, survives reinstalls) or of a random ID kept in the iPhone
+  Keychain. The raw ID never leaves the phone.
+- A reinstalled phone gets **its existing guest back** (same photos, same 5 GB),
+  not a fresh 5 GB. Once that guest has signed in, a reinstall starts a new
+  guest and you sign in to get your account.
+- New guests per network address are capped at 300/hour (a loose brake on
+  scripts; mobile carriers share one address between many users).
+- Hitting the guest limit: uploads pause with "Free guest storage is full. Tap
+  to sign in and get 100 GB free"; signing in resumes them.
+- Later: Google Play Integrity for stronger protection against fake devices.
+
 ## Gentle nudge
 
 Guests with 3+ photos see a dismissible gallery banner: "Sign in so you never

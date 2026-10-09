@@ -41,6 +41,21 @@ entirely in the cloud by the time you press stop.
   `store.ts`; API `POST /media {streaming: true}`, `POST /media/:id/complete {size}`.
   Tests: `infra/scripts/e2e.sh`, `tests/live-upload/run.sh`.
 
+## Background backup (Android)
+
+Uploads keep going when you leave Lens or turn the screen off:
+
+- While originals upload, a **foreground service** shows **"Backing up 3 of 12"**
+  with progress (tap it to open Lens) and holds a CPU wake lock + Wi-Fi lock.
+  It stops when the queue is empty. Android 13+ asks for notification
+  permission once. (Android 15 allows such services ~6 h/day.)
+- A **periodic background task** (WorkManager, every 15 min or more, about 8 min
+  per run) continues after a reboot or after the system closed the app.
+- iPhone: foreground uploads only for now (needs background URLSessions).
+- Code: `modules/lens-device` (`BackupService.kt`, `backupService`),
+  `backup` + `runBackgroundSync` in `store.ts`, `src/lib/background.ts`
+  (defined from the custom entry `index.ts`).
+
 ## Heat guard
 
 A small native module (`modules/lens-device`: Android `PowerManager` thermal

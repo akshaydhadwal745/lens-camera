@@ -18,7 +18,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3, signMediaUrl } from './lib';
+import { checkQuota, ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3, signMediaUrl } from './lib';
 import { listStorages, PROVIDERS, Provider } from './storage';
 
 /** Files up to this size use a single PUT; larger ones use S3 multipart. */
@@ -335,9 +335,7 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   }
 
   if (streaming && location) throw new HttpError(400, 'Upload while recording goes to Lens storage');
-  if (!location && identity.usedBytes + size > env.quotaBytes) {
-    return json(413, { error: 'Lens storage is full', code: 'quota' });
-  }
+  if (!location) checkQuota(identity, size);
 
   const item: MediaRecord = {
     ...mediaKey(identity.id, id),
@@ -391,7 +389,7 @@ async function switchDestination(identity: Identity, item: MediaRecord, location
       .catch(() => {});
   }
   const toLens = !location;
-  if (toLens && identity.usedBytes + item.size > env.quotaBytes) throw new HttpError(413, 'Lens storage is full');
+  if (toLens) checkQuota(identity, item.size);
   let uploadId: string | undefined;
   if (toLens && item.size > SINGLE_PUT_MAX) {
     const mpu = await s3.send(
@@ -577,7 +575,7 @@ export async function completeUpload(identity: Identity, id: string, req?: Req):
     const size = req?.body?.size ?? item.size;
     if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, 'Missing final size');
     if (size > env.maxFileBytes) throw new HttpError(413, 'File too large');
-    if (identity.usedBytes + size > env.quotaBytes) return json(413, { error: 'Lens storage is full', code: 'quota' });
+    checkQuota(identity, size);
     if (size !== item.size) {
       await ddb.send(
         new UpdateCommand({

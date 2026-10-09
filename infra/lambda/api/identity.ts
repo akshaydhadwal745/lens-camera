@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-import { ddb, env, hashSecret, HttpError, json, randomId, Req, Res, safeEqual } from './lib';
+import { ddb, env, hashSecret, HttpError, json, quotaFor, randomId, rateLimit, Req, Res, safeEqual } from './lib';
 import { randomName } from './names';
 
 export type Identity = { id: string; name: string; usedBytes: number; tokenId: string; email?: string };
@@ -34,8 +34,43 @@ export async function issueToken(deviceId: string, label: 'device' | 'web', devi
   return `${deviceId}.${tokenId}.${secret}`;
 }
 
-/** POST /v1/devices {device?}: create a new (guest) identity with a unique random name. */
+/**
+ * New guest identities per network address per hour: a loose brake on scripts
+ * (they can fake fingerprints). Kept high because mobile carriers put thousands
+ * of users behind one address (CGNAT). Real protection: fingerprint + 5 GB
+ * guest limit (+ Play Integrity later).
+ */
+const REGISTRATIONS_PER_IP_HOUR = 300;
+const FINGERPRINT = /^[0-9a-f]{64}$/;
+
+/**
+ * POST /v1/devices {device?, fingerprint?}: a guest identity for this phone.
+ * `fingerprint` is a hash of the device's ID (Android ID / Keychain UUID). The
+ * same phone gets its existing guest back (same photos, same 5 GB) instead of
+ * a fresh one after a reinstall. Once that guest became a signed-in account,
+ * a reinstall starts a new guest (the account needs signing in).
+ */
 export async function register(req?: Req): Promise<Res> {
+  const device = typeof req?.body?.device === 'string' ? req.body.device.slice(0, 80) : undefined;
+  const fingerprint =
+    typeof req?.body?.fingerprint === 'string' && FINGERPRINT.test(req.body.fingerprint) ? req.body.fingerprint : undefined;
+  const deviceKey = fingerprint ? { pk: `FP#${fingerprint}`, sk: 'DEVICE' } : undefined;
+
+  if (deviceKey) {
+    const known = (await ddb.send(new GetCommand({ TableName: env.table, Key: deviceKey }))).Item;
+    if (known?.guestId) {
+      const profile = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${known.guestId}`, sk: 'PROFILE' } })))
+        .Item;
+      if (profile && !profile.email) {
+        const token = await issueToken(known.guestId, 'device', device);
+        return json(200, { id: known.guestId, name: profile.name, token, restored: true });
+      }
+    }
+  }
+  if (req?.sourceIp) {
+    await rateLimit(`register#${req.sourceIp}`, REGISTRATIONS_PER_IP_HOUR, 'Too many new devices from this network. Try again later.');
+  }
+
   const id = randomId(12);
   const now = Date.now();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -61,6 +96,7 @@ export async function register(req?: Req): Promise<Res> {
                   name,
                   usedBytes: 0,
                   createdAt: now,
+                  ...(fingerprint ? { fingerprint } : {}),
                   gsi1pk: 'NAME',
                   gsi1sk: name,
                 },
@@ -69,8 +105,10 @@ export async function register(req?: Req): Promise<Res> {
           ],
         }),
       );
-      const device = typeof req?.body?.device === 'string' ? req.body.device.slice(0, 80) : undefined;
       const token = await issueToken(id, 'device', device);
+      if (deviceKey) {
+        await ddb.send(new PutCommand({ TableName: env.table, Item: { ...deviceKey, guestId: id, updatedAt: now } }));
+      }
       return json(201, { id, name, token });
     } catch (error: any) {
       if (error?.name === 'TransactionCanceledException') continue; // name taken, retry
@@ -121,7 +159,7 @@ export async function authenticate(req: Req): Promise<Identity> {
 
 export function me(identity: Identity): Res {
   const { tokenId: _session, ...profile } = identity;
-  return json(200, { ...profile, quotaBytes: env.quotaBytes });
+  return json(200, { ...profile, quotaBytes: quotaFor(identity), signedInQuotaBytes: env.quotaBytes });
 }
 
 /** GET /v1/users?q=prefix: search identities by name prefix. */

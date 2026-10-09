@@ -255,6 +255,8 @@ function handler(event) {
       CF_KEY_PAIR_ID: publicKey.publicKeyId,
       CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
       QUOTA_BYTES: String(quotaGb * 1024 ** 3),
+      // Guests (not signed in) get this much Lens storage, pooled per device fingerprint.
+      GUEST_QUOTA_BYTES: String(Number(this.node.tryGetContext('guestQuotaGb') ?? 5) * 1024 ** 3),
       MAX_FILE_BYTES: String(1024 ** 4), // 1 TiB per file
       CODE_SENDER: codeSender ?? '',
       TRANSCODE_QUEUE_SPOT: spotQueue.jobQueueArn,

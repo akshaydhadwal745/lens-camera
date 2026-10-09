@@ -53,8 +53,9 @@ export interface ConnectedStorage {
 
 export interface StorageOverview {
   plan: 'free';
-  /** Lens storage: newest `recentBytes` are "Recent", the rest "Saver" (all instant). */
-  lens: { usedBytes: number; quotaBytes: number; recentBytes: number };
+  /** Lens storage: newest `recentBytes` are "Recent", the rest "Saver" (all instant). Guests: 5 GB. */
+  lens: { usedBytes: number; quotaBytes: number; recentBytes: number; signedInQuotaBytes: number };
+  signedIn: boolean;
   storages: ConnectedStorage[];
   limits: { storages: number; routing: boolean };
 }
@@ -119,6 +120,8 @@ export interface LocalEntry {
   nextAttemptAt?: number;
   /** Permanent failure (won't retry automatically). */
   error?: string;
+  /** Why, for the app: e.g. "guest-quota" (sign in to get more storage). */
+  errorCode?: string;
 }
 
 /**

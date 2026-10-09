@@ -22,7 +22,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 import { Identity, issueToken } from './identity';
-import { ddb, derivedKey, env, hashSecret, HttpError, json, Req, Res, safeEqual } from './lib';
+import { ddb, derivedKey, env, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
 import { googleLoginClaims } from './oauth';
 
 const ses = new SESv2Client({});
@@ -47,29 +47,13 @@ function normalizeEmail(value: unknown): string {
   return email;
 }
 
-/** Fixed-window counter; throws 429 past the limit. */
-async function rateLimit(scope: string, limit: number) {
-  const hour = Math.floor(Date.now() / 3_600_000);
-  const result = await ddb.send(
-    new UpdateCommand({
-      TableName: env.table,
-      Key: { pk: `RATE#${scope}#${hour}`, sk: 'COUNT' },
-      UpdateExpression: 'ADD #c :one SET #ttl = :ttl',
-      ExpressionAttributeNames: { '#c': 'count', '#ttl': 'ttl' },
-      ExpressionAttributeValues: { ':one': 1, ':ttl': (hour + 2) * 3600 },
-      ReturnValues: 'UPDATED_NEW',
-    }),
-  );
-  if ((result.Attributes?.count ?? 0) > limit) throw new HttpError(429, 'Too many codes requested. Try again in an hour.');
-}
-
 // ---------- Email codes ----------
 
 /** POST /v1/auth/email/start {email}: emails a 6-digit code. */
 export async function startEmail(identity: Identity, req: Req): Promise<Res> {
   const email = normalizeEmail(req.body.email);
-  await rateLimit(`email#${email}`, CODES_PER_HOUR);
-  await rateLimit(`device#${identity.id}`, CODES_PER_HOUR * 2);
+  await limit(`email#${email}`, CODES_PER_HOUR, 'Too many codes requested. Try again in an hour.');
+  await limit(`device#${identity.id}`, CODES_PER_HOUR * 2, 'Too many codes requested. Try again in an hour.');
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const isTest = email.endsWith(TEST_DOMAIN);

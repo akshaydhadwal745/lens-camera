@@ -70,6 +70,8 @@ module), Android app (basic camera for now), and a web viewer.
 | Upload videos while recording (header held back, re-checked at stop) | Android | ✅ | No | Real app code tested against the live API (`tests/live-upload`) |
 | Heat guard (pause uploads/previews/overlays when hot) | iOS, Android | ✅ | No | Native module `modules/lens-device` |
 | Smooth streaming of long videos (lazy HLS on Batch Fargate Spot, signed links) | All | ✅ | No | Conversion + playback tested on AWS (`tests/stream`) |
+| Background backup: foreground service + periodic task | Android | ✅ | No | "Backing up N of M" notification |
+| Guest 5 GB / signed-in 100 GB, device fingerprint (reinstall keeps the same guest) | iOS, Android | ✅ | No | Server tested (e2e) |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

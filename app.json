@@ -65,7 +65,8 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true

@@ -16,6 +16,12 @@ curl -sS "$API/health" | grep -q true && ok health
 A=$(curl -sS -X POST "$API/devices"); TA=$(echo "$A" | j .token); NA=$(echo "$A" | j .name)
 B=$(curl -sS -X POST "$API/devices"); TB=$(echo "$B" | j .token); NB=$(echo "$B" | j .name); IB=$(echo "$B" | j .id)
 ok "registered A=$NA B=$NB"
+# A signs in (guests are capped at 5 GB; the big-file tests need the account quota).
+otp() { aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"OTP#$1\"},\"sk\":{\"S\":\"CODE\"}}" --query Item.testCode.S --output text; }
+MAILA="a$(date +%s%N)@e2e.lens.invalid"
+curl -sS -X POST "$API/auth/email/start" -H "authorization: Bearer $TA" -H 'content-type: application/json' -d "{\"email\":\"$MAILA\"}" >/dev/null
+curl -sS -X POST "$API/auth/email/verify" -H "authorization: Bearer $TA" -H 'content-type: application/json' -d "{\"email\":\"$MAILA\",\"code\":\"$(otp "$MAILA")\"}" >/dev/null
+[[ $(curl -sS "$API/me" -H "authorization: Bearer $TA" | j .quotaBytes) == $((100*1024*1024*1024)) ]] && ok "signed-in account: 100 GB"
 [[ $(call GET /me "bad.token.x" -o /dev/null -w '%{http_code}') == 401 ]] && ok "bad token rejected"
 
 # --- single PUT (photo) ---
@@ -198,7 +204,6 @@ LOC=$(loc "$API/oauth/callback?code=x&state=forged.state")
 [[ "$LOC" == lens://oauth?error=* ]] && ok "forged state rejected"
 [[ $(call POST /oauth/nope/start "$TA" -d '{}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "unknown provider rejected"
 # --- accounts: email code sign-in, merge on a second phone, sessions ---
-otp() { aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"OTP#$1\"},\"sk\":{\"S\":\"CODE\"}}" --query Item.testCode.S --output text; }
 MAIL="user$(date +%s)@e2e.lens.invalid"
 C=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d '{"device":"Pixel 8"}'); TC=$(echo "$C" | j .token); IC=$(echo "$C" | j .id)
 [[ $(call POST /auth/email/start "$TC" -d "{\"email\":\"$MAIL\"}" | j .sent) == true ]] && ok "sign-in code sent"
@@ -260,4 +265,17 @@ call POST "/media/$IDV/complete" "$TA" >/dev/null
 [[ $(call POST /stream "$TA" -d "{\"mediaId\":\"$IDV\"}" | j .status) == original ]] && ok "short clip plays the original (no conversion)"
 [[ $(call POST /stream "$TB" -d "{\"mediaId\":\"$IDV\",\"ownerId\":\"$IA\"}" -o /dev/null -w '%{http_code}') == 404 ]] && ok "can't stream someone else's video unless it's shared"
 call DELETE "/media/$IDV/forever" "$TA" >/dev/null
+# --- guest limits + device fingerprint ---
+FP=$(openssl rand -hex 32)
+G1=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d "{\"fingerprint\":\"$FP\"}"); TG1=$(echo "$G1" | j .token); IG1=$(echo "$G1" | j .id)
+[[ $(call GET /me "$TG1" | j .quotaBytes) == $((5*1024*1024*1024)) ]] && ok "guest gets 5 GB"
+R=$(call POST /media "$TG1" -d "{\"id\":\"$(node -p "Date.now().toString(36).padStart(8,'0')")-guest01\",\"contentType\":\"video/mp4\",\"size\":$((6*1024*1024*1024)),\"kind\":\"video\"}")
+[[ $(echo "$R" | j .code) == guest-quota ]] && ok "guest over 5 GB is told to sign in"
+G2=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d "{\"fingerprint\":\"$FP\"}")
+[[ $(echo "$G2" | j .id) == "$IG1" && $(echo "$G2" | j .restored) == true ]] && ok "reinstall on the same phone gets the same guest back (no fresh 5 GB)"
+MAILG="g$(date +%s%N)@e2e.lens.invalid"
+call POST /auth/email/start "$TG1" -d "{\"email\":\"$MAILG\"}" >/dev/null
+call POST /auth/email/verify "$TG1" -d "{\"email\":\"$MAILG\",\"code\":\"$(otp "$MAILG")\"}" >/dev/null
+G3=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d "{\"fingerprint\":\"$FP\"}")
+[[ $(echo "$G3" | j .id) != "$IG1" && -z $(echo "$G3" | j .restored) ]] && ok "after that guest signed in, a reinstall starts a new guest (account needs sign-in)"
 echo "ALL PASSED"

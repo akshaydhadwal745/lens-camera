@@ -61,6 +61,15 @@ function LensStorageCard() {
           <Text style={styles.legendName}>Saver</Text> · everything older, stored more efficiently. Still opens instantly.
         </Text>
       </View>
+      {!storage.signedIn && (
+        <Pressable style={styles.guestNote} onPress={() => router.push('/signin')}>
+          <Ionicons name="person-circle-outline" size={18} color={colors.accent} />
+          <Text style={[styles.legendText, { color: '#fff' }]}>
+            Guests get {formatBytes(quotaBytes)}. <Text style={{ color: colors.accent, fontWeight: '700' }}>Sign in</Text> to get{' '}
+            {formatBytes(storage.lens.signedInQuotaBytes)} free.
+          </Text>
+        </Pressable>
+      )}
       <View style={styles.legendRow}>
         <Ionicons name="shield-checkmark-outline" size={14} color="#4ADE80" />
         <Text style={styles.legendText}>
@@ -446,6 +455,7 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   legendText: { color: '#bbb', fontSize: 13, lineHeight: 18, flex: 1 },
   legendName: { color: '#fff', fontWeight: '700' },
+  guestNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2C2C2E', borderRadius: 10, padding: 10 },
   providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   providerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 56 },
   providerName: { color: '#fff', fontSize: 16, fontWeight: '600' },
