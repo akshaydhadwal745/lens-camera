@@ -32,6 +32,8 @@ export const env = {
   auditBucket: process.env.AUDIT_BUCKET ?? '',
   /** Accounts (by email) allowed into /admin. */
   adminEmails: (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+  /** Where contact-form messages are emailed (comma-separated); defaults to the admins. */
+  contactTo: (process.env.CONTACT_TO ?? '').split(',').map((e) => e.trim()).filter(Boolean),
   /** Google Play listing for invite/affiliate links; empty until the app is published. */
   playUrl: process.env.PLAY_URL ?? '',
   /** Runs long background jobs (account deletion). */

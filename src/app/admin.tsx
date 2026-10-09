@@ -3,14 +3,14 @@
 // Every action here is recorded in the audit log.
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AdminAffiliate, AdminPayout, api } from '@/lib/api';
+import { AdminAffiliate, AdminPayout, api, ContactMessage } from '@/lib/api';
 import { rupees } from '@/lib/format';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
-type Tab = 'affiliates' | 'referrals' | 'payouts';
+type Tab = 'inbox' | 'affiliates' | 'referrals' | 'payouts';
 
 function lastMonth(): string {
   const d = new Date();
@@ -24,6 +24,67 @@ function Button({ label, onPress, danger }: { label: string; onPress: () => void
     <Pressable style={[styles.smallButton, danger && { backgroundColor: '#3A1D1D' }]} onPress={onPress}>
       <Text style={[styles.smallButtonText, danger && { color: colors.danger }]}>{label}</Text>
     </Pressable>
+  );
+}
+
+/** Contact-form messages (also emailed; reply from your mail app). */
+function Inbox() {
+  const [status, setStatus] = useState<'new' | 'done'>('new');
+  const [rows, setRows] = useState<ContactMessage[] | null>(null);
+  const load = useCallback(() => {
+    api.admin.contact(status).then((r) => setRows(r.messages), (e) => notify('Error', errorMessage(e)));
+  }, [status]);
+  useEffect(load, [load]);
+  const done = async (m: ContactMessage) => {
+    try {
+      await api.admin.closeContact(m.id);
+      load();
+    } catch (e) {
+      notify('Error', errorMessage(e));
+    }
+  };
+  const reply = (m: ContactMessage) =>
+    Linking.openURL(`mailto:${m.email}?subject=${encodeURIComponent(`Re: your Lens message (${m.reference})`)}`).catch(() => undefined);
+  return (
+    <>
+      <View style={styles.chips}>
+        {(['new', 'done'] as const).map((s) => (
+          <Pressable
+            key={s}
+            style={[styles.chip, s === status && styles.chipOn]}
+            onPress={() => {
+              setRows(null);
+              setStatus(s);
+            }}
+          >
+            <Text style={[styles.chipText, s === status && { color: '#000' }]}>{s}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {!rows ? (
+        <ActivityIndicator color={colors.accent} />
+      ) : rows.length === 0 ? (
+        <Text style={styles.empty}>No messages.</Text>
+      ) : (
+        rows.map((m) => (
+          <View key={m.id} style={styles.card}>
+            <Text style={styles.name}>
+              {m.name} · {m.topic}
+            </Text>
+            <Text style={styles.small} selectable>
+              {m.email} · {m.reference} · {new Date(m.at).toLocaleString()}
+            </Text>
+            <Text style={styles.body} selectable>
+              {m.message}
+            </Text>
+            <View style={styles.actions}>
+              <Button label="Reply" onPress={() => reply(m)} />
+              {m.status === 'new' && <Button label="Mark done" onPress={() => done(m)} />}
+            </View>
+          </View>
+        ))
+      )}
+    </>
   );
 }
 
@@ -200,7 +261,7 @@ function Payouts() {
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<Tab>('affiliates');
+  const [tab, setTab] = useState<Tab>('inbox');
   return (
     <View style={[styles.fill, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -210,13 +271,14 @@ export default function AdminScreen() {
         </Pressable>
       </View>
       <View style={styles.chips}>
-        {(['affiliates', 'referrals', 'payouts'] as Tab[]).map((t) => (
+        {(['inbox', 'affiliates', 'referrals', 'payouts'] as Tab[]).map((t) => (
           <Pressable key={t} style={[styles.chip, t === tab && styles.chipOn]} onPress={() => setTab(t)}>
             <Text style={[styles.chipText, t === tab && { color: '#000' }]}>{t}</Text>
           </Pressable>
         ))}
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, gap: 10 }} keyboardShouldPersistTaps="handled">
+        {tab === 'inbox' && <Inbox />}
         {tab === 'affiliates' && <Affiliates />}
         {tab === 'referrals' && <Referrals />}
         {tab === 'payouts' && <Payouts />}

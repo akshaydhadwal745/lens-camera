@@ -1,7 +1,7 @@
 # Website and web app (lens.instagrowapp.com)
 
-**Live now at:** https://d13kuzzim5hg3c.cloudfront.net (until the domain is
-connected; see "Domain" below). **Design:** [design/website.md](../design/website.md).
+**Live at:** https://lens.instagrowapp.com (connected 2026-10-09; the old
+cloudfront.net address redirects here). **Design:** [design/website.md](../design/website.md).
 
 ## What's where
 
@@ -65,16 +65,28 @@ syncs to S3 with a deploy-only AWS role (GitHub OIDC, no stored keys), then
 clears the CloudFront cache. Repo variables: `WEB_DEPLOY_ROLE_ARN`,
 `WEB_BUCKET`, `CF_DISTRIBUTION_ID`.
 
-## Domain (to do once)
+## Domain (done 2026-10-09)
 
-1. Request the certificate in us-east-1 (needs admin rights once).
-2. Add its validation CNAME at Hostinger; wait for "Issued".
-3. Set `webDomain` + `webCertificateArn` (and `webOrigin`) in `infra/cdk.json`, deploy.
-4. Add `lens` CNAME → the CloudFront domain at Hostinger. The cloudfront.net
-   address then redirects to the domain.
+- Certificate (us-east-1, DNS-validated, renews automatically while the
+  validation CNAME stays at Hostinger):
+  `arn:aws:acm:us-east-1:495026846839:certificate/40453c45-d688-412f-9d37-311e6290c3ae`.
+- `infra/cdk.json`: `webDomain`, `webCertificateArn`, `webOrigin` = `https://lens.instagrowapp.com`.
+- Hostinger: `lens` CNAME → `d13kuzzim5hg3c.cloudfront.net`, plus the ACM validation CNAME (keep both).
+- Repo variable `EXPO_PUBLIC_WEB_URL` = `https://lens.instagrowapp.com`.
+
+## Contact form
+
+`/contact/` (EN/HI; `?topic=grievance|delete-account|affiliate|…` preselects).
+`POST /v1/contact` (`infra/lambda/api/contact.ts`): stored as `CONTACT` items
+(2 years), emailed to `contactEmail` (CDK context, now akshaydhadwal2@gmail.com)
+with Reply-To = the sender, so replying from Gmail answers them. Honeypot
+field + rate limits (30/hour per network, 3/hour per email). The sender gets no
+automatic email (prevents abuse). Admin → Inbox lists messages, Reply opens
+mail, Mark done. No public postal address or mailbox for now (owner decision):
+legal pages point to this form for questions, grievances and deletion requests.
 
 ## Still to do
 
 - Analytics (GA4 / Cloudflare) and Search Console / Bing: later (owner decision).
 - Download button → Google Play listing once published.
-- Legal pages: confirm operator name, address and contact emails (`site/src/content/legal.ts` → `LEGAL`).
+- Legal pages: confirm the operator/legal entity name and, if wanted, a Grievance Officer name (`site/src/content/legal.ts` → `LEGAL`).

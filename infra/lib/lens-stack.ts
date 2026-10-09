@@ -357,6 +357,8 @@ function handler(event) {
       ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
       // Play Store listing for invite/affiliate links; empty until the app is published.
       PLAY_URL: (this.node.tryGetContext('playUrl') as string | undefined) ?? '',
+      // Contact-form messages are emailed here (Reply-To = the sender).
+      CONTACT_TO: (this.node.tryGetContext('contactEmail') as string | undefined) ?? '',
     };
 
     const api = new nodejs.NodejsFunction(this, 'Api', {

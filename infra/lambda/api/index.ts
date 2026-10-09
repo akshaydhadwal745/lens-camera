@@ -26,6 +26,7 @@ import { deleteStorage, getStorage, putStorage, requestProvider } from './storag
 import { requestStream } from './stream';
 import { requestAccountDeletion } from './account';
 import { followLink } from './attribution';
+import { closeContact, listContact, submitContact } from './contact';
 import { claimCode, decideReferral, heldReferrals, myReferrals } from './referrals';
 import {
   apply as applyAffiliate,
@@ -64,6 +65,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /devices') return await register(req);
     if (route === 'POST /pairing/claim') return await claimPairing(req);
     if (route === 'GET /health') return json(200, { ok: true });
+    if (route === 'POST /contact') return await submitContact(req);
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
     // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.
     if (seg[1] === 'r' && seg.length === 3 && method === 'GET') return await followLink(req, 'referral', seg[2]);
@@ -121,6 +123,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (route === 'GET /admin/payouts') return await payoutSheet(req, identity.id);
       if (seg[2] === 'payouts' && seg.length === 6 && seg[5] === 'paid' && method === 'POST') return await markPaid(identity.id, seg[3], seg[4], req);
       if (route === 'GET /admin/audit') return await auditTrail(req);
+      if (route === 'GET /admin/contact') return await listContact(req);
+      if (seg[2] === 'contact' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeContact(identity.id, decodeURIComponent(seg[3]));
     }
 
     if (route === 'GET /media') return await listMedia(identity, req);

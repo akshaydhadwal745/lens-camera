@@ -617,3 +617,31 @@ a.card:hover {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+.contact-form {
+  margin-top: 1.5rem;
+}
+.field select,
+.field textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+.field select {
+  min-height: 48px;
+}
+.field textarea {
+  resize: vertical;
+  min-height: 160px;
+}
+/* Honeypot: invisible to people, filled by bots. */
+.hp {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

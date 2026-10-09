@@ -15,7 +15,7 @@ export const helpFaq: Record<Lang, Faq[]> = {
     { q: 'How do I sign a browser out?', a: 'On the website: Account → Log out. From your phone: Settings → Account → signed-in browsers → Log out.' },
     { q: 'How do I delete my account?', a: 'See the Delete your account page: it explains how, and exactly what is deleted.' },
     { q: 'How do I get more free storage?', a: 'Invite friends: Settings → Invite friends. You get +10 GB for every friend who installs Lens and signs in on their phone. There is no limit; each person and phone counts once.' },
-    { q: 'How do I contact you?', a: 'Email support@instagrowapp.com. We usually reply within two working days.' },
+    { q: 'How do I contact you?', a: 'Use the contact form at lens.instagrowapp.com/contact/. We reply by email, usually within two working days.' },
   ],
   hi: [
     { q: 'कंप्यूटर पर साइन इन कैसे करें?', a: 'lens.instagrowapp.com खोलें और साइन इन पर क्लिक करें। फ़ोन से QR कोड स्कैन करके मंज़ूरी दें, या उसी ईमेल या Google अकाउंट से साइन इन करें जो ऐप में है।' },
@@ -27,7 +27,7 @@ export const helpFaq: Record<Lang, Faq[]> = {
     { q: 'ब्राउज़र से साइन आउट कैसे करें?', a: 'वेबसाइट पर: Account → Log out। फ़ोन से: Settings → Account → signed-in browsers → Log out।' },
     { q: 'अपना अकाउंट कैसे डिलीट करें?', a: '"अकाउंट डिलीट करें" पेज देखें: वहाँ तरीका और ठीक-ठीक क्या डिलीट होता है, बताया गया है।' },
     { q: 'और मुफ़्त स्टोरेज कैसे पाएँ?', a: 'दोस्तों को इनवाइट करें: Settings → Invite friends। हर दोस्त जो Lens इंस्टॉल करके अपने फ़ोन पर साइन इन करे, उस पर आपको +10 GB मिलता है। कोई सीमा नहीं; हर व्यक्ति और फ़ोन एक बार गिना जाता है।' },
-    { q: 'आपसे संपर्क कैसे करें?', a: 'support@instagrowapp.com पर ईमेल करें। हम आमतौर पर दो कामकाजी दिनों में जवाब देते हैं।' },
+    { q: 'आपसे संपर्क कैसे करें?', a: 'lens.instagrowapp.com/contact/ पर संपर्क फ़ॉर्म भरें। हम ईमेल से जवाब देते हैं, आमतौर पर दो कामकाजी दिनों में।' },
   ],
 };
 

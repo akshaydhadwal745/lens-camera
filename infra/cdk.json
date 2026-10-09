@@ -7,8 +7,11 @@
     "alertEmail": "akshaydhadwal2@gmail.com",
     "codeDomain": "lens.instagrowapp.com",
     "cdnDomain": "d13kuzzim5hg3c.cloudfront.net",
-    "webOrigin": "https://d13kuzzim5hg3c.cloudfront.net",
+    "webOrigin": "https://lens.instagrowapp.com",
     "adminEmails": "akshaydhadwal2@gmail.com",
-    "playUrl": ""
+    "playUrl": "",
+    "contactEmail": "akshaydhadwal2@gmail.com",
+    "webDomain": "lens.instagrowapp.com",
+    "webCertificateArn": "arn:aws:acm:us-east-1:495026846839:certificate/40453c45-d688-412f-9d37-311e6290c3ae"
   }
 }

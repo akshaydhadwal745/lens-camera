@@ -281,7 +281,7 @@ export default function PartnersScreen() {
               <Text style={[styles.muted, { padding: 20, textAlign: 'center' }]}>Thanks for applying! We’ll email you when your account is approved.</Text>
             )}
             {data.status === 'suspended' && (
-              <Text style={[styles.muted, { padding: 20 }]}>Your affiliate account is paused{data.note ? `: ${data.note}` : '.'} Contact support@instagrowapp.com.</Text>
+              <Text style={[styles.muted, { padding: 20 }]}>Your affiliate account is paused{data.note ? `: ${data.note}` : '.'} Contact us at lens.instagrowapp.com/contact/.</Text>
             )}
             {(data.status === 'approved' || data.status === 'suspended') && <Approved data={data} reload={load} />}
           </>

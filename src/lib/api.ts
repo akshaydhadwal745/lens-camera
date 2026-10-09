@@ -109,6 +109,7 @@ export type AffiliateDashboard = {
   payouts?: { month: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string }[];
 };
 export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
+export type ContactMessage = { id: string; reference: string; name: string; email: string; topic: string; message: string; at: number; status: string };
 export type AdminPayout = { affiliateId: string; name?: string; email?: string; upi?: string; pan?: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string };
 export type Session = { id: string; label: string; kind: string; createdAt: number; lastUsedAt: number; current: boolean };
 type DerivativeUrls = { thumb?: string; preview?: string };
@@ -250,6 +251,8 @@ export const api = {
       request<{ state: string }>('POST', `/admin/referrals/${friendId}`, { action }),
     runPayouts: (month: string) => request<{ payouts: { affiliateId: string; grossPaise: number }[] }>('POST', '/admin/payouts/run', { month }),
     payouts: (month: string) => request<{ payouts: AdminPayout[] }>('GET', `/admin/payouts?month=${month}`),
+    contact: (status: 'new' | 'done') => request<{ messages: ContactMessage[] }>('GET', `/admin/contact?status=${status}`),
+    closeContact: (id: string) => request<{ status: string }>('POST', `/admin/contact/${encodeURIComponent(id)}/done`),
     markPaid: (affiliateId: string, month: string, reference: string) =>
       request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),
   },

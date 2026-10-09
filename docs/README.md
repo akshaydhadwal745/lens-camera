@@ -89,10 +89,11 @@ native camera module on each platform), and a web viewer.
 | Guest 5 GB / signed-in 100 GB, device fingerprint (reinstall keeps the same guest) | iOS, Android | ✅ | No | Server tested (e2e) |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
-| Website: marketing site (EN + HI, 44 pages, JSON-LD, sitemap, Lighthouse 100s) | Web | ✅ | ✅ (Lighthouse, headless Chrome) | On the CloudFront address until the domain is connected |
+| Website: marketing site (EN + HI, 44 pages, JSON-LD, sitemap, Lighthouse 100s) | Web | ✅ | ✅ (Lighthouse, headless Chrome) | Live at lens.instagrowapp.com |
 | Web sign-in: QR from phone (approve/deny, city), email code, Google; HttpOnly cookie | Web, iOS, Android | ✅ | Server ✅ (e2e) | Phone scanner + App Link not device-tested |
 | Web app under /app: upload from computer, automatic sync | Web | ✅ | No | Replaces the 8-character link code |
 | Delete account (app + web), everything removed in the background | All | ✅ | Server ✅ (e2e) | Google Play requirement |
-| Invite friends: +10 GB per friend who signs in on a new phone; install referrer, links, typed codes, anti-fraud | All (referrer: Android) | ✅ | No (not deployed yet) | e2e written; needs deploy |
-| Affiliate program: apply, links, 50% of net commission, 30-day hold, refunds, monthly payouts + TDS, partner dashboard | All | ✅ | No (not deployed yet) | Payments (Play Billing) not built: purchases come in via Maintenance for now |
-| Admin (allow-listed): approve partners, held rewards, payouts; audit log (DynamoDB + S3 Object Lock) | All | ✅ | No | |
+| Invite friends: +10 GB per friend who signs in on a new phone; install referrer, links, typed codes, anti-fraud | All (referrer: Android) | ✅ | Server ✅ (e2e) | Deployed 2026-10-09 |
+| Affiliate program: apply, links, 50% of net commission, 30-day hold, refunds, monthly payouts + TDS, partner dashboard | All | ✅ | Server ✅ (e2e) | Payments (Play Billing) not built: purchases come in via Maintenance for now |
+| Admin (allow-listed): approve partners, held rewards, payouts; audit log (DynamoDB + S3 Object Lock) | All | ✅ | Server ✅ (e2e) | |
+| Contact form (/contact/, EN/HI) → emailed to the team + Admin → Inbox | Web, iOS, Android | ✅ | Server ✅ (e2e) | Replaces public support/grievance emails |

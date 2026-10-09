@@ -4,14 +4,16 @@
 // point-in-time recovery (35 days), API logs 7 days, no CloudFront/S3 access
 // logs, Google scope openid+email+profile (only sub + email stored).
 //
-// TODO before launch (owner to confirm): legal entity name, postal address,
-// contact and grievance-officer email. Placeholders are in LEGAL below.
+// Contact: the contact form only (user decision 2026-10-09: no postal address
+// or public mailbox for now). Messages are emailed to the team.
+// TODO (owner to confirm): legal entity name; Grievance Officer name if wanted.
 import type { Lang } from '../i18n/ui';
 
 export const LEGAL = {
   operator: 'InstaGrow',
-  contact: 'support@instagrowapp.com',
-  grievance: 'grievance@instagrowapp.com',
+  /** No public mailbox: the contact form (topic presets via ?topic=). */
+  contact: 'lens.instagrowapp.com/contact/',
+  grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
   updated: { en: '9 October 2026', hi: '9 अक्टूबर 2026' },
 };
 
@@ -44,7 +46,7 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['IP address', 'To limit abuse (counting requests per network for one hour)', 'About 2 hours'],
             ['Approximate city (from your IP) when you request QR sign-in on the website', 'To show "who is asking" on your phone before you approve', 'At most 2 minutes'],
             ['Sign-in codes we email you', 'To verify you own the email address', '10 minutes; stored only as a hash'],
-            ['Requests you send us (for example "add a storage provider")', 'To reply and improve Lens', 'Up to 2 years'],
+            ['Requests you send us (for example "add a storage provider", or the contact form: name, email, message)', 'To reply and improve Lens', 'Up to 2 years'],
             ['Invites: which invite or affiliate link or code brought you (from the Google Play install referrer, a website cookie, or a code you type), and whether your phone is an emulator', 'To give your friend their storage reward or the affiliate their commission, and to stop fake sign-ups', 'Until you delete your account'],
             ['Clicks on invite and affiliate links: time, browser type and a one-way hash of the IP address', 'Fraud checks and the inviter’s statistics (counts only, never who clicked)', 'Raw clicks 30 days; daily counts for the life of the link'],
             ['Affiliates only: name, channels, PAN and UPI ID (encrypted), commissions and payouts', 'To run the program, pay you and meet tax law (TDS, Form 16A)', '8 years after the financial year (Indian tax and accounting law)'],
@@ -109,7 +111,7 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '10. Contact and grievance officer',
-        p: [`Questions or requests: ${C}. Grievance officer: ${G}. We respond within 30 days, usually much sooner.`],
+        p: [`Questions or requests: use our contact form at ${C}. Grievance Officer: choose "Grievance" on the same form (${G}). We acknowledge grievances within 48 hours and respond within 30 days, usually much sooner.`],
       },
       {
         h2: '11. Changes',
@@ -139,7 +141,7 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['IP एड्रेस', 'दुरुपयोग सीमित करने के लिए (एक घंटे तक नेटवर्क के हिसाब से रिक्वेस्ट गिनना)', 'लगभग 2 घंटे'],
             ['वेबसाइट पर QR साइन इन माँगने पर अनुमानित शहर (आपके IP से)', 'मंज़ूरी से पहले आपके फ़ोन पर "कौन माँग रहा है" दिखाने के लिए', 'ज़्यादा से ज़्यादा 2 मिनट'],
             ['हम जो साइन-इन कोड ईमेल करते हैं', 'यह जाँचने के लिए कि ईमेल आपका है', '10 मिनट; सिर्फ़ हैश के रूप में'],
-            ['आपकी भेजी रिक्वेस्ट (जैसे "स्टोरेज प्रोवाइडर जोड़ें")', 'जवाब देने और Lens बेहतर करने के लिए', '2 साल तक'],
+            ['आपकी भेजी रिक्वेस्ट (जैसे "स्टोरेज प्रोवाइडर जोड़ें", या संपर्क फ़ॉर्म: नाम, ईमेल, संदेश)', 'जवाब देने और Lens बेहतर करने के लिए', '2 साल तक'],
             ['इनवाइट: कौन-सा इनवाइट या एफ़िलिएट लिंक या कोड आपको लाया (Google Play इंस्टॉल रेफ़रर, वेबसाइट कुकी या आपके टाइप किए कोड से), और क्या आपका फ़ोन एम्युलेटर है', 'आपके दोस्त को स्टोरेज इनाम या एफ़िलिएट को कमीशन देने और नकली साइन-अप रोकने के लिए', 'अकाउंट डिलीट करने तक'],
             ['इनवाइट और एफ़िलिएट लिंक पर क्लिक: समय, ब्राउज़र का प्रकार और IP एड्रेस का वन-वे हैश', 'धोखाधड़ी की जाँच और इनवाइट करने वाले के आँकड़े (सिर्फ़ गिनती, कभी नहीं कि किसने क्लिक किया)', 'क्लिक 30 दिन; रोज़ की गिनती लिंक रहने तक'],
             ['सिर्फ़ एफ़िलिएट: नाम, चैनल, PAN और UPI ID (एन्क्रिप्टेड), कमीशन और भुगतान', 'प्रोग्राम चलाने, आपको भुगतान करने और टैक्स क़ानून (TDS, Form 16A) के पालन के लिए', 'वित्त वर्ष के 8 साल बाद तक (भारतीय टैक्स और अकाउंटिंग क़ानून)'],
@@ -202,7 +204,7 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '10. संपर्क और शिकायत अधिकारी',
-        p: [`सवाल या रिक्वेस्ट: ${C}। शिकायत अधिकारी: ${G}। हम 30 दिनों के अंदर जवाब देते हैं, आमतौर पर बहुत जल्दी।`],
+        p: [`सवाल या रिक्वेस्ट: हमारे संपर्क फ़ॉर्म ${C} का इस्तेमाल करें। शिकायत अधिकारी: उसी फ़ॉर्म पर "शिकायत" चुनें (${G})। हम शिकायत 48 घंटे में स्वीकार करते हैं और 30 दिनों के अंदर जवाब देते हैं, आमतौर पर बहुत जल्दी।`],
       },
       {
         h2: '11. बदलाव',
@@ -234,7 +236,7 @@ export const terms: Record<Lang, LegalDoc> = {
       { h2: '6. Changes and ending the service', p: ['We may change features. If we ever end a service that stores your files, we will give at least 60 days’ notice so you can download your library. You can stop using Lens and delete your account at any time.'] },
       { h2: '7. Liability', p: ['To the extent the law allows, Lens is provided "as is" and our total liability for any claim is limited to the amount you paid us in the 12 months before it (₹0 on the free plan). Nothing here limits rights you have that cannot be limited by law.'] },
       { h2: '8. Law and disputes', p: ['These terms are governed by the laws of India. Contact us first so we can try to resolve any problem.'] },
-      { h2: '9. Contact', p: [`${C}`] },
+      { h2: '9. Contact', p: [`Contact form: ${C}`] },
     ],
   },
   hi: {
@@ -255,7 +257,7 @@ export const terms: Record<Lang, LegalDoc> = {
       { h2: '6. बदलाव और सेवा बंद होना', p: ['हम फ़ीचर बदल सकते हैं। अगर हम कभी फ़ाइलें स्टोर करने वाली सेवा बंद करते हैं, तो कम से कम 60 दिन पहले बताएँगे ताकि आप अपनी लाइब्रेरी डाउनलोड कर सकें। आप कभी भी Lens इस्तेमाल करना बंद करके अकाउंट डिलीट कर सकते हैं।'] },
       { h2: '7. ज़िम्मेदारी', p: ['क़ानून जितनी अनुमति देता है, Lens "जैसा है" वैसा दिया जाता है और किसी भी दावे के लिए हमारी कुल ज़िम्मेदारी उससे पहले के 12 महीनों में आपके दिए भुगतान तक सीमित है (फ़्री प्लान पर ₹0)। यहाँ कुछ भी आपके उन अधिकारों को सीमित नहीं करता जिन्हें क़ानून सीमित नहीं करने देता।'] },
       { h2: '8. क़ानून और विवाद', p: ['ये शर्तें भारत के क़ानूनों के अधीन हैं। किसी भी समस्या को सुलझाने के लिए पहले हमसे संपर्क करें।'] },
-      { h2: '9. संपर्क', p: [`${C}`] },
+      { h2: '9. संपर्क', p: [`संपर्क फ़ॉर्म: ${C}`] },
     ],
   },
 };
@@ -263,7 +265,7 @@ export const terms: Record<Lang, LegalDoc> = {
 export const deletion: Record<Lang, LegalDoc> = {
   en: {
     title: 'Delete your Lens account',
-    description: 'How to delete your Lens by InstaGrow account and exactly what is deleted, from the app, the website or by email.',
+    description: 'How to delete your Lens by InstaGrow account and exactly what is deleted, from the app, the website or the contact form.',
     h1: 'Delete your account',
     intro: 'You can delete your Lens by InstaGrow account and all its data at any time. Deleting is permanent: download anything you want to keep first.',
     blocks: [
@@ -272,7 +274,7 @@ export const deletion: Record<Lang, LegalDoc> = {
         ul: [
           'In the app: Settings → Account → Delete account, then confirm.',
           'On the website: sign in, open Account, choose Delete account, then confirm.',
-          `By email: write to ${C} from the email address on your account, with the subject "Delete my account". We confirm and delete within 7 days.`,
+          `By contact form: at ${C}, choose "Delete my account" and enter the email address on your account. We confirm by email and delete within 7 days.`,
         ],
       },
       {
@@ -297,7 +299,7 @@ export const deletion: Record<Lang, LegalDoc> = {
   },
   hi: {
     title: 'अपना Lens अकाउंट डिलीट करें',
-    description: 'Lens by InstaGrow अकाउंट कैसे डिलीट करें और ठीक-ठीक क्या डिलीट होता है, ऐप, वेबसाइट या ईमेल से।',
+    description: 'Lens by InstaGrow अकाउंट कैसे डिलीट करें और ठीक-ठीक क्या डिलीट होता है, ऐप, वेबसाइट या संपर्क फ़ॉर्म से।',
     h1: 'अकाउंट डिलीट करें',
     intro: 'आप कभी भी अपना Lens by InstaGrow अकाउंट और उसका सारा डेटा डिलीट कर सकते हैं। डिलीट करना स्थायी है: जो रखना है वह पहले डाउनलोड कर लें।',
     blocks: [
@@ -306,7 +308,7 @@ export const deletion: Record<Lang, LegalDoc> = {
         ul: [
           'ऐप में: Settings → Account → Delete account, फिर पुष्टि करें।',
           'वेबसाइट पर: साइन इन करें, Account खोलें, Delete account चुनें, फिर पुष्टि करें।',
-          `ईमेल से: अपने अकाउंट वाले ईमेल से ${C} पर "Delete my account" विषय के साथ लिखें। हम 7 दिनों में पुष्टि करके डिलीट कर देंगे।`,
+          `संपर्क फ़ॉर्म से: ${C} पर "मेरा अकाउंट डिलीट करें" चुनें और अपने अकाउंट वाला ईमेल डालें। हम ईमेल से पुष्टि करके 7 दिनों में डिलीट कर देंगे।`,
         ],
       },
       {
@@ -380,7 +382,7 @@ export const affiliateTerms: Record<Lang, LegalDoc> = {
       },
       { h2: '8. Your data', p: ['We handle your application, PAN, payout details and earnings as described in the privacy policy. PAN and payout details are encrypted; tax and payment records are kept for 8 years as the law requires.'] },
       { h2: '9. Changes', p: ['We may update these terms with 30 days’ notice by email. Continuing after the change means you accept it.'] },
-      { h2: '10. Contact', p: [`${C}`] },
+      { h2: '10. Contact', p: [`Contact form: ${C} (choose "Affiliate program")`] },
     ],
   },
   hi: {
@@ -425,7 +427,7 @@ export const affiliateTerms: Record<Lang, LegalDoc> = {
       { h2: '7. निलंबन और समाप्ति', p: ['असामान्य गतिविधि की जाँच के दौरान हम आपका अकाउंट निलंबित कर सकते हैं, और इन शर्तों के उल्लंघन पर ख़त्म कर सकते हैं। आप कभी भी छोड़ सकते हैं। बिना उल्लंघन के अकाउंट ख़त्म होने पर मंज़ूर कमीशन अगले भुगतान में दिया जाता है (न्यूनतम से कम हो तब भी) और आगे कमीशन नहीं जुड़ता।'] },
       { h2: '8. आपका डेटा', p: ['आपका आवेदन, PAN, भुगतान की जानकारी और कमाई हम प्राइवेसी पॉलिसी के अनुसार संभालते हैं। PAN और भुगतान की जानकारी एन्क्रिप्टेड रहती है; टैक्स और भुगतान के रिकॉर्ड क़ानून के अनुसार 8 साल रखे जाते हैं।'] },
       { h2: '9. बदलाव', p: ['हम 30 दिन पहले ईमेल से बताकर ये शर्तें बदल सकते हैं। बदलाव के बाद जारी रखने का मतलब है कि आप उन्हें मानते हैं।'] },
-      { h2: '10. संपर्क', p: [`${C}`] },
+      { h2: '10. संपर्क', p: [`संपर्क फ़ॉर्म: ${C} ("एफ़िलिएट प्रोग्राम" चुनें)`] },
     ],
   },
 };

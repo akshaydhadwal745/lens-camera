@@ -1,0 +1,100 @@
+---
+// Contact form: messages are stored and emailed to the team (no public
+// mailbox or postal address for now). Topic can be preset with ?topic=…
+import Layout from '../layouts/Layout.astro';
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const c = {
+  en: {
+    title: 'Contact us',
+    description: 'Contact the Lens by InstaGrow team: help with the app, privacy and grievances, account deletion, the affiliate program or business enquiries.',
+    h1: 'Contact us',
+    lead: 'Tell us how we can help. We reply by email, usually within two working days.',
+    name: 'Your name',
+    email: 'Your email (we reply here)',
+    topic: 'Topic',
+    topics: {
+      support: 'Help with Lens',
+      privacy: 'Privacy or my data',
+      grievance: 'Grievance (Grievance Officer)',
+      'delete-account': 'Delete my account',
+      affiliate: 'Affiliate program',
+      business: 'Business or press',
+      other: 'Something else',
+    },
+    message: 'Message',
+    deleteHint: 'For account deletion, use the email address on your Lens account. The fastest way is in the app: Settings → Delete account.',
+    send: 'Send message',
+    privacy: 'We use your details only to reply to you. See our Privacy policy.',
+    i18n: { sending: 'Sending…', sent: 'Thanks! We got your message (reference {ref}) and will reply to {email}.', error: 'Something went wrong. Please try again.' },
+  },
+  hi: {
+    title: 'संपर्क करें',
+    description: 'Lens by InstaGrow टीम से संपर्क करें: ऐप में मदद, प्राइवेसी और शिकायत, अकाउंट डिलीट करना, एफ़िलिएट प्रोग्राम या बिज़नेस पूछताछ।',
+    h1: 'संपर्क करें',
+    lead: 'बताएँ हम कैसे मदद कर सकते हैं। हम ईमेल से जवाब देते हैं, आमतौर पर दो कामकाजी दिनों में।',
+    name: 'आपका नाम',
+    email: 'आपका ईमेल (जवाब यहीं आएगा)',
+    topic: 'विषय',
+    topics: {
+      support: 'Lens में मदद',
+      privacy: 'प्राइवेसी या मेरा डेटा',
+      grievance: 'शिकायत (शिकायत अधिकारी)',
+      'delete-account': 'मेरा अकाउंट डिलीट करें',
+      affiliate: 'एफ़िलिएट प्रोग्राम',
+      business: 'बिज़नेस या प्रेस',
+      other: 'कुछ और',
+    },
+    message: 'संदेश',
+    deleteHint: 'अकाउंट डिलीट करने के लिए अपने Lens अकाउंट वाला ईमेल इस्तेमाल करें। सबसे तेज़ तरीका ऐप में है: Settings → Delete account।',
+    send: 'संदेश भेजें',
+    privacy: 'आपकी जानकारी सिर्फ़ जवाब देने के लिए इस्तेमाल होती है। हमारी प्राइवेसी पॉलिसी देखें।',
+    i18n: { sending: 'भेज रहे हैं…', sent: 'धन्यवाद! आपका संदेश मिल गया (रेफ़रेंस {ref}), हम {email} पर जवाब देंगे।', error: 'कुछ गड़बड़ हुई। फिर से कोशिश करें।' },
+  },
+}[lang];
+---
+
+<Layout lang={lang} path="contact" title={c.title} description={c.description}>
+  <section class="block">
+    <div class="container narrow" id="contact" data-i18n={JSON.stringify(c.i18n)} data-lang={lang}>
+      <h1>{c.h1}</h1>
+      <p class="lead">{c.lead}</p>
+      <form id="contact-form" class="card contact-form" novalidate>
+        <div class="field">
+          <label for="c-name">{c.name}</label>
+          <input id="c-name" name="name" autocomplete="name" maxlength="100" required />
+        </div>
+        <div class="field">
+          <label for="c-email">{c.email}</label>
+          <input id="c-email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required />
+        </div>
+        <div class="field">
+          <label for="c-topic">{c.topic}</label>
+          <select id="c-topic" name="topic">
+            {Object.entries(c.topics).map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </div>
+        <p class="note" id="delete-hint" hidden>{c.deleteHint}</p>
+        <div class="field">
+          <label for="c-message">{c.message}</label>
+          <textarea id="c-message" name="message" rows="7" maxlength="4000" required></textarea>
+        </div>
+        <div class="hp" aria-hidden="true">
+          <label for="c-website">Website</label>
+          <input id="c-website" name="website" tabindex="-1" autocomplete="off" />
+        </div>
+        <button class="btn btn-primary" type="submit">{c.send}</button>
+        <p class="status" id="contact-status" role="status" aria-live="polite"></p>
+        <p class="note"><a href={lang === 'en' ? '/privacy/' : '/hi/privacy/'}>{c.privacy}</a></p>
+      </form>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  import '../scripts/contact';
+</script>

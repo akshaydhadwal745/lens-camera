@@ -412,6 +412,16 @@ S=$(call GET "/admin/payouts?month=$MONTH" "$TADM")
 [[ $(call GET "/admin/audit?entity=affiliate:$IP" "$TADM" | j .events.length) -ge 8 ]] && ok "audit trail recorded"
 AUDIT=$(node -p "require('./outputs.json').Lens.AuditBucketName")
 [[ $(aws s3api list-objects-v2 --profile lens --bucket "$AUDIT" --prefix "audit/$(date -u +%F)/affiliate:$IP/" --query 'length(Contents)' --output text) -ge 8 ]] && ok "audit events locked in S3 (Object Lock)"
+# --- contact form (stored + emailed to the team) ---
+R=$(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d "{\"name\":\"E2E\",\"email\":\"c$(date +%s%N)@e2e.lens.invalid\",\"topic\":\"support\",\"message\":\"Automated test message, please ignore.\"}")
+CREF=$(echo "$R" | j .reference)
+[[ $(echo "$R" | j .received) == true && $CREF == L-* ]] && ok "contact form message received ($CREF)"
+[[ $(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d '{"name":"x","email":"bad","message":"hello there friend"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "contact form needs a valid email"
+[[ $(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d '{"name":"bot","email":"b@x.com","message":"spam spam spam","website":"http://spam"}' | j .received) == true ]] && ok "honeypot: bots get a fake success"
+CM=$(call GET "/admin/contact" "$TADM" | j ".messages.find(m=>m.reference==='$CREF')?.id")
+[[ -n "$CM" && $(call GET "/admin/contact" "$TADM" | j ".messages.some(m=>m.email==='b@x.com')") == false ]] && ok "admin inbox shows the message (not the bot's)"
+[[ $(call POST "/admin/contact/$(node -p "encodeURIComponent('$CM')")/done" "$TADM" | j .status) == done ]] && ok "message marked done"
+[[ $(call GET "/admin/contact" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "inbox hidden from normal accounts"
 # --- delete account (Play requirement): everything goes, the email can start fresh ---
 D=$(curl -sS -X POST "$API/devices"); TD=$(echo "$D" | j .token); ID_D=$(echo "$D" | j .id)
 MAILD="d$(date +%s%N)@e2e.lens.invalid"
