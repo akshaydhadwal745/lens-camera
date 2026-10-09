@@ -532,9 +532,9 @@ export async function markPaid(adminId: string, affId: string, month: string, re
       new UpdateCommand({
         TableName: env.table,
         Key: poKey,
-        UpdateExpression: 'SET #s = :p, reference = :r, paidAt = :n',
+        UpdateExpression: 'SET #s = :p, #ref = :r, paidAt = :n',
         ConditionExpression: '#s = :due',
-        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeNames: { '#s': 'status', '#ref': 'reference' },
         ExpressionAttributeValues: { ':p': 'paid', ':r': reference, ':n': Date.now(), ':due': 'due' },
       }),
     );

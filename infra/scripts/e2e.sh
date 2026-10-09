@@ -404,14 +404,14 @@ R=$(call POST /admin/payouts/run "$TADM" -d "{\"month\":\"$MONTH\",\"affiliateId
 [[ $(call POST /admin/payouts/run "$TADM" -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}" | j .payouts.length) == 0 ]] && ok "payout run is idempotent"
 S=$(call GET "/admin/payouts?month=$MONTH" "$TADM")
 [[ $(echo "$S" | j ".payouts.find(p=>p.affiliateId==='$IP').upi") == e2e.creator@okaxis ]] && ok "payout sheet decrypts the UPI ID for the transfer"
-[[ $(call POST "/admin/payouts/$IP/$MONTH/paid" "$TADM" -d '{"reference":"UPI-E2E-1"}' | j .status) == paid ]] && ok "marked paid"
-[[ $(call GET /affiliates/me "$TP" | j .paidPaise) == 131065 && $(call GET /affiliates/me "$TP" | j ".payouts[0].status") == paid ]] && ok "partner sees the payout"
+[[ $(call POST "/admin/payouts/$IP/$MONTH/paid" "$TADM" -d '{"reference":"UPI-E2E-1"}' | j .status) == paid ]] && ok "marked paid" || fail "mark paid"
+[[ $(call GET /affiliates/me "$TP" | j .paidPaise) == 131065 && $(call GET /affiliates/me "$TP" | j ".payouts[0].status") == paid ]] && ok "partner sees the payout" || fail "partner payout view"
 [[ $(paise "{\"refund\":{\"orderId\":\"$O3\"}}") == reversed && $(call GET /affiliates/me "$TP" | j .approvedPaise) == -127500 ]] && ok "refund after payout: clawed back from the next payout"
 [[ $(call POST "/admin/affiliates/$IP" "$TADM" -d '{"action":"suspend","note":"e2e"}' | j .status) == suspended ]] && ok "admin suspends"
 [[ $(curl -sS -o /dev/null -w '%{redirect_url}' "$SITE/go/$ACODE") != *via=* ]] && ok "suspended partner's links stop attributing"
 [[ $(call GET "/admin/audit?entity=affiliate:$IP" "$TADM" | j .events.length) -ge 8 ]] && ok "audit trail recorded"
 AUDIT=$(node -p "require('./outputs.json').Lens.AuditBucketName")
-[[ $(aws s3api list-objects-v2 --profile lens --bucket "$AUDIT" --prefix "audit/$(date -u +%F)/affiliate:$IP/" --query KeyCount --output text) -ge 8 ]] && ok "audit events locked in S3 (Object Lock)"
+[[ $(aws s3api list-objects-v2 --profile lens --bucket "$AUDIT" --prefix "audit/$(date -u +%F)/affiliate:$IP/" --query 'length(Contents)' --output text) -ge 8 ]] && ok "audit events locked in S3 (Object Lock)"
 # --- delete account (Play requirement): everything goes, the email can start fresh ---
 D=$(curl -sS -X POST "$API/devices"); TD=$(echo "$D" | j .token); ID_D=$(echo "$D" | j .id)
 MAILD="d$(date +%s%N)@e2e.lens.invalid"
