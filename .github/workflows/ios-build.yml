@@ -20,7 +20,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'certs/**'
-      - '.fingerprintignore'
+      - 'app.config.js'
       - 'scripts/ota-publish.mjs'
       - '.github/workflows/ios-build.yml'
 
@@ -232,9 +232,18 @@ jobs:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
 
-      # Which update channel this APK listens to (OTA updates must match it).
+      # Which updates this APK accepts: the runtime version from app.config.js
+      # (hash of committed native inputs). The OTA job computes the same value;
+      # fail here if the APK somehow embedded something else.
       - name: Runtime version
-        run: npx expo-updates runtimeversion:resolve --platform android | jq -r .runtimeVersion | tee runtime-${{ matrix.abi }}.txt
+        run: |
+          RUNTIME=$(npx expo config --json --type public | jq -r .runtimeVersion)
+          APK=android/app/build/outputs/apk/release/app-${{ matrix.abi }}-release.apk
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          EMBEDDED=$("$AAPT2" dump resources "$APK" | grep -A1 'string/expo_runtime_version' | tail -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "config: $RUNTIME  apk: $EMBEDDED"
+          test "$RUNTIME" = "$EMBEDDED"
+          echo "$RUNTIME" > runtime-${{ matrix.abi }}.txt
 
       - name: Collect APK
         run: |
@@ -250,7 +259,7 @@ jobs:
           retention-days: 14
 
   # Over-the-air update: the JS of this commit for apps built with the same
-  # native code (runtime version = fingerprint). Phones get it in ~2 minutes
+  # native code (runtime version from app.config.js). Phones get it in ~2 minutes
   # without reinstalling; signed with our key (the app rejects anything else).
   ota:
     runs-on: ubuntu-latest

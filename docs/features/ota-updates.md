@@ -20,14 +20,17 @@ Install an APK once; after that Lens updates its own app code.
 
 ## When a new APK is still needed
 
-The **runtime version** is a fingerprint of the native code (`app.json`
-`runtimeVersion.policy: fingerprint`): Kotlin/Swift, native libraries,
-config plugins, permissions, icons. Change any of those and the fingerprint
-changes: the update is published for the new runtime, which only new APKs
-use, so an old app never runs JS that needs native code it doesn't have.
-Release notes show each APK's runtime. `.fingerprintignore` keeps the
-generated `android/`/`ios/` folders out of it (CI builds with them, publishes
-without them; verified identical).
+The **runtime version** (`app.config.js`, e.g. `n-812c0e84…`) is a hash of
+the committed files that can change the native app: `package-lock.json`,
+`app.json`, `modules/`, `plugins/`, `patches/`, `certs/`. Change any of those
+and the runtime changes: the update is published for the new runtime, which
+only new APKs use, so an old app never runs JS that needs native code it
+doesn't have. Release notes show each APK's runtime, and the Android build
+**fails** if the APK embedded a different value than the config.
+
+Why not Expo's `fingerprint` policy: it produced a different value on every
+machine (CI APK job, CI update job, laptop), so APKs never matched their
+updates (dev-26…28).
 
 ## Security
 

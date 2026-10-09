@@ -4,7 +4,8 @@
 //   OTA_PRIVATE_KEY=<pem> WEB_BUCKET=<bucket> WEB_ORIGIN=https://lens.instagrowapp.com \
 //     node scripts/ota-publish.mjs android [--dry-run]
 //
-// 1. Runtime version = fingerprint of the native code (same as the APK's).
+// 1. Runtime version = hash of the committed native inputs (app.config.js),
+//    the same value the APK was built with.
 // 2. `expo export` → bundle + assets, uploaded content-addressed (sha256) to
 //    s3://<bucket>/ota/a/<hash>.<ext> (immutable; served by CloudFront).
 // 3. Manifest (Expo Updates protocol v1) signed with our private key, stored at
@@ -24,14 +25,15 @@ if (!OTA_PRIVATE_KEY || !WEB_ORIGIN || (!WEB_BUCKET && !dryRun)) throw new Error
 const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
 const npx = (...args) => run('npx', args);
 
-const runtime = JSON.parse(npx('expo-updates', 'runtimeversion:resolve', '--platform', platform)).runtimeVersion;
+const expoClient = JSON.parse(npx('expo', 'config', '--json', '--type', 'public'));
+const runtime = expoClient.runtimeVersion;
+if (typeof runtime !== 'string' || !runtime) throw new Error('No runtimeVersion string in the Expo config');
 console.log(`runtime ${runtime}`);
 
 const out = 'dist-ota';
 rmSync(out, { recursive: true, force: true });
 npx('expo', 'export', '--platform', platform, '--output-dir', out);
 const meta = JSON.parse(readFileSync(join(out, 'metadata.json'), 'utf8')).fileMetadata[platform];
-const expoClient = JSON.parse(npx('expo', 'config', '--json', '--type', 'public'));
 
 const TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', ttf: 'font/ttf', otf: 'font/otf', json: 'application/json' };
 const staging = join(out, 'upload');

@@ -90,9 +90,6 @@
       "typedRoutes": true,
       "baseUrl": "/app"
     },
-    "runtimeVersion": {
-      "policy": "fingerprint"
-    },
     "updates": {
       "url": "https://bjktkbei62fat72vloceovhn4a0gsxwb.lambda-url.ap-south-1.on.aws/v1/updates",
       "enabled": true,
