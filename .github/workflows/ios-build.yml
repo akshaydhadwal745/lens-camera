@@ -58,11 +58,14 @@ jobs:
       # modules/lens-camera/android/src/main/assets/looks/ when Looks.swift changes).
       - name: Bake looks for Android
         working-directory: modules/lens-camera
+        # A helper, not the app: never let it fail the iOS build.
+        continue-on-error: true
         run: |
-          swiftc -O tools/bake-looks.swift ios/Imaging/Looks.swift -o "$RUNNER_TEMP/bake-looks"
+          swiftc -O tools/bake-looks/main.swift ios/Imaging/Looks.swift -o "$RUNNER_TEMP/bake-looks"
           "$RUNNER_TEMP/bake-looks" "$RUNNER_TEMP/looks"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
         with:
           name: looks
           path: ${{ runner.temp }}/looks

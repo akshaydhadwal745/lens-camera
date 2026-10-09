@@ -64,7 +64,7 @@ Works with the front and back cameras. People only; pets and objects aren't dete
 
 - The 13 looks are colour lookup tables (33³). Same names and recipe as iOS.
   Exact iOS-matching tables are baked on the macOS CI runner
-  (`modules/lens-camera/tools/bake-looks.swift`, artifact `looks`). When they
+  (`modules/lens-camera/tools/bake-looks/main.swift`, artifact `looks`). When they
   are copied to `android/src/main/assets/looks/`, Android uses them; until
   then Android uses its own definition (`LookLut.kt`), which is close but not identical.
 - Editor: looks + intensity, Auto, exposure, contrast, highlights/shadows

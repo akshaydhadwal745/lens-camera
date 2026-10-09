@@ -1,7 +1,7 @@
 // Bakes the iOS looks (ios/Imaging/Looks.swift) into 33³ LUT strips for
 // Android, so a look is pixel-for-pixel the same on both platforms.
 //
-//   swiftc -O tools/bake-looks.swift ios/Imaging/Looks.swift -o /tmp/bake-looks
+//   swiftc -O tools/bake-looks/main.swift ios/Imaging/Looks.swift -o /tmp/bake-looks
 //   /tmp/bake-looks android/src/main/assets/looks
 //
 // Output: <id>.png, 1089×33 RGBA. Column b·33 + r, row g (see LookLut.kt).
