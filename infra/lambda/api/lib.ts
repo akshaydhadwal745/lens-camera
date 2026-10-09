@@ -17,6 +17,10 @@ export const env = {
   maxFileBytes: Number(process.env.MAX_FILE_BYTES),
   /** Verified SES sender for sign-in codes (empty = email sign-in off). */
   codeSender: process.env.CODE_SENDER ?? '',
+  transcodeQueueSpot: process.env.TRANSCODE_QUEUE_SPOT ?? '',
+  transcodeQueueOnDemand: process.env.TRANSCODE_QUEUE_ONDEMAND ?? '',
+  transcodeJob: process.env.TRANSCODE_JOB ?? '',
+  streamKeyParam: process.env.STREAM_KEY_PARAM ?? '/lens/stream/token-key',
 };
 
 export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {

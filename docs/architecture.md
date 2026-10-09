@@ -61,6 +61,7 @@ Media ids are client-generated and time-sortable (`<base36 ms>-<random>`).
 | `POST /oauth/:provider/start\|token\|refresh`, `GET /oauth/callback`, `GET /oauth/providers` | OAuth relay for Google Drive / Dropbox / OneDrive / Box (adds client secret from SSM, stores no tokens) |
 | `POST /auth/email/start\|verify`, `POST /auth/google`, `POST /auth/continue` | Sign in (guest → account; merges a guest into an existing account) |
 | `GET /sessions`, `DELETE /sessions` (others), `DELETE /sessions/:id\|current` | Devices / log out |
+| `POST /stream {mediaId, ownerId?}` | How to play a video: `ready` (signed HLS link), `preparing` (conversion started), `original` |
 | `GET /users?q=`, `GET /contacts` | Find people, share history |
 | `POST /shares`, `GET /shared`, `DELETE /shared/:owner/:id` | Sharing |
 | `POST /pairing`, `POST /pairing/claim` | Web viewer sign-in code |

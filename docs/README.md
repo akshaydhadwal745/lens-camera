@@ -16,6 +16,7 @@ module), Android app (basic camera for now), and a web viewer.
 | Delete, Trash & Archive | [features/trash-and-archive.md](features/trash-and-archive.md) |
 | Storage: Lens + your own (Drive, OneDrive, Dropbox, Box, S3, WebDAV) | [features/own-storage.md](features/own-storage.md) |
 | Accounts: sign in with email code / Google, devices, log out | [features/accounts.md](features/accounts.md) |
+| Smooth video streaming (HLS 540p/1080p, made on demand) | [features/video-streaming.md](features/video-streaming.md) |
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 
@@ -68,6 +69,7 @@ module), Android app (basic camera for now), and a web viewer.
 | Android camera preview: no lag (expo-camera patch, 30 fps) | Android | ✅ | No | `patches/expo-camera+57.0.6.patch` |
 | Upload videos while recording (header held back, re-checked at stop) | Android | ✅ | No | Real app code tested against the live API (`tests/live-upload`) |
 | Heat guard (pause uploads/previews/overlays when hot) | iOS, Android | ✅ | No | Native module `modules/lens-device` |
+| Smooth streaming of long videos (lazy HLS on Batch Fargate Spot, signed links) | All | ✅ | No | Conversion + playback tested on AWS (`tests/stream`) |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

@@ -94,6 +94,11 @@ export type MediaRecord = {
   recoveringSince?: number;
   /** Uploading while still recording: size is set when the recording ends. */
   streaming?: boolean;
+  /** HLS streaming copy (see stream.ts): queued → ready. */
+  streamStatus?: 'queued' | 'ready';
+  streamJobId?: string;
+  streamQueuedAt?: number;
+  streamAttempts?: number;
   gsi1pk?: string;
   gsi1sk?: string;
   /**

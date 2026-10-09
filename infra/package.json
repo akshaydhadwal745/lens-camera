@@ -21,6 +21,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@aws-sdk/client-batch": "^3.1148.0",
     "@aws-sdk/client-dynamodb": "^3.1147.0",
     "@aws-sdk/client-s3": "^3.1147.0",
     "@aws-sdk/client-sesv2": "^3.1147.0",

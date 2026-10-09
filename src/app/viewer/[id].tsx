@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -23,6 +24,7 @@ import { formatDate } from '@/lib/format';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
 import { useOriginal } from '@/lib/storage/useOriginal';
+import { useStream } from '@/lib/useStream';
 import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -77,7 +79,10 @@ function PhotoPage({
 }
 
 function VideoPage({ item, width, height, active }: { item: GalleryItem; width: number; height: number; active: boolean }) {
-  const source = useOriginal(item);
+  const original = useOriginal(item);
+  // Long videos from the cloud: adaptive 540p/1080p streaming once converted.
+  const stream = useStream(item, active);
+  const source = stream.asking ? null : stream.url ? { uri: stream.url } : original;
   const player = useVideoPlayer(source, (p) => {
     p.loop = false;
   });
@@ -86,6 +91,15 @@ function VideoPage({ item, width, height, active }: { item: GalleryItem; width: 
     if (active) player.play();
     else player.pause();
   }, [active, player]);
+
+  if (!source && stream.asking) {
+    return (
+      <View style={{ width, height, justifyContent: 'center' }}>
+        <Image source={{ uri: viewUri(item) }} style={{ width, height: height * 0.8 }} contentFit="contain" />
+        <ActivityIndicator color="#fff" style={StyleSheet.absoluteFill} />
+      </View>
+    );
+  }
 
   if (!source) {
     // Only the poster frame is in the cloud so far.
@@ -106,6 +120,7 @@ function VideoPage({ item, width, height, active }: { item: GalleryItem; width: 
   return (
     <View style={{ width, height, justifyContent: 'center' }}>
       <VideoView player={player} style={{ width, height: height * 0.8 }} contentFit="contain" nativeControls />
+      {stream.preparing && <Text style={styles.pendingVideo}>Preparing smooth playback for next time…</Text>}
     </View>
   );
 }

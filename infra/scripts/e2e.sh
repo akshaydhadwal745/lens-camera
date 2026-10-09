@@ -251,4 +251,13 @@ R=$(call POST "/media/$IDL/complete" "$TA" -d "{\"size\":$((4*P8 + 300000))}")
 [[ $(echo "$R" | j .media.originalReady) == true ]] && ok "recording stopped: completed with final size"
 cmp -s <(curl -sS "$(echo "$R" | j .media.url)") "$TMP/rec.mp4" && ok "cloud copy byte-identical to the final file (rewritten header included)"
 call DELETE "/media/$IDL/forever" "$TA" >/dev/null
+# --- streaming (the full Batch conversion test is tests/stream/run.sh) ---
+IDV="$(node -p "Date.now().toString(36).padStart(8,'0')")-short01"
+head -c 200000 /dev/urandom > "$TMP/short.mp4"; SM=$(md5b64 "$TMP/short.mp4")
+R=$(call POST /media "$TA" -d "{\"id\":\"$IDV\",\"contentType\":\"video/mp4\",\"size\":200000,\"kind\":\"video\",\"duration\":8,\"md5\":\"$SM\"}")
+curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: video/mp4' -H "content-md5: $SM" --data-binary @"$TMP/short.mp4" -o /dev/null
+call POST "/media/$IDV/complete" "$TA" >/dev/null
+[[ $(call POST /stream "$TA" -d "{\"mediaId\":\"$IDV\"}" | j .status) == original ]] && ok "short clip plays the original (no conversion)"
+[[ $(call POST /stream "$TB" -d "{\"mediaId\":\"$IDV\",\"ownerId\":\"$IA\"}" -o /dev/null -w '%{http_code}') == 404 ]] && ok "can't stream someone else's video unless it's shared"
+call DELETE "/media/$IDV/forever" "$TA" >/dev/null
 echo "ALL PASSED"

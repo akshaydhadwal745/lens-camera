@@ -7,7 +7,7 @@
    see [cloud-and-storage](features/cloud-and-storage.md)) can be tested in Expo Go.
 2. ~~Live upload while recording~~ (built for Android; iPhone pro camera later).
 3. ~~Thermal guard~~ (built).
-4. **Video streaming (Step 5):** multi-quality HLS made in the cloud only when needed.
+4. ~~Video streaming (Step 5)~~ (built: lazy HLS 540p/1080p on Batch Fargate Spot).
 
 ## Later
 

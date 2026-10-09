@@ -147,6 +147,9 @@ export const api = {
     request<{ phase: 'restored'; media: RemoteMedia } | { phase: 'recovering'; item: TrashItem }>('POST', `/media/${id}/restore`),
   deleteForever: (id: string) => request<{ deleted: string }>('DELETE', `/media/${id}/forever`),
 
+  /** How to play a video here: adaptive HLS (ready), original while converting (preparing), or original. */
+  stream: (mediaId: string, ownerId?: string) =>
+    request<{ status: 'ready' | 'preparing' | 'original'; url?: string }>('POST', '/stream', { mediaId, ownerId }),
   storage: () => request<StorageOverview>('GET', '/storage'),
   /** Connect or report health. Free plan allows one (ApiError code "plan-limit"). */
   putStorage: (id: string, body: Omit<ConnectedStorage, 'id' | 'checkedAt' | 'createdAt'>) =>

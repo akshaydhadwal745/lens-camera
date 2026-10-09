@@ -23,6 +23,7 @@ import { BatchWriteCommand, DeleteCommand, QueryCommand, TransactWriteCommand, U
 import { Identity } from './identity';
 import { ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3 } from './lib';
 import { derivativeKey, getMedia, mediaKey, MediaRecord, requireMedia, toClient } from './media';
+import { streamPrefix } from './stream';
 
 const DAY = 24 * 3600 * 1000;
 export const TRASH_DAYS = 30;
@@ -103,6 +104,7 @@ async function destroy(item: MediaRecord) {
       .catch(() => {});
   }
   await deleteAllVersions(item.key);
+  await deleteAllVersions(streamPrefix(item.key)); // HLS streaming copies, if any
   await deleteAllVersions(derivativeKey(item.key, 'thumb').replace(/thumb\.jpg$/, ''));
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: mediaKey(ownerId, item.id) }));
   const bytes = countedBytes(item);

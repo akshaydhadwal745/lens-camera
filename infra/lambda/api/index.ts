@@ -7,6 +7,7 @@ import { commitEdit, startEdit } from './edits';
 import { removeShared, share, sharedWithMe } from './shares';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
+import { requestStream } from './stream';
 import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth } from './oauth';
 import { continueSignIn, listSessions, revokeOtherSessions, revokeSession, startEmail, verifyEmail, verifyGoogle } from './auth';
 
@@ -57,6 +58,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       return await commitEdit(identity, seg[2], req);
     }
 
+    if (route === 'POST /stream') return await requestStream(identity, req);
     if (route === 'GET /storage') return await getStorage(identity);
     if (seg[1] === 'storages' && seg.length === 3 && method === 'PUT') return await putStorage(identity, seg[2], req);
     if (seg[1] === 'storages' && seg.length === 3 && method === 'DELETE') return await deleteStorage(identity, seg[2]);
