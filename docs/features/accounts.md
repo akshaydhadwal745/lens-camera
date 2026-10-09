@@ -20,7 +20,15 @@ iPhone shows email only, so Apple's rule that apps offering Google sign-in
 must also offer Sign in with Apple doesn't apply.
 
 **Codes:** 6 digits, valid 10 minutes, single use, 5 wrong tries lock the
-code, at most 5 codes per hour per email. Sent from `no-reply@<our domain>`
+code, at most 5 codes per hour per email.
+
+**Temporary email providers are refused** (yopmail, mailinator,
+10minutemail, guerrillamail… and their subdomains): ~35,600 domains, the union
+of three maintained lists (disposable-email-domains, 7c/fakefilter,
+wesbos/burner-email-providers), minus a safety list of mainstream providers
+(Gmail, Outlook, Yahoo, iCloud, Proton, Zoho, Rediffmail…). Refresh with
+`infra/scripts/update-disposable-domains.sh`, then deploy. Google sign-in isn't
+affected (Google verifies its accounts). Sent from `no-reply@<our domain>`
 via Amazon SES.
 
 ## What happens when you sign in

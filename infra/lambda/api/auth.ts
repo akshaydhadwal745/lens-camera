@@ -24,6 +24,7 @@ import {
 import { Identity, issueToken } from './identity';
 import { ddb, derivedKey, env, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
 import { googleLoginClaims } from './oauth';
+import { isDisposableEmail } from './disposable';
 
 const ses = new SESv2Client({});
 
@@ -52,6 +53,9 @@ function normalizeEmail(value: unknown): string {
 /** POST /v1/auth/email/start {email}: emails a 6-digit code. */
 export async function startEmail(identity: Identity, req: Req): Promise<Res> {
   const email = normalizeEmail(req.body.email);
+  if (isDisposableEmail(email)) {
+    throw new HttpError(400, 'Temporary email addresses can’t be used. Please use your regular email.', 'disposable-email');
+  }
   await limit(`email#${email}`, CODES_PER_HOUR, 'Too many codes requested. Try again in an hour.');
   await limit(`device#${identity.id}`, CODES_PER_HOUR * 2, 'Too many codes requested. Try again in an hour.');
 

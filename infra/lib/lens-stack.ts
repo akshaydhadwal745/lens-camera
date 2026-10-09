@@ -273,7 +273,7 @@ function handler(event) {
       timeout: Duration.seconds(60), // sign-in may move a guest's records into an account
       logGroup,
       environment: apiEnv,
-      bundling: { minify: true, sourceMap: true, target: 'node24' },
+      bundling: { minify: true, sourceMap: true, target: 'node24', loader: { '.txt': 'text' } },
     });
 
     // Daily: Trash → Archive after 30 days, finish recoveries, purge after a year.
@@ -285,7 +285,7 @@ function handler(event) {
       timeout: Duration.minutes(10),
       logGroup,
       environment: apiEnv,
-      bundling: { minify: true, sourceMap: true, target: 'node24' },
+      bundling: { minify: true, sourceMap: true, target: 'node24', loader: { '.txt': 'text' } },
     });
     // The e2e test runs it with a simulated date for its own throwaway identity.
     maintenance.addPermission('DeveloperInvoke', {

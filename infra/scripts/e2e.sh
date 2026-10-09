@@ -278,4 +278,9 @@ call POST /auth/email/start "$TG1" -d "{\"email\":\"$MAILG\"}" >/dev/null
 call POST /auth/email/verify "$TG1" -d "{\"email\":\"$MAILG\",\"code\":\"$(otp "$MAILG")\"}" >/dev/null
 G3=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d "{\"fingerprint\":\"$FP\"}")
 [[ $(echo "$G3" | j .id) != "$IG1" && -z $(echo "$G3" | j .restored) ]] && ok "after that guest signed in, a reinstall starts a new guest (account needs sign-in)"
+# --- disposable email providers are refused ---
+for DM in yopmail.com mailinator.com abc.guerrillamail.com; do
+  [[ $(call POST /auth/email/start "$TE" -d "{\"email\":\"x$RANDOM@$DM\"}" | j .code) == disposable-email ]] || fail "$DM not refused"
+done; ok "temporary email providers refused (yopmail, mailinator, subdomains)"
+[[ $(call POST /auth/email/start "$TE" -d "{\"email\":\"ok$(date +%s%N)@e2e.lens.invalid\"}" | j .sent) == true ]] && ok "regular addresses still work"
 echo "ALL PASSED"
