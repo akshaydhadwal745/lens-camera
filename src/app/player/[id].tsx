@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEvent } from 'expo';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoSource, VideoView } from 'expo-video';
 import { ComponentProps, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, LayoutChangeEvent, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -10,10 +10,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatDate, formatDuration } from '@/lib/format';
 import { providerInfo } from '@/lib/storage/providers';
+import type { MediaSource } from '@/lib/storage/types';
 import { useOriginal } from '@/lib/storage/useOriginal';
 import { selectGallery, selectShared, useStore } from '@/lib/store';
 import { viewUri } from '@/lib/types';
 import { useStream } from '@/lib/useStream';
+import { takePreloaded } from '@/lib/video-prefetch';
 
 const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
 const SKIP_S = 10;
@@ -30,6 +32,14 @@ const setRate = (p: Player, rate: number) => {
 const setMuted = (p: Player, muted: boolean) => {
   p.muted = muted;
 };
+const setUp = (p: Player) => {
+  p.loop = false;
+  p.timeUpdateEventInterval = 0.25;
+  p.play();
+};
+/** Cloud files go through the player's disk cache (replays and preloaded starts are free). */
+const withCaching = (source: MediaSource | null): VideoSource | null =>
+  source ? { ...source, ...(source.uri.startsWith('http') ? { useCaching: true } : {}) } : null;
 
 /**
  * Full-screen video player: our own controls (no overlap with the viewer's
@@ -43,15 +53,21 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
-  // Long cloud videos: adaptive streaming once converted; otherwise the original.
-  const original = useOriginal(item);
+  // A player warmed up by intent preloading (finger on the tile, poster in the
+  // viewer) already has the first seconds buffered: take it and play at once.
+  const [preloaded] = useState(() => (id ? takePreloaded(id) : null));
+  // Otherwise: long cloud videos stream once converted; else the original.
+  const original = useOriginal(item, !preloaded);
   const stream = useStream(item, true);
-  const source = stream.asking ? null : stream.url ? { uri: stream.url } : original;
-  const player = useVideoPlayer(source, (p) => {
-    p.loop = false;
-    p.timeUpdateEventInterval = 0.25;
-    p.play();
-  });
+  const source = preloaded || stream.asking ? null : stream.url ? { uri: stream.url, useCaching: true } : withCaching(original);
+  const created = useVideoPlayer(source, setUp);
+  const player = preloaded ?? created;
+  const hasSource = !!preloaded || !!source;
+  useEffect(() => {
+    if (!preloaded) return;
+    setUp(preloaded);
+    return () => preloaded.release(); // it's ours now
+  }, [preloaded]);
 
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
   const { status } = useEvent(player, 'statusChange', { status: player.status });
@@ -162,9 +178,9 @@ export default function PlayerScreen() {
     );
   }
 
-  const loading = stream.asking || (!!source && status === 'loading');
+  const loading = (!preloaded && stream.asking) || (hasSource && status === 'loading');
   // Nothing to play on this phone (e.g. their own storage isn't signed in here).
-  const unavailable = !source && !stream.asking
+  const unavailable = !hasSource && !stream.asking
     ? item.location
       ? `The video is in your ${providerInfo(item.location.provider).name}. Sign in to it on this phone to play it.`
       : 'The video is still uploading from the other device'
@@ -175,7 +191,7 @@ export default function PlayerScreen() {
     <View style={styles.fill}>
       <GestureDetector gesture={surface}>
         <View style={StyleSheet.absoluteFill}>
-          {source ? (
+          {hasSource ? (
             <VideoView player={player} style={{ width, height }} contentFit="contain" nativeControls={false} />
           ) : (
             <Image source={{ uri: viewUri(item) }} style={{ width, height }} contentFit="contain" />
@@ -195,7 +211,7 @@ export default function PlayerScreen() {
           <ActivityIndicator size="large" color="#fff" />
         </View>
       )}
-      {(unavailable || (source && status === 'error')) && (
+      {(unavailable || (hasSource && status === 'error')) && (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
           <Text style={styles.message}>{unavailable ?? 'This video can’t be played right now.'}</Text>
         </View>
@@ -214,7 +230,7 @@ export default function PlayerScreen() {
             <View style={styles.iconButton}>{quality && <Text style={styles.quality}>{quality}</Text>}</View>
           </View>
 
-          {!loading && source && (
+          {!loading && hasSource && (
             <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.center]}>
               <View style={styles.centerRow}>
                 <RoundButton icon="play-back" label={`Back ${SKIP_S} seconds`} onPress={() => skip(-SKIP_S)} />

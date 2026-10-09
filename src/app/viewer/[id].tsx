@@ -25,6 +25,7 @@ import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
 import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
+import { keepOnly, prefetchVideo } from '@/lib/video-prefetch';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const isWeb = Platform.OS === 'web';
@@ -193,6 +194,17 @@ export default function ViewerScreen() {
   const listRef = useRef<FlatList<GalleryItem>>(null);
 
   const current = items[Math.min(index, items.length - 1)];
+
+  // Intent preloading: a video's poster on screen means ▶ is likely next;
+  // its neighbours are a swipe away (those only on Wi-Fi, see video-prefetch).
+  const prev = items[index - 1];
+  const next = items[index + 1];
+  useEffect(() => {
+    keepOnly([current?.id, prev?.id, next?.id].filter((x): x is string => !!x));
+    prefetchVideo(current, 'high');
+    prefetchVideo(next, 'low');
+    prefetchVideo(prev, 'low');
+  }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (items.length === 0) router.back();

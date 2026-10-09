@@ -45,6 +45,7 @@ import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
 import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 import { LiveUpload } from './live-upload';
+import { setPrefetchContext } from './video-prefetch';
 import { registerBackgroundBackup } from './background';
 import { backupService, mediaPicker, onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
 
@@ -175,6 +176,7 @@ const listeners = new Set<() => void>();
 
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
+  if ('cellular' in patch || 'thermal' in patch) setPrefetchContext({ cellular: state.cellular, hot: isHot(state.thermal) });
   listeners.forEach((l) => l());
 }
 

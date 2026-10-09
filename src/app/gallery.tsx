@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,6 +40,7 @@ import {
   importFromGallery,
 } from '@/lib/store';
 import { formatBytes, formatEta, formatRate } from '@/lib/format';
+import { keepOnly, prefetchPhoto, prefetchVideo } from '@/lib/video-prefetch';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { loadDoc, saveDoc } from '@/lib/local-store';
 import { providerInfo } from '@/lib/storage/providers';
@@ -140,6 +142,44 @@ export default function GalleryScreen() {
     },
     [selecting, tab, toggle],
   );
+
+  // Intent preloading: finger on a tile = about to open it.
+  const onPressIn = useCallback(
+    (item: GalleryItem) => {
+      if (selecting) return;
+      if (item.kind === 'video') prefetchVideo(item, 'high');
+      else prefetchPhoto(item);
+    },
+    [selecting],
+  );
+
+  // Scrolling stopped (or the gallery just opened): warm the videos nearest the
+  // middle of the screen. Visibility changes keep coming while scrolling, so
+  // 300 ms after the last one means "stopped here". FlatList needs one stable
+  // callback for its whole life.
+  const [settle] = useState(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+    };
+    const onViewable = ({ viewableItems }: { viewableItems: ViewToken<GalleryItem>[] }) => {
+      cancel();
+      timer = setTimeout(() => {
+        const visible = viewableItems.map((v) => v.item).filter((i): i is GalleryItem => !!i);
+        const middle = (visible.length - 1) / 2;
+        const videos = visible
+          .map((item, i) => ({ item, distance: Math.abs(i - middle) }))
+          .filter((v) => v.item.kind === 'video')
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 2)
+          .map((v) => v.item);
+        keepOnly(videos.map((v) => v.id));
+        videos.forEach((v) => prefetchVideo(v, 'medium'));
+      }, 300);
+    };
+    return { onViewable, cancel };
+  });
+  useEffect(() => settle.cancel, [settle]);
 
   const onLongPress = useCallback(
     (item: GalleryItem) => {
@@ -286,8 +326,7 @@ export default function GalleryScreen() {
             </Pressable>
           ) : !isWeb ? (
             <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Back to camera" style={styles.headerButton}>
-              <Ionicons name="chevron-back" size={26} color={colors.accent} />
-              <Text style={styles.headerAction}>Camera</Text>
+              <Ionicons name="chevron-back" size={28} color={colors.accent} />
             </Pressable>
           ) : (
             <Text style={styles.brand}>Lens</Text>
@@ -317,13 +356,18 @@ export default function GalleryScreen() {
         <View style={[styles.headerSide, { justifyContent: 'flex-end' }]}>
           {isWeb && !selecting && tab === 'mine' && <WebUploader />}
           {canImport && !selecting && tab === 'mine' && (
-            <Pressable onPress={onImport} hitSlop={10} accessibilityLabel="Import from your phone gallery" style={styles.headerButton}>
-              <Ionicons name="images-outline" size={24} color={colors.accent} />
+            <Pressable onPress={onImport} hitSlop={6} accessibilityLabel="Import from your phone gallery" style={styles.headerButton}>
+              <View>
+                <Ionicons name="images-outline" size={24} color={colors.accent} />
+                <View style={styles.plusBadge}>
+                  <Ionicons name="add" size={11} color="#000" />
+                </View>
+              </View>
             </Pressable>
           )}
           {!selecting && items.length > 0 && (
-            <Pressable onPress={() => setSelecting(true)} hitSlop={10} style={styles.headerButton}>
-              <Text style={styles.headerAction}>Select</Text>
+            <Pressable onPress={() => setSelecting(true)} hitSlop={6} accessibilityLabel="Select" style={styles.headerButton}>
+              <Ionicons name="checkmark-circle-outline" size={25} color={colors.accent} />
             </Pressable>
           )}
           {!selecting && (
@@ -351,6 +395,12 @@ export default function GalleryScreen() {
                     ? 'Photos and videos you take with Lens on your iPhone or iPad show up here.'
                     : 'Go back to the camera and take your first shot. It goes straight to the cloud.'}
               </Text>
+              {canImport && tab === 'mine' && (
+                <Pressable onPress={onImport} style={styles.importButton} accessibilityRole="button">
+                  <Ionicons name="images-outline" size={18} color="#000" />
+                  <Text style={styles.importButtonText}>Import from your phone</Text>
+                </Pressable>
+              )}
             </>
           )}
         </View>
@@ -369,10 +419,12 @@ export default function GalleryScreen() {
               showOwner={tab === 'shared'}
               onPress={onPress}
               onLongPress={onLongPress}
+              onPressIn={onPressIn}
             />
           )}
           columnWrapperStyle={{ gap: GAP }}
           contentContainerStyle={{ gap: GAP, paddingBottom: insets.bottom + (selecting ? 90 : 64), width: contentWidth, alignSelf: 'center' }}
+          onViewableItemsChanged={settle.onViewable}
           initialNumToRender={columns * 8}
           windowSize={7}
           refreshControl={
@@ -443,14 +495,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#222',
   },
-  headerSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  headerCenter: { alignItems: 'center' },
-  headerButton: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 6 },
+  // Sides take what their buttons need; the tabs get the rest, so nothing overlaps on narrow phones.
+  headerSide: { flexDirection: 'row', alignItems: 'center', minWidth: 44 },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 40, paddingHorizontal: 4 },
+  plusBadge: {
+    position: 'absolute',
+    right: -5,
+    bottom: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 24,
+    backgroundColor: colors.accent,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  importButtonText: { color: '#000', fontSize: 15, fontWeight: '700' },
   headerAction: { color: colors.accent, fontSize: 17 },
   brand: { color: '#fff', fontSize: 20, fontWeight: '800', paddingHorizontal: 8 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
   tabs: { flexDirection: 'row', backgroundColor: '#1C1C1E', borderRadius: 9, padding: 2 },
-  tab: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 7 },
+  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7 },
   tabActive: { backgroundColor: '#3A3A3C' },
   tabText: { color: '#8E8E93', fontSize: 14, fontWeight: '600' },
   tabTextActive: { color: '#fff' },

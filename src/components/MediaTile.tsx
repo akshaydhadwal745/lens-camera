@@ -15,6 +15,8 @@ type Props = {
   showOwner?: boolean;
   onPress: (item: GalleryItem) => void;
   onLongPress: (item: GalleryItem) => void;
+  /** Finger down: a strong hint it's about to open (preloading starts here). */
+  onPressIn?: (item: GalleryItem) => void;
 };
 
 /** Share of the original already in the cloud (null when nothing is uploading). */
@@ -75,12 +77,13 @@ function SyncBadge({ item }: { item: GalleryItem }) {
   );
 }
 
-export const MediaTile = memo(function MediaTile({ item, size, selecting, selected, showOwner, onPress, onLongPress }: Props) {
+export const MediaTile = memo(function MediaTile({ item, size, selecting, selected, showOwner, onPress, onLongPress, onPressIn }: Props) {
   const uri = displayUri(item);
   return (
     <Pressable
       onPress={() => onPress(item)}
       onLongPress={() => onLongPress(item)}
+      onPressIn={onPressIn ? () => onPressIn(item) : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${item.kind === 'video' ? 'Video' : 'Photo'}${item.ownerName ? ` from ${item.ownerName}` : ''}`}
       accessibilityState={{ selected }}

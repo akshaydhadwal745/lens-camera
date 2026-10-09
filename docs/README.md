@@ -77,6 +77,7 @@ native camera module on each platform), and a web viewer.
 | Upload videos while recording (header held back, re-checked at stop) | Android | ✅ | No | Real app code tested against the live API (`tests/live-upload`) |
 | Video player page (own controls: scrub, ±10 s, double-tap skip, speed, mute, auto-hide) | All | ✅ | No | Replaces native controls that overlapped the viewer bar (S8 test) |
 | Import from phone gallery (user picks; copied one at a time just before upload, copy removed after) | Android | ✅ | No | No storage permission (photo picker) |
+| Intent preloading: videos start instantly (touch, viewer, scroll-stop; max 2 hidden players; data-aware) | Android, iOS | ✅ | No | |
 | Upload progress: camera pill, tile bar, gallery bar (MB, speed, time left), viewer on-phone vs in-cloud | Android, iOS | ✅ | No | Live-upload progress tested (`tests/live-upload`) |
 | Heat guard (pause uploads/previews/overlays when hot) | iOS, Android | ✅ | No | Native module `modules/lens-device` |
 | Smooth streaming of long videos (lazy HLS on Batch Fargate Spot, signed links) | All | ✅ | No | Conversion + playback tested on AWS (`tests/stream`) |

@@ -42,8 +42,9 @@ steady 30 fps. If OpenGL fails on a phone, the plain CameraX preview is used
 **Rotation:** CameraX reports how far the raw sensor image must turn to be
 upright. When the camera writes straight into our SurfaceTexture, some phones
 (e.g. Galaxy S8) already put the sensor rotation into the buffer transform, so
-`GlPreview` rotates only by what's left after the SurfaceTexture matrix
-(otherwise the viewfinder shows sideways). Tap-to-focus keeps the full
+`GlPreview` combines CameraX's rotation with the angle read from the
+SurfaceTexture matrix (on the S8, ignoring it was 90° off and subtracting it
+180° off; adding it is upright). Tap-to-focus keeps the full
 rotation (raw buffer coordinates). The log line `first frame … rotation R (st S)`
 shows both values.
 

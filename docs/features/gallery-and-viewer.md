@@ -11,6 +11,32 @@
 - Pull to refresh.
 - **Select** (or long-press) → Send to friends · Paste edit (when an edit is copied) · Delete (to Trash; see [trash-and-archive.md](trash-and-archive.md)) / Remove.
 
+## Intent preloading (instant video start)
+
+Lens guesses which video you're about to open and buffers its first ~3 s in
+a hidden player; the player page takes that same player, so ▶ starts at once.
+Code: `src/lib/video-prefetch.ts`.
+
+| Signal | Strength | On mobile data |
+|---|---|---|
+| Finger down on a video tile | high | yes |
+| Video poster showing in the viewer | high | yes |
+| Scrolling stopped 300 ms (2 videos nearest the middle), gallery opened | medium | no |
+| Viewer neighbours (one swipe away) | low | no |
+
+- Preloading = ask Lens for the stream link ahead of time (shared with
+  `useStream`, so opening doesn't ask again) + a hidden `createVideoPlayer`
+  with a 3 s buffer. Max **2** hidden players (old phones have few decoders);
+  weakest/oldest dropped first; released after 45 s unused or when you
+  scroll/swipe away.
+- Videos on the phone use no data, so they're always warmed.
+- Nothing when the phone is hot. Cloud video bytes go through a 200 MB disk
+  cache (`useCaching`), so replays and preloaded starts don't download twice.
+- Photos: finger down on a cloud photo (Wi-Fi) starts fetching the original.
+- **Seeking:** jumping to minute 50 of a long video loads only the pieces at
+  minute 50 (HLS 4 s segments; originals use HTTP range requests), never the
+  whole file before it.
+
 ## Import from the phone gallery (Android)
 
 The user chooses what to back up; Lens never scans or uploads the gallery on
