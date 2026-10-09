@@ -10,7 +10,6 @@ import {
   NativeSyntheticEvent,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -18,12 +17,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ZoomableImage } from '@/components/ZoomableImage';
+
 import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
 import { formatDate } from '@/lib/format';
+import { hasEdit, useFullQuality, webCanShowOriginal } from '@/lib/full-view';
+import { useOriginal } from '@/lib/storage/useOriginal';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
-import { useOriginal } from '@/lib/storage/useOriginal';
 import { useStream } from '@/lib/useStream';
 import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
@@ -37,50 +39,37 @@ function PhotoPage({
   height,
   onTap,
   loadOriginal,
+  onZoom,
 }: {
   item: GalleryItem;
   width: number;
   height: number;
   onTap: () => void;
-  /** Fetch the full-quality cloud original (Wi-Fi, or the user tapped HD). */
+  /** Full quality is allowed now (Wi-Fi, this phone's own file, or the user asked: HD / zoom). */
   loadOriginal: boolean;
+  onZoom: (zoomed: boolean) => void;
 }) {
-  // Show the preview instantly; swap in the original when allowed. A local
-  // original (this device) is always used as-is.
-  const preview = viewUri(item);
-  // Lens URL or the user's own storage (with auth headers).
-  const original = useOriginal(item, !item.localUri && loadOriginal);
-  const showOriginal = !item.localUri && loadOriginal && original ? original : null;
-  // iOS ScrollView supports native pinch-to-zoom.
+  // The preview shows instantly. Full quality replaces it when allowed: the
+  // original, or for an edited photo the original rendered with its edit.
+  // (A photo with an edit never shows the unedited original.)
+  const edited = hasEdit(item);
+  const preview = edited ? (item.previewUri ?? item.thumbUri) : viewUri(item);
+  const full = useFullQuality(item, loadOriginal || (!!item.localUri && !isWeb));
   return (
-    <ScrollView
-      style={{ width, height }}
-      contentContainerStyle={{ width, height }}
-      maximumZoomScale={4}
-      minimumZoomScale={1}
-      centerContent
-      showsHorizontalScrollIndicator={false}
-      showsVerticalScrollIndicator={false}
-      bouncesZoom
-    >
-      <Pressable onPress={onTap} style={{ width, height }}>
-        <Image
-          source={showOriginal ?? { uri: preview }}
-          placeholder={showOriginal && preview ? { uri: preview } : undefined}
-          placeholderContentFit="contain"
-          style={{ width, height }}
-          contentFit="contain"
-          cachePolicy="memory-disk"
-          transition={200}
-        />
-      </Pressable>
-    </ScrollView>
+    <ZoomableImage
+      source={full ?? (preview ? { uri: preview } : undefined)}
+      placeholder={full && preview ? { uri: preview } : undefined}
+      width={width}
+      height={height}
+      onTap={onTap}
+      onZoomChange={onZoom}
+    />
   );
 }
 
 function VideoPage({ item, width, height, active }: { item: GalleryItem; width: number; height: number; active: boolean }) {
   const original = useOriginal(item);
-  // Long videos from the cloud: adaptive 540p/1080p streaming once converted.
+  // Long videos from the cloud: adaptive streaming (up to the original's resolution) once converted.
   const stream = useStream(item, active);
   const source = stream.asking ? null : stream.url ? { uri: stream.url } : original;
   const player = useVideoPlayer(source, (p) => {
@@ -181,10 +170,13 @@ export default function ViewerScreen() {
   const [index, setIndex] = useState(initialIndex);
   const [chrome, setChrome] = useState(true);
   const cellular = useStore((s) => s.cellular);
-  // On mobile data, originals load only when the user asks (HD); on Wi-Fi automatically.
-  // The web always shows previews (browsers can't decode HEIC/RAW); "Open original" downloads.
+  // Full quality: automatically on Wi-Fi; on mobile data when the user taps HD
+  // or zooms in (a slow connection keeps the preview until it arrives). The web
+  // shows originals browsers can draw (JPEG/PNG…); HEIC/RAW stay previews there.
   const [hd, setHd] = useState<Set<string>>(new Set());
-  const loadOriginalFor = (item: GalleryItem) => !isWeb && (!cellular || hd.has(item.id));
+  const [zoomed, setZoomed] = useState(false);
+  const loadOriginalFor = (item: GalleryItem) =>
+    (isWeb ? webCanShowOriginal(item) : true) && (!cellular || hd.has(item.id));
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList<GalleryItem>>(null);
 
@@ -257,6 +249,7 @@ export default function ViewerScreen() {
         keyExtractor={(item) => `${item.ownerId ?? 'me'}-${item.id}`}
         horizontal
         pagingEnabled
+        scrollEnabled={!zoomed}
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={Math.min(index, items.length - 1)}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
@@ -273,6 +266,11 @@ export default function ViewerScreen() {
               height={height}
               onTap={() => setChrome((c) => !c)}
               loadOriginal={loadOriginalFor(item)}
+              onZoom={(z) => {
+                setZoomed(z);
+                // Zooming in means the detail matters: fetch full quality.
+                if (z) setHd((prev) => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
+              }}
             />
           ) : (
             <VideoPage item={item} width={width} height={height} active={i === index} />
@@ -290,7 +288,7 @@ export default function ViewerScreen() {
               <Text style={styles.date}>{formatDate(current.createdAt)}</Text>
               <SyncLine item={current} />
             </View>
-            {current.kind === 'photo' && !current.localUri && (current.remoteUrl || current.location) && !loadOriginalFor(current) && !isWeb ? (
+            {current.kind === 'photo' && !current.localUri && (current.remoteUrl || current.location) && !loadOriginalFor(current) && !(isWeb && !webCanShowOriginal(current)) ? (
               <Pressable
                 onPress={() => setHd((prev) => new Set(prev).add(current.id))}
                 style={styles.barButton}

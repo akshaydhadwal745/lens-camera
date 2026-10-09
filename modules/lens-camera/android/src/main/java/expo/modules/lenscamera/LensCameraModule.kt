@@ -68,6 +68,8 @@ class LensCameraModule : Module() {
       Prop("tint") { view: LensCameraView, value: Double -> view.config = view.config.copy(tint = value) }
       Prop("focusMode") { view: LensCameraView, value: String -> view.config = view.config.copy(focusMode = value) }
       Prop("lensPosition") { view: LensCameraView, value: Double -> view.config = view.config.copy(lensPosition = value) }
+      Prop("raw") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(raw = value) }
+      Prop("hdrPhoto") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(hdrPhoto = value) }
       Prop("analysis") { view: LensCameraView, value: AnalysisProps ->
         view.analysis = AnalysisOptions(value.peaking, value.zebra, value.zebraLevel, value.falseColor, value.histogram)
       }

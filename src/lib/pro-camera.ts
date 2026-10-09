@@ -14,6 +14,8 @@ export type ProSettings = {
   flash: 'off' | 'auto' | 'on';
   torch: boolean;
   raw: boolean;
+  /** Android 14+: Ultra HDR photos (more range on HDR screens, normal JPEG elsewhere). */
+  hdrPhoto: boolean;
   appleLog: boolean;
   videoResolution: '4k' | '1080p';
   timer: 0 | 3 | 10;
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   flash: 'off',
   torch: false,
   raw: false,
+  hdrPhoto: true,
   appleLog: false,
   videoResolution: '4k',
   timer: 0,
@@ -94,6 +97,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
 export const PRESET_KEYS = [
   'mode',
   'raw',
+  'hdrPhoto',
   'appleLog',
   'videoResolution',
   'hdrVideo',

@@ -1,4 +1,4 @@
-# Lens video transcoder: makes HLS (fMP4) 540p + 1080p from an original in S3.
+# Lens video transcoder: makes HLS (fMP4) from 540p up to the original's resolution (4K) from an original in S3.
 # Runs on AWS Batch (Fargate Spot). Static ffmpeg + AWS CLI on Amazon Linux.
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 

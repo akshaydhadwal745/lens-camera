@@ -80,7 +80,9 @@ export function makeDerivatives(entry: LocalEntry): Promise<Pick<LocalEntry, 'th
   const job = (async () => {
     const stamp = Date.now().toString(36);
     const edited = !isNeutral(entry.edit) && isImagingAvailable;
-    if (edited && entry.kind === 'photo') return renderEdited(uriFor(entry), entry.edit!, entry, stamp);
+    // RAW (DNG): decoded by the imaging engine, the general image loader can't on every phone.
+    const raw = entry.kind === 'photo' && /\.dng$/i.test(entry.fileName) && isImagingAvailable;
+    if ((edited || raw) && entry.kind === 'photo') return renderEdited(uriFor(entry), entry.edit ?? {}, entry, stamp);
 
     const source: Source = entry.kind === 'video' ? await posterFrame(entry) : uriFor(entry);
     const preview = await render(source, PREVIEW_PX);

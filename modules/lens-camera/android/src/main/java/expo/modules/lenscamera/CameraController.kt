@@ -72,12 +72,17 @@ data class CameraConfig(
   val tint: Double = 0.0,
   val focusMode: String = "auto",
   val lensPosition: Double = 0.5,
+  /** Photo mode: save RAW (DNG) where the camera supports it. */
+  val raw: Boolean = false,
+  /** Photo mode: Ultra HDR JPEG (Android 14+, where supported). */
+  val hdrPhoto: Boolean = true,
 ) {
   val isVideo get() = mode == "video"
   val isNight get() = mode == "night"
 
   fun needsRebind(old: CameraConfig) =
     position != old.position || lens != old.lens || isVideo != old.isVideo || isNight != old.isNight ||
+      mode != old.mode || raw != old.raw || hdrPhoto != old.hdrPhoto ||
       (isVideo && (videoResolution != old.videoResolution || hdrVideo != old.hdrVideo || fps != old.fps || stabilization != old.stabilization))
 }
 
@@ -111,6 +116,8 @@ class CameraController(private val context: Context) {
   private var lens: LensOption? = null
   private var preview: Preview? = null
   private var imageCapture: ImageCapture? = null
+  /** Output format the photo use case was bound with (JPEG, Ultra HDR or RAW). */
+  private var photoFormat = ImageCapture.OUTPUT_FORMAT_JPEG
   private var videoCapture: VideoCapture<Recorder>? = null
   private var recording: Recording? = null
   private var config = CameraConfig()
@@ -120,7 +127,13 @@ class CameraController(private val context: Context) {
   /** What actually got bound after fallbacks (e.g. HDR dropped). */
   private var bound = BoundVideo()
 
-  private data class BoundVideo(val hdr: Boolean = false, val fps: Int = 30, val stabilized: Boolean = false)
+  private data class BoundVideo(
+    val hdr: Boolean = false,
+    val fps: Int = 30,
+    val stabilized: Boolean = false,
+    /** Photo fallback: plain JPEG if the phone refuses Ultra HDR / RAW. */
+    val plainPhoto: Boolean = false,
+  )
 
   // Latest per-frame metadata from the camera, for the HUD and manual WB anchoring.
   @Volatile private var lastIso: Int? = null
@@ -234,7 +247,7 @@ class CameraController(private val context: Context) {
         BoundVideo(false, 30, false),
       ).distinct()
     } else {
-      listOf(BoundVideo())
+      listOf(BoundVideo(), BoundVideo(plainPhoto = true))
     }
     var lastError: Exception? = null
     val baseSelector = cam.info.cameraSelector
@@ -292,9 +305,13 @@ class CameraController(private val context: Context) {
       videoCapture = builder.build().also { group.addUseCase(it) }
       imageCapture = null
     } else {
+      photoFormat = if (video.plainPhoto) ImageCapture.OUTPUT_FORMAT_JPEG else choosePhotoFormat(cam)
       imageCapture = ImageCapture.Builder()
         // Night bursts need quick successive shots; everything else, best quality.
         .setCaptureMode(if (config.isNight && !nightExtension) ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+        // 95 in every mode (CameraX would use 85 for quick captures, e.g. Night frames).
+        .setJpegQuality(95)
+        .setOutputFormat(photoFormat)
         .setResolutionSelector(
           ResolutionSelector.Builder()
             .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
@@ -307,6 +324,24 @@ class CameraController(private val context: Context) {
       videoCapture = null
     }
     return group.build()
+  }
+
+  private fun photoFormats(cam: CameraFacts): Set<Int> =
+    runCatching { ImageCapture.getImageCaptureCapabilities(cam.info).supportedOutputFormats }.getOrDefault(emptySet())
+
+  /**
+   * RAW (DNG) when asked for in Photo mode; otherwise Ultra HDR where the phone
+   * supports it (more highlight/shadow range on HDR screens, a normal JPEG
+   * everywhere else). Night and Portrait stay plain JPEG: their processing
+   * (frame merge, embedded mask) works on standard JPEGs.
+   */
+  private fun choosePhotoFormat(cam: CameraFacts): Int {
+    val formats = photoFormats(cam)
+    return when {
+      config.mode == "photo" && config.raw && ImageCapture.OUTPUT_FORMAT_RAW in formats -> ImageCapture.OUTPUT_FORMAT_RAW
+      config.mode == "photo" && config.hdrPhoto && ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR in formats -> ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR
+      else -> ImageCapture.OUTPUT_FORMAT_JPEG
+    }
   }
 
   /** A steady frame rate (30 fps) so auto exposure doesn't slow the preview down. */
@@ -454,7 +489,8 @@ class CameraController(private val context: Context) {
       "manualExposure" to f.canManualExposure,
       "manualFocus" to f.canManualFocus,
       "manualWhiteBalance" to f.canManualWhiteBalance,
-      "raw" to false,
+      "raw" to (ImageCapture.OUTPUT_FORMAT_RAW in photoFormats(f)),
+      "ultraHdr" to (ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR in photoFormats(f)),
       "proRaw" to false,
       "appleLog" to false,
       "hdrVideo" to (videoCaps?.supportedDynamicRanges?.contains(DynamicRange.HLG_10_BIT) == true),
@@ -524,7 +560,8 @@ class CameraController(private val context: Context) {
       "auto" -> ImageCapture.FLASH_MODE_AUTO
       else -> ImageCapture.FLASH_MODE_OFF
     }
-    val file = File(outputDir(), "lens-${UUID.randomUUID()}.jpg")
+    val raw = photoFormat == ImageCapture.OUTPUT_FORMAT_RAW
+    val file = File(outputDir(), "lens-${UUID.randomUUID()}.${if (raw) "dng" else "jpg"}")
     capture.takePicture(
       ImageCapture.OutputFileOptions.Builder(file).build(),
       io,
@@ -532,8 +569,8 @@ class CameraController(private val context: Context) {
         override fun onImageSaved(output: ImageCapture.OutputFileResults) {
           val (w, h) = uprightSize(file)
           // Portrait: find the person and keep the mask inside the photo.
-          val depth = config.mode == "portrait" && Portrait.addMask(file)
-          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to false, "depth" to depth)))
+          val depth = !raw && config.mode == "portrait" && Portrait.addMask(file)
+          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to raw, "depth" to depth)))
         }
 
         override fun onError(exception: ImageCaptureException) {
@@ -622,12 +659,19 @@ class CameraController(private val context: Context) {
 
   private fun outputDir() = File(context.cacheDir, "LensCamera").apply { mkdirs() }
 
-  /** Width/height as displayed (EXIF rotation applied). */
+  /** Width/height as displayed (EXIF rotation applied). DNGs are sized from their tags. */
   private fun uprightSize(file: File): Pair<Int, Int> {
     val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, opts)
-    val rotation = runCatching { ExifInterface(file).rotationDegrees }.getOrDefault(0)
-    return if (rotation % 180 == 0) opts.outWidth to opts.outHeight else opts.outHeight to opts.outWidth
+    val exif = runCatching { ExifInterface(file) }.getOrNull()
+    var w = opts.outWidth
+    var h = opts.outHeight
+    if (w <= 0 || h <= 0) {
+      w = exif?.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, 0) ?: 0
+      h = exif?.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, 0) ?: 0
+    }
+    val rotation = exif?.rotationDegrees ?: 0
+    return if (rotation % 180 == 0) w to h else h to w
   }
 
   companion object {

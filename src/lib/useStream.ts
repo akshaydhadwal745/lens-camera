@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import type { GalleryItem } from './types';
 
-/** Long or big videos get adaptive streaming (540p/1080p) when played from the cloud. */
+/** Long or big videos get adaptive streaming (540p up to the original's resolution) when played from the cloud. */
 const LONG_SECONDS = 60;
 const BIG_BYTES = 100 * 1024 * 1024;
 

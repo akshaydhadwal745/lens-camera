@@ -64,9 +64,10 @@ Works with the front and back cameras. People only; pets and objects aren't dete
 
 - The 13 looks are colour lookup tables (33³). Same names and recipe as iOS.
   Exact iOS-matching tables are baked on the macOS CI runner
-  (`modules/lens-camera/tools/bake-looks/main.swift`, artifact `looks`). When they
-  are copied to `android/src/main/assets/looks/`, Android uses them; until
-  then Android uses its own definition (`LookLut.kt`), which is close but not identical.
+  (`modules/lens-camera/tools/bake-looks/main.swift`, artifact `looks`) and
+  bundled in `android/src/main/assets/looks/` (done 2026-10-09, 324 KB), so
+  looks match iOS exactly. `LookLut.kt` is the fallback if an asset is missing.
+  Re-copy the artifact whenever `Looks.swift` changes.
 - Editor: looks + intensity, Auto, exposure, contrast, highlights/shadows
   (by region, not flat), warmth/tint, saturation, vibrance, sharpness,
   vignette, grain, crop/rotate/flip/straighten, portrait blur.
@@ -77,9 +78,20 @@ Works with the front and back cameras. People only; pets and objects aren't dete
 - Video looks: re-encoded with Media3 Transformer (hardware codecs, audio
   copied). HDR videos are tone-mapped to normal video first.
 
+## Photo quality (Android)
+
+- **JPEG quality 95** in every mode (CameraX would use 85 for quick captures).
+- **Ultra HDR** (Android 14+ phones that support it, on by default, **HDR**
+  button in Photo mode): a normal JPEG plus an HDR "gain map", so highlights
+  and shadows show their full range on HDR screens. Other screens see a normal JPEG.
+- **RAW (DNG)** on cameras that support it (**RAW** button in Photo mode).
+  The unprocessed sensor data, for editing elsewhere; previews are made by Lens's
+  imaging engine.
+- Night is merged at **full resolution** on every phone.
+- If a phone refuses Ultra HDR or RAW when the camera starts, it falls back to plain JPEG.
+
 ## Not yet on Android
 
-- RAW (DNG) capture: the RAW button is hidden for now.
 - The Kelvin readout in auto mode is an estimate; the dial itself is anchored
   on the phone's own auto white balance, so switching to manual doesn't jump.
 

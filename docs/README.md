@@ -17,7 +17,7 @@ native camera module on each platform), and a web viewer.
 | Delete, Trash & Archive | [features/trash-and-archive.md](features/trash-and-archive.md) |
 | Storage: Lens + your own (Drive, OneDrive, Dropbox, Box, S3, WebDAV) | [features/own-storage.md](features/own-storage.md) |
 | Accounts: sign in with email code / Google, devices, log out | [features/accounts.md](features/accounts.md) |
-| Smooth video streaming (HLS 540p/1080p, made on demand) | [features/video-streaming.md](features/video-streaming.md) |
+| Smooth video streaming (HLS up to 4K, adaptive, made on demand) | [features/video-streaming.md](features/video-streaming.md) |
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 
@@ -77,7 +77,10 @@ native camera module on each platform), and a web viewer.
 | Pro camera falls back to the basic camera if it can't start | Android | ✅ | No | |
 | 32-bit APK (`Lens-32bit.apk`) for Android Go / older phones | Android | ✅ | No | CI builds both |
 | Heat level on Android 7–9 (battery temperature) | Android | ✅ | No | Android 10+ uses the thermal API |
-| RAW (DNG) capture | Android | ❌ | — | Next |
+| RAW (DNG) capture | Android | ✅ | No | Cameras with RAW support; previews via the imaging engine |
+| Ultra HDR photos (gain map) + JPEG quality 95 | Android | ✅ | No | Android 14+ where supported; HDR button |
+| Full-quality viewer: zoom (all platforms), HD on zoom, edited photos rendered at 4096 px, web shows JPEG originals | All | ✅ | No | Never shows below the original's quality once allowed |
+| Streaming up to 4K + 60 fps bitrates + HDR tone-mapping | All | ✅ | No | Tested locally; needs a deploy |
 | Guest 5 GB / signed-in 100 GB, device fingerprint (reinstall keeps the same guest) | iOS, Android | ✅ | No | Server tested (e2e) |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |

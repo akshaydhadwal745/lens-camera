@@ -91,7 +91,7 @@ async function jobAlive(item: MediaRecord): Promise<boolean> {
 
 /**
  * POST /v1/stream {mediaId, ownerId?}: how to play a video on this device.
- *   ready     → { url } HLS master playlist (adaptive 540p/1080p)
+ *   ready     → { url } HLS master playlist (adaptive, 540p up to the original's resolution)
  *   preparing → play the original meanwhile; conversion has started
  *   original  → short/small video: just play the original
  */

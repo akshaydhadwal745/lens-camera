@@ -27,11 +27,26 @@ before; the server can't fetch those originals.
 HLS with fMP4 segments of 4 s (keyframe every 2 s), H.264 High + AAC 128k
 (plays on every Android phone):
 
-| Source (short side) | Versions |
+Up to the original's own resolution, never upscaled. The player picks the
+best version the connection carries; a slow connection drops to a lower one
+instead of stalling, and goes back up when it can.
+
+| Source (short side) | Versions (30 fps bitrates) |
 |---|---|
-| ≥ 1000 px (1080p, 4K…) | 540p (1.5 Mbps) + 1080p (5 Mbps) |
+| ≥ 2000 px (4K) | 540p (1.5) + 1080p (6) + 1440p (10) + 2160p (20 Mbps) |
+| 1400–1999 px (1440p) | 540p + 1080p + 1440p |
+| 1000–1399 px (1080p) | 540p + 1080p |
 | 540–999 px (720p…) | 540p |
-| < 540 px | its own size (never upscaled) |
+| < 540 px | its own size |
+
+- **50/60 fps** videos keep their frame rate, with 1.5× the bitrate.
+- **HDR** recordings (HLG/PQ) are tone-mapped to normal video for streaming,
+  so they look right on every screen instead of washed out. The original keeps
+  its HDR (download / Save to Photos).
+- Short clips (< 60 s and < 100 MB) aren't converted at all: the original plays.
+- Changed 2026-10-09 (was 540p + 1080p only). Needs a deploy to take effect;
+  tested locally on a 4K 60 fps HLG clip (all 4 versions made, 40 s for 2 s
+  of 4K on this PC without a GPU).
 
 Portrait videos stay portrait. Stored under `h/{owner}/{id}/`, kept **90 days**
 (S3 lifecycle), then re-made the next time someone plays the video. Deleting

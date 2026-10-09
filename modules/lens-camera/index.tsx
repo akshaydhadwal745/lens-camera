@@ -37,6 +37,8 @@ export type Capabilities = {
   modes?: CameraMode[];
   /** Android: what the hardware allows. pro = manual sensor + white balance, basic = auto only. */
   tier?: 'pro' | 'standard' | 'basic';
+  /** Android 14+: Ultra HDR photos (JPEG with an HDR gain map). */
+  ultraHdr?: boolean;
 };
 
 export type CameraStats = {
@@ -90,6 +92,10 @@ export type LensCameraProps = ViewProps & {
   tint: number;
   focusMode: 'auto' | 'manual';
   lensPosition: number;
+  /** Android: bind the camera for RAW (DNG) photos (iOS chooses per shot in takePhoto). */
+  raw?: boolean;
+  /** Android: Ultra HDR photos where supported. */
+  hdrPhoto?: boolean;
   analysis: AnalysisSettings;
   onReady?: (e: NativeSyntheticEvent<Capabilities>) => void;
   onStats?: (e: NativeSyntheticEvent<CameraStats>) => void;

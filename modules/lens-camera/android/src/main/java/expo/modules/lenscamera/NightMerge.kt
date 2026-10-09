@@ -41,8 +41,8 @@ object NightMerge {
     BitmapFactory.decodeFile(frames[0].path, bounds)
     val w = bounds.outWidth
     val h = bounds.outHeight
-    // Very large frames (50 MP+) are merged at half size: noise matters more than pixels at night.
-    val sample = if (w.toLong() * h > 24_000_000L) 2 else 1
+    // Always full resolution: the merge works in bands, so memory stays small at any size.
+    val sample = 1
     val ow = w / sample
     val oh = h / sample
 

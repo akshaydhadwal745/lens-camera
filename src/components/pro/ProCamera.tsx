@@ -409,6 +409,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             tint={s.tint}
             focusMode={s.focusMode}
             lensPosition={s.lensPosition}
+            raw={s.mode === 'photo' && s.raw && !!caps?.raw}
+            hdrPhoto={s.hdrPhoto}
             analysis={{
               // Heat guard: frame analysis overlays switch off while the phone is hot.
               peaking: peakingOn && !hot,
@@ -485,6 +487,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             )}
             {s.mode === 'photo' && caps?.raw && (
               <TopButton label={caps.proRaw ? 'ProRAW' : 'RAW'} active={s.raw} onPress={() => update({ raw: !s.raw })} />
+            )}
+            {s.mode === 'photo' && caps?.ultraHdr && !s.raw && (
+              <TopButton label="HDR" active={s.hdrPhoto} onPress={() => update({ hdrPhoto: !s.hdrPhoto })} />
             )}
             {s.mode === 'video' && (
               <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
