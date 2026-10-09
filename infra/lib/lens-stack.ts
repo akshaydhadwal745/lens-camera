@@ -152,8 +152,7 @@ function handler(event) {
     // Sign-in codes are emailed from our own domain (cdk.json context
     // `codeDomain`, sender `no-reply@<domain>`). SES verifies the domain via 3
     // DKIM CNAME records (printed as outputs) that go into the domain's DNS.
-    // SES starts in sandbox: recipients must be verified too until production
-    // access is granted.
+    // SES in this account/region (ap-south-1) has production access (67k/day).
     const codeDomain = this.node.tryGetContext('codeDomain') as string | undefined;
     const codeSender = codeDomain ? `no-reply@${codeDomain}` : undefined;
     const senderIdentity = codeDomain

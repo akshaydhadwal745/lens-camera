@@ -56,7 +56,7 @@ lose your photos". Settings → Account has the same prompt.
 - `cdk.json` context `codeDomain` = your domain. Deploy prints three
   `CodeDomainDkim…` outputs: add them as CNAME records in the domain's DNS.
   SES verifies the domain within minutes to hours.
-- SES starts in **sandbox**: codes only reach verified addresses. Request
-  production access (SES console → Account dashboard) before launch.
+- SES in **ap-south-1** (the API's region) already has **production access**
+  on this account (67,200 emails/day), so codes reach any address.
 - Google sign-in uses the Google client registered for Drive; while the
   consent screen is in Testing, only listed test users can use it.
