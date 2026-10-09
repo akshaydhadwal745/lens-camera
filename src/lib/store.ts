@@ -554,6 +554,26 @@ export async function logOut() {
   void ensureCloudIdentity();
 }
 
+/**
+ * Deletes the account: everything in the cloud (the server finishes in the
+ * background) and Lens's own copies on this phone. Afterwards the phone starts
+ * as a new, empty guest; the website goes back to the home page.
+ */
+export async function deleteAccount() {
+  await api.deleteAccount();
+  if (!isWeb) {
+    state.entries.forEach(deleteFileFor);
+    setEntries([]);
+  }
+  await saveIdentity(null);
+  applyIdentity(null);
+  saveRemoteCache([]);
+  set({ remote: [], shared: [], trash: [], storage: null, usage: null });
+  if (isWeb) return;
+  setSignedOut(false);
+  void ensureCloudIdentity();
+}
+
 /** Web: sign this browser in as the identity that generated `code`. */
 export async function linkWithCode(code: string) {
   const identity = await api.claimPairing(code);

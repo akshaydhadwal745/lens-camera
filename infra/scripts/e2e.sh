@@ -319,4 +319,30 @@ wcall POST /web/auth/email/start -d "{\"email\":\"$MAILW\"}" >/dev/null
 [[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"$(otp "$MAILW")\"}" | j .email) == "$MAILW" ]] && ok "web sign-up creates an account"
 [[ $(wcall GET /me | j .quotaBytes) == $((100*1024*1024*1024)) ]] && ok "web account gets 100 GB"
 [[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"000000\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "used code refused"
+# --- delete account (Play requirement): everything goes, the email can start fresh ---
+D=$(curl -sS -X POST "$API/devices"); TD=$(echo "$D" | j .token); ID_D=$(echo "$D" | j .id)
+MAILD="d$(date +%s%N)@e2e.lens.invalid"
+call POST /auth/email/start "$TD" -d "{\"email\":\"$MAILD\"}" >/dev/null
+call POST /auth/email/verify "$TD" -d "{\"email\":\"$MAILD\",\"code\":\"$(otp "$MAILD")\"}" >/dev/null
+IDD="$(node -p "Date.now().toString(36).padStart(8,'0')")-delacct"
+head -c 200000 /dev/urandom > "$TMP/del.jpg"; DMD5=$(md5b64 "$TMP/del.jpg")
+R=$(call POST /media "$TD" -d "{\"id\":\"$IDD\",\"contentType\":\"image/jpeg\",\"size\":200000,\"kind\":\"photo\",\"md5\":\"$DMD5\"}")
+curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $DMD5" --data-binary @"$TMP/del.jpg" -o /dev/null
+call POST "/media/$IDD/complete" "$TD" >/dev/null
+call POST /shares "$TD" -d "{\"mediaIds\":[\"$IDD\"],\"to\":[\"$IB\"]}" >/dev/null
+[[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == true ]] && ok "account to delete has a photo shared with B"
+[[ $(call DELETE /account "$TD" -o /dev/null -w '%{http_code}') == 400 ]] && ok "deletion needs an explicit confirmation"
+[[ $(call DELETE /account "$TD" -d '{"confirm":"DELETE"}' -o /dev/null -w '%{http_code}') == 202 ]] && ok "account deletion accepted"
+[[ $(call GET /me "$TD" -o /dev/null -w '%{http_code}') == 401 ]] && ok "its sessions stop working at once"
+for _ in $(seq 1 30); do
+  GONE=$(aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"D#$ID_D\"},\"sk\":{\"S\":\"PROFILE\"}}" --query Item.pk.S --output text)
+  [[ "$GONE" == None ]] && break; sleep 2
+done
+[[ "$GONE" == None ]] && ok "account removed in the background" || fail "account still there"
+[[ $(vcount "m/$ID_D/") == 0 && $(vcount "d/$ID_D/") == 0 ]] && ok "every stored file and version deleted"
+[[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == false ]] && ok "friends lose access to what it shared"
+N=$(curl -sS -X POST "$API/devices"); TN=$(echo "$N" | j .token)
+call POST /auth/email/start "$TN" -d "{\"email\":\"$MAILD\"}" >/dev/null
+R=$(call POST /auth/email/verify "$TN" -d "{\"email\":\"$MAILD\",\"code\":\"$(otp "$MAILD")\"}")
+[[ $(echo "$R" | j .id) != "$ID_D" && $(echo "$R" | j .moved) == 0 ]] && ok "the same email starts a fresh, empty account"
 echo "ALL PASSED"

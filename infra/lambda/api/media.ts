@@ -51,6 +51,10 @@ const CONTENT_TYPES: Record<string, { ext: string; kind: 'photo' | 'video' }> = 
   'image/jpeg': { ext: 'jpg', kind: 'photo' },
   'image/heic': { ext: 'heic', kind: 'photo' },
   'image/png': { ext: 'png', kind: 'photo' },
+  // Common on computers (website uploads); stored as-is like every original.
+  'image/webp': { ext: 'webp', kind: 'photo' },
+  'image/heif': { ext: 'heif', kind: 'photo' },
+  'image/avif': { ext: 'avif', kind: 'photo' },
   'image/x-adobe-dng': { ext: 'dng', kind: 'photo' },
   'video/quicktime': { ext: 'mov', kind: 'video' },
   'video/mp4': { ext: 'mp4', kind: 'video' },

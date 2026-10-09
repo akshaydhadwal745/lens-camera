@@ -24,6 +24,7 @@ import { removeShared, share, sharedWithMe } from './shares';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { requestStream } from './stream';
+import { requestAccountDeletion } from './account';
 import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth, webStartGoogle } from './oauth';
 import {
   continueSignIn,
@@ -64,6 +65,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     const identity = await authenticate(req);
 
     if (route === 'GET /me') return me(identity);
+    if (route === 'DELETE /account') return await requestAccountDeletion(identity, req);
     if (route === 'POST /auth/email/start') return await startEmail(identity, req);
     if (route === 'POST /auth/email/verify') return await verifyEmail(identity, req);
     if (route === 'POST /auth/google') return await verifyGoogle(identity, req);

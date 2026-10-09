@@ -80,6 +80,8 @@ jobs:
         run: |
           TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          # Which identity GitHub vouches for (not secret; helps if AWS refuses it).
+          echo "OIDC subject: $(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq -r .sub)"
           CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE" --role-session-name "gh-web-$GITHUB_RUN_ID" \
             --web-identity-token "$TOKEN" --duration-seconds 3600 --query Credentials --output json)
           for k in AccessKeyId:AWS_ACCESS_KEY_ID SecretAccessKey:AWS_SECRET_ACCESS_KEY SessionToken:AWS_SESSION_TOKEN; do

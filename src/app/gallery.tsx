@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isImagingAvailable } from '../../modules/lens-camera';
 import { MediaTile } from '@/components/MediaTile';
+import { WebUploader } from '@/components/WebUploader';
 import {
   pasteEdit,
   refreshRemote,
@@ -255,6 +256,7 @@ export default function GalleryScreen() {
         </View>
 
         <View style={[styles.headerSide, { justifyContent: 'flex-end' }]}>
+          {isWeb && !selecting && tab === 'mine' && <WebUploader />}
           {!selecting && items.length > 0 && (
             <Pressable onPress={() => setSelecting(true)} hitSlop={10} style={styles.headerButton}>
               <Text style={styles.headerAction}>Select</Text>

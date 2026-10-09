@@ -62,7 +62,7 @@ async function hasShares(ownerId: string, id: string): Promise<boolean> {
   return !!result.Items?.length;
 }
 
-async function deleteShares(ownerId: string, id: string) {
+export async function deleteShares(ownerId: string, id: string) {
   const shares = await ddb.send(
     new QueryCommand({
       TableName: env.table,
@@ -79,7 +79,7 @@ async function deleteShares(ownerId: string, id: string) {
 }
 
 /** Deletes every S3 version (and delete marker) under a prefix. */
-async function deleteAllVersions(prefix: string) {
+export async function deleteAllVersions(prefix: string) {
   let keyMarker: string | undefined;
   let versionMarker: string | undefined;
   do {

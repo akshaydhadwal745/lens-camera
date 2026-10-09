@@ -20,6 +20,7 @@ native camera module on each platform), and a web viewer.
 | Smooth video streaming (HLS up to 4K, adaptive, made on demand) | [features/video-streaming.md](features/video-streaming.md) |
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
+| Website + web app (lens.instagrowapp.com): SEO site EN/HI, QR/email/Google sign-in, upload, sync, delete account | [features/website.md](features/website.md) |
 
 ## Engineering
 
@@ -31,6 +32,7 @@ native camera module on each platform), and a web viewer.
 | Registering storage providers (Google, Dropbox, Microsoft, Box) | [setup/storage-providers.md](setup/storage-providers.md) |
 | Design: own storage + Lens tiers | [design/own-storage.md](design/own-storage.md) |
 | Design: Android pro camera, looks, editor, Night, Portrait | [design/android-camera.md](design/android-camera.md) |
+| Design: website + web app | [design/website.md](design/website.md) |
 
 ## Feature status
 
@@ -84,4 +86,7 @@ native camera module on each platform), and a web viewer.
 | Guest 5 GB / signed-in 100 GB, device fingerprint (reinstall keeps the same guest) | iOS, Android | ✅ | No | Server tested (e2e) |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
-| Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |
+| Website: marketing site (EN + HI, 44 pages, JSON-LD, sitemap, Lighthouse 100s) | Web | ✅ | ✅ (Lighthouse, headless Chrome) | On the CloudFront address until the domain is connected |
+| Web sign-in: QR from phone (approve/deny, city), email code, Google; HttpOnly cookie | Web, iOS, Android | ✅ | Server ✅ (e2e) | Phone scanner + App Link not device-tested |
+| Web app under /app: upload from computer, automatic sync | Web | ✅ | No | Replaces the 8-character link code |
+| Delete account (app + web), everything removed in the background | All | ✅ | Server ✅ (e2e) | Google Play requirement |

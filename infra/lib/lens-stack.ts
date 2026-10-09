@@ -366,6 +366,17 @@ function handler(event) {
       targets: [new targets.LambdaFunction(maintenance)],
     });
 
+    // Account deletion: the API hands off to Maintenance, which may continue itself.
+    api.addEnvironment('MAINTENANCE_FUNCTION', maintenance.functionName);
+    maintenance.grantInvoke(api);
+    maintenance.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['lambda:InvokeFunction'],
+        // By name pattern: referencing its own ARN would be a dependency cycle.
+        resources: [`arn:aws:lambda:${this.region}:${this.account}:function:Lens-Maintenance*`],
+      }),
+    );
+
     for (const fn of [api, maintenance]) {
       table.grantReadWriteData(fn);
       mediaBucket.grantReadWrite(fn); // presigned PUT/multipart, Head, Delete, tagging, versions
@@ -472,7 +483,8 @@ function handler(event) {
       maxSessionDuration: Duration.hours(1),
       assumedBy: new iam.WebIdentityPrincipal(github.openIdConnectProviderArn, {
         StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:akshaydhadwal745/lens-camera:ref:refs/heads/main' },
+        // Workflows of this repository only (fork pull requests get no OIDC token).
+        StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:akshaydhadwal745/lens-camera:*' },
       }),
     });
     webBucket.grantReadWrite(webDeployRole);

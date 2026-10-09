@@ -12,6 +12,7 @@ import { api, Session } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
+  deleteAccount,
   freeUpSpace,
   guardSpace,
   logOut,
@@ -160,6 +161,37 @@ function AccountSection() {
       <Pressable style={styles.rowButton} onPress={logOutHere} disabled={busy}>
         {busy ? <ActivityIndicator color={colors.danger} /> : <Ionicons name="log-out-outline" size={18} color={colors.danger} />}
         <Text style={[styles.rowButtonText, { color: colors.danger }]}>Log out</Text>
+      </Pressable>
+    </Section>
+  );
+}
+
+/** Delete the account and everything in it (Google Play requirement; also on the website). */
+function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    const first = await confirmDestructive(
+      'Delete your account?',
+      'All your photos and videos in Lens (including Trash and Archive), shares, devices and sign-ins are deleted for good. Photos that are only inside Lens on this phone are removed too: save any you want to keep first. Files in your own Google Drive, Dropbox etc. stay there.',
+      'Continue',
+    );
+    if (!first || !(await confirmDestructive('This can’t be undone', 'Delete the account and all its data now?', 'Delete account'))) return;
+    setBusy(true);
+    try {
+      await deleteAccount();
+      notify('Account deleted', 'Everything is being removed. It can take a few minutes for large libraries.');
+      onDeleted();
+    } catch (error) {
+      notify('Could not delete the account', errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Section title="Delete account" footer="Permanently deletes your Lens account and all its data. lens.instagrowapp.com/delete-account explains exactly what is removed.">
+      <Pressable style={styles.rowButton} onPress={run} disabled={busy} accessibilityRole="button">
+        {busy ? <ActivityIndicator color={colors.danger} /> : <Ionicons name="trash-outline" size={18} color={colors.danger} />}
+        <Text style={[styles.rowButtonText, { color: colors.danger }]}>Delete account and data</Text>
       </Pressable>
     </Section>
   );
@@ -442,6 +474,8 @@ export default function SettingsScreen() {
             </Pressable>
           </Section>
         )}
+
+        {identity && <DeleteAccountSection onDeleted={() => (isWeb ? window.location.replace('/') : router.replace('/'))} />}
       </ScrollView>
     </View>
   );

@@ -230,8 +230,13 @@ async function linkLogins(accountId: string, logins: { kind: LoginKind; value: s
     new UpdateCommand({
       TableName: env.table,
       Key: profileKey(accountId),
-      UpdateExpression: `${email ? 'SET email = if_not_exists(email, :e) ' : ''}ADD logins :l`,
-      ExpressionAttributeValues: { ...(email ? { ':e': email } : {}), ':l': new Set(logins.map((l) => l.kind)) },
+      // loginKeys: exactly which login records point here (to unlink them on account deletion).
+      UpdateExpression: `${email ? 'SET email = if_not_exists(email, :e) ' : ''}ADD logins :l, loginKeys :k`,
+      ExpressionAttributeValues: {
+        ...(email ? { ':e': email } : {}),
+        ':l': new Set(logins.map((l) => l.kind)),
+        ':k': new Set(logins.map((l) => loginKey(l.kind, l.value).pk)),
+      },
     }),
   );
 }

@@ -192,6 +192,8 @@ export const api = {
   denyLoginSession: (id: string) => request<{ denied: boolean }>('POST', `/login-sessions/${id}/deny`),
   webSessions: () => request<{ sessions: { id: string; browser: string; createdAt: number }[] }>('GET', '/web-sessions'),
   signOutAllBrowsers: () => request<{ revoked: number }>('DELETE', '/web-sessions'),
+  /** Deletes the account and all its data (cloud). Irreversible. */
+  deleteAccount: () => request<{ deleting: boolean }>('DELETE', '/account', { confirm: 'DELETE' }),
   /** Website: end this browser's session (clears the cookie). */
   signOutThisBrowser: () => request<{ signedOut: boolean }>('DELETE', '/web-sessions/current'),
 };

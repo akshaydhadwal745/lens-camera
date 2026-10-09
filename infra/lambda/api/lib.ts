@@ -28,6 +28,8 @@ export const env = {
   webOrigin: process.env.WEB_ORIGIN ?? '',
   /** Sent only by our CloudFront (/api): proves the viewer headers are real. */
   edgeSecret: process.env.EDGE_SECRET ?? '',
+  /** Runs long background jobs (account deletion). */
+  maintenanceFunction: process.env.MAINTENANCE_FUNCTION ?? process.env.AWS_LAMBDA_FUNCTION_NAME ?? '',
 };
 
 export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {

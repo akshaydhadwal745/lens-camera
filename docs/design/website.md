@@ -1,6 +1,9 @@
 # Design: lens.instagrowapp.com, the website + web app
 
-Status: **proposed (2026-10-09), waiting for approval.** Nothing is built yet.
+Status: **approved and built (2026-10-09).** Guide: [features/website.md](../features/website.md).
+Decisions: brand "Lens by InstaGrow"; English + Hindi from launch; upload from
+computer yes; automatic web sync; sign-in = QR + email code + Google; analytics,
+Search Console and the Play Store link come later.
 
 Goal: one domain that (1) ranks on Google and converts visitors into app users,
 and (2) is a real web extension of the app: sign in by scanning a QR with the
