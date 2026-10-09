@@ -150,6 +150,9 @@ function handler(event) {
   var host = req.headers.host ? req.headers.host.value : '';
   if (CANONICAL && host !== CANONICAL) return redirect('https://' + CANONICAL + uri + query(req.querystring));
   if (uri === '/app') return redirect('/app/' + query(req.querystring));
+  // Old web-app addresses (before the site existed at the root).
+  if (uri === '/link' || uri === '/link/') return redirect('/signin/');
+  if (/^\\/(gallery|settings|trash|storage|share|viewer)(\\/|$)/.test(uri)) return redirect('/app' + uri);
   if (uri.indexOf('/app/') === 0) {
     if (uri.slice(uri.lastIndexOf('/') + 1).indexOf('.') === -1) req.uri = '/app/index.html';
     return req;
@@ -482,9 +485,12 @@ function handler(event) {
       description: 'GitHub Actions (main branch) deploys the Lens website',
       maxSessionDuration: Duration.hours(1),
       assumedBy: new iam.WebIdentityPrincipal(github.openIdConnectProviderArn, {
-        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        // Workflows of this repository only (fork pull requests get no OIDC token).
-        StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:akshaydhadwal745/lens-camera:*' },
+        // Only this repository's main branch. GitHub's subject includes the owner
+        // and repository ids (immutable: survives renames, blocks look-alikes).
+        StringEquals: {
+          'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+          'token.actions.githubusercontent.com:sub': 'repo:akshaydhadwal745@204663223/lens-camera@1408539654:ref:refs/heads/main',
+        },
       }),
     });
     webBucket.grantReadWrite(webDeployRole);
