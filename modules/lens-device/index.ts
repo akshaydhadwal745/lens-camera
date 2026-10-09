@@ -4,6 +4,20 @@ import { requireOptionalNativeModule } from 'expo';
 
 export type ThermalLevel = 'normal' | 'warm' | 'hot' | 'critical';
 
+/** A photo/video the user picked from their phone gallery: a content:// link, not a copy. */
+export type PickedMedia = {
+  uri: string;
+  mimeType: string | null;
+  name: string | null;
+  size: number | null;
+  /** Milliseconds since 1970 (when it was taken, or last modified). */
+  dateTaken: number | null;
+  width: number | null;
+  height: number | null;
+  /** Seconds (videos). */
+  duration: number | null;
+};
+
 type LensDeviceNative = {
   thermalLevel(): ThermalLevel;
   startBackup(text: string): boolean;
@@ -11,6 +25,9 @@ type LensDeviceNative = {
   stopBackup(): void;
   installReferrer(): Promise<string | null>;
   isEmulator(): boolean;
+  pickMedia(max: number): Promise<PickedMedia[]>;
+  canRead(uri: string): boolean;
+  copyMedia(uri: string, destination: string): Promise<number>;
   addListener(event: 'onThermalChange', listener: (e: { level: ThermalLevel }) => void): { remove(): void };
 };
 
@@ -75,3 +92,19 @@ export function isEmulator(): boolean {
     return false;
   }
 }
+
+/** Android: the user picks photos/videos from their gallery (max per pick). Null where unavailable. */
+export const mediaPicker = native?.pickMedia
+  ? {
+      pick: (max = 100): Promise<PickedMedia[]> => native.pickMedia(max),
+      /** Copies the picked item's exact bytes to `destination` (file:// URI); returns the size. */
+      copy: (uri: string, destination: string): Promise<number> => native.copyMedia(uri, destination),
+      canRead: (uri: string): boolean => {
+        try {
+          return native.canRead(uri);
+        } catch {
+          return false;
+        }
+      },
+    }
+  : null;

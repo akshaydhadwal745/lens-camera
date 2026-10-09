@@ -107,6 +107,14 @@ export interface LocalEntry {
   streamed?: boolean;
   /** Too big for their storage plan (e.g. Box free 250 MB): this one goes to Lens storage. */
   forceLens?: boolean;
+  /**
+   * Imported from the phone's gallery (Android picker): the content:// link to
+   * the user's own file. Lens copies it just before uploading and removes its
+   * copy once it's safe in the cloud; the gallery original is never touched.
+   */
+  importUri?: string;
+  /** Imported but not copied yet (waits for its turn, and for free space). */
+  awaitingCopy?: boolean;
   /** Resumable upload state in the user's own storage (e.g. a Drive session URL). */
   externalUpload?: { storageId: string; resume?: string };
   /** Set once the cloud copy is confirmed; local copy becomes eligible for cleanup. */
@@ -116,6 +124,8 @@ export interface LocalEntry {
    * the cloud). Thumbnail + preview stay so the gallery still works offline.
    */
   offloadedAt?: number;
+  /** Why it was removed: age (retention), space (phone low on space) or manual (Free up space). */
+  offloadReason?: OffloadReason;
   attempts?: number;
   nextAttemptAt?: number;
   /** Permanent failure (won't retry automatically). */
@@ -123,6 +133,8 @@ export interface LocalEntry {
   /** Why, for the app: e.g. "guest-quota" (sign in to get more storage). */
   errorCode?: string;
 }
+
+export type OffloadReason = 'age' | 'space' | 'manual' | 'imported';
 
 /**
  * queued: nothing in the cloud yet · uploading: transfer in progress ·
@@ -144,6 +156,8 @@ export interface GalleryItem {
   localUri?: string;
   /** Cloud original (only once verified). */
   remoteUrl?: string;
+  /** This phone's original was removed (and why); it plays/opens from the cloud. */
+  offloadReason?: OffloadReason;
   thumbUri?: string;
   previewUri?: string;
   sync: SyncState;

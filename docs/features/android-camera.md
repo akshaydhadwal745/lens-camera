@@ -39,6 +39,14 @@ a third stream was what made the old Android camera lag. Preview runs at a
 steady 30 fps. If OpenGL fails on a phone, the plain CameraX preview is used
 (no live looks, everything else works).
 
+**Rotation:** CameraX reports how far the raw sensor image must turn to be
+upright. When the camera writes straight into our SurfaceTexture, some phones
+(e.g. Galaxy S8) already put the sensor rotation into the buffer transform, so
+`GlPreview` rotates only by what's left after the SurfaceTexture matrix
+(otherwise the viewfinder shows sideways). Tap-to-focus keeps the full
+rotation (raw buffer coordinates). The log line `first frame … rotation R (st S)`
+shows both values.
+
 ## Night (Android)
 
 - **Maker's Night mode** (CameraX Extensions) when the phone has one: a single

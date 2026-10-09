@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -21,12 +19,10 @@ import { ZoomableImage } from '@/components/ZoomableImage';
 
 import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
-import { formatDate } from '@/lib/format';
+import { formatBytes, formatDate, formatDuration, formatEta, formatRate } from '@/lib/format';
 import { hasEdit, useFullQuality, webCanShowOriginal } from '@/lib/full-view';
-import { useOriginal } from '@/lib/storage/useOriginal';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
-import { useStream } from '@/lib/useStream';
 import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -67,67 +63,83 @@ function PhotoPage({
   );
 }
 
-function VideoPage({ item, width, height, active }: { item: GalleryItem; width: number; height: number; active: boolean }) {
-  const original = useOriginal(item);
-  // Long videos from the cloud: adaptive streaming (up to the original's resolution) once converted.
-  const stream = useStream(item, active);
-  const source = stream.asking ? null : stream.url ? { uri: stream.url } : original;
-  const player = useVideoPlayer(source, (p) => {
-    p.loop = false;
-  });
-
-  useEffect(() => {
-    if (active) player.play();
-    else player.pause();
-  }, [active, player]);
-
-  if (!source && stream.asking) {
-    return (
-      <View style={{ width, height, justifyContent: 'center' }}>
-        <Image source={{ uri: viewUri(item) }} style={{ width, height: height * 0.8 }} contentFit="contain" />
-        <ActivityIndicator color="#fff" style={StyleSheet.absoluteFill} />
-      </View>
-    );
-  }
-
-  if (!source) {
-    // Only the poster frame is in the cloud so far.
-    return (
-      <View style={{ width, height, justifyContent: 'center' }}>
-        <Image source={{ uri: viewUri(item) }} style={{ width, height: height * 0.8 }} contentFit="contain" />
-        <Text style={styles.pendingVideo}>
-          {item.location
-            ? item.ownerName
-              ? 'The full video is in the sender’s own storage'
-              : `The video is in your ${providerInfo(item.location.provider).name}. Sign in to it on this phone to play it.`
-            : 'The video is still uploading from the other device'}
-        </Text>
-      </View>
-    );
-  }
-
+/**
+ * A video in the swipe viewer: poster + play button. Playing happens on its own
+ * full-screen page (`/player/[id]`), so the player's controls never collide
+ * with the viewer's action bar.
+ */
+function VideoPage({
+  item,
+  width,
+  height,
+  source,
+  onTap,
+}: {
+  item: GalleryItem;
+  width: number;
+  height: number;
+  source?: string;
+  onTap: () => void;
+}) {
+  // Playable: on this phone, in Lens storage, or in our own connected storage.
+  const playable = !!item.localUri || !!item.remoteUrl || (!!item.location && !item.ownerName);
+  const open = () => router.push({ pathname: '/player/[id]', params: { id: item.id, ...(source ? { source } : {}) } });
   return (
-    <View style={{ width, height, justifyContent: 'center' }}>
-      <VideoView player={player} style={{ width, height: height * 0.8 }} contentFit="contain" nativeControls />
-      {stream.preparing && <Text style={styles.pendingVideo}>Preparing smooth playback for next time…</Text>}
-    </View>
+    <Pressable style={{ width, height, justifyContent: 'center' }} onPress={onTap} accessibilityLabel="Show or hide controls">
+      <Image source={{ uri: viewUri(item) }} style={{ width, height: height * 0.8 }} contentFit="contain" />
+      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.center]}>
+        {playable ? (
+          <Pressable onPress={open} style={styles.playButton} accessibilityLabel="Play video" hitSlop={12}>
+            <Ionicons name="play" size={40} color="#fff" style={{ marginLeft: 4 }} />
+          </Pressable>
+        ) : (
+          <Text style={styles.pendingVideo}>
+            {item.location
+              ? 'The full video is in the sender’s own storage'
+              : 'The video is still uploading from the other device'}
+          </Text>
+        )}
+        {playable && item.duration != null && <Text style={styles.videoLength}>{formatDuration(item.duration)}</Text>}
+      </View>
+    </Pressable>
   );
 }
 
 function SyncLine({ item }: { item: GalleryItem }) {
-  const progress = useStore((s) => (s.uploadingId === item.id ? s.progress : null));
+  const transfer = useStore((s) => s.transfers[item.id]);
   if (item.ownerName) return <Text style={styles.sub}>From {item.ownerName}</Text>;
+  if (item.sync === 'uploading' && transfer) {
+    const pct = transfer.total ? Math.round((transfer.sent / transfer.total) * 100) : 0;
+    const extra = [transfer.rate > 0 ? formatRate(transfer.rate) : '', transfer.recording ? 'recording' : formatEta(transfer.total - transfer.sent, transfer.rate)]
+      .filter(Boolean)
+      .join(' · ');
+    return (
+      <View style={styles.transfer}>
+        <Text style={styles.sub}>
+          On phone {formatBytes(transfer.total)} · in cloud {formatBytes(transfer.sent)} ({pct}%)
+        </Text>
+        <View style={styles.transferTrack}>
+          <View style={[styles.transferFill, { width: `${pct}%` }]} />
+        </View>
+        {!!extra && <Text style={styles.sub}>{extra}</Text>}
+      </View>
+    );
+  }
   const where =
     item.sync === 'synced'
       ? item.location
         ? `In your ${providerInfo(item.location.provider).name}${item.localUri ? ' · on this device' : ''}`
         : item.localUri
-        ? 'In the cloud · on this device'
-        : item.previewUri?.startsWith('file:')
-          ? 'In the cloud · preview on this device'
-          : 'In the cloud'
+        ? '✓ Safe in the cloud · also on this device'
+        : item.offloadReason === 'space'
+          ? 'In the cloud · removed from phone to free space'
+          : item.offloadReason === 'age'
+            ? 'In the cloud · removed from phone after the keep period'
+            : item.previewUri?.startsWith('file:')
+              ? '✓ Safe in the cloud · preview on this device'
+              : 'In the cloud'
       : item.sync === 'uploading'
-        ? `Uploading ${Math.round((progress ?? 0) * 100)}%`
+        ? 'Uploading…'
         : item.sync === 'partial'
           ? item.localUri
             ? 'Preview in the cloud · original waiting to upload'
@@ -273,7 +285,7 @@ export default function ViewerScreen() {
               }}
             />
           ) : (
-            <VideoPage item={item} width={width} height={height} active={i === index} />
+            <VideoPage item={item} width={width} height={height} source={source} onTap={() => setChrome((c) => !c)} />
           )
         }
       />
@@ -373,9 +385,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
   },
-  pendingVideo: { color: '#ccc', textAlign: 'center', marginTop: 12, fontSize: 13 },
+  pendingVideo: { color: '#ccc', textAlign: 'center', marginTop: 12, fontSize: 13, paddingHorizontal: 24 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  playButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoLength: { color: '#fff', fontSize: 13, fontWeight: '600', marginTop: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 3 },
   date: { color: '#fff', fontSize: 15, fontWeight: '600' },
   sub: { color: '#aaa', fontSize: 12, marginTop: 2 },
+  transfer: { alignSelf: 'stretch', alignItems: 'center' },
+  transferTrack: { alignSelf: 'stretch', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', marginTop: 4, overflow: 'hidden' },
+  transferFill: { height: '100%', backgroundColor: '#3B82F6' },
   bottomBar: {
     position: 'absolute',
     bottom: 0,

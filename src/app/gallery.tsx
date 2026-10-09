@@ -33,7 +33,12 @@ import {
   selectStorageStuck,
   selectWaitingForWifi,
   useStore,
+  selectTransferTotals,
+  dismissSpaceFreed,
+  canImport,
+  importFromGallery,
 } from '@/lib/store';
+import { formatBytes, formatEta, formatRate } from '@/lib/format';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { loadDoc, saveDoc } from '@/lib/local-store';
 import { providerInfo } from '@/lib/storage/providers';
@@ -46,6 +51,32 @@ const TARGET_TILE = 120;
 const MAX_CONTENT_WIDTH = 1400;
 
 type Tab = 'mine' | 'shared';
+
+/** "Uploading 1 video · 176 MB of 1.0 GB in cloud" + speed, time left and a bar. */
+function UploadBanner({ pending }: { pending: number }) {
+  const t = useStore(selectTransferTotals);
+  const pct = t.total ? Math.min(100, Math.round((t.sent / t.total) * 100)) : 0;
+  const details = [t.rate > 0 ? formatRate(t.rate) : '', formatEta(t.total - t.sent, t.rate)].filter(Boolean).join(' · ');
+  return (
+    <View style={[styles.banner, styles.uploadBanner, { backgroundColor: '#1E3A8A' }]}>
+      <View style={styles.uploadRow}>
+        <ActivityIndicator size="small" color="#fff" />
+        <Text style={styles.bannerText}>
+          Uploading {pending} to the cloud
+          {t.count ? ` · ${formatBytes(t.sent)} of ${formatBytes(t.total)} (${pct}%)` : '…'}
+        </Text>
+      </View>
+      {t.count > 0 && (
+        <>
+          <View style={styles.uploadTrack}>
+            <View style={[styles.uploadFill, { width: `${pct}%` }]} />
+          </View>
+          {!!details && <Text style={styles.uploadDetails}>{details}</Text>}
+        </>
+      )}
+    </View>
+  );
+}
 
 export default function GalleryScreen() {
   const insets = useSafeAreaInsets();
@@ -65,6 +96,8 @@ export default function GalleryScreen() {
   const isGuest = useStore((s) => !!s.identity && !s.identity.email);
   const [nudgeDismissed, setNudgeDismissed] = useState(() => loadDoc('signin-nudge-dismissed', false));
   const online = useStore((s) => s.online);
+  const spaceFreed = useStore((s) => s.spaceFreed);
+  const importWaitingForSpace = useStore((s) => s.importWaitingForSpace);
   const name = useStore((s) => s.identity?.name);
   const remoteLoading = useStore((s) => s.remoteLoading);
   const sharedLoading = useStore((s) => s.sharedLoading);
@@ -150,6 +183,16 @@ export default function GalleryScreen() {
     }
   };
 
+  // Import: the user picks from their gallery; items upload one by one (copied only for the upload).
+  const onImport = () => {
+    importFromGallery()
+      .then(({ added, skipped }) => {
+        if (added) notify(`Importing ${added} item${added === 1 ? '' : 's'}`, 'They upload one by one at full quality. The originals stay in your phone gallery.');
+        else if (skipped) notify('Already in Lens', `${skipped === 1 ? 'That item is' : 'Those items are'} already imported.`);
+      })
+      .catch((e) => notify('Import failed', errorMessage(e)));
+  };
+
   const onRefresh = () => {
     (tab === 'mine' ? refreshRemote() : refreshShared()).catch((e) => notify('Refresh failed', errorMessage(e)));
   };
@@ -195,15 +238,31 @@ export default function GalleryScreen() {
       <Ionicons name="alert-circle-outline" size={16} color="#fff" />
       <Text style={styles.bannerText}>{failed} failed to upload. Tap to retry</Text>
     </Pressable>
+  ) : importWaitingForSpace && pending ? (
+    <Pressable style={[styles.banner, { backgroundColor: '#7C2D12' }]} onPress={() => router.push('/settings')}>
+      <Ionicons name="phone-portrait-outline" size={16} color="#fff" />
+      <Text style={styles.bannerText}>Imports wait for free space (they need room for one copy at a time). Tap for storage settings</Text>
+    </Pressable>
   ) : pending && waitingForWifi === pending ? (
     <View style={[styles.banner, { backgroundColor: '#334155' }]}>
       <Ionicons name="wifi-outline" size={16} color="#fff" />
       <Text style={styles.bannerText}>{waitingForWifi} waiting for Wi-Fi (big files). Change in Settings</Text>
     </View>
   ) : pending ? (
-    <View style={[styles.banner, { backgroundColor: '#1E3A8A' }]}>
-      <ActivityIndicator size="small" color="#fff" />
-      <Text style={styles.bannerText}>Uploading {pending} to the cloud…</Text>
+    <UploadBanner pending={pending} />
+  ) : spaceFreed && !isWeb ? (
+    // The storage guardian removed originals: say so once, so playing from the cloud isn't a surprise.
+    <View style={[styles.banner, { backgroundColor: '#1C1C1E' }]}>
+      <Ionicons name="phone-portrait-outline" size={16} color={colors.accent} />
+      <Pressable style={{ flex: 1 }} onPress={() => router.push('/settings')}>
+        <Text style={styles.bannerText}>
+          Freed {formatBytes(spaceFreed.bytes)} on this phone (less than {spaceFreed.keepFreeGB} GB was free). {spaceFreed.count}{' '}
+          {spaceFreed.count === 1 ? 'original is' : 'originals are'} safe in the cloud and play from there.
+        </Text>
+      </Pressable>
+      <Pressable onPress={dismissSpaceFreed} hitSlop={10} accessibilityLabel="Dismiss">
+        <Ionicons name="close" size={16} color="#888" />
+      </Pressable>
     </View>
   ) : isGuest && !isWeb && !nudgeDismissed && mine.length >= 3 ? (
     <View style={[styles.banner, { backgroundColor: '#1C1C1E' }]}>
@@ -257,6 +316,11 @@ export default function GalleryScreen() {
 
         <View style={[styles.headerSide, { justifyContent: 'flex-end' }]}>
           {isWeb && !selecting && tab === 'mine' && <WebUploader />}
+          {canImport && !selecting && tab === 'mine' && (
+            <Pressable onPress={onImport} hitSlop={10} accessibilityLabel="Import from your phone gallery" style={styles.headerButton}>
+              <Ionicons name="images-outline" size={24} color={colors.accent} />
+            </Pressable>
+          )}
           {!selecting && items.length > 0 && (
             <Pressable onPress={() => setSelecting(true)} hitSlop={10} style={styles.headerButton}>
               <Text style={styles.headerAction}>Select</Text>
@@ -392,7 +456,12 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#fff' },
 
   banner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  bannerText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  bannerText: { color: '#fff', fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  uploadBanner: { flexDirection: 'column', alignItems: 'stretch', gap: 6 },
+  uploadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uploadTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' },
+  uploadFill: { height: '100%', backgroundColor: '#93C5FD' },
+  uploadDetails: { color: '#BFDBFE', fontSize: 12 },
 
   emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16, textAlign: 'center' },
   emptyBody: { color: '#888', fontSize: 15, textAlign: 'center', marginTop: 8, maxWidth: 360 },

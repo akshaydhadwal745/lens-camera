@@ -75,6 +75,9 @@ native camera module on each platform), and a web viewer.
 | Sessions: 90-day sliding, devices list, log out (others) | iOS, Android | ✅ | No | Server tested (e2e) |
 | Android camera preview: no lag (expo-camera patch, 30 fps) | Android | ✅ | No | `patches/expo-camera+57.0.6.patch` |
 | Upload videos while recording (header held back, re-checked at stop) | Android | ✅ | No | Real app code tested against the live API (`tests/live-upload`) |
+| Video player page (own controls: scrub, ±10 s, double-tap skip, speed, mute, auto-hide) | All | ✅ | No | Replaces native controls that overlapped the viewer bar (S8 test) |
+| Import from phone gallery (user picks; copied one at a time just before upload, copy removed after) | Android | ✅ | No | No storage permission (photo picker) |
+| Upload progress: camera pill, tile bar, gallery bar (MB, speed, time left), viewer on-phone vs in-cloud | Android, iOS | ✅ | No | Live-upload progress tested (`tests/live-upload`) |
 | Heat guard (pause uploads/previews/overlays when hot) | iOS, Android | ✅ | No | Native module `modules/lens-device` |
 | Smooth streaming of long videos (lazy HLS on Batch Fargate Spot, signed links) | All | ✅ | No | Conversion + playback tested on AWS (`tests/stream`) |
 | Background backup: foreground service + periodic task | Android | ✅ | No | "Backing up N of M" notification |

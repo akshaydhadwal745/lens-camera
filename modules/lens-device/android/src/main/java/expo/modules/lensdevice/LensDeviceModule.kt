@@ -12,6 +12,8 @@ import android.os.PowerManager
 import com.android.installreferrer.api.InstallReferrerClient
 import com.android.installreferrer.api.InstallReferrerStateListener
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -43,6 +45,53 @@ class LensDeviceModule : Module() {
     Events("onThermalChange")
 
     Function("thermalLevel") { currentLevel() }
+
+    // Import from the phone's gallery: the user picks; we get links (no copies, no permission).
+    lateinit var pickerLauncher: AppContextActivityResultLauncher<PickMediaInput, List<PickedMedia>>
+    RegisterActivityContracts {
+      pickerLauncher = registerForActivityResult(MediaPickerContract(this@LensDeviceModule))
+    }
+    AsyncFunction("pickMedia") Coroutine { max: Int ->
+      pickerLauncher.launch(PickMediaInput(max)).map {
+        mapOf(
+          "uri" to it.uri,
+          "mimeType" to it.mimeType,
+          "name" to it.name,
+          "size" to it.size?.toDouble(),
+          "dateTaken" to it.dateTaken?.toDouble(),
+          "width" to it.width,
+          "height" to it.height,
+          "duration" to it.durationMs?.let { ms -> ms / 1000.0 },
+        )
+      }
+    }
+
+    // Copies a picked gallery item into the app's own file (exact bytes) just before it uploads.
+    // Returns the number of bytes copied.
+    AsyncFunction("copyMedia") Coroutine { uri: String, destination: String ->
+      val context = appContext.reactContext ?: throw IllegalStateException("No context")
+      val dest = java.io.File(android.net.Uri.parse(destination).path ?: destination)
+      val partial = java.io.File(dest.path + ".part")
+      kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        dest.parentFile?.mkdirs()
+        val input = context.contentResolver.openInputStream(android.net.Uri.parse(uri))
+          ?: throw java.io.FileNotFoundException("Can't open $uri")
+        try {
+          input.use { src -> partial.outputStream().use { out -> src.copyTo(out, 1 shl 20) } }
+          if (!partial.renameTo(dest)) throw java.io.IOException("Could not save the copy")
+        } catch (e: Exception) {
+          partial.delete()
+          throw e
+        }
+        dest.length().toDouble()
+      }
+    }
+
+    // Is a picked gallery item still readable (not deleted, access not revoked)?
+    Function("canRead") { uri: String ->
+      val context = appContext.reactContext ?: return@Function false
+      runCatching { context.contentResolver.openFileDescriptor(android.net.Uri.parse(uri), "r")?.use { true } ?: false }.getOrDefault(false)
+    }
 
     // Background backup (foreground service). Must be started while the app is
     // in the foreground (Android 12+ rule); returns false if Android refused.

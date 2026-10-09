@@ -10,7 +10,9 @@ import { ValueDial } from '@/components/pro/ValueDial';
 import { posterUri } from '@/lib/derivatives';
 import { cachedOriginal } from '@/lib/edit-remote';
 import { ADJUSTMENTS, Adjustments, centeredCrop, compact, CROP_ASPECTS, EditRecipe, isNeutral, LOOKS } from '@/lib/edits';
+import { asFileUri } from '@/lib/content-file';
 import { uriFor } from '@/lib/local-store';
+import { extensionFor } from '@/lib/storage/useOriginal';
 import { nearestIndex } from '@/lib/pro-camera';
 import { copyEdit, getState, saveEdit, selectGallery, useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
@@ -55,7 +57,7 @@ export default function EditScreen() {
     (async () => {
       const found = getState().entries.find((e) => e.id === item.id);
       // Offloaded entries only have previews here; photos edit from the cloud original.
-      const entry = found?.offloadedAt ? undefined : found;
+      const entry = found?.offloadedAt || found?.awaitingCopy ? undefined : found;
       let uri: string;
       if (item.kind === 'video') {
         if (!entry) throw new Error('Video looks can be changed only while the video is still on the phone that recorded it.');
@@ -63,7 +65,9 @@ export default function EditScreen() {
       } else {
         uri = entry
           ? uriFor(entry)
-          : await cachedOriginal({
+          : item.localUri?.startsWith('content:')
+            ? await asFileUri(item.localUri, item.id, extensionFor(item.contentType, item.kind)) // imported: their gallery file
+            : await cachedOriginal({
               id: item.id,
               url: item.remoteUrl,
               kind: item.kind,

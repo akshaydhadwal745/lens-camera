@@ -17,8 +17,27 @@ type Props = {
   onLongPress: (item: GalleryItem) => void;
 };
 
+/** Share of the original already in the cloud (null when nothing is uploading). */
+function useUploadFraction(id: string): number | null {
+  return useStore((s) => {
+    const t = s.transfers[id];
+    if (t) return t.total ? Math.round((t.sent / t.total) * 100) / 100 : 0;
+    return s.uploadingId === id ? Math.round(s.progress * 100) / 100 : null;
+  });
+}
+
+function UploadBar({ id }: { id: string }) {
+  const fraction = useUploadFraction(id);
+  if (fraction == null) return null;
+  return (
+    <View pointerEvents="none" style={styles.barTrack}>
+      <View style={[styles.barFill, { width: `${Math.round(fraction * 100)}%` }]} />
+    </View>
+  );
+}
+
 function SyncBadge({ item }: { item: GalleryItem }) {
-  const progress = useStore((s) => (s.uploadingId === item.id ? s.progress : null));
+  const progress = useUploadFraction(item.id);
   if (item.sync === 'partial') {
     // Visible everywhere already; the full-quality original is still on its way.
     return (
@@ -87,6 +106,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
         </Text>
       )}
       {!showOwner && <SyncBadge item={item} />}
+      {!showOwner && item.sync === 'uploading' && <UploadBar id={item.id} />}
 
       {selecting && (
         <View style={[styles.check, selected && styles.checkOn]}>
@@ -135,6 +155,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  barTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, backgroundColor: 'rgba(0,0,0,0.5)' },
+  barFill: { height: '100%', backgroundColor: '#3B82F6' },
   badgeQuiet: { backgroundColor: 'rgba(0,0,0,0.55)' },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   check: {

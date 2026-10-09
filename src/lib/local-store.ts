@@ -19,6 +19,13 @@ const CONTENT_TYPES: Record<string, string> = {
   dng: 'image/x-adobe-dng',
   mov: 'video/quicktime',
   mp4: 'video/mp4',
+  heif: 'image/heif',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
+  '3gp': 'video/3gpp',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
 };
 
 function readJson<T>(file: File, fallback: T): T {
@@ -89,7 +96,9 @@ export function loadEntries(): LocalEntry[] {
     const previewFile = exists(e.previewFile);
     // Without the original, an entry is only worth keeping if it's safe in the
     // cloud and we still have its previews (offloaded by the storage guardian).
-    if (!hasOriginal && !(e.uploadedAt && (thumbFile || previewFile))) continue;
+    // Imports waiting to be copied have no file yet: their link is the original.
+    const awaitingCopy = !!e.awaitingCopy && !hasOriginal && !e.uploadedAt;
+    if (!hasOriginal && !awaitingCopy && !(e.uploadedAt && (thumbFile || previewFile))) continue;
     const size = e.size && e.size > 0 ? e.size : hasOriginal ? fileSize(fileFor(e as LocalEntry)) : 0;
     // Entries that failed only because their size was misread get retried.
     const sizeError = !e.uploadedAt && e.error && /invalid size/i.test(e.error);
@@ -99,7 +108,8 @@ export function loadEntries(): LocalEntry[] {
       previewFile,
       contentType: e.contentType ?? CONTENT_TYPES[extOf(e.fileName)] ?? 'image/jpeg',
       size,
-      offloadedAt: hasOriginal ? undefined : (e.offloadedAt ?? Date.now()),
+      awaitingCopy: awaitingCopy || undefined,
+      offloadedAt: hasOriginal || awaitingCopy ? undefined : (e.offloadedAt ?? Date.now()),
       liveUploading: undefined, // a restart ends live uploading; the regular uploader finishes it
       ...(sizeError ? { error: undefined, attempts: 0, nextAttemptAt: undefined } : {}),
     });
@@ -132,6 +142,36 @@ export function importCapture(input: NewCapture): LocalEntry {
     duration: input.duration,
     edit: input.edit,
     ...(input.live ? { liveUploading: true, streamed: true } : {}),
+  };
+}
+
+/** An item picked from the phone's gallery: an entry pointing at it (copied later, just before upload). */
+export function importEntry(picked: {
+  uri: string;
+  mimeType: string | null;
+  name: string | null;
+  size: number | null;
+  dateTaken: number | null;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+}): LocalEntry {
+  const id = newId();
+  const kind = picked.mimeType?.startsWith('video/') ? 'video' : 'photo';
+  const byMime = Object.entries(CONTENT_TYPES).find(([, type]) => type === picked.mimeType)?.[0];
+  const ext = (picked.name && CONTENT_TYPES[extOf(picked.name)] ? extOf(picked.name) : byMime) ?? (kind === 'video' ? 'mp4' : 'jpg');
+  return {
+    id,
+    kind,
+    fileName: `${id}.${ext}`,
+    contentType: picked.mimeType ?? CONTENT_TYPES[ext],
+    size: picked.size ?? 0,
+    createdAt: picked.dateTaken ?? Date.now(),
+    width: picked.width ?? undefined,
+    height: picked.height ?? undefined,
+    duration: picked.duration ?? undefined,
+    importUri: picked.uri,
+    awaitingCopy: true,
   };
 }
 

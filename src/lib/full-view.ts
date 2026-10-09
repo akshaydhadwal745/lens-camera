@@ -8,7 +8,8 @@ import { Platform } from 'react-native';
 import { isImagingAvailable, LensImaging } from '../../modules/lens-camera';
 import { cachedOriginal } from './edit-remote';
 import { EditRecipe, isNeutral } from './edits';
-import { useOriginal } from './storage/useOriginal';
+import { asFileUri } from './content-file';
+import { extensionFor, useOriginal } from './storage/useOriginal';
 import type { MediaSource } from './storage/types';
 import type { GalleryItem } from './types';
 
@@ -41,8 +42,9 @@ export function useFullQuality(item: GalleryItem | undefined, allowed: boolean):
     if (!item || !key || !allowed || !isImagingAvailable || item.kind !== 'photo' || rendered.has(key)) return;
     let live = true;
     (async () => {
-      const source =
-        item.localUri ??
+      const source = item.localUri
+        ? await asFileUri(item.localUri, item.id, extensionFor(item.contentType, item.kind))
+        :
         (await cachedOriginal({ id: item.id, url: item.remoteUrl, kind: item.kind, location: item.location, contentType: item.contentType }));
       const out = await LensImaging!.renderImage(source, item.edit as EditRecipe, { maxPixel: FULL_VIEW_PX, format: 'jpeg', quality: 0.95 });
       rendered.set(key, out.uri);

@@ -21,7 +21,8 @@ const camDir = join(process.env.SHIM_ROOT ?? '/tmp/lens-shim', 'cache', 'Camera'
 rmSync(camDir, { recursive: true, force: true });
 mkdirSync(camDir, { recursive: true });
 const id = newId();
-const live = new LiveUpload(id, { canSend: () => true });
+const reports: { sent: number; total: number; recording: boolean }[] = [];
+const live = new LiveUpload(id, { canSend: () => true, onProgress: (sent, total, recording) => reports.push({ sent, total, recording }) });
 
 // "Recording": header placeholder, then 2 MB of samples every 300 ms up to 42 MB.
 const path = join(camDir, 'b7f3c1d2-rec.mp4');
@@ -33,6 +34,11 @@ for (let size = 64 * 1024; size < 42 * MB; size += 2 * MB) {
 await sleep(6000); // a few ticks while "still recording"
 const sentDuring = (live as any).sent as Map<number, string>;
 ok(sentDuring.size >= 2 && !sentDuring.has(1) && !sentDuring.has(2), `sent ${[...sentDuring.keys()].join(',')} during recording; header blocks held back`);
+const lastDuring = reports[reports.length - 1];
+ok(
+  !!lastDuring && lastDuring.recording && lastDuring.sent >= sentDuring.size * 8 * MB && lastDuring.total >= 42 * MB,
+  `progress while recording: ${((lastDuring?.sent ?? 0) / MB).toFixed(0)} of ${((lastDuring?.total ?? 0) / MB).toFixed(0)} MB in cloud`,
+);
 
 // "Stop": the writer patches the header and appends its index (moov).
 const fd = openSync(path, 'r+');
@@ -40,8 +46,12 @@ writeSync(fd, Buffer.from('MDAT-SIZE+MOOV-REWRITTEN'), 0, 24, 40);
 closeSync(fd);
 appendFileSync(path, randomBytes(700 * 1024));
 
-const media = await live.finish(new File(path));
+const fractions: number[] = [];
+const media = await live.finish(new File(path), (f) => fractions.push(f));
 ok(!!media?.originalReady, 'finished: upload completed with the final size');
+const final = reports[reports.length - 1];
+const finalSize = readFileSync(path).length;
+ok(!final.recording && final.sent === finalSize && final.total === finalSize && fractions[fractions.length - 1] === 1, 'progress after stop ends at 100% of the final size');
 const cloud = Buffer.from(await (await fetch(media!.url!)).arrayBuffer());
 ok(cloud.equals(readFileSync(path)), `cloud copy byte-identical (${(cloud.length / MB).toFixed(1)} MB)`);
 await fetch(`${process.env.EXPO_PUBLIC_API_URL}/v1/media/${id}/forever`, { method: 'DELETE', headers: { authorization: `Bearer ${reg.token}` } });

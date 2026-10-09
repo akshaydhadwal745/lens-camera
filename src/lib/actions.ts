@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing';
 
 import { LensImaging } from '../../modules/lens-camera';
 import { isNeutral } from './edits';
+import { asFileUri } from './content-file';
 import { downloadFromStorage } from './storage';
 import { extensionFor } from './storage/useOriginal';
 import { GalleryItem } from './types';
@@ -12,7 +13,7 @@ import { GalleryItem } from './types';
 export const saveLabel = 'Save to Photos';
 
 async function localFileUri(item: GalleryItem): Promise<string> {
-  if (item.localUri) return item.localUri;
+  if (item.localUri) return asFileUri(item.localUri, item.id, extensionFor(item.contentType, item.kind));
   if (!item.remoteUrl && item.location?.ref) {
     if (item.ownerId) throw new Error('The original is in the sender’s own storage. You can save the preview instead.');
     return downloadFromStorage(item.id, item.location, extensionFor(item.contentType, item.kind));

@@ -27,6 +27,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconButton } from '@/components/IconButton';
+import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { formatDuration } from '@/lib/format';
 import { capture as saveCapture, finishLiveUpload, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
 import { displayUri, newId } from '@/lib/types';
@@ -65,6 +66,8 @@ export function BasicCamera() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
+  /** Id of the upload running while recording (null: uploads after you stop). */
+  const [liveId, setLiveId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [muted, setMuted] = useState(false);
 
@@ -159,6 +162,7 @@ export function BasicCamera() {
     // in the cloud by the time you press stop.
     const id = newId();
     const live = startLiveUpload(id);
+    setLiveId(live ? id : null);
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 600 });
       if (video?.uri) {
@@ -419,6 +423,7 @@ export function BasicCamera() {
           <View style={styles.recBadge}>
             <View style={styles.recDot} />
             <Text style={styles.recText}>{formatDuration(elapsed)}</Text>
+            <LiveUploadPill liveId={liveId} />
           </View>
         ) : (
           toolButtons
@@ -466,8 +471,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 4,
   },
-  recBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
-  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF3B30', marginRight: 8 },
+  recBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, flexShrink: 1 },
+  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF3B30' },
   recText: { color: '#fff', fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
 
   bottomControls: {

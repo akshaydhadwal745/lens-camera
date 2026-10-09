@@ -46,6 +46,10 @@ function listRecordings(): Set<string> {
 export type LiveUploadOptions = {
   /** Checked before each block: network policy, heat, etc. False = wait. */
   canSend: () => boolean;
+  /** Bytes in the cloud (incl. the block being sent) vs the file's size so far. */
+  onProgress?: (sent: number, total: number, recording: boolean) => void;
+  /** The upload was dropped (recording failed or discarded). */
+  onCancel?: () => void;
 };
 
 export class LiveUpload {
@@ -56,6 +60,10 @@ export class LiveUpload {
   private file: File | null = null;
   /** Part number → MD5 (base64) of what we sent. */
   private sent = new Map<number, string>();
+  /** Part number → bytes of that part in the cloud. */
+  private sentBytes = new Map<number, number>();
+  /** Bytes of the part being sent right now. */
+  private sending = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private busy: Promise<void> = Promise.resolve();
   private stopped = false;
@@ -107,25 +115,40 @@ export class LiveUpload {
 
   /** Sends every whole block past the held-back header area that's safely written. */
   private async sendReady() {
-    if (!(await this.started) || !this.options.canSend()) return;
+    if (!(await this.started)) return;
     const file = this.findFile();
     if (!file?.exists) return;
     const size = fileSize(file);
+    this.report(size, true);
+    if (!this.options.canSend()) return;
     for (let n = HOLD_PARTS + 1; n * this.partSize <= size - TAIL_MARGIN; n++) {
       if (this.stopped || !this.options.canSend()) return;
       if (this.sent.has(n)) continue;
-      await this.sendPart(file, n, this.partSize);
+      await this.sendPart(file, n, this.partSize, () => this.report(fileSize(file), !this.stopped));
     }
   }
 
-  private async sendPart(file: File, n: number, length: number) {
+  private report(total: number, recording: boolean) {
+    let inCloud = this.sending;
+    this.sentBytes.forEach((b) => (inCloud += b));
+    this.options.onProgress?.(inCloud, total, recording);
+  }
+
+  private async sendPart(file: File, n: number, length: number, onBytes?: () => void) {
     const chunk = writeChunkAt(file, `live-${this.id}`, (n - 1) * this.partSize, length);
     try {
       const md5 = md5Of(chunk);
       const { urls } = await api.partUrls(this.id, [{ n, md5 }]);
-      await put(chunk, urls[n], { 'Content-MD5': md5 }, () => {});
+      // A re-sent part (header rewritten) counts from zero again.
+      this.sentBytes.delete(n);
+      await put(chunk, urls[n], { 'Content-MD5': md5 }, (bytes) => {
+        this.sending = bytes;
+        onBytes?.();
+      });
       this.sent.set(n, md5);
+      this.sentBytes.set(n, length);
     } finally {
+      this.sending = 0;
       if (chunk.exists) chunk.delete();
     }
   }
@@ -145,6 +168,11 @@ export class LiveUpload {
       if (size <= 0) return null;
       const total = Math.ceil(size / this.partSize);
       const length = (n: number) => Math.min(this.partSize, size - (n - 1) * this.partSize);
+      const progress = () => {
+        this.report(size, false);
+        onProgress?.(Math.min(1, [...this.sentBytes.values()].reduce((a, b) => a + b, this.sending) / size));
+      };
+      progress();
       for (let n = 1; n <= total; n++) {
         const previous = this.sent.get(n);
         if (previous && length(n) === this.partSize) {
@@ -152,13 +180,10 @@ export class LiveUpload {
           const chunk = writeChunkAt(final, `check-${this.id}`, (n - 1) * this.partSize, length(n));
           const same = md5Of(chunk) === previous;
           if (chunk.exists) chunk.delete();
-          if (same) {
-            onProgress?.(n / total);
-            continue;
-          }
+          if (same) continue;
         }
-        await this.sendPart(final, n, length(n));
-        onProgress?.(n / total);
+        await this.sendPart(final, n, length(n), progress);
+        progress();
       }
       const { media } = await api.complete(this.id, size);
       return media;
@@ -171,6 +196,7 @@ export class LiveUpload {
   cancel() {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
+    this.options.onCancel?.();
     void this.started.then((ok) => {
       if (ok) api.deleteMedia(this.id).catch(() => {});
     });

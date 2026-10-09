@@ -64,6 +64,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var viewHeight = 1
   private val stMatrix = FloatArray(16)
   private val uvMatrix = FloatArray(16)
+  private val focusMatrix = FloatArray(16)
   private var lutTexture = 0
   private var lutId: String? = null
   private var analysisFbo = 0
@@ -238,7 +239,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       core.swap(window)
       if (firstFrame) {
         firstFrame = false
-        Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees view ${viewWidth}x$viewHeight")
+        Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")
         mainHandler.post { onFirstFrame?.invoke() }
       }
     } catch (e: Exception) {
@@ -273,19 +274,40 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
    * rotation CameraX reports for making the buffer upright.
    */
   private fun computeUvMatrix() {
+    // When the camera writes straight into our SurfaceTexture (no CameraX
+    // processing in between), Android puts the sensor rotation into the buffer
+    // transform, so stMatrix already turns the image part of the way. Only add
+    // what's left, or the picture is turned twice (sideways on e.g. Galaxy S8).
+    val residual = Math.floorMod(rotationDegrees - stMatrixRotation(), 360)
+    fillUvMatrix(uvMatrix, residual)
+    // Tap-to-focus works in raw buffer coordinates: the full CameraX rotation.
+    fillUvMatrix(focusMatrix, rotationDegrees)
+  }
+
+  private fun fillUvMatrix(out: FloatArray, degrees: Int) {
     val rotated = rotationDegrees % 180 != 0
     val bw = (if (rotated) bufferSize.height else bufferSize.width).toFloat()
     val bh = (if (rotated) bufferSize.width else bufferSize.height).toFloat()
     val scale = max(viewWidth / bw, viewHeight / bh)
     val fx = viewWidth / (bw * scale)
     val fy = viewHeight / (bh * scale)
-    Matrix.setIdentityM(uvMatrix, 0)
-    Matrix.translateM(uvMatrix, 0, 0.5f, 0.5f, 0f)
+    Matrix.setIdentityM(out, 0)
+    Matrix.translateM(out, 0, 0.5f, 0.5f, 0f)
     // Buffer -> upright is a clockwise rotation; going back is counter-clockwise.
-    Matrix.rotateM(uvMatrix, 0, rotationDegrees.toFloat(), 0f, 0f, 1f)
-    if (mirror) Matrix.scaleM(uvMatrix, 0, -1f, 1f, 1f)
-    Matrix.scaleM(uvMatrix, 0, fx, fy, 1f)
-    Matrix.translateM(uvMatrix, 0, -0.5f, -0.5f, 0f)
+    Matrix.rotateM(out, 0, degrees.toFloat(), 0f, 0f, 1f)
+    if (mirror) Matrix.scaleM(out, 0, -1f, 1f, 1f)
+    Matrix.scaleM(out, 0, fx, fy, 1f)
+    Matrix.translateM(out, 0, -0.5f, -0.5f, 0f)
+  }
+
+  /**
+   * The rotation inside the SurfaceTexture matrix (0/90/180/270). That matrix is
+   * flipV · crop · bufferTransform; undo the flip, then read the angle (crop
+   * only scales, so the signs, and the snapped angle, survive).
+   */
+  private fun stMatrixRotation(): Int {
+    val angle = Math.toDegrees(kotlin.math.atan2(-stMatrix[1].toDouble(), stMatrix[0].toDouble()))
+    return Math.floorMod((Math.round(angle / 90.0) * 90).toInt(), 360)
   }
 
   private fun runAnalysis() {
@@ -324,7 +346,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
    * buffer (sensor orientation), for tap-to-focus. Same transform as the shader.
    */
   fun viewToBuffer(x: Float, y: Float): Pair<Float, Float> {
-    val m = uvMatrix.copyOf()
+    val m = focusMatrix.copyOf()
     val uv = floatArrayOf(x, 1 - y, 0f, 1f)
     val out = FloatArray(4)
     Matrix.multiplyMV(out, 0, m, 0, uv, 0)

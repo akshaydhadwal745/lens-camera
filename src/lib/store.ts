@@ -14,6 +14,7 @@ import {
   deleteOriginal,
   freeDiskBytes,
   importCapture,
+  importEntry,
   loadDoc,
   loadEntries,
   loadPrefs,
@@ -29,6 +30,7 @@ import {
   GalleryItem,
   LocalEntry,
   NewCapture,
+  OffloadReason,
   ProviderId,
   RemoteMedia,
   SharedMedia,
@@ -44,7 +46,7 @@ import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, s
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 import { LiveUpload } from './live-upload';
 import { registerBackgroundBackup } from './background';
-import { backupService, onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
+import { backupService, mediaPicker, onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
 
 const isWeb = Platform.OS === 'web';
 const DAY = 24 * 3600 * 1000;
@@ -113,6 +115,8 @@ export type State = {
   sharedLoading: boolean;
   uploadingId: string | null;
   progress: number;
+  /** Originals on their way to the cloud right now (regular and live uploads), by id. */
+  transfers: Record<string, Transfer>;
   online: boolean;
   /** Connected over mobile data (uploads follow `settings.cellularUploads`). */
   cellular: boolean;
@@ -134,6 +138,10 @@ export type State = {
   signedOut: boolean;
   /** Phone heat: when hot, uploads and preview-making pause until it cools. */
   thermal: ThermalLevel;
+  /** An import is waiting because the phone is low on space. */
+  importWaitingForSpace: boolean;
+  /** The storage guardian just removed originals for space (gallery note until dismissed). */
+  spaceFreed: { count: number; bytes: number; keepFreeGB: number; at: number } | null;
 };
 
 let state: State = {
@@ -147,6 +155,7 @@ let state: State = {
   sharedLoading: false,
   uploadingId: null,
   progress: 0,
+  transfers: {},
   online: true,
   cellular: false,
   settings: DEFAULT_SETTINGS,
@@ -158,6 +167,8 @@ let state: State = {
   storage: null,
   signedOut: false,
   thermal: 'normal',
+  spaceFreed: null,
+  importWaitingForSpace: false,
 };
 
 const listeners = new Set<() => void>();
@@ -165,6 +176,67 @@ const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
+}
+
+// ---------- Transfers (bytes in the cloud vs on the phone) ----------
+
+export type Transfer = {
+  /** Bytes of the original already in the cloud (or being sent). */
+  sent: number;
+  /** Size of the original; grows while a video is still recording. */
+  total: number;
+  /** Upload speed, bytes per second (smoothed; 0 until known). */
+  rate: number;
+  /** Still recording (upload while recording). */
+  recording?: boolean;
+  /** When `sent`/`rate` were last measured. */
+  at: number;
+};
+
+const TRANSFER_EMIT_MS = 400;
+
+/** Records upload progress for the gallery/viewer/camera; throttled, speed smoothed. */
+function setTransfer(id: string, sent: number, total: number, recording = false) {
+  const prev = state.transfers[id];
+  const now = Date.now();
+  const done = total > 0 && sent >= total && !recording;
+  if (prev && now - prev.at < TRANSFER_EMIT_MS && !done && prev.recording === recording) return;
+  let rate = prev?.rate ?? 0;
+  if (prev && now > prev.at && sent >= prev.sent) {
+    const instant = ((sent - prev.sent) * 1000) / (now - prev.at);
+    rate = rate ? rate * 0.8 + instant * 0.2 : instant;
+  }
+  set({ transfers: { ...state.transfers, [id]: { sent, total: Math.max(total, sent), rate, recording, at: now } } });
+}
+
+function clearTransfer(id: string) {
+  if (!state.transfers[id]) return;
+  const { [id]: _, ...rest } = state.transfers;
+  set({ transfers: rest });
+}
+
+type TransferTotals = { sent: number; total: number; rate: number; count: number };
+let totalsMemo: { transfers: State['transfers']; out: TransferTotals } | null = null;
+
+/** All current transfers summed, for the gallery's upload bar (memoized: stable for useStore). */
+export function selectTransferTotals(s: State): TransferTotals {
+  if (totalsMemo?.transfers === s.transfers) return totalsMemo.out;
+  totalsMemo = { transfers: s.transfers, out: sumTransfers(s.transfers) };
+  return totalsMemo.out;
+}
+
+function sumTransfers(transfers: State['transfers']): TransferTotals {
+  let sent = 0;
+  let total = 0;
+  let rate = 0;
+  let count = 0;
+  for (const t of Object.values(transfers)) {
+    sent += t.sent;
+    total += t.total;
+    rate += t.rate;
+    count++;
+  }
+  return { sent, total, rate, count };
 }
 
 export function getState() {
@@ -217,7 +289,7 @@ export function selectGallery(s: State): GalleryItem[] {
     const originalInCloud = !!e.uploadedAt || cloud?.sync === 'synced';
     const sync: GalleryItem['sync'] = originalInCloud
       ? 'synced'
-      : s.uploadingId === e.id
+      : s.uploadingId === e.id || e.liveUploading
         ? 'uploading'
         : e.error
           ? 'failed'
@@ -233,7 +305,9 @@ export function selectGallery(s: State): GalleryItem[] {
       height: e.height,
       duration: e.duration,
       size: e.size,
-      localUri: e.offloadedAt ? undefined : uriFor(e),
+      // Imports: until copied (and after our copy is removed) the phone's own gallery file is the local original.
+      localUri: e.awaitingCopy ? e.importUri : e.offloadedAt ? e.importUri : uriFor(e),
+      offloadReason: e.offloadedAt ? e.offloadReason : undefined,
       // Local derivative files are faster than the network; fall back to cloud ones.
       thumbUri: e.thumbFile ? captureFile(e.thumbFile).uri : cloud?.thumbUri,
       previewUri: e.previewFile ? captureFile(e.previewFile).uri : cloud?.previewUri,
@@ -358,6 +432,7 @@ export async function boot() {
   }
 
   runCleanup();
+  if (!isWeb) setTimeout(checkImportLinks, 3000);
   if (!isWeb) void registerBackgroundBackup();
   if (!isWeb) watchThermal();
   if (!isWeb) void backfillDerivatives();
@@ -684,7 +759,7 @@ export function capture(input: NewCapture): LocalEntry {
 async function backfillDerivatives() {
   for (const entry of state.entries) {
     if (isHot(state.thermal)) return; // resumes when the phone cools
-    if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt) continue;
+    if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt || entry.awaitingCopy) continue;
     await ensureDerivatives(entry);
   }
   kickSync();
@@ -692,7 +767,7 @@ async function backfillDerivatives() {
 
 /** Makes thumbnail + preview if missing. Failure is non-fatal: the original still uploads. */
 async function ensureDerivatives(entry: LocalEntry): Promise<LocalEntry> {
-  if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt) return entry;
+  if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt || entry.awaitingCopy) return entry;
   try {
     const files = await makeDerivatives(entry);
     updateEntry(entry.id, files);
@@ -783,7 +858,9 @@ async function syncLoop() {
           upsertRemote(media);
           continue;
         }
-        const entry = await ensureDerivatives(next);
+        // Imported from the phone gallery: copy it now (one at a time, only with room to spare).
+        if (next.awaitingCopy && !(await copyImport(next))) continue;
+        const entry = await ensureDerivatives(state.entries.find((e) => e.id === next.id) ?? next);
         // Their own storage first (if connected, signed in on this phone and healthy), else Lens.
         const location = entry.uploadedAt ? undefined : await chooseDestination(state.storage?.storages, entry);
         const result = await uploadEntry(entry, {
@@ -812,6 +889,7 @@ async function syncLoop() {
               lastEmit = t;
               set({ progress: p });
             }
+            if (entry.size > 0) setTransfer(next.id, Math.round(p * entry.size), entry.size);
             backup.progress(p);
           },
           isCancelled: () => cancelled.has(next.id),
@@ -833,6 +911,8 @@ async function syncLoop() {
         upsertRemote(result.media);
         if (result.originalDone) {
           backup.itemDone();
+          // Imports: the original is still in their phone gallery; drop our copy right away.
+          if (entry.importUri) offloadOriginals(state.entries.filter((e) => e.id === next.id), 'imported');
           guardSpace(); // this original may now be offloaded
         }
       } catch (error) {
@@ -858,6 +938,7 @@ async function syncLoop() {
         if (error instanceof ApiError && error.status === 0) break; // offline; NetInfo will wake us
       } finally {
         set({ uploadingId: null, progress: 0 });
+        clearTransfer(next.id);
       }
     }
   } finally {
@@ -1029,6 +1110,71 @@ export async function deleteItems(
   return { failed, needsScope };
 }
 
+// ---------- Import from the phone gallery (Android) ----------
+
+/** Copies need this much free space left over, so the phone never fills up. */
+const IMPORT_MARGIN = 500 * 1024 * 1024;
+const IMPORT_SPACE_RETRY_MS = 10 * 60 * 1000;
+
+export const canImport = !isWeb && !!mediaPicker;
+
+/**
+ * The user picks photos/videos from their gallery (Android's picker: no
+ * permission, only what they choose). Nothing is copied now: each item is
+ * copied just before its upload and the copy removed once it's in the cloud.
+ * Returns how many were added and how many were already in Lens.
+ */
+export async function importFromGallery(): Promise<{ added: number; skipped: number }> {
+  if (!mediaPicker) return { added: 0, skipped: 0 };
+  const picked = await mediaPicker.pick(100);
+  const known = new Set(state.entries.map((e) => e.importUri).filter(Boolean));
+  const fresh = picked.filter((p) => !known.has(p.uri));
+  if (fresh.length) {
+    const added = fresh.map(importEntry);
+    setEntries([...added, ...state.entries].sort((a, b) => b.createdAt - a.createdAt));
+    kickSync();
+  }
+  return { added: fresh.length, skipped: picked.length - fresh.length };
+}
+
+/** Copy an imported item into Lens just before upload. False = not now (no room) or failed. */
+async function copyImport(entry: LocalEntry): Promise<boolean> {
+  if (!mediaPicker || !entry.importUri) {
+    updateEntry(entry.id, { error: 'This item can’t be read on this phone', awaitingCopy: false });
+    return false;
+  }
+  const free = freeDiskBytes();
+  if (free !== null && free - entry.size < IMPORT_MARGIN) {
+    // Room frees up as other items finish uploading (their copies are removed); try again later.
+    updateEntry(entry.id, { nextAttemptAt: Date.now() + IMPORT_SPACE_RETRY_MS });
+    set({ importWaitingForSpace: true });
+    return false;
+  }
+  set({ importWaitingForSpace: false });
+  try {
+    const size = await mediaPicker.copy(entry.importUri, captureFile(entry.fileName).uri);
+    updateEntry(entry.id, { awaitingCopy: undefined, size });
+    return true;
+  } catch {
+    const gone = !mediaPicker.canRead(entry.importUri);
+    updateEntry(entry.id, {
+      ...(gone
+        ? { error: 'No longer in your phone gallery (deleted, or access ended). Import it again.', errorCode: 'import-gone' }
+        : { attempts: (entry.attempts ?? 0) + 1, nextAttemptAt: Date.now() + BACKOFF_MS[1] }),
+    });
+    return false;
+  }
+}
+
+/** After a restart: forget gallery links that no longer open (the cloud copy stays). */
+function checkImportLinks() {
+  if (!mediaPicker) return;
+  for (const e of state.entries) {
+    if (!e.importUri || e.awaitingCopy || !e.offloadedAt) continue;
+    if (!mediaPicker.canRead(e.importUri)) updateEntry(e.id, { importUri: undefined });
+  }
+}
+
 // ---------- Upload while recording ----------
 
 const liveAllowedNow = (s: State) =>
@@ -1043,12 +1189,26 @@ export function startLiveUpload(id: string): LiveUpload | null {
   if (isWeb || !LiveUpload.supported || !state.identity || state.signedOut || !liveAllowedNow(state)) return null;
   const own = state.storage?.storages[0];
   if (own && own.status !== 'full' && own.status !== 'signed-out') return null;
-  return new LiveUpload(id, { canSend: () => liveAllowedNow(state) });
+  return new LiveUpload(id, {
+    canSend: () => liveAllowedNow(state),
+    onProgress: (sent, total, recording) => setTransfer(id, sent, total, recording),
+    onCancel: () => clearTransfer(id),
+  });
+}
+
+/** Why a recording won't upload while it records (shown in the camera), or null if it will. */
+export function liveUploadBlocker(s: State = state): string | null {
+  if (isWeb || !LiveUpload.supported) return 'Uploads after you stop';
+  if (s.settings.liveUpload === 'off') return 'Uploads after you stop';
+  if (!s.online) return 'Offline: uploads later';
+  if (isHot(s.thermal)) return 'Phone hot: uploads later';
+  if (s.cellular && s.settings.liveUpload !== 'all') return 'Mobile data: uploads after you stop';
+  return null;
 }
 
 /** Recording saved as `entry`: finish the live upload, or hand over to the regular uploader. */
 export async function finishLiveUpload(live: LiveUpload, entry: LocalEntry) {
-  const media = await live.finish(captureFile(entry.fileName));
+  const media = await live.finish(captureFile(entry.fileName)).finally(() => clearTransfer(entry.id));
   if (media) {
     updateEntry(entry.id, { liveUploading: false, uploadedAt: Date.now(), attempts: 0, error: undefined });
     upsertRemote(media);
@@ -1238,7 +1398,7 @@ const offloadable = (e: LocalEntry) => !!e.uploadedAt && !e.offloadedAt;
  * thumbnail + preview so the gallery still shows them (even offline). Items
  * without local previews are removed entirely; the cloud listing covers them.
  */
-function offloadOriginals(drop: LocalEntry[]): Freed {
+function offloadOriginals(drop: LocalEntry[], reason: OffloadReason): Freed {
   drop = drop.filter(offloadable);
   if (!drop.length) return { count: 0, bytes: 0 };
   let bytes = 0;
@@ -1247,7 +1407,7 @@ function offloadOriginals(drop: LocalEntry[]): Freed {
   for (const e of drop) {
     if (e.thumbFile || e.previewFile) {
       bytes += deleteOriginal(e);
-      patched.set(e.id, { ...e, offloadedAt: now });
+      patched.set(e.id, { ...e, offloadedAt: now, offloadReason: reason });
     } else {
       bytes += e.size;
       deleteFileFor(e);
@@ -1263,11 +1423,17 @@ function offloadOriginals(drop: LocalEntry[]): Freed {
   return { count: drop.length, bytes };
 }
 
+/** Shots from the last day keep their original unless the phone is nearly full. */
+const RECENT_MS = DAY;
+/** Below this, recording/capturing could fail: recent originals may go too. */
+const CRITICAL_FREE = GB;
+
 /**
  * Storage guardian: if the phone has less free space than the setting, first
  * drop re-downloadable cache files, then offload the oldest originals that are
- * safe in the cloud until there's enough room. Never touches anything that
- * isn't verified in the cloud.
+ * safe in the cloud until there's enough room. Shots from the last 24 h are
+ * kept unless the phone is nearly full (under 1 GB). Never touches anything
+ * that isn't verified in the cloud. Tells the gallery what it freed.
  */
 export function guardSpace(): Freed {
   if (isWeb) return { count: 0, bytes: 0 };
@@ -1281,16 +1447,33 @@ export function guardSpace(): Freed {
   need -= cacheBytes;
   const drop: LocalEntry[] = [];
   if (need > 0) {
+    const now = Date.now();
     const oldestFirst = state.entries.filter(offloadable).sort((a, b) => a.createdAt - b.createdAt);
-    for (const e of oldestFirst) {
+    const older = oldestFirst.filter((e) => now - e.createdAt >= RECENT_MS);
+    const recent = oldestFirst.filter((e) => now - e.createdAt < RECENT_MS);
+    for (const e of older) {
       if (need <= 0) break;
       drop.push(e);
       need -= e.size;
     }
+    // Still short and nearly full: recent shots too (oldest first), only as much as gets back to 1 GB.
+    let critical = CRITICAL_FREE - (target - need);
+    for (const e of recent) {
+      if (critical <= 0) break;
+      drop.push(e);
+      critical -= e.size;
+    }
   }
-  const result = offloadOriginals(drop);
+  const result = offloadOriginals(drop, 'space');
   if (result.count || cacheBytes) set({ freeBytes: freeDiskBytes() });
+  if (result.count) {
+    set({ spaceFreed: { count: result.count, bytes: result.bytes, keepFreeGB: state.settings.keepFreeGB, at: Date.now() } });
+  }
   return { count: result.count, bytes: result.bytes + cacheBytes };
+}
+
+export function dismissSpaceFreed() {
+  set({ spaceFreed: null });
 }
 
 /** Offloads originals older than the retention window, then checks free space. */
@@ -1299,7 +1482,7 @@ export function runCleanup(): Freed {
   let byAge: Freed = { count: 0, bytes: 0 };
   if (days >= 0) {
     const cutoff = Date.now() - days * DAY;
-    byAge = offloadOriginals(state.entries.filter((e) => offloadable(e) && e.uploadedAt! < cutoff));
+    byAge = offloadOriginals(state.entries.filter((e) => offloadable(e) && e.uploadedAt! < cutoff), 'age');
   }
   const bySpace = guardSpace();
   return { count: byAge.count + bySpace.count, bytes: byAge.bytes + bySpace.bytes };
@@ -1308,7 +1491,7 @@ export function runCleanup(): Freed {
 /** Removes every local original that is already safe in the cloud (previews stay). */
 export function freeUpSpace(): Freed {
   const cacheBytes = clearDownloadCache();
-  const result = offloadOriginals(state.entries);
+  const result = offloadOriginals(state.entries, 'manual');
   set({ freeBytes: freeDiskBytes() });
   return { count: result.count, bytes: result.bytes + cacheBytes };
 }

@@ -22,6 +22,7 @@ import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
 import { NamePrompt } from './NamePrompt';
 import { ValueDial } from './ValueDial';
+import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { compact, EditRecipe, LOOKS } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
 import {
@@ -79,6 +80,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
+  /** Id of the upload running while recording (null: uploads after you stop). */
+  const [liveId, setLiveId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [focusMark, setFocusMark] = useState<{ x: number; y: number; key: number } | null>(null);
@@ -229,6 +232,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     // the uploaded file would be the re-encoded one, not this recording.
     const id = newId();
     const live = baking ? null : startLiveUpload(id);
+    setLiveId(live ? id : null);
     cameraRef.current
       .startRecording()
       .then(async (video) => {
@@ -468,6 +472,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             <Text style={styles.recText}>{formatDuration(elapsed)}</Text>
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
+            <LiveUploadPill liveId={liveId} />
           </View>
         ) : (
           <>

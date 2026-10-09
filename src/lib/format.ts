@@ -27,6 +27,20 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
 
+/** Upload speed, e.g. "0.6 MB/s". */
+export function formatRate(bytesPerSecond: number): string {
+  return `${formatBytes(Math.round(bytesPerSecond))}/s`;
+}
+
+/** Time left for `remaining` bytes at `rate`, e.g. "~23 min left" (empty if unknown). */
+export function formatEta(remaining: number, rate: number): string {
+  if (rate <= 0 || remaining <= 0) return '';
+  const s = remaining / rate;
+  if (s < 60) return 'under a minute left';
+  if (s < 3600) return `~${Math.round(s / 60)} min left`;
+  return `~${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h left`;
+}
+
 /** Paise as rupees with Indian digit grouping, e.g. ₹12,34,567.89. */
 export function rupees(paise = 0): string {
   const sign = paise < 0 ? '−' : '';

@@ -26,6 +26,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="gallery" />
         <Stack.Screen name="viewer/[id]" options={{ animation: 'fade' }} />
+        <Stack.Screen name="player/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="share" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />

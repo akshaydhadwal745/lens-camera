@@ -41,6 +41,25 @@ entirely in the cloud by the time you press stop.
   `store.ts`; API `POST /media {streaming: true}`, `POST /media/:id/complete {size}`.
   Tests: `infra/scripts/e2e.sh`, `tests/live-upload/run.sh`.
 
+## Upload progress (on phone vs in cloud)
+
+You can always see how much of an original is already safe:
+
+- **Camera, while recording:** a pill next to the timer, e.g.
+  `64 MB of 210 MB in cloud` (upload while recording), or why it will upload
+  later (`Mobile data: uploads after you stop`, `Offline: uploads later`,
+  `Phone hot: uploads later`).
+- **Gallery tile:** % badge plus a thin blue bar along the bottom edge (regular
+  and live uploads).
+- **Gallery upload bar:** `Uploading 2 to the cloud · 176 MB of 1.0 GB (17%)`,
+  a progress bar, speed and time left (e.g. `0.6 MB/s · ~23 min left`).
+- **Viewer:** `On phone 1.0 GB · in cloud 176 MB (17%)` with a bar and speed;
+  when done, `✓ Safe in the cloud · also on this device`.
+- Code: `transfers` / `setTransfer` / `selectTransferTotals` in `store.ts`
+  (speed smoothed, updates throttled to 400 ms); `LiveUpload` reports
+  `onProgress(sent, total, recording)`; `LiveUploadPill`, `MediaTile`,
+  `gallery.tsx` `UploadBanner`, viewer `SyncLine`. Tested in `tests/live-upload`.
+
 ## Background backup (Android)
 
 Uploads keep going when you leave Lens or turn the screen off:
@@ -78,11 +97,18 @@ The original is removed from the phone when **any** of these is true:
 | Trigger | What happens |
 |---|---|
 | Older than "Keep originals on phone for" | Removed on app start / return to the app |
-| Free space below "Always keep free on phone" | First deletes re-downloadable cached files (shared/saved/edited cloud originals), then removes the **oldest** verified originals until there's enough room |
+| Free space below "Always keep free on phone" | First deletes re-downloadable cached files (shared/saved/edited cloud originals), then removes the **oldest** verified originals until there's enough room. **Shots from the last 24 h are kept**, unless the phone is nearly full (under 1 GB free): then recent ones go too, oldest first, only until 1 GB is free |
 | You tap "Free up space now" | Removes every verified original |
 
 When the guardian checks free space: app start, every return to the app, after
 every capture, after every original finishes uploading, and when Settings opens.
+
+**Telling the user:** when space forces originals off the phone, the gallery
+shows *"Freed 345 MB on this phone (less than 2 GB was free). 1 original is
+safe in the cloud and plays from there."* (tap: Settings; ✕ dismisses). The
+viewer says why an item is cloud-only: *removed from phone to free space* or
+*removed from phone after the keep period* (`offloadReason` on the entry:
+`age` · `space` · `manual`).
 
 **Rules:** anything not yet verified in the cloud is never touched. Items with
 no local preview (rare: preview creation failed) are removed entirely and show
