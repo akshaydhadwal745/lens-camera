@@ -277,12 +277,15 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     // When the camera writes straight into our SurfaceTexture (no CameraX
     // processing in between), Android puts the sensor rotation into the buffer
     // transform, so stMatrix already contains a rotation that we must account
-    // for. Measured on a Galaxy S8: ignoring it showed the preview 90° off, and
-    // subtracting it 180° off, so the matrix's angle (as read below) adds.
-    val residual = Math.floorMod(rotationDegrees + stMatrixRotation(), 360)
+    // for. And texture coordinates run bottom-up (stMatrix ends with a vertical
+    // flip), so in uv space the rotation goes the other way: −(R + α).
+    // Galaxy S8 (α read as 270): +R+α was right in portrait only (R = 90, where
+    // ± agree) and 180° off in both landscapes; −(R + α) is right in all three.
+    val residual = Math.floorMod(-(rotationDegrees + stMatrixRotation()), 360)
     fillUvMatrix(uvMatrix, residual)
-    // Tap-to-focus works in raw buffer coordinates: the full CameraX rotation.
-    fillUvMatrix(focusMatrix, rotationDegrees)
+    // Tap-to-focus works in raw buffer coordinates: the full CameraX rotation,
+    // in the same (bottom-up) direction.
+    fillUvMatrix(focusMatrix, Math.floorMod(-rotationDegrees, 360))
   }
 
   private fun fillUvMatrix(out: FloatArray, degrees: Int) {
