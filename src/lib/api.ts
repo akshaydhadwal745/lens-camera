@@ -80,6 +80,36 @@ export type SignInResult = {
   pending: boolean;
   resume?: string;
 };
+export type Referrals = {
+  code: string;
+  link: string;
+  rewardBytes: number;
+  friendBonusBytes: number;
+  earnedBytes: number;
+  bonusBytes: number;
+  friends: { name: string; state: 'joined' | 'signed-in' | 'rewarded' | 'not-eligible'; bytes: number; at: number }[];
+  canClaim: boolean;
+};
+export type AffiliateLink = { code: string; campaign: string; url: string; clicks: number; signups: number; payers: number; netPaise: number; commissionPaise: number };
+export type AffiliateDashboard = {
+  status: 'none' | 'applied' | 'approved' | 'rejected' | 'suspended';
+  name?: string;
+  rateBps: number;
+  holdDays?: number;
+  minPayoutPaise?: number;
+  panMasked?: string;
+  upiMasked?: string;
+  note?: string;
+  links?: AffiliateLink[];
+  pendingPaise?: number;
+  approvedPaise?: number;
+  inPayoutPaise?: number;
+  paidPaise?: number;
+  commissions?: { id: string; at: number; amountPaise: number; status: string; paid: boolean }[];
+  payouts?: { month: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string }[];
+};
+export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
+export type AdminPayout = { affiliateId: string; name?: string; email?: string; upi?: string; pan?: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string };
 export type Session = { id: string; label: string; kind: string; createdAt: number; lastUsedAt: number; current: boolean };
 type DerivativeUrls = { thumb?: string; preview?: string };
 type PlanExtras = { derivativeUrls?: DerivativeUrls; previewReady?: boolean };
@@ -99,9 +129,13 @@ const q = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cu
 
 export const api = {
   /** Guest for this phone; `fingerprint` (hash) gets a reinstalled phone its guest back. */
-  register: (device?: string, fingerprint?: string) =>
-    request<IdentityResponse & { restored?: boolean }>('POST', '/devices', { device, fingerprint }),
-  me: () => request<{ id: string; name: string; email?: string; usedBytes: number; quotaBytes: number }>('GET', '/me'),
+  register: (device?: string, fingerprint?: string, extra?: { ref?: string; emulator?: boolean }) =>
+    request<IdentityResponse & { restored?: boolean }>('POST', '/devices', { device, fingerprint, ...extra }),
+  me: () =>
+    request<{ id: string; name: string; email?: string; usedBytes: number; quotaBytes: number; bonusBytes?: number; admin?: boolean }>(
+      'GET',
+      '/me',
+    ),
 
   // Accounts (guest → signed in)
   authEmailStart: (email: string) => request<{ sent: boolean }>('POST', '/auth/email/start', { email }),
@@ -194,6 +228,31 @@ export const api = {
   signOutAllBrowsers: () => request<{ revoked: number }>('DELETE', '/web-sessions'),
   /** Deletes the account and all its data (cloud). Irreversible. */
   deleteAccount: () => request<{ deleting: boolean }>('DELETE', '/account', { confirm: 'DELETE' }),
+
+  // Invite friends (+storage) and the affiliate program.
+  referrals: () => request<Referrals>('GET', '/referrals'),
+  claimReferral: (code: string) => request<{ program: string; state: string }>('POST', '/referrals/claim', { code }),
+  affiliate: () => request<AffiliateDashboard>('GET', '/affiliates/me'),
+  applyAffiliate: (body: { name: string; channels: string; audience?: string; pan?: string; upi?: string; agree: boolean }) =>
+    request<{ status: string }>('POST', '/affiliates/apply', body),
+  affiliatePayoutDetails: (body: { pan?: string; upi?: string }) =>
+    request<{ panMasked?: string; upiMasked?: string }>('PUT', '/affiliates/payout-details', body),
+  createAffiliateLink: (campaign: string) => request<{ code: string; url: string }>('POST', '/affiliates/links', { campaign }),
+
+  // Admin (allow-listed accounts).
+  admin: {
+    affiliates: (status: string) => request<{ affiliates: AdminAffiliate[] }>('GET', `/admin/affiliates?status=${status}`),
+    decideAffiliate: (id: string, action: string, note?: string) =>
+      request<{ status: string }>('POST', `/admin/affiliates/${id}`, { action, note }),
+    heldReferrals: () =>
+      request<{ held: { inviterId: string; friendId: string; friendName: string; reason: string; at: number }[] }>('GET', '/admin/referrals/held'),
+    decideReferral: (friendId: string, action: 'release' | 'reject') =>
+      request<{ state: string }>('POST', `/admin/referrals/${friendId}`, { action }),
+    runPayouts: (month: string) => request<{ payouts: { affiliateId: string; grossPaise: number }[] }>('POST', '/admin/payouts/run', { month }),
+    payouts: (month: string) => request<{ payouts: AdminPayout[] }>('GET', `/admin/payouts?month=${month}`),
+    markPaid: (affiliateId: string, month: string, reference: string) =>
+      request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),
+  },
   /** Website: end this browser's session (clears the cookie). */
   signOutThisBrowser: () => request<{ signedOut: boolean }>('DELETE', '/web-sessions/current'),
 };

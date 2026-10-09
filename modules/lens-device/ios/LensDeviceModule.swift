@@ -18,6 +18,16 @@ public class LensDeviceModule: Module {
     Function("updateBackup") { (_: String, _: Int) in }
     Function("stopBackup") {}
 
+    // No install referrer on iOS (codes are typed instead).
+    AsyncFunction("installReferrer") { () -> String? in nil }
+    Function("isEmulator") { () -> Bool in
+      #if targetEnvironment(simulator)
+      return true
+      #else
+      return false
+      #endif
+    }
+
     OnStartObserving {
       self.observer = NotificationCenter.default.addObserver(
         forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main

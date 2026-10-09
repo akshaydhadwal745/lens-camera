@@ -319,6 +319,99 @@ wcall POST /web/auth/email/start -d "{\"email\":\"$MAILW\"}" >/dev/null
 [[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"$(otp "$MAILW")\"}" | j .email) == "$MAILW" ]] && ok "web sign-up creates an account"
 [[ $(wcall GET /me | j .quotaBytes) == $((100*1024*1024*1024)) ]] && ok "web account gets 100 GB"
 [[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"000000\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "used code refused"
+# --- user referrals: +10 GB per friend who signs in on a new phone ---
+GB=$((1024*1024*1024))
+newphone() { curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d "{\"fingerprint\":\"$1\"${2:+,$2}}"; }
+signin() { local t=$1 m=$2; call POST /auth/email/start "$t" -d "{\"email\":\"$m\"}" >/dev/null
+  call POST /auth/email/verify "$t" -d "{\"email\":\"$m\",\"code\":\"$(otp "$m")\"}"; }
+quota() { call GET /me "$1" | j .quotaBytes; }
+FPR=$(openssl rand -hex 32); RR=$(newphone "$FPR"); TR=$(echo "$RR" | j .token)
+[[ $(call GET /referrals "$TR" | j .code) == sign-in ]] && ok "guests can't invite (sign in first)"
+signin "$TR" "r$(date +%s%N)@e2e.lens.invalid" >/dev/null
+REF=$(call GET /referrals "$TR"); RCODE=$(echo "$REF" | j .code)
+[[ -n "$RCODE" && $(echo "$REF" | j .link) == *"/r/$RCODE" && $(call GET /referrals "$TR" | j .code) == "$RCODE" ]] && ok "invite code + link (stable): $RCODE"
+JAR="$TMP/jar-ref"
+R=$(curl -sS -o /dev/null -c "$JAR" -w '%{http_code} %{redirect_url}' "$SITE/r/$RCODE" -A 'Mozilla/5.0 (X11; Linux)')
+[[ $R == "302 "*"invite=$RCODE" ]] && grep -q "__Host-lensref" "$JAR" && ok "invite link counts the click, sets the cookie and redirects"
+[[ $(curl -sS -o /dev/null -w '%{redirect_url}' "$SITE/r/ZZZZZZZ") != *invite* ]] && ok "unknown code goes to the home page"
+F1=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"lens_ref=$RCODE&utm_source=x\""); TF1=$(echo "$F1" | j .token)
+[[ $(call GET /referrals "$TR" | j ".friends[0].state") == joined ]] && ok "friend installed from the invite: listed as joined, no reward yet"
+[[ $(quota "$TR") == $((100*GB)) ]] && ok "no storage before the friend signs in"
+MAILF1="f$(date +%s%N)@e2e.lens.invalid"; signin "$TF1" "$MAILF1" >/dev/null
+[[ $(quota "$TR") == $((110*GB)) ]] && ok "friend signed in on a new phone: inviter +10 GB (110 GB)"
+[[ $(call GET /referrals "$TR" | j .earnedBytes) == $((10*GB)) ]] && ok "invite screen shows 10 GB earned"
+F2=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"$RCODE\""); signin "$(echo "$F2" | j .token)" "$MAILF1" >/dev/null
+[[ $(quota "$TR") == $((110*GB)) ]] && ok "same person on another phone (existing account): no second reward"
+FPF3=$(openssl rand -hex 32); F3=$(newphone "$FPF3" "\"ref\":\"$RCODE\""); TF3=$(echo "$F3" | j .token)
+signin "$TF3" "f3$(date +%s%N)@e2e.lens.invalid" >/dev/null
+F3B=$(newphone "$FPF3" "\"ref\":\"$RCODE\""); signin "$(echo "$F3B" | j .token)" "f3b$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(quota "$TR") == $((120*GB)) ]] && ok "a second friend: 120 GB; a new account on that same phone earns nothing"
+F4=$(newphone "$FPR" "\"ref\":\"$RCODE\""); signin "$(echo "$F4" | j .token)" "f4$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(quota "$TR") == $((120*GB)) ]] && ok "self-referral (inviter's own phone) earns nothing"
+F5=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"$RCODE\",\"emulator\":true"); signin "$(echo "$F5" | j .token)" "f5$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(quota "$TR") == $((120*GB)) ]] && ok "emulators earn nothing"
+F6=$(newphone "$(openssl rand -hex 32)"); TF6=$(echo "$F6" | j .token); signin "$TF6" "f6$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(call POST /referrals/claim "$TF6" -d '{"code":"BADCODE"}' -o /dev/null -w '%{http_code}') == 404 ]] && ok "wrong typed code refused"
+[[ $(call POST /referrals/claim "$TF6" -d "{\"code\":\"${RCODE,,}\"}" | j .state) == rewarded && $(quota "$TR") == $((130*GB)) ]] && ok "typed code within 7 days: rewarded (130 GB)"
+[[ $(call POST /referrals/claim "$TF6" -d "{\"code\":\"$RCODE\"}" -o /dev/null -w '%{http_code}') == 409 ]] && ok "only one code per person"
+[[ $(call POST /referrals/claim "$TR" -d "{\"code\":\"$RCODE\"}" -o /dev/null -w '%{http_code}') =~ ^(400|409)$ ]] && ok "own code refused"
+# Website sign-up from the invite link (cookie), reward when they sign in on a phone.
+MAILW2="fw$(date +%s%N)@e2e.lens.invalid"
+wcall POST /web/auth/email/start -d "{\"email\":\"$MAILW2\"}" >/dev/null
+wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW2\",\"code\":\"$(otp "$MAILW2")\"}" >/dev/null
+[[ $(call GET /referrals "$TR" | j ".friends.length") == 7 && $(quota "$TR") == $((130*GB)) ]] && ok "web sign-up from the invite link is attributed; no reward without a phone"
+F7=$(newphone "$(openssl rand -hex 32)"); signin "$(echo "$F7" | j .token)" "$MAILW2" >/dev/null
+[[ $(quota "$TR") == $((140*GB)) ]] && ok "…and rewarded when that account signs in on a phone (140 GB)"
+[[ $(call GET /referrals "$TR" | j ".friends.filter(f=>f.state==='rewarded').length") == 4 ]] && ok "friends list: 4 rewarded"
+IR=$(echo "$RR" | j .id)
+[[ $(aws dynamodb query --profile lens --table-name Lens --key-condition-expression 'pk = :p AND begins_with(sk, :s)' \
+  --expression-attribute-values "{\":p\":{\"S\":\"D#$IR\"},\":s\":{\"S\":\"BN#\"}}" --query Count --output text) == 4 ]] && ok "bonus ledger has 4 grants"
+# --- affiliate program: 50% of net, 30-day hold, payouts with TDS ---
+paise() { aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "$1" "$TMP/p.json" >/dev/null && j .status < "$TMP/p.json"; }
+PA=$(newphone "$(openssl rand -hex 32)"); TP=$(echo "$PA" | j .token); IP=$(echo "$PA" | j .id)
+[[ $(call POST /affiliates/apply "$TP" -d '{"name":"X","channels":"y","agree":true}' -o /dev/null -w '%{http_code}') == 403 ]] && ok "guests can't apply"
+signin "$TP" "p$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(call POST /affiliates/apply "$TP" -d '{"name":"E2E Creator","channels":"youtube.com/@e2e","agree":true,"pan":"BAD"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "invalid PAN refused"
+[[ $(call POST /affiliates/apply "$TP" -d '{"name":"E2E Creator","channels":"youtube.com/@e2e","agree":true,"pan":"ABCDE1234F","upi":"e2e.creator@okaxis"}' | j .status) == applied ]] && ok "affiliate application"
+[[ $(call GET /affiliates/me "$TP" | j .panMasked) == "••••••234F" ]] && ok "PAN stored encrypted, shown masked"
+[[ $(call POST /affiliates/links "$TP" -d '{}' -o /dev/null -w '%{http_code}') == 403 ]] && ok "no links before approval"
+[[ $(call GET /admin/affiliates "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "admin API hidden from normal accounts"
+ADM=$(newphone "$(openssl rand -hex 32)"); TADM=$(echo "$ADM" | j .token); IADM=$(echo "$ADM" | j .id)
+signin "$TADM" "adm$(date +%s%N)@e2e.lens.invalid" >/dev/null
+aws dynamodb update-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"D#$IADM\"},\"sk\":{\"S\":\"PROFILE\"}}" \
+  --update-expression 'SET #a = :t' --expression-attribute-names '{"#a":"admin"}' --expression-attribute-values '{":t":{"BOOL":true}}'
+[[ $(call GET "/admin/affiliates?status=applied" "$TADM" | j ".affiliates.some(a=>a.id==='$IP')") == true ]] && ok "admin sees the application"
+[[ $(call POST "/admin/affiliates/$IP" "$TADM" -d '{"action":"approve"}' | j .status) == approved ]] && ok "admin approves"
+ACODE=$(call GET /affiliates/me "$TP" | j ".links[0].code")
+[[ -n "$ACODE" ]] && ok "approved partner gets a first link: $ACODE"
+[[ $(call POST /affiliates/links "$TP" -d '{"campaign":"instagram"}' | j .campaign) == instagram ]] && ok "extra campaign link"
+[[ $(curl -sS -o /dev/null -w '%{http_code}' "$SITE/go/$ACODE" -A 'Mozilla/5.0') == 302 ]] && ok "affiliate link redirects"
+U=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"lens_aff=$ACODE\""); IU=$(echo "$U" | j .id); signin "$(echo "$U" | j .token)" "u$(date +%s%N)@e2e.lens.invalid" >/dev/null
+O1="e2e-$(date +%s%N)-1"; O2="e2e-$(date +%s%N)-2"; O3="e2e-$(date +%s%N)-3"
+[[ $(paise "{\"purchase\":{\"orderId\":\"$O1\",\"userId\":\"$IU\",\"grossPaise\":9900,\"taxPaise\":1510,\"feePaise\":1259}}") == pending ]] && ok "₹99 purchase: commission pending"
+[[ $(paise "{\"purchase\":{\"orderId\":\"$O1\",\"userId\":\"$IU\",\"grossPaise\":9900,\"taxPaise\":1510,\"feePaise\":1259}}") == duplicate ]] && ok "same order twice: counted once"
+[[ $(call GET /affiliates/me "$TP" | j .pendingPaise) == 3565 ]] && ok "50% of net ₹71.31 = ₹35.65 pending"
+[[ $(call GET /affiliates/me "$TP" | j ".links.find(l=>l.code==='$ACODE').payers") == 1 ]] && ok "funnel: 1 paying user"
+paise "{\"purchase\":{\"orderId\":\"$O2\",\"userId\":\"$IU\",\"grossPaise\":9900,\"taxPaise\":1510,\"feePaise\":1259}}" >/dev/null
+[[ $(paise "{\"refund\":{\"orderId\":\"$O2\"}}") == reversed && $(call GET /affiliates/me "$TP" | j .pendingPaise) == 3565 ]] && ok "refund during the hold reverses the commission"
+paise "{\"purchase\":{\"orderId\":\"$O3\",\"userId\":\"$IU\",\"grossPaise\":354000,\"taxPaise\":54000,\"feePaise\":45000}}" >/dev/null
+[[ $(paise "{\"approveCommissions\":{\"now\":$(( $(date +%s%3N) + 29 * DAY )),\"onlyAffiliate\":\"$IP\"}}") == "" && $(call GET /affiliates/me "$TP" | j .approvedPaise) == 0 ]] && ok "still on hold after 29 days"
+aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"approveCommissions\":{\"now\":$(( $(date +%s%3N) + 31 * DAY )),\"onlyAffiliate\":\"$IP\"}}" "$TMP/p.json" >/dev/null
+[[ $(j .approved < "$TMP/p.json") == 2 && $(call GET /affiliates/me "$TP" | j .approvedPaise) == 131065 ]] && ok "approved after 30 days: ₹1,310.65"
+MONTH="2099-$(printf %02d $(( RANDOM % 12 + 1 )))"
+R=$(call POST /admin/payouts/run "$TADM" -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}")
+[[ $(echo "$R" | j ".payouts[0].grossPaise") == 131065 && $(echo "$R" | j ".payouts[0].tdsPaise") == 0 ]] && ok "monthly payout statement (under the TDS threshold: no TDS)"
+[[ $(call POST /admin/payouts/run "$TADM" -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}" | j .payouts.length) == 0 ]] && ok "payout run is idempotent"
+S=$(call GET "/admin/payouts?month=$MONTH" "$TADM")
+[[ $(echo "$S" | j ".payouts.find(p=>p.affiliateId==='$IP').upi") == e2e.creator@okaxis ]] && ok "payout sheet decrypts the UPI ID for the transfer"
+[[ $(call POST "/admin/payouts/$IP/$MONTH/paid" "$TADM" -d '{"reference":"UPI-E2E-1"}' | j .status) == paid ]] && ok "marked paid"
+[[ $(call GET /affiliates/me "$TP" | j .paidPaise) == 131065 && $(call GET /affiliates/me "$TP" | j ".payouts[0].status") == paid ]] && ok "partner sees the payout"
+[[ $(paise "{\"refund\":{\"orderId\":\"$O3\"}}") == reversed && $(call GET /affiliates/me "$TP" | j .approvedPaise) == -127500 ]] && ok "refund after payout: clawed back from the next payout"
+[[ $(call POST "/admin/affiliates/$IP" "$TADM" -d '{"action":"suspend","note":"e2e"}' | j .status) == suspended ]] && ok "admin suspends"
+[[ $(curl -sS -o /dev/null -w '%{redirect_url}' "$SITE/go/$ACODE") != *via=* ]] && ok "suspended partner's links stop attributing"
+[[ $(call GET "/admin/audit?entity=affiliate:$IP" "$TADM" | j .events.length) -ge 8 ]] && ok "audit trail recorded"
+AUDIT=$(node -p "require('./outputs.json').Lens.AuditBucketName")
+[[ $(aws s3api list-objects-v2 --profile lens --bucket "$AUDIT" --prefix "audit/$(date -u +%F)/affiliate:$IP/" --query KeyCount --output text) -ge 8 ]] && ok "audit events locked in S3 (Object Lock)"
 # --- delete account (Play requirement): everything goes, the email can start fresh ---
 D=$(curl -sS -X POST "$API/devices"); TD=$(echo "$D" | j .token); ID_D=$(echo "$D" | j .id)
 MAILD="d$(date +%s%N)@e2e.lens.invalid"

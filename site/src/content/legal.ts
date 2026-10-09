@@ -45,6 +45,10 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['Approximate city (from your IP) when you request QR sign-in on the website', 'To show "who is asking" on your phone before you approve', 'At most 2 minutes'],
             ['Sign-in codes we email you', 'To verify you own the email address', '10 minutes; stored only as a hash'],
             ['Requests you send us (for example "add a storage provider")', 'To reply and improve Lens', 'Up to 2 years'],
+            ['Invites: which invite or affiliate link or code brought you (from the Google Play install referrer, a website cookie, or a code you type), and whether your phone is an emulator', 'To give your friend their storage reward or the affiliate their commission, and to stop fake sign-ups', 'Until you delete your account'],
+            ['Clicks on invite and affiliate links: time, browser type and a one-way hash of the IP address', 'Fraud checks and the inviter’s statistics (counts only, never who clicked)', 'Raw clicks 30 days; daily counts for the life of the link'],
+            ['Affiliates only: name, channels, PAN and UPI ID (encrypted), commissions and payouts', 'To run the program, pay you and meet tax law (TDS, Form 16A)', '8 years after the financial year (Indian tax and accounting law)'],
+            ['A record of reward, commission and payout changes', 'An unchangeable audit trail, so rewards and payments can be checked', '8 years'],
           ],
         },
         p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics or crash-reporting in the app today. If we add analytics, we will update this policy first.'],
@@ -81,7 +85,7 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '6. Cookies on the website',
-        p: ['The website uses one strictly necessary cookie, "__Host-lens", to keep you signed in. It is secure, HttpOnly (scripts cannot read it) and sent only to lens.instagrowapp.com. It lasts up to 30 days or until you log out. We use no advertising or tracking cookies.'],
+        p: ['The website uses only strictly necessary cookies. "__Host-lens" keeps you signed in. It is secure, HttpOnly (scripts cannot read it) and sent only to lens.instagrowapp.com. It lasts up to 30 days or until you log out. If you arrive through an invite or affiliate link, a second cookie, "__Host-lensref", remembers that link’s code for up to 30 days so the right person is credited if you sign up on the website. We use no advertising or tracking cookies.'],
       },
       {
         h2: '7. Your rights',
@@ -136,6 +140,10 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['वेबसाइट पर QR साइन इन माँगने पर अनुमानित शहर (आपके IP से)', 'मंज़ूरी से पहले आपके फ़ोन पर "कौन माँग रहा है" दिखाने के लिए', 'ज़्यादा से ज़्यादा 2 मिनट'],
             ['हम जो साइन-इन कोड ईमेल करते हैं', 'यह जाँचने के लिए कि ईमेल आपका है', '10 मिनट; सिर्फ़ हैश के रूप में'],
             ['आपकी भेजी रिक्वेस्ट (जैसे "स्टोरेज प्रोवाइडर जोड़ें")', 'जवाब देने और Lens बेहतर करने के लिए', '2 साल तक'],
+            ['इनवाइट: कौन-सा इनवाइट या एफ़िलिएट लिंक या कोड आपको लाया (Google Play इंस्टॉल रेफ़रर, वेबसाइट कुकी या आपके टाइप किए कोड से), और क्या आपका फ़ोन एम्युलेटर है', 'आपके दोस्त को स्टोरेज इनाम या एफ़िलिएट को कमीशन देने और नकली साइन-अप रोकने के लिए', 'अकाउंट डिलीट करने तक'],
+            ['इनवाइट और एफ़िलिएट लिंक पर क्लिक: समय, ब्राउज़र का प्रकार और IP एड्रेस का वन-वे हैश', 'धोखाधड़ी की जाँच और इनवाइट करने वाले के आँकड़े (सिर्फ़ गिनती, कभी नहीं कि किसने क्लिक किया)', 'क्लिक 30 दिन; रोज़ की गिनती लिंक रहने तक'],
+            ['सिर्फ़ एफ़िलिएट: नाम, चैनल, PAN और UPI ID (एन्क्रिप्टेड), कमीशन और भुगतान', 'प्रोग्राम चलाने, आपको भुगतान करने और टैक्स क़ानून (TDS, Form 16A) के पालन के लिए', 'वित्त वर्ष के 8 साल बाद तक (भारतीय टैक्स और अकाउंटिंग क़ानून)'],
+            ['इनाम, कमीशन और भुगतान में हर बदलाव का रिकॉर्ड', 'न बदला जा सकने वाला ऑडिट रिकॉर्ड, ताकि इनाम और भुगतान जाँचे जा सकें', '8 साल'],
           ],
         },
         p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और आज ऐप में किसी थर्ड-पार्टी एनालिटिक्स या क्रैश रिपोर्टिंग का इस्तेमाल नहीं करते। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
@@ -170,7 +178,7 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '6. वेबसाइट पर कुकी',
-        p: ['वेबसाइट सिर्फ़ एक ज़रूरी कुकी "__Host-lens" इस्तेमाल करती है, आपको साइन इन रखने के लिए। यह सुरक्षित, HttpOnly (स्क्रिप्ट नहीं पढ़ सकतीं) है और सिर्फ़ lens.instagrowapp.com को भेजी जाती है। यह 30 दिन तक या लॉग आउट करने तक रहती है। हम कोई विज्ञापन या ट्रैकिंग कुकी इस्तेमाल नहीं करते।'],
+        p: ['वेबसाइट सिर्फ़ ज़रूरी कुकी इस्तेमाल करती है। "__Host-lens" आपको साइन इन रखती है। यह सुरक्षित, HttpOnly (स्क्रिप्ट नहीं पढ़ सकतीं) है और सिर्फ़ lens.instagrowapp.com को भेजी जाती है। यह 30 दिन तक या लॉग आउट करने तक रहती है। अगर आप किसी इनवाइट या एफ़िलिएट लिंक से आते हैं, तो दूसरी कुकी "__Host-lensref" उस लिंक का कोड 30 दिन तक याद रखती है ताकि वेबसाइट पर साइन अप करने पर सही व्यक्ति को श्रेय मिले। हम कोई विज्ञापन या ट्रैकिंग कुकी इस्तेमाल नहीं करते।'],
       },
       {
         h2: '7. आपके अधिकार',
@@ -218,6 +226,10 @@ export const terms: Record<Lang, LegalDoc> = {
         p: ['Don’t use Lens to store or share content that is illegal, including child sexual abuse material, content that infringes others’ rights, or malware. Don’t try to break, overload or get around the limits and security of Lens. We may remove such content, report it to authorities where required by law, and suspend accounts.'],
       },
       { h2: '4. Storage limits', p: ['The free plan includes 100 GB of Lens storage after you sign in (5 GB before). When you reach the limit, new uploads pause. Storage in your own connected services is governed by those services.'] },
+      {
+        h2: '4a. Invite friends (bonus storage)',
+        p: ['You get bonus Lens storage (currently +10 GB) for each friend who installs Lens from your link or code and signs in on their own phone. Each person and each phone can earn a reward only once; your own accounts, phones and emulators do not count, and unusual activity may be held for review. Bonus storage lasts as long as your account. If a reward was earned by fake accounts or other abuse we may remove it (nothing you stored is deleted; new uploads just pause if you are over the limit). The affiliate program has its own affiliate terms.'],
+      },
       { h2: '5. Availability and backups', p: ['We work hard to keep Lens available and your files safe, with verified uploads and redundant storage. But no service can promise zero downtime or zero data loss; keep important originals in more than one place.'] },
       { h2: '6. Changes and ending the service', p: ['We may change features. If we ever end a service that stores your files, we will give at least 60 days’ notice so you can download your library. You can stop using Lens and delete your account at any time.'] },
       { h2: '7. Liability', p: ['To the extent the law allows, Lens is provided "as is" and our total liability for any claim is limited to the amount you paid us in the 12 months before it (₹0 on the free plan). Nothing here limits rights you have that cannot be limited by law.'] },
@@ -235,6 +247,10 @@ export const terms: Record<Lang, LegalDoc> = {
       { h2: '2. आपका अकाउंट', p: ['अपने ईमेल और फ़ोन की पहुँच सुरक्षित रखें; जिसके पास इनकी पहुँच है वह साइन इन कर सकता है। आपके अकाउंट पर होने वाली गतिविधि की ज़िम्मेदारी आपकी है। आपकी उम्र 18 साल या ज़्यादा होनी चाहिए, या माता-पिता/अभिभावक की सहमति।'] },
       { h2: '3. सही इस्तेमाल', p: ['Lens का इस्तेमाल ग़ैरक़ानूनी कंटेंट रखने या शेयर करने के लिए न करें, जिसमें बाल यौन शोषण सामग्री, दूसरों के अधिकारों का उल्लंघन करने वाला कंटेंट या मैलवेयर शामिल है। Lens की सीमाओं और सुरक्षा को तोड़ने, ओवरलोड करने या बायपास करने की कोशिश न करें। हम ऐसा कंटेंट हटा सकते हैं, क़ानून के अनुसार अधिकारियों को रिपोर्ट कर सकते हैं और अकाउंट निलंबित कर सकते हैं।'] },
       { h2: '4. स्टोरेज सीमा', p: ['फ़्री प्लान में साइन इन के बाद 100 GB Lens स्टोरेज (पहले 5 GB) शामिल है। सीमा पूरी होने पर नए अपलोड रुक जाते हैं। आपकी जोड़ी गई अपनी सेवाओं का स्टोरेज उन्हीं सेवाओं के नियमों से चलता है।'] },
+      {
+        h2: '4a. दोस्तों को इनवाइट करें (बोनस स्टोरेज)',
+        p: ['हर उस दोस्त के लिए जो आपके लिंक या कोड से Lens इंस्टॉल करके अपने फ़ोन पर साइन इन करे, आपको बोनस Lens स्टोरेज (अभी +10 GB) मिलता है। हर व्यक्ति और हर फ़ोन सिर्फ़ एक बार इनाम दिला सकता है; आपके अपने अकाउंट, फ़ोन और एम्युलेटर नहीं गिने जाते, और असामान्य गतिविधि जाँच के लिए रोकी जा सकती है। बोनस स्टोरेज आपके अकाउंट जितने समय रहता है। अगर इनाम नकली अकाउंट या दूसरे दुरुपयोग से मिला हो, तो हम उसे हटा सकते हैं (आपका रखा कुछ डिलीट नहीं होता; सीमा से ऊपर होने पर सिर्फ़ नए अपलोड रुकते हैं)। एफ़िलिएट प्रोग्राम की अपनी अलग शर्तें हैं।'],
+      },
       { h2: '5. उपलब्धता और बैकअप', p: ['हम Lens को उपलब्ध और आपकी फ़ाइलें सुरक्षित रखने के लिए पूरी मेहनत करते हैं, जाँचे हुए अपलोड और कई जगह स्टोरेज के साथ। फिर भी कोई सेवा शून्य डाउनटाइम या शून्य डेटा हानि का वादा नहीं कर सकती; ज़रूरी ओरिजिनल एक से ज़्यादा जगह रखें।'] },
       { h2: '6. बदलाव और सेवा बंद होना', p: ['हम फ़ीचर बदल सकते हैं। अगर हम कभी फ़ाइलें स्टोर करने वाली सेवा बंद करते हैं, तो कम से कम 60 दिन पहले बताएँगे ताकि आप अपनी लाइब्रेरी डाउनलोड कर सकें। आप कभी भी Lens इस्तेमाल करना बंद करके अकाउंट डिलीट कर सकते हैं।'] },
       { h2: '7. ज़िम्मेदारी', p: ['क़ानून जितनी अनुमति देता है, Lens "जैसा है" वैसा दिया जाता है और किसी भी दावे के लिए हमारी कुल ज़िम्मेदारी उससे पहले के 12 महीनों में आपके दिए भुगतान तक सीमित है (फ़्री प्लान पर ₹0)। यहाँ कुछ भी आपके उन अधिकारों को सीमित नहीं करता जिन्हें क़ानून सीमित नहीं करने देता।'] },
@@ -311,6 +327,105 @@ export const deletion: Record<Lang, LegalDoc> = {
           'जहाँ क़ानून कोई रिकॉर्ड रखना ज़रूरी बनाता है (जैसे कोई क़ानूनी रिक्वेस्ट), हम सिर्फ़ वह रिकॉर्ड, ज़रूरत भर समय तक रखते हैं।',
         ],
       },
+    ],
+  },
+};
+
+export const affiliateTerms: Record<Lang, LegalDoc> = {
+  en: {
+    title: 'Affiliate program terms',
+    description: 'The terms of the Lens affiliate program: 50% recurring commission on net revenue, the 30-day hold, monthly payouts, TDS, and fair-play rules.',
+    h1: 'Affiliate program terms',
+    intro: `These terms apply to the Lens affiliate program run by ${LEGAL.operator}, in addition to the Lens terms of service. By applying you agree to them. Version 9 October 2026.`,
+    blocks: [
+      { h2: '1. Joining', p: ['You need a Lens account and must be 18 or older. We review every application and may approve or decline it at our discretion. Your tracking links work only while your account is approved.'] },
+      {
+        h2: '2. Commission',
+        ul: [
+          'You earn 50% of net revenue from paid Lens plans bought by users you referred. Net revenue is what we actually receive: the price paid, minus GST and other taxes, minus the app store’s fee.',
+          'Commission is recurring for as long as the referred user keeps paying, unless your account is ended under section 7.',
+          'A user is referred by you if they installed Lens through your link (Google Play install referrer), signed up on the website after opening your link (within 30 days), or entered your code within 7 days of joining. Each user is credited to one referrer only, fixed at sign-up.',
+          'We may change the commission rate for future payments with 30 days’ notice; payments already made keep the old rate.',
+        ],
+      },
+      {
+        h2: '3. Hold, refunds and reversals',
+        p: ['Each commission is pending for 30 days after the payment, then approved. If the payment is refunded, charged back or cancelled during the hold, the commission is cancelled. If that happens after approval or payout, the amount is deducted from your next payouts.'],
+      },
+      {
+        h2: '4. Payouts and tax',
+        ul: [
+          'Approved commission is paid monthly by UPI or bank transfer once your approved balance is at least ₹1,000; smaller balances roll over.',
+          'Before your first payout you must give your PAN and payout details. They must match your name.',
+          'We deduct TDS under section 194H of the Income-tax Act as required (currently 2% once your commission in a financial year exceeds ₹20,000, and 20% if no PAN is given) and issue Form 16A. You are responsible for your own income tax and GST, if applicable.',
+          'Payments are made in Indian rupees to Indian accounts.',
+        ],
+      },
+      {
+        h2: '5. Not allowed',
+        ul: [
+          'Buying through your own link, or referring your own accounts or devices',
+          'Fake, automated or incentivised installs or sign-ups (for example paying people to install), click fraud, or misleading claims about Lens',
+          'Spam, including unsolicited messages, comments or emails',
+          'Bidding on "Lens by InstaGrow" or similar brand terms in search ads, or pretending to be us',
+          'Coupon or "free money" sites that misrepresent the program',
+          'Content that is illegal, hateful, adult or violates platform rules',
+        ],
+        p: ['Commissions earned in breach of these rules are not payable and may be reversed.'],
+      },
+      { h2: '6. Disclosure', p: ['Clearly disclose that you are paid for referrals whenever you promote Lens (for example "#ad" or the platform’s paid-partnership label), as required by the ASCI guidelines for influencer advertising.'] },
+      {
+        h2: '7. Suspension and ending',
+        p: ['We may suspend your account while we investigate unusual activity, and end it for breach of these terms. You may leave at any time. When your account ends without a breach, approved commissions are paid in the next payout run (even below the minimum) and no further commission accrues.'],
+      },
+      { h2: '8. Your data', p: ['We handle your application, PAN, payout details and earnings as described in the privacy policy. PAN and payout details are encrypted; tax and payment records are kept for 8 years as the law requires.'] },
+      { h2: '9. Changes', p: ['We may update these terms with 30 days’ notice by email. Continuing after the change means you accept it.'] },
+      { h2: '10. Contact', p: [`${C}`] },
+    ],
+  },
+  hi: {
+    title: 'एफ़िलिएट प्रोग्राम की शर्तें',
+    description: 'Lens एफ़िलिएट प्रोग्राम की शर्तें: नेट कमाई पर 50% रिकरिंग कमीशन, 30 दिन होल्ड, मासिक भुगतान, TDS और सही खेल के नियम।',
+    h1: 'एफ़िलिएट प्रोग्राम की शर्तें',
+    intro: `ये शर्तें ${LEGAL.operator} द्वारा चलाए जाने वाले Lens एफ़िलिएट प्रोग्राम पर, Lens की सेवा की शर्तों के अलावा, लागू होती हैं। आवेदन करके आप इन्हें मानते हैं। संस्करण 9 अक्टूबर 2026। (यह अनुवाद है; अंतर होने पर अंग्रेज़ी संस्करण मान्य होगा।)`,
+    blocks: [
+      { h2: '1. जुड़ना', p: ['आपके पास Lens अकाउंट होना चाहिए और उम्र 18 साल या ज़्यादा। हम हर आवेदन देखते हैं और अपने विवेक से मंज़ूर या अस्वीकार कर सकते हैं। आपके ट्रैकिंग लिंक तभी काम करते हैं जब आपका अकाउंट मंज़ूर हो।'] },
+      {
+        h2: '2. कमीशन',
+        ul: [
+          'आपके रेफ़र किए यूज़र जो पेड Lens प्लान ख़रीदते हैं, उनकी नेट कमाई का 50% आपको मिलता है। नेट कमाई वह है जो हमें असल में मिलती है: चुकाई गई कीमत, माइनस GST और दूसरे टैक्स, माइनस ऐप स्टोर की फ़ीस।',
+          'जब तक रेफ़र किया गया यूज़र भुगतान करता रहे, कमीशन हर बार मिलता है, जब तक आपका अकाउंट धारा 7 के तहत ख़त्म न हो।',
+          'यूज़र आपका रेफ़र किया माना जाता है अगर उसने आपके लिंक से Lens इंस्टॉल किया (Google Play इंस्टॉल रेफ़रर), आपका लिंक खोलने के 30 दिन के अंदर वेबसाइट पर साइन अप किया, या जुड़ने के 7 दिन के अंदर आपका कोड डाला। हर यूज़र सिर्फ़ एक रेफ़रर के नाम होता है, जो साइन-अप पर तय होता है।',
+          'हम 30 दिन पहले बताकर आगे के भुगतानों की कमीशन दर बदल सकते हैं; पहले हो चुके भुगतानों पर पुरानी दर रहती है।',
+        ],
+      },
+      { h2: '3. होल्ड, रिफ़ंड और वापसी', p: ['हर कमीशन भुगतान के बाद 30 दिन पेंडिंग रहता है, फिर मंज़ूर होता है। अगर इस दौरान भुगतान रिफ़ंड, चार्जबैक या रद्द हो, तो कमीशन रद्द हो जाता है। मंज़ूरी या भुगतान के बाद ऐसा हो, तो रक़म आपके अगले भुगतानों से काटी जाती है।'] },
+      {
+        h2: '4. भुगतान और टैक्स',
+        ul: [
+          'मंज़ूर कमीशन हर महीने UPI या बैंक ट्रांसफ़र से दिया जाता है, जब मंज़ूर बैलेंस कम से कम ₹1,000 हो; कम बैलेंस अगले महीने जुड़ता है।',
+          'पहले भुगतान से पहले आपको PAN और भुगतान की जानकारी देनी होगी। ये आपके नाम से मेल खानी चाहिए।',
+          'हम आयकर अधिनियम की धारा 194H के तहत ज़रूरी TDS काटते हैं (अभी वित्त वर्ष में कमीशन ₹20,000 से ज़्यादा होने पर 2%, और PAN न देने पर 20%) और Form 16A देते हैं। अपने इनकम टैक्स और, लागू हो तो, GST की ज़िम्मेदारी आपकी है।',
+          'भुगतान भारतीय रुपये में भारतीय खातों में होते हैं।',
+        ],
+      },
+      {
+        h2: '5. मना है',
+        ul: [
+          'अपने ही लिंक से ख़रीदना, या अपने ही अकाउंट या डिवाइस रेफ़र करना',
+          'नकली, ऑटोमेटेड या लालच देकर करवाए गए इंस्टॉल या साइन-अप (जैसे इंस्टॉल के लिए पैसे देना), क्लिक फ़्रॉड, या Lens के बारे में भ्रामक दावे',
+          'स्पैम, जिसमें बिना माँगे मैसेज, कमेंट या ईमेल शामिल हैं',
+          'सर्च विज्ञापनों में "Lens by InstaGrow" या मिलते-जुलते ब्रांड शब्दों पर बोली लगाना, या हमारे होने का दिखावा करना',
+          'प्रोग्राम को ग़लत तरीके से दिखाने वाली कूपन या "फ़्री पैसे" वाली साइटें',
+          'ग़ैरक़ानूनी, नफ़रत भरा, वयस्क या प्लेटफ़ॉर्म नियम तोड़ने वाला कंटेंट',
+        ],
+        p: ['इन नियमों को तोड़कर कमाया गया कमीशन देय नहीं है और वापस लिया जा सकता है।'],
+      },
+      { h2: '6. जानकारी देना', p: ['जब भी आप Lens का प्रचार करें, साफ़ बताएँ कि रेफ़रल के लिए आपको भुगतान मिलता है (जैसे "#ad" या प्लेटफ़ॉर्म का पेड-पार्टनरशिप लेबल), जैसा इन्फ़्लुएंसर विज्ञापन के लिए ASCI दिशानिर्देश कहते हैं।'] },
+      { h2: '7. निलंबन और समाप्ति', p: ['असामान्य गतिविधि की जाँच के दौरान हम आपका अकाउंट निलंबित कर सकते हैं, और इन शर्तों के उल्लंघन पर ख़त्म कर सकते हैं। आप कभी भी छोड़ सकते हैं। बिना उल्लंघन के अकाउंट ख़त्म होने पर मंज़ूर कमीशन अगले भुगतान में दिया जाता है (न्यूनतम से कम हो तब भी) और आगे कमीशन नहीं जुड़ता।'] },
+      { h2: '8. आपका डेटा', p: ['आपका आवेदन, PAN, भुगतान की जानकारी और कमाई हम प्राइवेसी पॉलिसी के अनुसार संभालते हैं। PAN और भुगतान की जानकारी एन्क्रिप्टेड रहती है; टैक्स और भुगतान के रिकॉर्ड क़ानून के अनुसार 8 साल रखे जाते हैं।'] },
+      { h2: '9. बदलाव', p: ['हम 30 दिन पहले ईमेल से बताकर ये शर्तें बदल सकते हैं। बदलाव के बाद जारी रखने का मतलब है कि आप उन्हें मानते हैं।'] },
+      { h2: '10. संपर्क', p: [`${C}`] },
     ],
   },
 };

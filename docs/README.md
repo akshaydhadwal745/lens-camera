@@ -21,6 +21,7 @@ native camera module on each platform), and a web viewer.
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 | Website + web app (lens.instagrowapp.com): SEO site EN/HI, QR/email/Google sign-in, upload, sync, delete account | [features/website.md](features/website.md) |
+| Invite friends (+10 GB) and the affiliate program (50% commission), admin, audit log | [features/referrals-and-affiliates.md](features/referrals-and-affiliates.md) |
 
 ## Engineering
 
@@ -33,6 +34,7 @@ native camera module on each platform), and a web viewer.
 | Design: own storage + Lens tiers | [design/own-storage.md](design/own-storage.md) |
 | Design: Android pro camera, looks, editor, Night, Portrait | [design/android-camera.md](design/android-camera.md) |
 | Design: website + web app | [design/website.md](design/website.md) |
+| Design: user referrals + affiliate program | [design/referrals-and-affiliates.md](design/referrals-and-affiliates.md) |
 
 ## Feature status
 
@@ -90,3 +92,6 @@ native camera module on each platform), and a web viewer.
 | Web sign-in: QR from phone (approve/deny, city), email code, Google; HttpOnly cookie | Web, iOS, Android | ✅ | Server ✅ (e2e) | Phone scanner + App Link not device-tested |
 | Web app under /app: upload from computer, automatic sync | Web | ✅ | No | Replaces the 8-character link code |
 | Delete account (app + web), everything removed in the background | All | ✅ | Server ✅ (e2e) | Google Play requirement |
+| Invite friends: +10 GB per friend who signs in on a new phone; install referrer, links, typed codes, anti-fraud | All (referrer: Android) | ✅ | No (not deployed yet) | e2e written; needs deploy |
+| Affiliate program: apply, links, 50% of net commission, 30-day hold, refunds, monthly payouts + TDS, partner dashboard | All | ✅ | No (not deployed yet) | Payments (Play Billing) not built: purchases come in via Maintenance for now |
+| Admin (allow-listed): approve partners, held rewards, payouts; audit log (DynamoDB + S3 Object Lock) | All | ✅ | No | |

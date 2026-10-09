@@ -26,3 +26,12 @@ export function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
+
+/** Paise as rupees with Indian digit grouping, e.g. ₹12,34,567.89. */
+export function rupees(paise = 0): string {
+  const sign = paise < 0 ? '−' : '';
+  const [whole, frac] = (Math.abs(paise) / 100).toFixed(2).split('.');
+  // Indian grouping: 12,34,567.89
+  const head = whole.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return `${sign}₹${head ? `${head},` : ''}${whole.slice(-3)}.${frac}`;
+}

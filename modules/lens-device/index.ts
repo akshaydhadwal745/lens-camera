@@ -9,6 +9,8 @@ type LensDeviceNative = {
   startBackup(text: string): boolean;
   updateBackup(text: string, progress: number): void;
   stopBackup(): void;
+  installReferrer(): Promise<string | null>;
+  isEmulator(): boolean;
   addListener(event: 'onThermalChange', listener: (e: { level: ThermalLevel }) => void): { remove(): void };
 };
 
@@ -55,3 +57,21 @@ export const backupService = {
     }
   },
 };
+
+/** Android: the Play install referrer ("lens_ref=…") of this install, if any. */
+export async function installReferrer(): Promise<string | undefined> {
+  try {
+    return (await native?.installReferrer()) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True on an emulator/simulator (best guess). */
+export function isEmulator(): boolean {
+  try {
+    return native?.isEmulator() ?? false;
+  } catch {
+    return false;
+  }
+}

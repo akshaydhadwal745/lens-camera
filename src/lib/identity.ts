@@ -8,6 +8,7 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+import { installReferrer, isEmulator } from '../../modules/lens-device';
 import { api, IdentityResponse } from './api';
 
 /** `email` is set once the guest identity became a signed-in account. */
@@ -93,7 +94,9 @@ async function deviceFingerprint(): Promise<string | undefined> {
 export async function ensureIdentity(): Promise<Identity> {
   const existing = await loadIdentity();
   if (existing) return existing;
-  const created = await api.register(deviceLabel(), await deviceFingerprint());
+  // Invite/affiliate link this app was installed from (Play install referrer).
+  const ref = Platform.OS === 'android' ? await installReferrer() : undefined;
+  const created = await api.register(deviceLabel(), await deviceFingerprint(), { ref, emulator: isEmulator() || undefined });
   await saveIdentity(created);
   return created;
 }

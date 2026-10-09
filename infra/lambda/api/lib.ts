@@ -28,6 +28,12 @@ export const env = {
   webOrigin: process.env.WEB_ORIGIN ?? '',
   /** Sent only by our CloudFront (/api): proves the viewer headers are real. */
   edgeSecret: process.env.EDGE_SECRET ?? '',
+  /** Append-only audit trail (S3 Object Lock). */
+  auditBucket: process.env.AUDIT_BUCKET ?? '',
+  /** Accounts (by email) allowed into /admin. */
+  adminEmails: (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+  /** Google Play listing for invite/affiliate links; empty until the app is published. */
+  playUrl: process.env.PLAY_URL ?? '',
   /** Runs long background jobs (account deletion). */
   maintenanceFunction: process.env.MAINTENANCE_FUNCTION ?? process.env.AWS_LAMBDA_FUNCTION_NAME ?? '',
 };
@@ -123,13 +129,13 @@ export function withCookies(res: Res, cookies: string[]): Res {
   return { ...res, cookies: [...(res.cookies ?? []), ...cookies] };
 }
 
-/** Lens storage limit: guests get less until they sign in. */
-export function quotaFor(identity: { email?: string }): number {
-  return identity.email ? env.quotaBytes : env.guestQuotaBytes;
+/** Lens storage limit: guests get less until they sign in; referral bonuses add on top. */
+export function quotaFor(identity: { email?: string; bonusBytes?: number }): number {
+  return (identity.email ? env.quotaBytes : env.guestQuotaBytes) + Math.max(0, identity.bonusBytes ?? 0);
 }
 
 /** Throws 413 if `bytes` more would exceed this identity's Lens storage. */
-export function checkQuota(identity: { email?: string; usedBytes: number }, bytes: number, what = 'Lens storage is full') {
+export function checkQuota(identity: { email?: string; bonusBytes?: number; usedBytes: number }, bytes: number, what = 'Lens storage is full') {
   if (bytes <= 0 || identity.usedBytes + bytes <= quotaFor(identity)) return;
   if (!identity.email) {
     const gb = Math.round(env.guestQuotaBytes / 1024 ** 3);

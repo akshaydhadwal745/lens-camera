@@ -25,6 +25,20 @@ import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { requestStream } from './stream';
 import { requestAccountDeletion } from './account';
+import { followLink } from './attribution';
+import { claimCode, decideReferral, heldReferrals, myReferrals } from './referrals';
+import {
+  apply as applyAffiliate,
+  auditTrail,
+  createLink,
+  dashboard as affiliateDashboard,
+  decideAffiliate,
+  listAffiliates,
+  markPaid,
+  payoutSheet,
+  runPayouts,
+  updatePayoutDetails,
+} from './affiliates';
 import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth, webStartGoogle } from './oauth';
 import {
   continueSignIn,
@@ -51,6 +65,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /pairing/claim') return await claimPairing(req);
     if (route === 'GET /health') return json(200, { ok: true });
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
+    // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.
+    if (seg[1] === 'r' && seg.length === 3 && method === 'GET') return await followLink(req, 'referral', seg[2]);
+    if (seg[1] === 'go' && seg.length === 3 && method === 'GET') return await followLink(req, 'affiliate', seg[2]);
 
     // Website sign-in (public): QR from a phone, email code, or Google. The
     // session comes back as an HttpOnly cookie through the /api proxy.
@@ -84,6 +101,27 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[1] === 'login-sessions' && seg.length === 4 && seg[3] === 'deny' && method === 'POST') return await denyLoginSession(identity, seg[2]);
     if (route === 'GET /web-sessions') return await listWebSessions(identity);
     if (route === 'DELETE /web-sessions') return await revokeWebSessions(identity);
+
+    // User referrals (+storage) and the affiliate program (commission).
+    if (route === 'GET /referrals') return await myReferrals(identity);
+    if (route === 'POST /referrals/claim') return await claimCode(identity, req);
+    if (route === 'GET /affiliates/me') return await affiliateDashboard(identity);
+    if (route === 'POST /affiliates/apply') return await applyAffiliate(identity, req);
+    if (route === 'PUT /affiliates/payout-details') return await updatePayoutDetails(identity, req);
+    if (route === 'POST /affiliates/links') return await createLink(identity, req);
+
+    // Admin (allow-listed accounts only).
+    if (seg[1] === 'admin') {
+      if (!identity.admin) throw new HttpError(404, 'Not found');
+      if (route === 'GET /admin/affiliates') return await listAffiliates(req);
+      if (seg[2] === 'affiliates' && seg.length === 4 && method === 'POST') return await decideAffiliate(identity.id, seg[3], req);
+      if (route === 'GET /admin/referrals/held') return await heldReferrals();
+      if (seg[2] === 'referrals' && seg.length === 4 && method === 'POST') return await decideReferral(identity.id, seg[3], req);
+      if (route === 'POST /admin/payouts/run') return await runPayouts(identity.id, req);
+      if (route === 'GET /admin/payouts') return await payoutSheet(req, identity.id);
+      if (seg[2] === 'payouts' && seg.length === 6 && seg[5] === 'paid' && method === 'POST') return await markPaid(identity.id, seg[3], seg[4], req);
+      if (route === 'GET /admin/audit') return await auditTrail(req);
+    }
 
     if (route === 'GET /media') return await listMedia(identity, req);
     if (route === 'POST /media') return await startUpload(identity, req);

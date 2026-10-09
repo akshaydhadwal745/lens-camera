@@ -96,6 +96,22 @@ export class LensStack extends Stack {
       autoDeleteObjects: true,
     });
 
+    // Audit trail for referral rewards, commissions and payouts. Object Lock keeps
+    // every event for 8 years (Indian books-of-account retention); events are tiny.
+    // GOVERNANCE while testing (only a special IAM permission can remove test
+    // events); switch to COMPLIANCE (nobody, not even root) before launch.
+    const auditBucket = new s3.Bucket(this, 'Audit', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      versioned: true,
+      objectLockEnabled: true,
+      objectLockDefaultRetention: s3.ObjectLockRetention.governance(Duration.days(8 * 365)),
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    new CfnOutput(this, 'AuditBucketName', { value: auditBucket.bucketName });
+
     const table = new dynamodb.TableV2(this, 'Table', {
       tableName: 'Lens',
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
@@ -336,6 +352,11 @@ function handler(event) {
       TRANSCODE_QUEUE_ONDEMAND: onDemandQueue.jobQueueArn,
       TRANSCODE_JOB: transcodeJob.jobDefinitionArn,
       STREAM_KEY_PARAM,
+      AUDIT_BUCKET: auditBucket.bucketName,
+      // Who may open /admin (comma-separated emails).
+      ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
+      // Play Store listing for invite/affiliate links; empty until the app is published.
+      PLAY_URL: (this.node.tryGetContext('playUrl') as string | undefined) ?? '',
     };
 
     const api = new nodejs.NodejsFunction(this, 'Api', {
@@ -382,6 +403,7 @@ function handler(event) {
 
     for (const fn of [api, maintenance]) {
       table.grantReadWriteData(fn);
+      auditBucket.grantPut(fn, 'audit/*');
       mediaBucket.grantReadWrite(fn); // presigned PUT/multipart, Head, Delete, tagging, versions
       fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:RestoreObject'], resources: [mediaBucket.arnForObjects('m/*')] }));
       fn.addToRolePolicy(
@@ -463,6 +485,34 @@ function handler(event) {
         functionAssociations: [{ function: apiRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
     );
+
+    // Invite (/r/<code>) and affiliate (/go/<code>) links: the API counts the
+    // click, sets the attribution cookie on this domain and redirects.
+    const linkRewrite = new cloudfront.Function(this, 'LinkRewrite', {
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var req = event.request;
+  req.uri = '/v1' + req.uri.replace(/\\/+$/, '');
+  return req;
+}`),
+    });
+    for (const pattern of ['/r/*', '/go/*']) {
+      distribution.addBehavior(
+        pattern,
+        new origins.HttpOrigin(Fn.select(2, Fn.split('/', apiUrl.url)), {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+          customHeaders: edgeSecret ? { 'x-lens-edge': edgeSecret } : undefined,
+        }),
+        {
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: apiOriginPolicy,
+          functionAssociations: [{ function: linkRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+        },
+      );
+    }
 
     // Missing website files answer 404 (not 403), so the 404 page shows.
     webBucket.addToResourcePolicy(

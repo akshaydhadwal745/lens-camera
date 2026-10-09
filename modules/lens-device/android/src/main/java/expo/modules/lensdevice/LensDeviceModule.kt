@@ -9,6 +9,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import com.android.installreferrer.api.InstallReferrerClient
+import com.android.installreferrer.api.InstallReferrerStateListener
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -66,6 +69,45 @@ class LensDeviceModule : Module() {
         context.stopService(Intent(context, BackupService::class.java))
       }
       Unit
+    }
+
+    // Play Install Referrer (e.g. "lens_ref=ABCD234&utm_source=…"), read once on
+    // first launch; null when not installed from Play or Play is unavailable.
+    AsyncFunction("installReferrer") { promise: Promise ->
+      val context = appContext.reactContext ?: return@AsyncFunction promise.resolve(null)
+      val client = InstallReferrerClient.newBuilder(context).build()
+      var settled = false
+      fun settle(value: String?) {
+        if (settled) return
+        settled = true
+        promise.resolve(value)
+        try { client.endConnection() } catch (_: Exception) {}
+      }
+      try {
+        client.startConnection(object : InstallReferrerStateListener {
+          override fun onInstallReferrerSetupFinished(code: Int) {
+            settle(
+              if (code == InstallReferrerClient.InstallReferrerResponse.OK) {
+                try { client.installReferrer.installReferrer } catch (_: Exception) { null }
+              } else null,
+            )
+          }
+          override fun onInstallReferrerServiceDisconnected() = settle(null)
+        })
+        handler.postDelayed({ settle(null) }, 5_000)
+      } catch (_: Exception) {
+        settle(null)
+      }
+    }
+
+    // Emulator heuristics (referral rewards ignore emulators). Not proof: Play Integrity later.
+    Function("isEmulator") {
+      val fp = Build.FINGERPRINT.lowercase()
+      fp.startsWith("generic") || fp.contains("emulator") || fp.contains("sdk_gphone") ||
+        Build.MODEL.contains("Emulator") || Build.MODEL.contains("Android SDK built for") ||
+        Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu") ||
+        Build.PRODUCT.contains("sdk") || Build.MANUFACTURER.contains("Genymotion") ||
+        (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
     }
 
     OnStartObserving {

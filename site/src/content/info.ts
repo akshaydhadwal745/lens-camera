@@ -14,6 +14,7 @@ export const helpFaq: Record<Lang, Faq[]> = {
     { q: 'How do I connect Google Drive, OneDrive or Dropbox?', a: 'Tap the storage button in the gallery (or Settings → Storage), pick your provider and sign in. New photos go there from then on.' },
     { q: 'How do I sign a browser out?', a: 'On the website: Account → Log out. From your phone: Settings → Account → signed-in browsers → Log out.' },
     { q: 'How do I delete my account?', a: 'See the Delete your account page: it explains how, and exactly what is deleted.' },
+    { q: 'How do I get more free storage?', a: 'Invite friends: Settings → Invite friends. You get +10 GB for every friend who installs Lens and signs in on their phone. There is no limit; each person and phone counts once.' },
     { q: 'How do I contact you?', a: 'Email support@instagrowapp.com. We usually reply within two working days.' },
   ],
   hi: [
@@ -25,6 +26,7 @@ export const helpFaq: Record<Lang, Faq[]> = {
     { q: 'Google Drive, OneDrive या Dropbox कैसे जोड़ें?', a: 'गैलरी में स्टोरेज बटन (या Settings → Storage) दबाएँ, अपना प्रोवाइडर चुनें और साइन इन करें। उसके बाद नई फ़ोटो वहीं जाती हैं।' },
     { q: 'ब्राउज़र से साइन आउट कैसे करें?', a: 'वेबसाइट पर: Account → Log out। फ़ोन से: Settings → Account → signed-in browsers → Log out।' },
     { q: 'अपना अकाउंट कैसे डिलीट करें?', a: '"अकाउंट डिलीट करें" पेज देखें: वहाँ तरीका और ठीक-ठीक क्या डिलीट होता है, बताया गया है।' },
+    { q: 'और मुफ़्त स्टोरेज कैसे पाएँ?', a: 'दोस्तों को इनवाइट करें: Settings → Invite friends। हर दोस्त जो Lens इंस्टॉल करके अपने फ़ोन पर साइन इन करे, उस पर आपको +10 GB मिलता है। कोई सीमा नहीं; हर व्यक्ति और फ़ोन एक बार गिना जाता है।' },
     { q: 'आपसे संपर्क कैसे करें?', a: 'support@instagrowapp.com पर ईमेल करें। हम आमतौर पर दो कामकाजी दिनों में जवाब देते हैं।' },
   ],
 };
@@ -51,6 +53,7 @@ export const infoPages: InfoPage[] = [
               'Sharing with friends',
               'Web app with QR sign-in and upload from your computer',
               'Trash for 30 days, Archive for 1 year',
+              '+10 GB more for every friend you invite, no limit',
             ],
           },
           {
@@ -76,6 +79,7 @@ export const infoPages: InfoPage[] = [
               'दोस्तों के साथ शेयरिंग',
               'QR साइन इन और कंप्यूटर से अपलोड वाला वेब ऐप',
               '30 दिन ट्रैश, 1 साल आर्काइव',
+              'हर इनवाइट किए दोस्त पर +10 GB और, कोई सीमा नहीं',
             ],
           },
           {
@@ -148,6 +152,85 @@ export const infoPages: InfoPage[] = [
             body: [],
           },
           { h2: 'पूरी जानकारी', body: ['हम क्या, क्यों और कितने समय के लिए इकट्ठा करते हैं, यह प्राइवेसी पॉलिसी में पढ़ें।'] },
+        ],
+      },
+    },
+  },
+  {
+    slug: 'affiliates',
+    name: { en: 'Affiliate program', hi: 'एफ़िलिएट प्रोग्राम' },
+    copy: {
+      en: {
+        title: 'Affiliate program: earn 50% recurring commission',
+        description: 'Creators, photographers and bloggers: share Lens and earn 50% of our net revenue from every user you bring, for as long as they pay. Monthly UPI payouts.',
+        h1: 'Earn 50% for as long as they pay',
+        lead: 'Share Lens with your audience. When people you bring buy a Lens plan, you earn half of what we receive, every month, for life.',
+        sections: [
+          {
+            h2: 'How it works',
+            body: ['Apply in the Lens app (Settings → Affiliate program). We review applications within a few days. Once approved, you get tracking links for each platform or campaign and a dashboard with clicks, sign-ups, paying users and earnings.'],
+            bullets: [
+              '50% of net revenue: what we receive after GST and Google Play’s fee',
+              'Recurring for the lifetime of each user you bring',
+              'Commissions are approved 30 days after each payment (the refund window)',
+              'Paid monthly by UPI or bank transfer once you have ₹1,000 or more',
+              'Links work through Google Play, so installs are credited exactly',
+            ],
+          },
+          {
+            h2: 'Example',
+            body: ['A user you bring pays ₹99 a month. After 18% GST (₹15.10) and the Play fee (₹12.59) we receive ₹71.31; you earn ₹35.65 every month they stay. 100 such users: about ₹3,565 a month.'],
+          },
+          {
+            h2: 'Who it is for',
+            body: ['YouTubers, Instagram creators, photographers, photography teachers, tech bloggers and communities whose audience takes photos and videos.'],
+          },
+          {
+            h2: 'Paid plans are coming',
+            body: ['Lens is free today. You can join now, get your links and start building referrals; commissions start when paid plans launch.'],
+          },
+          {
+            h2: 'Fair-play rules',
+            body: ['No fake or incentivised installs, no buying through your own link, no spam, no bidding on our brand in ads, and always disclose the partnership (#ad). Full details in the affiliate terms.'],
+          },
+        ],
+        faq: [
+          { q: 'Do I need to pay anything?', a: 'No. Joining is free.' },
+          { q: 'How is tax handled?', a: 'Under Indian law we deduct TDS (2% once your commission in a financial year passes ₹20,000; 20% if you have not given a PAN) and issue Form 16A. Add your PAN and UPI in the app before your first payout.' },
+          { q: 'What if a user asks for a refund?', a: 'The commission for that payment is cancelled. If it was already paid, it is deducted from your next payout.' },
+          { q: 'Is this the same as inviting friends?', a: 'No. Every Lens user can invite friends and earn +10 GB of storage per friend. The affiliate program is a separate, approved program that pays money.' },
+        ],
+      },
+      hi: {
+        title: 'एफ़िलिएट प्रोग्राम: 50% रिकरिंग कमीशन कमाएँ',
+        description: 'क्रिएटर, फ़ोटोग्राफ़र और ब्लॉगर: Lens शेयर करें और अपने लाए हर यूज़र से हमारी नेट कमाई का 50% कमाएँ, जब तक वे भुगतान करते रहें। हर महीने UPI से भुगतान।',
+        h1: 'जब तक वे भुगतान करें, आप 50% कमाएँ',
+        lead: 'अपनी ऑडियंस के साथ Lens शेयर करें। आपके लाए लोग जब Lens प्लान ख़रीदते हैं, तो हमें मिलने वाली रक़म का आधा आपको मिलता है, हर महीने, हमेशा।',
+        sections: [
+          {
+            h2: 'कैसे काम करता है',
+            body: ['Lens ऐप में आवेदन करें (Settings → Affiliate program)। हम कुछ दिनों में आवेदन देखते हैं। मंज़ूरी के बाद आपको हर प्लेटफ़ॉर्म या कैंपेन के लिए ट्रैकिंग लिंक और क्लिक, साइन-अप, पेड यूज़र और कमाई वाला डैशबोर्ड मिलता है।'],
+            bullets: [
+              'नेट कमाई का 50%: GST और Google Play फ़ीस के बाद जो हमें मिलता है',
+              'आपके लाए हर यूज़र के पूरे समय तक रिकरिंग',
+              'हर भुगतान के 30 दिन बाद कमीशन मंज़ूर होता है (रिफ़ंड की अवधि)',
+              '₹1,000 या ज़्यादा होने पर हर महीने UPI या बैंक ट्रांसफ़र',
+              'लिंक Google Play से काम करते हैं, इसलिए इंस्टॉल ठीक-ठीक आपके नाम दर्ज होते हैं',
+            ],
+          },
+          {
+            h2: 'उदाहरण',
+            body: ['आपका लाया यूज़र हर महीने ₹99 देता है। 18% GST (₹15.10) और Play फ़ीस (₹12.59) के बाद हमें ₹71.31 मिलते हैं; जब तक वह रहे, आपको हर महीने ₹35.65 मिलते हैं। ऐसे 100 यूज़र: लगभग ₹3,565 महीना।'],
+          },
+          { h2: 'किसके लिए', body: ['YouTuber, Instagram क्रिएटर, फ़ोटोग्राफ़र, फ़ोटोग्राफ़ी टीचर, टेक ब्लॉगर और ऐसी कम्युनिटी जिनकी ऑडियंस फ़ोटो और वीडियो लेती है।'] },
+          { h2: 'पेड प्लान आ रहे हैं', body: ['आज Lens मुफ़्त है। आप अभी जुड़कर लिंक ले सकते हैं और रेफ़रल बनाना शुरू कर सकते हैं; पेड प्लान आने पर कमीशन शुरू होगा।'] },
+          { h2: 'सही खेल के नियम', body: ['नकली या लालच देकर करवाए गए इंस्टॉल नहीं, अपने ही लिंक से ख़रीदारी नहीं, स्पैम नहीं, विज्ञापनों में हमारे ब्रांड पर बोली नहीं, और साझेदारी हमेशा बताएँ (#ad)। पूरी जानकारी एफ़िलिएट शर्तों में।'] },
+        ],
+        faq: [
+          { q: 'क्या कुछ भुगतान करना होगा?', a: 'नहीं। जुड़ना मुफ़्त है।' },
+          { q: 'टैक्स कैसे संभाला जाता है?', a: 'भारतीय क़ानून के अनुसार हम TDS काटते हैं (वित्त वर्ष में कमीशन ₹20,000 से ज़्यादा होने पर 2%; PAN न देने पर 20%) और Form 16A देते हैं। पहले भुगतान से पहले ऐप में PAN और UPI जोड़ें।' },
+          { q: 'अगर यूज़र रिफ़ंड माँगे तो?', a: 'उस भुगतान का कमीशन रद्द हो जाता है। अगर पहले ही भुगतान हो चुका हो, तो अगले भुगतान से काटा जाता है।' },
+          { q: 'क्या यह दोस्तों को इनवाइट करने जैसा है?', a: 'नहीं। हर Lens यूज़र दोस्तों को इनवाइट करके हर दोस्त पर +10 GB स्टोरेज पा सकता है। एफ़िलिएट प्रोग्राम अलग, मंज़ूरी वाला प्रोग्राम है जिसमें पैसे मिलते हैं।' },
         ],
       },
     },

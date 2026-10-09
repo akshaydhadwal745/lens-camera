@@ -20,8 +20,19 @@ import {
   withCookies,
 } from './lib';
 import { randomName } from './names';
+import { attribute } from './attribution';
+import { onAttributed, rewardsHook } from './referrals';
 
-export type Identity = { id: string; name: string; usedBytes: number; tokenId: string; email?: string };
+export type Identity = {
+  id: string;
+  name: string;
+  usedBytes: number;
+  tokenId: string;
+  email?: string;
+  bonusBytes?: number;
+  /** May use /admin: email in ADMIN_EMAILS, or `admin` set on the profile directly in the database. */
+  admin?: boolean;
+};
 
 /** Sessions end after this long without use (sliding; refreshed at most daily). */
 const SESSION_IDLE_MS = 90 * 24 * 3600 * 1000;
@@ -112,6 +123,9 @@ export async function register(req?: Req): Promise<Res> {
   const fingerprint =
     typeof req?.body?.fingerprint === 'string' && FINGERPRINT.test(req.body.fingerprint) ? req.body.fingerprint : undefined;
   const deviceKey = fingerprint ? { pk: `FP#${fingerprint}`, sk: 'DEVICE' } : undefined;
+  // Reported by the app (an emulator never earns referral rewards). Easy to
+  // fake, so only one of several checks; Play Integrity later.
+  const emulator = req?.body?.emulator === true;
 
   if (deviceKey) {
     const known = (await ddb.send(new GetCommand({ TableName: env.table, Key: deviceKey }))).Item;
@@ -164,8 +178,10 @@ export async function register(req?: Req): Promise<Res> {
       );
       const token = await issueToken(id, 'device', device);
       if (deviceKey) {
-        await ddb.send(new PutCommand({ TableName: env.table, Item: { ...deviceKey, guestId: id, updatedAt: now } }));
+        await ddb.send(new PutCommand({ TableName: env.table, Item: { ...deviceKey, guestId: id, updatedAt: now, ...(emulator ? { emulator } : {}) } }));
       }
+      // Invited by a friend or an affiliate (Play install referrer "lens_ref=…").
+      if (req?.body?.ref) await rewardsHook(async () => onAttributed(id, await attribute(id, req, req.body.ref, 'install')));
       return json(201, { id, name, token });
     } catch (error: any) {
       if (error?.name === 'TransactionCanceledException') continue; // name taken, retry
@@ -220,8 +236,11 @@ export async function authenticate(req: Req): Promise<Identity> {
     id: deviceId,
     name: profile.Item.name,
     usedBytes: profile.Item.usedBytes ?? 0,
+    bonusBytes: profile.Item.bonusBytes ?? 0,
     tokenId,
     email: profile.Item.email,
+    admin:
+      profile.Item.admin === true || (!!profile.Item.email && env.adminEmails.includes(String(profile.Item.email).toLowerCase())) || undefined,
   };
 }
 

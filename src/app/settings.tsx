@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { Href, router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -162,6 +162,33 @@ function AccountSection() {
         {busy ? <ActivityIndicator color={colors.danger} /> : <Ionicons name="log-out-outline" size={18} color={colors.danger} />}
         <Text style={[styles.rowButtonText, { color: colors.danger }]}>Log out</Text>
       </Pressable>
+    </Section>
+  );
+}
+
+/** Invite friends (+storage), the affiliate program, and admin tools for allow-listed accounts. */
+function EarnSection({ signedIn }: { signedIn: boolean }) {
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    if (signedIn) api.me().then((m) => setAdmin(!!m.admin), () => undefined);
+  }, [signedIn]);
+  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; to: '/invite' | '/partners' | '/admin' }[] = [
+    { icon: 'gift-outline', label: 'Invite friends: +10 GB each', to: '/invite' },
+    { icon: 'trending-up-outline', label: 'Affiliate program', to: '/partners' },
+    ...(admin ? [{ icon: 'shield-checkmark-outline' as const, label: 'Admin', to: '/admin' as const }] : []),
+  ];
+  return (
+    <Section title="Invite & earn">
+      {rows.map((r, i) => (
+        <View key={r.to}>
+          {i > 0 && <View style={styles.divider} />}
+          <Pressable style={styles.rowButton} onPress={() => router.push((signedIn ? r.to : '/signin') as Href)}>
+            <Ionicons name={r.icon} size={18} color={colors.accent} />
+            <Text style={[styles.rowButtonText, { flex: 1 }]}>{r.label}</Text>
+            <Ionicons name="chevron-forward" size={16} color="#555" />
+          </Pressable>
+        </View>
+      ))}
     </Section>
   );
 }
@@ -331,6 +358,8 @@ export default function SettingsScreen() {
             </>
           )}
         </Section>
+
+        {identity && <EarnSection signedIn={!!identity.email} />}
 
         {!isWeb && (
           <>

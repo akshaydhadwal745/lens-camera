@@ -25,6 +25,8 @@ import { createIdentity, Identity, issueToken, webSignIn } from './identity';
 import { ddb, derivedKey, env, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
 import { googleLoginClaims } from './oauth';
 import { isDisposableEmail } from './disposable';
+import { attribute } from './attribution';
+import { forgetGuest, onAttributed, onPhoneSignIn, rewardsHook } from './referrals';
 
 const ses = new SESv2Client({});
 
@@ -132,17 +134,20 @@ export async function verifyEmail(identity: Identity, req: Req): Promise<Res> {
 // ---------- Website sign-in (no guest identity on the web) ----------
 
 /** The account for these logins; a new one is created for first-time web sign-ups. */
-async function accountForWeb(logins: { kind: LoginKind; value: string }[], email?: string): Promise<string> {
+async function accountForWeb(req: Req, logins: { kind: LoginKind; value: string }[], email?: string): Promise<string> {
   const existing = await findAccount(logins);
   const accountId = existing ?? (await createIdentity()).id;
   await linkLogins(accountId, logins, email);
+  // New web sign-up that came through an invite/affiliate link (cookie). The
+  // referral reward waits until they also sign in on a phone.
+  if (!existing) await rewardsHook(async () => onAttributed(accountId, await attribute(accountId, req, undefined, 'web')));
   return accountId;
 }
 
 /** POST /v1/web/auth/email/verify {email, code}: signs the browser in (session cookie). */
 export async function webVerifyEmail(req: Req): Promise<Res> {
   const email = await consumeCode(req);
-  return webSignIn(await accountForWeb([{ kind: 'email', value: email }], email), req);
+  return webSignIn(await accountForWeb(req, [{ kind: 'email', value: email }], email), req);
 }
 
 /** POST /v1/web/auth/google {code, state, codeVerifier}: Google sign-in on the website. */
@@ -150,7 +155,7 @@ export async function webVerifyGoogle(req: Req): Promise<Res> {
   const claims = await googleLoginClaims(null, req);
   const logins: { kind: LoginKind; value: string }[] = [{ kind: 'google', value: claims.sub }];
   if (claims.email && claims.emailVerified) logins.push({ kind: 'email', value: claims.email.toLowerCase() });
-  return webSignIn(await accountForWeb(logins, claims.email?.toLowerCase()), req);
+  return webSignIn(await accountForWeb(req, logins, claims.email?.toLowerCase()), req);
 }
 
 // ---------- Google (Android) ----------
@@ -247,6 +252,7 @@ async function signIn(identity: Identity, req: Req, logins: { kind: LoginKind; v
   // First sign-in: this phone's identity becomes the account.
   if (!accountId || accountId === identity.id) {
     await linkLogins(identity.id, logins, email);
+    await rewardsHook(async () => onPhoneSignIn(identity.id, await fingerprintOf(identity.id)));
     return { id: identity.id, name: identity.name, email, moved: 0, pending: false };
   }
 
@@ -263,8 +269,17 @@ async function finishMerge(identity: Identity, req: Req, accountId: string, emai
     return { id: accountId, name: account.name, email: account.email, moved, pending, resume: await signResume(identity.id, accountId) };
   }
   const token = await issueToken(accountId, 'device', deviceLabel(req));
+  const fingerprint = await fingerprintOf(identity.id);
+  // The guest was not a new user after all: drop it from an inviter's friend list.
+  await rewardsHook(() => forgetGuest(identity.id));
   await retireIdentity(identity.id, identity.name);
+  // This phone now belongs to the account (referral check: web sign-ups earn their inviter's reward here).
+  await rewardsHook(() => onPhoneSignIn(accountId, fingerprint));
   return { id: accountId, name: account.name, email: account.email ?? email, token, moved, pending: false };
+}
+
+async function fingerprintOf(id: string): Promise<string | undefined> {
+  return (await ddb.send(new GetCommand({ TableName: env.table, Key: profileKey(id), ProjectionExpression: 'fingerprint' }))).Item?.fingerprint;
 }
 
 function deviceLabel(req: Req): string | undefined {
