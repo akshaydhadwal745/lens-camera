@@ -15,6 +15,7 @@ module), Android app (basic camera for now), and a web viewer.
 | Cloud upload, previews & storage | [features/cloud-and-storage.md](features/cloud-and-storage.md) |
 | Delete, Trash & Archive | [features/trash-and-archive.md](features/trash-and-archive.md) |
 | Storage: Lens + your own (Drive, OneDrive, Dropbox, Box, S3, WebDAV) | [features/own-storage.md](features/own-storage.md) |
+| Accounts: sign in with email code / Google, devices, log out | [features/accounts.md](features/accounts.md) |
 | Gallery & viewer | [features/gallery-and-viewer.md](features/gallery-and-viewer.md) |
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 
@@ -62,6 +63,9 @@ module), Android app (basic camera for now), and a web viewer.
 | Own storage: Google Drive, OneDrive, Dropbox, Box | iOS, Android | ✅ | No | Needs provider registration ([setup](setup/storage-providers.md)) + a dev build (APK) |
 | Own storage: S3-compatible, WebDAV | iOS, Android | ✅ | No | Connector code tested against real S3 + a WebDAV server |
 | iCloud Drive | iOS | ❌ | — | Needs the paid Apple Developer account |
+| Sign in: email + code (phones), Google (Android); guest → account, merge on new phone | iOS, Android | ✅ | No | Server tested (e2e). Email needs the SES domain set up |
+| Sessions: 90-day sliding, devices list, log out (others) | iOS, Android | ✅ | No | Server tested (e2e) |
+| Android camera preview: no lag (expo-camera patch, 30 fps) | Android | ✅ | No | `patches/expo-camera+57.0.6.patch` |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

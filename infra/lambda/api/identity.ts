@@ -5,22 +5,37 @@ import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteComma
 import { ddb, env, hashSecret, HttpError, json, randomId, Req, Res, safeEqual } from './lib';
 import { randomName } from './names';
 
-export type Identity = { id: string; name: string; usedBytes: number };
+export type Identity = { id: string; name: string; usedBytes: number; tokenId: string; email?: string };
 
-async function issueToken(deviceId: string, label: 'device' | 'web', browser?: string): Promise<string> {
+/** Sessions end after this long without use (sliding; refreshed at most daily). */
+const SESSION_IDLE_MS = 90 * 24 * 3600 * 1000;
+const SESSION_SLIDE_MS = 24 * 3600 * 1000;
+
+export async function issueToken(deviceId: string, label: 'device' | 'web', device?: string): Promise<string> {
   const tokenId = randomId(9);
   const secret = randomId(32);
+  const now = Date.now();
   await ddb.send(
     new PutCommand({
       TableName: env.table,
-      Item: { pk: `D#${deviceId}`, sk: `T#${tokenId}`, hash: hashSecret(secret), label, browser, createdAt: Date.now() },
+      Item: {
+        pk: `D#${deviceId}`,
+        sk: `T#${tokenId}`,
+        hash: hashSecret(secret),
+        label,
+        // Web tokens carry a browser description; phones a device name.
+        ...(label === 'web' ? { browser: device } : { device }),
+        createdAt: now,
+        lastUsedAt: now,
+        expiresAt: now + SESSION_IDLE_MS,
+      },
     }),
   );
   return `${deviceId}.${tokenId}.${secret}`;
 }
 
-/** POST /v1/devices: create a new identity with a unique random name. */
-export async function register(): Promise<Res> {
+/** POST /v1/devices {device?}: create a new (guest) identity with a unique random name. */
+export async function register(req?: Req): Promise<Res> {
   const id = randomId(12);
   const now = Date.now();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -54,7 +69,8 @@ export async function register(): Promise<Res> {
           ],
         }),
       );
-      const token = await issueToken(id, 'device');
+      const device = typeof req?.body?.device === 'string' ? req.body.device.slice(0, 80) : undefined;
+      const token = await issueToken(id, 'device', device);
       return json(201, { id, name, token });
     } catch (error: any) {
       if (error?.name === 'TransactionCanceledException') continue; // name taken, retry
@@ -78,11 +94,34 @@ export async function authenticate(req: Req): Promise<Identity> {
   if (!tokenItem.Item || !profile.Item || !safeEqual(tokenItem.Item.hash, hashSecret(secret))) {
     throw new HttpError(401, 'Invalid token');
   }
-  return { id: deviceId, name: profile.Item.name, usedBytes: profile.Item.usedBytes ?? 0 };
+  const now = Date.now();
+  if (tokenItem.Item.expiresAt && tokenItem.Item.expiresAt < now) {
+    await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `D#${deviceId}`, sk: `T#${tokenId}` } }));
+    throw new HttpError(401, 'Session expired');
+  }
+  // Sliding expiry: in use = stays signed in. Written at most once a day per device.
+  if (!tokenItem.Item.lastUsedAt || now - tokenItem.Item.lastUsedAt > SESSION_SLIDE_MS) {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: { pk: `D#${deviceId}`, sk: `T#${tokenId}` },
+        UpdateExpression: 'SET lastUsedAt = :n, expiresAt = :e',
+        ExpressionAttributeValues: { ':n': now, ':e': now + SESSION_IDLE_MS },
+      }),
+    );
+  }
+  return {
+    id: deviceId,
+    name: profile.Item.name,
+    usedBytes: profile.Item.usedBytes ?? 0,
+    tokenId,
+    email: profile.Item.email,
+  };
 }
 
 export function me(identity: Identity): Res {
-  return json(200, { ...identity, quotaBytes: env.quotaBytes });
+  const { tokenId: _session, ...profile } = identity;
+  return json(200, { ...profile, quotaBytes: env.quotaBytes });
 }
 
 /** GET /v1/users?q=prefix: search identities by name prefix. */

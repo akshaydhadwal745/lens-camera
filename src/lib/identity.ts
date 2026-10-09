@@ -1,11 +1,13 @@
-// Device identity. Native: created silently on first launch and kept in the
-// iOS Keychain (survives reinstalls). Web: obtained by linking with a code
-// from the phone, kept in localStorage.
+// Session for this phone. It starts as a guest identity created silently on
+// first launch; signing in (email code / Google) turns it into an account, or
+// swaps in the account's session. Kept in the iOS Keychain / Android Keystore.
+// Web: obtained by linking with a code from the phone, kept in localStorage.
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { api, IdentityResponse } from './api';
 
+/** `email` is set once the guest identity became a signed-in account. */
 export type Identity = IdentityResponse;
 
 const KEY = 'lens.identity';
@@ -41,11 +43,19 @@ export async function saveIdentity(identity: Identity | null) {
   await write(identity ? JSON.stringify(identity) : null);
 }
 
-/** Native: returns the stored identity or registers a new one. */
+/** Shown in the account's device list, e.g. "samsung SM-S921B" or "iPhone". */
+export function deviceLabel(): string {
+  const c = Platform.constants as Record<string, unknown>;
+  if (Platform.OS === 'android') return [c.Brand, c.Model].filter(Boolean).join(' ') || 'Android phone';
+  if (Platform.OS === 'ios') return (Platform as { isPad?: boolean }).isPad ? 'iPad' : 'iPhone';
+  return 'Browser';
+}
+
+/** Native: returns the stored identity or registers a new (guest) one. */
 export async function ensureIdentity(): Promise<Identity> {
   const existing = await loadIdentity();
   if (existing) return existing;
-  const created = await api.register();
+  const created = await api.register(deviceLabel());
   await saveIdentity(created);
   return created;
 }

@@ -6,12 +6,13 @@ import { ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { api, WEB_URL } from '@/lib/api';
+import { api, Session, WEB_URL } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
   freeUpSpace,
   guardSpace,
+  logOut,
   KEEP_FREE_OPTIONS,
   RETENTION_OPTIONS,
   retryFailed,
@@ -46,6 +47,117 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
+  );
+}
+
+function timeAgo(ms: number): string {
+  const days = Math.floor((Date.now() - ms) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return days < 30 ? `${days} days ago` : `${Math.floor(days / 30)} months ago`;
+}
+
+/** Guest → sign-in prompt. Signed in → email, devices, log out. */
+function AccountSection() {
+  const email = useStore((s) => s.identity?.email);
+  const signedOut = useStore((s) => s.signedOut);
+  const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!email) return;
+    api
+      .sessions()
+      .then((r) => setSessions(r.sessions))
+      .catch(() => {});
+  }, [email]);
+
+  if (signedOut || !email) {
+    return (
+      <Section
+        title="Account"
+        footer={
+          signedOut
+            ? 'Uploads are paused until you sign in. Nothing on this phone is lost.'
+            : 'Right now your photos are tied to this phone. Sign in to get them back on a new phone or after reinstalling.'
+        }
+      >
+        <Pressable style={styles.button} onPress={() => router.push('/signin')}>
+          <Ionicons name="person-circle-outline" size={18} color="#000" />
+          <Text style={styles.buttonText}>{signedOut ? 'Sign in again' : 'Sign in'}</Text>
+        </Pressable>
+      </Section>
+    );
+  }
+
+  const others = (sessions ?? []).filter((s) => !s.current);
+
+  const logOutOthers = async () => {
+    if (!(await confirmDestructive('Log out other devices?', `${others.length} other device${others.length === 1 ? '' : 's'} will be signed out.`, 'Log out')))
+      return;
+    setBusy(true);
+    try {
+      await api.revokeOtherSessions();
+      setSessions((list) => (list ?? []).filter((s) => s.current));
+    } catch (error) {
+      notify('Could not log out other devices', errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logOutHere = async () => {
+    if (
+      !(await confirmDestructive(
+        'Log out of this phone?',
+        'Your photos stay safe in your account. Copies on this phone are removed; sign in again to see everything.',
+        'Log out',
+      ))
+    )
+      return;
+    setBusy(true);
+    try {
+      await logOut();
+    } catch (error) {
+      notify('Can’t log out yet', errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title="Account" footer="Sign in with this email on any phone to get all your photos back.">
+      <Row label="Signed in as" value={email} />
+      <View style={styles.divider} />
+      <Text style={[styles.rowLabel, { paddingHorizontal: 16, paddingTop: 12 }]}>Devices</Text>
+      {sessions === null ? (
+        <ActivityIndicator color="#fff" style={{ padding: 12 }} />
+      ) : (
+        sessions.map((s) => (
+          <View key={s.id} style={[styles.row, { minHeight: 44 }]}>
+            <Text style={styles.rowValue}>
+              {s.kind === 'web' ? '🖥  ' : '📱  '}
+              {s.label}
+            </Text>
+            <Text style={[styles.rowValue, s.current && { color: colors.accent }]}>{s.current ? 'This phone' : timeAgo(s.lastUsedAt)}</Text>
+          </View>
+        ))
+      )}
+      {others.length > 0 && (
+        <>
+          <View style={styles.divider} />
+          <Pressable style={styles.rowButton} onPress={logOutOthers} disabled={busy}>
+            <Ionicons name="exit-outline" size={18} color={colors.accent} />
+            <Text style={styles.rowButtonText}>Log out other devices</Text>
+          </Pressable>
+        </>
+      )}
+      <View style={styles.divider} />
+      <Pressable style={styles.rowButton} onPress={logOutHere} disabled={busy}>
+        {busy ? <ActivityIndicator color={colors.danger} /> : <Ionicons name="log-out-outline" size={18} color={colors.danger} />}
+        <Text style={[styles.rowButtonText, { color: colors.danger }]}>Log out</Text>
+      </Pressable>
+    </Section>
   );
 }
 
@@ -163,6 +275,8 @@ export default function SettingsScreen() {
             <Text style={styles.muted}>{online ? 'Setting up your cloud identity…' : 'Connect to the internet to set up your cloud identity.'}</Text>
           )}
         </View>
+
+        {!isWeb && <AccountSection />}
 
         <Section title="Storage">
           <View style={{ padding: 16 }}>

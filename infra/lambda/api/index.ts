@@ -8,6 +8,7 @@ import { removeShared, share, sharedWithMe } from './shares';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth } from './oauth';
+import { continueSignIn, listSessions, revokeOtherSessions, revokeSession, startEmail, verifyEmail, verifyGoogle } from './auth';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -18,7 +19,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     const route = `${method} /${seg.slice(1).join('/')}`;
 
     // Public routes
-    if (route === 'POST /devices') return await register();
+    if (route === 'POST /devices') return await register(req);
     if (route === 'POST /pairing/claim') return await claimPairing(req);
     if (route === 'GET /health') return json(200, { ok: true });
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
@@ -26,6 +27,13 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     const identity = await authenticate(req);
 
     if (route === 'GET /me') return me(identity);
+    if (route === 'POST /auth/email/start') return await startEmail(identity, req);
+    if (route === 'POST /auth/email/verify') return await verifyEmail(identity, req);
+    if (route === 'POST /auth/google') return await verifyGoogle(identity, req);
+    if (route === 'POST /auth/continue') return await continueSignIn(identity, req);
+    if (route === 'GET /sessions') return await listSessions(identity);
+    if (route === 'DELETE /sessions') return await revokeOtherSessions(identity);
+    if (seg[1] === 'sessions' && seg.length === 3 && method === 'DELETE') return await revokeSession(identity, seg[2]);
     if (route === 'GET /users') return await searchUsers(identity, req);
     if (route === 'GET /contacts') return await contacts(identity);
     if (route === 'POST /pairing') return await createPairing(identity);

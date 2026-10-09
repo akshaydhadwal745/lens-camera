@@ -59,23 +59,28 @@ export class ConnectCancelled extends Error {}
  * Opens the provider's sign-in page in an in-app browser and connects the
  * storage. `reconnectId` re-signs-in an existing storage (after "signed out").
  */
-export async function connectStorage(provider: ProviderId, reconnectId?: string): Promise<ConnectedStorage> {
-  const connector = connectorFor(provider);
-  if (isWeb || !connector) throw new Error('Connect storage from the Lens app on your phone.');
-
+/**
+ * Runs a provider's sign-in page in the in-app browser (PKCE) through the Lens
+ * OAuth relay and returns the authorization code. Used for storages and for
+ * Sign in with Google.
+ */
+export async function authorizeInBrowser(provider: ProviderId | 'google') {
   const verifier = base64url(Crypto.getRandomBytes(32));
   const challenge = base64url(new Uint8Array(await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, ascii(verifier))));
   const start = await api.oauthStart(provider, challenge);
-
   const result = await WebBrowser.openAuthSessionAsync(start.url, start.redirect);
   if (result.type !== 'success') throw new ConnectCancelled();
   const params = new URL(result.url).searchParams;
   if (params.get('error')) throw new Error(params.get('error')!);
-  const tokens = await api.oauthToken(provider, {
-    code: params.get('code') ?? '',
-    state: params.get('state') ?? '',
-    codeVerifier: verifier,
-  });
+  return { code: params.get('code') ?? '', state: params.get('state') ?? '', verifier };
+}
+
+export async function connectStorage(provider: ProviderId, reconnectId?: string): Promise<ConnectedStorage> {
+  const connector = connectorFor(provider);
+  if (isWeb || !connector) throw new Error('Connect storage from the Lens app on your phone.');
+
+  const { code, state, verifier } = await authorizeInBrowser(provider);
+  const tokens = await api.oauthToken(provider, { code, state, codeVerifier: verifier });
   if (!tokens.refreshToken) throw new Error('The storage didn’t allow offline access. Please try again.');
 
   const storageId = reconnectId ?? `${provider}-${base64url(Crypto.getRandomBytes(6)).toLowerCase().replace(/[^a-z0-9]/g, 'x')}`;

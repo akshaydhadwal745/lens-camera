@@ -19,7 +19,8 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Identity } from './identity';
 import { derivedKey, getParam, HttpError, json, Req, Res } from './lib';
 
-type OAuthProvider = 'gdrive' | 'dropbox' | 'onedrive' | 'box';
+/** Storage providers + 'google' = Sign in with Google (same Google client as Drive). */
+type OAuthProvider = 'gdrive' | 'dropbox' | 'onedrive' | 'box' | 'google';
 
 type ProviderConfig = {
   authorizeUrl: string;
@@ -51,6 +52,13 @@ const CONFIG: Record<OAuthProvider, ProviderConfig> = {
     extra: { prompt: 'select_account' },
     pkce: true,
   },
+  google: {
+    authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scope: 'openid email profile',
+    extra: { prompt: 'select_account' },
+    pkce: true,
+  },
   box: {
     authorizeUrl: 'https://account.box.com/api/oauth2/authorize',
     tokenUrl: 'https://api.box.com/oauth2/token',
@@ -68,9 +76,10 @@ function provider(value: string): OAuthProvider {
 }
 
 async function credentials(p: OAuthProvider) {
+  const stored = p === 'google' ? 'gdrive' : p; // one Google web client for Drive and sign-in
   const [clientId, clientSecret] = await Promise.all([
-    getParam(`/lens/oauth/${p}/client-id`),
-    getParam(`/lens/oauth/${p}/client-secret`),
+    getParam(`/lens/oauth/${stored}/client-id`),
+    getParam(`/lens/oauth/${stored}/client-secret`),
   ]);
   if (!clientId || !clientSecret) throw new HttpError(503, 'This storage isn’t available yet');
   return { clientId, clientSecret };
@@ -205,7 +214,42 @@ export async function refreshOAuth(_identity: Identity, providerName: string, re
 /** GET /v1/oauth/providers: which providers are set up (so the app can show Connect). */
 export async function oauthProviders(): Promise<Res> {
   const ready = await Promise.all(
-    (Object.keys(CONFIG) as OAuthProvider[]).map(async (p) => [p, !!(await getParam(`/lens/oauth/${p}/client-id`))] as const),
+    (Object.keys(CONFIG) as OAuthProvider[]).map(
+      async (p) => [p, !!(await getParam(`/lens/oauth/${p === 'google' ? 'gdrive' : p}/client-id`))] as const,
+    ),
   );
   return json(200, { providers: Object.fromEntries(ready) });
+}
+
+/**
+ * Sign in with Google: exchanges the code (PKCE + client secret) and reads the
+ * ID token. It comes straight from Google's token endpoint over TLS, so per
+ * OpenID Connect the signature check can be skipped; we still check issuer,
+ * audience and expiry.
+ */
+export async function googleLoginClaims(identity: Identity, req: Req) {
+  const state = await readState(req.body.state);
+  if (state.p !== 'google' || state.i !== identity.id) throw new HttpError(403, 'This sign-in belongs to someone else');
+  if (typeof req.body.code !== 'string' || typeof req.body.codeVerifier !== 'string') throw new HttpError(400, 'Missing code');
+  const { clientId, clientSecret } = await credentials('google');
+  const res = await fetch(CONFIG.google.tokenUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: req.body.code,
+      code_verifier: req.body.codeVerifier,
+      redirect_uri: callbackUrl(req),
+      client_id: clientId,
+      client_secret: clientSecret,
+    }).toString(),
+  });
+  const data = (await res.json().catch(() => ({}))) as { id_token?: string };
+  if (!res.ok || !data.id_token) throw new HttpError(401, 'Google sign-in failed. Please try again.');
+  const claims = JSON.parse(Buffer.from(data.id_token.split('.')[1], 'base64url').toString('utf8')) as Record<string, any>;
+  const validIssuer = claims.iss === 'https://accounts.google.com' || claims.iss === 'accounts.google.com';
+  if (!validIssuer || claims.aud !== clientId || Number(claims.exp) * 1000 < Date.now() || !claims.sub) {
+    throw new HttpError(401, 'Google sign-in could not be verified');
+  }
+  return { sub: String(claims.sub), email: claims.email as string | undefined, emailVerified: claims.email_verified === true };
 }

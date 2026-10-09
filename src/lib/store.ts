@@ -4,8 +4,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { api, ApiError, setAuth } from './api';
-import { ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity';
+import { api, ApiError, setAuth, SignInResult } from './api';
+import { deviceLabel, ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity';
 import {
   captureFile,
   clearChunkFiles,
@@ -14,9 +14,11 @@ import {
   deleteOriginal,
   freeDiskBytes,
   importCapture,
+  loadDoc,
   loadEntries,
   loadPrefs,
   loadRemoteCache,
+  saveDoc,
   saveEntries,
   savePrefs,
   saveRemoteCache,
@@ -38,7 +40,7 @@ import { makeDerivatives } from './derivatives';
 import { renderCloudDerivatives } from './edit-remote';
 import { compact, EditRecipe, forPaste } from './edits';
 import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
-import { authForLocation, checkStorage, chooseDestination, storageAction } from './storage';
+import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 
 const isWeb = Platform.OS === 'web';
@@ -112,6 +114,11 @@ export type State = {
   trashLoading: boolean;
   /** Lens storage usage + connected storages (null until loaded). */
   storage: StorageOverview | null;
+  /**
+   * The account's session ended (logged out from another device, or expired).
+   * Uploads pause until the user signs in again, so nothing lands in a new guest.
+   */
+  signedOut: boolean;
 };
 
 let state: State = {
@@ -134,6 +141,7 @@ let state: State = {
   trash: [],
   trashLoading: false,
   storage: null,
+  signedOut: false,
 };
 
 const listeners = new Set<() => void>();
@@ -316,7 +324,7 @@ export async function boot() {
   booted = true;
 
   const settings = loadPrefs(DEFAULT_SETTINGS);
-  set({ settings, entries: loadEntries(), remote: loadRemoteCache() });
+  set({ settings, entries: loadEntries(), remote: loadRemoteCache(), signedOut: !isWeb && loadDoc('signed-out', false) });
   clearChunkFiles();
 
   const identity = await loadIdentity();
@@ -379,7 +387,10 @@ function applyIdentity(identity: Identity | null) {
 }
 
 async function handleUnauthorized() {
-  // The token is no longer valid (identity removed server-side).
+  // The token is no longer valid (session revoked or expired). A signed-in
+  // account waits for the user to sign in again; a guest just starts over.
+  const hadAccount = !!state.identity?.email;
+  if (!isWeb && hadAccount) setSignedOut(true);
   await saveIdentity(null);
   applyIdentity(null);
   saveRemoteCache([]);
@@ -391,7 +402,7 @@ let identityInflight: Promise<boolean> | null = null;
 /** Native: make sure this device has a cloud identity (registers on first use). */
 function ensureCloudIdentity(): Promise<boolean> {
   if (state.identity) return Promise.resolve(true);
-  if (isWeb) return Promise.resolve(false);
+  if (isWeb || state.signedOut) return Promise.resolve(false);
   identityInflight ??= ensureIdentity()
     .then((identity) => {
       applyIdentity(identity);
@@ -402,6 +413,74 @@ function ensureCloudIdentity(): Promise<boolean> {
       identityInflight = null;
     });
   return identityInflight;
+}
+
+// ---------- Accounts (sign in / out) ----------
+
+/** Persisted so a restart while signed out doesn't quietly start a new guest. */
+function setSignedOut(value: boolean) {
+  set({ signedOut: value });
+  saveDoc('signed-out', value);
+}
+
+/** Identity to call the sign-in API with (a fresh guest if this phone was signed out). */
+async function sessionForSignIn() {
+  if (state.identity) return;
+  const guest = await ensureIdentity();
+  applyIdentity(guest);
+}
+
+/** Applies a sign-in: same identity (now an account) or a switch to an existing account. */
+async function applySignIn(first: SignInResult) {
+  let result = first;
+  // Big guest libraries move in rounds.
+  while (result.pending && result.resume) result = await api.authContinue(result.resume, deviceLabel());
+  const before = state.identity;
+  const identity: Identity = { id: result.id, name: result.name, email: result.email, token: result.token ?? before!.token };
+  await saveIdentity(identity);
+  applyIdentity(identity);
+  setSignedOut(false);
+  if (identity.id !== before?.id) {
+    saveRemoteCache([]);
+    set({ remote: [], shared: [], trash: [], storage: null });
+  }
+  void refreshRemote();
+  void refreshShared();
+  kickSync();
+}
+
+export async function sendSignInCode(email: string) {
+  await sessionForSignIn();
+  await api.authEmailStart(email);
+}
+
+export async function signInWithCode(email: string, code: string) {
+  await sessionForSignIn();
+  await applySignIn(await api.authEmailVerify(email, code, deviceLabel()));
+}
+
+export async function signInWithGoogle() {
+  await sessionForSignIn();
+  const { code, state: oauthState, verifier } = await authorizeInBrowser('google');
+  await applySignIn(await api.authGoogle({ code, state: oauthState, codeVerifier: verifier, device: deviceLabel() }));
+}
+
+/**
+ * Logs this phone out. Only when everything is uploaded: the local copies are
+ * then removed (they're safe in the cloud) and the phone starts a fresh guest.
+ */
+export async function logOut() {
+  const waiting = state.entries.filter((e) => !e.uploadedAt).length;
+  if (waiting) throw new Error(`${waiting} item${waiting === 1 ? ' is' : 's are'} still uploading. Wait until everything is in the cloud.`);
+  await api.revokeSession('current').catch(() => {});
+  state.entries.forEach(deleteFileFor);
+  setEntries([]);
+  await saveIdentity(null);
+  applyIdentity(null);
+  saveRemoteCache([]);
+  set({ remote: [], shared: [], trash: [], storage: null, usage: null });
+  setSignedOut(false);
+  void ensureCloudIdentity();
 }
 
 /** Web: sign this browser in as the identity that generated `code`. */
@@ -534,7 +613,8 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const cancelled = new Set<string>();
 
 export function kickSync() {
-  if (!syncing && !isWeb) void syncLoop();
+  // Signed out of an account: hold uploads until the user signs back in.
+  if (!syncing && !isWeb && !state.signedOut) void syncLoop();
 }
 
 async function syncLoop() {

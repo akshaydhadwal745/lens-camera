@@ -15,6 +15,8 @@ export const env = {
   privateKeyParam: process.env.CF_PRIVATE_KEY_PARAM!,
   quotaBytes: Number(process.env.QUOTA_BYTES),
   maxFileBytes: Number(process.env.MAX_FILE_BYTES),
+  /** Verified SES sender for sign-in codes (empty = email sign-in off). */
+  codeSender: process.env.CODE_SENDER ?? '',
 };
 
 export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {

@@ -58,7 +58,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
-export type IdentityResponse = { id: string; name: string; token: string };
+export type IdentityResponse = { id: string; name: string; token: string; email?: string };
+/** Sign-in outcome. `token` is set when this phone switched to an existing account. */
+export type SignInResult = {
+  id: string;
+  name: string;
+  email?: string;
+  token?: string;
+  moved: number;
+  pending: boolean;
+  resume?: string;
+};
+export type Session = { id: string; label: string; kind: string; createdAt: number; lastUsedAt: number; current: boolean };
 type DerivativeUrls = { thumb?: string; preview?: string };
 type PlanExtras = { derivativeUrls?: DerivativeUrls; previewReady?: boolean };
 export type UploadPlan = PlanExtras &
@@ -76,8 +87,19 @@ type Page<T> = { items: T[]; cursor: string | null };
 const q = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '');
 
 export const api = {
-  register: () => request<IdentityResponse>('POST', '/devices'),
-  me: () => request<{ id: string; name: string; usedBytes: number; quotaBytes: number }>('GET', '/me'),
+  register: (device?: string) => request<IdentityResponse>('POST', '/devices', { device }),
+  me: () => request<{ id: string; name: string; email?: string; usedBytes: number; quotaBytes: number }>('GET', '/me'),
+
+  // Accounts (guest → signed in)
+  authEmailStart: (email: string) => request<{ sent: boolean }>('POST', '/auth/email/start', { email }),
+  authEmailVerify: (email: string, code: string, device?: string) =>
+    request<SignInResult>('POST', '/auth/email/verify', { email, code, device }),
+  authGoogle: (body: { code: string; state: string; codeVerifier: string; device?: string }) =>
+    request<SignInResult>('POST', '/auth/google', body),
+  authContinue: (resume: string, device?: string) => request<SignInResult>('POST', '/auth/continue', { resume, device }),
+  sessions: () => request<{ sessions: Session[] }>('GET', '/sessions'),
+  revokeSession: (id: string) => request<unknown>('DELETE', `/sessions/${id}`),
+  revokeOtherSessions: () => request<{ revoked: number }>('DELETE', '/sessions'),
 
   listMedia: (cursor?: string | null) => request<Page<RemoteMedia>>('GET', `/media${q(cursor)}`),
   startUpload: (body: {
@@ -128,7 +150,7 @@ export const api = {
   deleteStorage: (id: string) => request<unknown>('DELETE', `/storages/${id}`),
   requestProvider: (provider: string, note?: string) => request<unknown>('POST', '/provider-requests', { provider, note }),
   oauthProviders: () => request<{ providers: Partial<Record<ProviderId, boolean>> }>('GET', '/oauth/providers'),
-  oauthStart: (provider: ProviderId, codeChallenge: string) =>
+  oauthStart: (provider: ProviderId | 'google', codeChallenge: string) =>
     request<{ url: string; state: string; redirect: string }>('POST', `/oauth/${provider}/start`, { codeChallenge }),
   oauthToken: (provider: ProviderId, body: { code: string; state: string; codeVerifier: string }) =>
     request<OAuthTokens>('POST', `/oauth/${provider}/token`, body),

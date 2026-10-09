@@ -32,6 +32,7 @@ import {
   useStore,
 } from '@/lib/store';
 import { confirmAndDelete } from '@/lib/delete-flow';
+import { loadDoc, saveDoc } from '@/lib/local-store';
 import { providerInfo } from '@/lib/storage/providers';
 import { GalleryItem } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -55,6 +56,9 @@ export default function GalleryScreen() {
   const waitingForWifi = useStore(selectWaitingForWifi);
   const storageStuck = useStore(selectStorageStuck);
   const indicator = useStore(selectStorageIndicator);
+  const signedOut = useStore((s) => s.signedOut);
+  const isGuest = useStore((s) => !!s.identity && !s.identity.email);
+  const [nudgeDismissed, setNudgeDismissed] = useState(() => loadDoc('signin-nudge-dismissed', false));
   const online = useStore((s) => s.online);
   const name = useStore((s) => s.identity?.name);
   const remoteLoading = useStore((s) => s.remoteLoading);
@@ -147,7 +151,17 @@ export default function GalleryScreen() {
 
   if (status === 'needs-link') return <Redirect href="/link" />;
 
-  const banner = storageStuck ? (
+  const dismissNudge = () => {
+    setNudgeDismissed(true);
+    saveDoc('signin-nudge-dismissed', true);
+  };
+
+  const banner = signedOut && !isWeb ? (
+    <Pressable style={[styles.banner, { backgroundColor: '#7F1D1D' }]} onPress={() => router.push('/signin')}>
+      <Ionicons name="person-circle-outline" size={16} color="#fff" />
+      <Text style={styles.bannerText}>You were signed out. Tap to sign in and keep uploading</Text>
+    </Pressable>
+  ) : storageStuck ? (
     // Phone nearly full and nothing is safe to remove yet: uploads must finish first.
     <View style={[styles.banner, { backgroundColor: '#7C2D12' }]}>
       <Ionicons name="warning-outline" size={16} color="#fff" />
@@ -175,6 +189,16 @@ export default function GalleryScreen() {
     <View style={[styles.banner, { backgroundColor: '#1E3A8A' }]}>
       <ActivityIndicator size="small" color="#fff" />
       <Text style={styles.bannerText}>Uploading {pending} to the cloud…</Text>
+    </View>
+  ) : isGuest && !isWeb && !nudgeDismissed && mine.length >= 3 ? (
+    <View style={[styles.banner, { backgroundColor: '#1C1C1E' }]}>
+      <Ionicons name="shield-checkmark-outline" size={16} color={colors.accent} />
+      <Pressable style={{ flex: 1 }} onPress={() => router.push('/signin')}>
+        <Text style={styles.bannerText}>Sign in so you never lose your photos</Text>
+      </Pressable>
+      <Pressable onPress={dismissNudge} hitSlop={10} accessibilityLabel="Dismiss">
+        <Ionicons name="close" size={16} color="#888" />
+      </Pressable>
     </View>
   ) : null;
 

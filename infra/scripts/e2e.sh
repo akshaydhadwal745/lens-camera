@@ -197,4 +197,41 @@ LOC=$(loc "$API/oauth/callback?error=access_denied")
 LOC=$(loc "$API/oauth/callback?code=x&state=forged.state")
 [[ "$LOC" == lens://oauth?error=* ]] && ok "forged state rejected"
 [[ $(call POST /oauth/nope/start "$TA" -d '{}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "unknown provider rejected"
+# --- accounts: email code sign-in, merge on a second phone, sessions ---
+otp() { aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"OTP#$1\"},\"sk\":{\"S\":\"CODE\"}}" --query Item.testCode.S --output text; }
+MAIL="user$(date +%s)@e2e.lens.invalid"
+C=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d '{"device":"Pixel 8"}'); TC=$(echo "$C" | j .token); IC=$(echo "$C" | j .id)
+[[ $(call POST /auth/email/start "$TC" -d "{\"email\":\"$MAIL\"}" | j .sent) == true ]] && ok "sign-in code sent"
+[[ $(call POST /auth/email/verify "$TC" -d "{\"email\":\"$MAIL\",\"code\":\"000000\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "wrong code rejected"
+CODE=$(otp "$MAIL")
+R=$(call POST /auth/email/verify "$TC" -d "{\"email\":\"$MAIL\",\"code\":\"$CODE\"}")
+[[ $(echo "$R" | j .id) == "$IC" && -z $(echo "$R" | j .token) ]] && ok "first sign-in: this phone's guest identity became the account"
+[[ $(call GET /me "$TC" | j .email) == "$MAIL" ]] && ok "account shows the email"
+[[ $(call POST /auth/email/verify "$TC" -d "{\"email\":\"$MAIL\",\"code\":\"$CODE\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "code works only once"
+
+D=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d '{"device":"Galaxy S24"}'); TD=$(echo "$D" | j .token)
+IDM="$(node -p "Date.now().toString(36).padStart(8,'0')")-merge01"
+head -c 120000 /dev/urandom > "$TMP/m.jpg"; MM=$(md5b64 "$TMP/m.jpg")
+R=$(call POST /media "$TD" -d "{\"id\":\"$IDM\",\"contentType\":\"image/jpeg\",\"size\":120000,\"kind\":\"photo\",\"md5\":\"$MM\"}")
+curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $MM" --data-binary @"$TMP/m.jpg" -o /dev/null
+call POST "/media/$IDM/complete" "$TD" >/dev/null
+call POST /auth/email/start "$TD" -d "{\"email\":\"$MAIL\"}" >/dev/null
+R=$(call POST /auth/email/verify "$TD" -d "{\"email\":\"$MAIL\",\"code\":\"$(otp "$MAIL")\",\"device\":\"Galaxy S24\"}")
+TD2=$(echo "$R" | j .token)
+[[ $(echo "$R" | j .id) == "$IC" && -n "$TD2" && $(echo "$R" | j .moved) -ge 1 ]] && ok "second phone signed in to the same account; its guest photo moved in"
+[[ $(call GET /me "$TD" -o /dev/null -w '%{http_code}') == 401 ]] && ok "second phone's guest session retired"
+[[ $(call GET /media "$TD2" | j ".items.some(i=>i.id==='$IDM')") == true ]] && ok "account sees the moved photo"
+cmp -s <(curl -sS "$(call GET /media "$TD2" | j ".items.find(i=>i.id==='$IDM').url")") "$TMP/m.jpg" && ok "moved photo still opens (bytes identical)"
+[[ $(call GET /me "$TD2" | j .usedBytes) == 120000 ]] && ok "quota moved with it"
+S=$(call GET /sessions "$TD2")
+[[ $(echo "$S" | j .sessions.length) == 2 && $(echo "$S" | j ".sessions.find(s=>s.current).label") == "Galaxy S24" ]] && ok "sessions list both phones, current marked"
+call DELETE /sessions "$TD2" >/dev/null
+[[ $(call GET /me "$TC" -o /dev/null -w '%{http_code}') == 401 ]] && ok "log out other devices"
+call DELETE /sessions/current "$TD2" >/dev/null
+[[ $(call GET /me "$TD2" -o /dev/null -w '%{http_code}') == 401 ]] && ok "log out this device"
+E=$(curl -sS -X POST "$API/devices"); TE=$(echo "$E" | j .token)
+call POST /auth/email/start "$TE" -d "{\"email\":\"$MAIL\"}" >/dev/null
+for i in 1 2 3 4 5; do call POST /auth/email/verify "$TE" -d "{\"email\":\"$MAIL\",\"code\":\"111111\"}" >/dev/null; done
+[[ $(call POST /auth/email/verify "$TE" -d "{\"email\":\"$MAIL\",\"code\":\"$(otp "$MAIL")\"}" -o /dev/null -w '%{http_code}') == 429 ]] && ok "too many wrong codes locks that code"
+[[ $(call POST /auth/google "$TE" -d '{"code":"x","state":"forged.state","codeVerifier":"y"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "Google sign-in rejects a forged state"
 echo "ALL PASSED"

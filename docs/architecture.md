@@ -29,10 +29,13 @@
 |---|---|---|---|
 | Profile | `D#{id}` | `PROFILE` | name, usedBytes; `gsi1` NAME/name for search |
 | Name reservation | `N#{name}` | `NAME` | uniqueness |
-| Token | `D#{id}` | `T#{tokenId}` | sha256(secret), label device/web |
+| Token (session) | `D#{id}` | `T#{tokenId}` | sha256(secret), label device/web, device name, lastUsedAt, expiresAt (90-day sliding) |
 | Media | `D#{owner}` | `M#{mediaId}` | key, kind, size, status pending/ready, uploadId, partSize, storageClass, previewReady, edit, derivVersion; when deleted: deletedAt, archived, recoveringSince, gsi1 `TRASH`/`{deletedAt}#{owner}#{id}`; ownerHidden ("only for me"); location `{storageId, provider, ref, checksum}` when the original is in the user's own storage |
 | Share | `D#{recipient}` | `S#{mediaId}#{owner}` | gsi1 `SM#{owner}#{mediaId}` for cascade delete |
 | Contact | `D#{me}` | `C#{other}` | share history (both directions) |
+| Login link | `ID#email#{address}` / `ID#google#{sub}` | `ACCOUNT` | accountId |
+| Sign-in code | `OTP#{email}` | `CODE` | sha256 hash, attempts, expiresAt, TTL |
+| Rate limit | `RATE#{scope}#{hour}` | `COUNT` | count, TTL |
 | Connected storage | `D#{id}` | `ST#{storageId}` | provider, label, account, status ok/low/full/signed-out/error, used/total bytes (no tokens) |
 | Provider request | `D#{id}` | `RQ#{ts}` | provider, note; gsi1 `PROVIDER_REQUEST` |
 | Pairing code | `P#{code}` | `PAIR` | TTL 5 min |
@@ -56,6 +59,8 @@ Media ids are client-generated and time-sortable (`<base36 ms>-<random>`).
 | `POST /media/:id/external {ref, checksum}` | Original verified in the user's own storage (POST /media with `location` returns mode `external`) |
 | `GET /storage`, `PUT/DELETE /storages/:id`, `POST /provider-requests` | Lens 100 GB (Recent/Saver), connected storages + health, provider requests |
 | `POST /oauth/:provider/start\|token\|refresh`, `GET /oauth/callback`, `GET /oauth/providers` | OAuth relay for Google Drive / Dropbox / OneDrive / Box (adds client secret from SSM, stores no tokens) |
+| `POST /auth/email/start\|verify`, `POST /auth/google`, `POST /auth/continue` | Sign in (guest → account; merges a guest into an existing account) |
+| `GET /sessions`, `DELETE /sessions` (others), `DELETE /sessions/:id\|current` | Devices / log out |
 | `GET /users?q=`, `GET /contacts` | Find people, share history |
 | `POST /shares`, `GET /shared`, `DELETE /shared/:owner/:id` | Sharing |
 | `POST /pairing`, `POST /pairing/claim` | Web viewer sign-in code |

@@ -18,6 +18,7 @@ import {
   aws_logs as logs,
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
+  aws_ses as ses,
   aws_budgets as budgets,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -148,6 +149,17 @@ function handler(event) {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+    // Sign-in codes are emailed from our own domain (cdk.json context
+    // `codeDomain`, sender `no-reply@<domain>`). SES verifies the domain via 3
+    // DKIM CNAME records (printed as outputs) that go into the domain's DNS.
+    // SES starts in sandbox: recipients must be verified too until production
+    // access is granted.
+    const codeDomain = this.node.tryGetContext('codeDomain') as string | undefined;
+    const codeSender = codeDomain ? `no-reply@${codeDomain}` : undefined;
+    const senderIdentity = codeDomain
+      ? new ses.EmailIdentity(this, 'CodeDomain', { identity: ses.Identity.domain(codeDomain) })
+      : undefined;
+
     // Per-identity storage quota (testing default 100 GB; becomes the free tier later).
     const quotaGb = Number(this.node.tryGetContext('quotaGb') ?? 100);
 
@@ -159,6 +171,7 @@ function handler(event) {
       CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
       QUOTA_BYTES: String(quotaGb * 1024 ** 3),
       MAX_FILE_BYTES: String(1024 ** 4), // 1 TiB per file
+      CODE_SENDER: codeSender ?? '',
     };
 
     const api = new nodejs.NodejsFunction(this, 'Api', {
@@ -166,7 +179,7 @@ function handler(event) {
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
       memorySize: 512,
-      timeout: Duration.seconds(15),
+      timeout: Duration.seconds(60), // sign-in may move a guest's records into an account
       logGroup,
       environment: apiEnv,
       bundling: { minify: true, sourceMap: true, target: 'node24' },
@@ -196,6 +209,12 @@ function handler(event) {
       table.grantReadWriteData(fn);
       mediaBucket.grantReadWrite(fn); // presigned PUT/multipart, Head, Delete, tagging, versions
       fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:RestoreObject'], resources: [mediaBucket.arnForObjects('m/*')] }));
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail'],
+          resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`],
+        }),
+      );
       fn.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['ssm:GetParameter'],
@@ -255,5 +274,9 @@ function handler(event) {
     new CfnOutput(this, 'WebUrl', { value: `https://${distribution.distributionDomainName}` });
     new CfnOutput(this, 'MediaBucket', { value: mediaBucket.bucketName });
     new CfnOutput(this, 'MaintenanceFunction', { value: maintenance.functionName });
+    // DNS records that prove we own the sign-in email domain (add as CNAMEs).
+    senderIdentity?.dkimRecords.forEach((r, i) =>
+      new CfnOutput(this, `CodeDomainDkim${i + 1}`, { value: `${r.name} CNAME ${r.value}` }),
+    );
   }
 }
