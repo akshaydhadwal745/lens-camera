@@ -15,13 +15,18 @@ cd infra && npm install
 - **Expo Go (basic camera, no native modules):** `npm run tunnel` → scan the QR
   code. Uses a Cloudflare quick tunnel so it works on any network. Press `r` to reload.
 - **Lens app build (pro camera, editing):** install `Lens-dev.ipa` from the
-  GitHub release with SideStore (one-time USB setup with iloader), or
-  `Lens-dev.apk` on Android. Then `npm run tunnel` and open the app — JS loads
-  live from your computer; only native changes need a new build.
+  GitHub release with SideStore (one-time USB setup with iloader). Then
+  `npm run tunnel` and open the app — JS loads live from your computer.
+- **Android:** install `Lens.apk` from the latest `dev-N` release once; after
+  that every push reaches the phone as an over-the-air update in ~2 min
+  ([ota-updates.md](features/ota-updates.md)). Native changes need a new APK.
 
 ## Builds (GitHub Actions, `.github/workflows/ios-build.yml`)
 
-Triggered by changes to `modules/**`, `app.json`, `package*.json`:
+Triggered by changes to `src/**`, `modules/**`, `app.json`, `package*.json`, … :
+- **ota:** publishes the JS as a signed over-the-air update (~2 min).
+- **Android:** `Lens.apk` (64-bit) and `Lens-32bit.apk` build in parallel
+  (~7 min); the `dev-N` release is published as soon as they're done.
 - **iOS:** unsigned Debug .ipa on macOS (ccache + CocoaPods cache, ~10 min).
   Fails loudly on any compiler error and verifies the app binary exists.
 - **Android:** debug .apk (arm64) on Linux (~12 min).

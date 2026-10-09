@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { BrandIntro } from '@/components/BrandIntro';
+import { UpdateBanner } from '@/components/UpdateBanner';
 import { boot, useStore } from '@/lib/store';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -42,6 +43,7 @@ export default function RootLayout() {
         <Stack.Screen name="link" />
         <Stack.Screen name="edit/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack>
+      <UpdateBanner />
       {introVisible && <BrandIntro done={status !== 'booting'} onFinished={() => setIntroVisible(false)} />}
     </GestureHandlerRootView>
   );

@@ -14,6 +14,7 @@ native camera module on each platform), and a web viewer.
 | Android camera, looks, editor (device tiers, fallbacks, Night, Portrait) | [features/android-camera.md](features/android-camera.md) |
 | Looks & editing (non-destructive) | [features/looks-and-editing.md](features/looks-and-editing.md) |
 | Cloud upload, previews & storage | [features/cloud-and-storage.md](features/cloud-and-storage.md) |
+| Over-the-air updates (self-hosted, signed) | [features/ota-updates.md](features/ota-updates.md) |
 | Delete, Trash & Archive | [features/trash-and-archive.md](features/trash-and-archive.md) |
 | Storage: Lens + your own (Drive, OneDrive, Dropbox, Box, S3, WebDAV) | [features/own-storage.md](features/own-storage.md) |
 | Accounts: sign in with email code / Google, devices, log out | [features/accounts.md](features/accounts.md) |
@@ -78,6 +79,7 @@ native camera module on each platform), and a web viewer.
 | Video player page (own controls: scrub, ±10 s, double-tap skip, speed, mute, auto-hide) | All | ✅ | No | Replaces native controls that overlapped the viewer bar (S8 test) |
 | Import from phone gallery (user picks; copied one at a time just before upload, copy removed after) | Android | ✅ | No | No storage permission (photo picker) |
 | Intent preloading: videos start instantly (touch, viewer, scroll-stop; max 2 hidden players; data-aware) | Android, iOS | ✅ | No | |
+| Over-the-air updates: JS fixes in ~2 min, no reinstall (signed, self-hosted on our AWS) | Android | ✅ | Partly | API route + signing verified; first phone test with dev-26 |
 | Upload progress: camera pill, tile bar, gallery bar (MB, speed, time left), viewer on-phone vs in-cloud | Android, iOS | ✅ | No | Live-upload progress tested (`tests/live-upload`) |
 | Heat guard (pause uploads/previews/overlays when hot) | iOS, Android | ✅ | No | Native module `modules/lens-device` |
 | Smooth streaming of long videos (lazy HLS on Batch Fargate Spot, signed links) | All | ✅ | No | Conversion + playback tested on AWS (`tests/stream`) |

@@ -57,3 +57,9 @@ modules/*/android/.cxx/
 site/node_modules/
 site/dist/
 site/.astro/
+
+# OTA update signing: the public certificate ships in the app (the private key stays in infra/keys/ota + a CI secret).
+!certs/certificate.pem
+
+# OTA publish output
+dist-ota/

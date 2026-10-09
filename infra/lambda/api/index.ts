@@ -40,6 +40,7 @@ import {
   runPayouts,
   updatePayoutDetails,
 } from './affiliates';
+import { updateManifest } from './updates';
 import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth, webStartGoogle } from './oauth';
 import {
   continueSignIn,
@@ -65,6 +66,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /devices') return await register(req);
     if (route === 'POST /pairing/claim') return await claimPairing(req);
     if (route === 'GET /health') return json(200, { ok: true });
+    if (route === 'GET /updates') return await updateManifest(req);
     if (route === 'POST /contact') return await submitContact(req);
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
     // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.

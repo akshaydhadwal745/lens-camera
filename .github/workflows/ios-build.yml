@@ -1,9 +1,9 @@
 # Builds development builds of the app:
 #  - iOS: UNSIGNED .ipa on a GitHub macOS runner; SideStore re-signs it with a
 #    free Apple ID when installing.
-#  - Android: debug-signed .apk on a Linux runner; installs directly.
-# JS/UI changes load live from Metro (npm run tunnel); only native changes
-# (modules/, app.json, dependencies) need a new build.
+#  - Android: standalone release .apk (debug-key signed), installs directly.
+#    64-bit and 32-bit build in parallel, and the release is published as soon
+#    as Android is done (iOS adds its .ipa when it finishes).
 name: App builds
 
 on:
@@ -19,6 +19,9 @@ on:
       - 'app.json'
       - 'package.json'
       - 'package-lock.json'
+      - 'certs/**'
+      - '.fingerprintignore'
+      - 'scripts/ota-publish.mjs'
       - '.github/workflows/ios-build.yml'
 
 # Least privilege; only the release job can write.
@@ -158,6 +161,13 @@ jobs:
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      matrix:
+        include:
+          - abi: arm64-v8a
+            apk: Lens.apk
+          - abi: armeabi-v7a
+            apk: Lens-32bit.apk
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -181,8 +191,10 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('package-lock.json') }}
-          restore-keys: gradle-
+          key: gradle-${{ matrix.abi }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            gradle-${{ matrix.abi }}-
+            gradle-
 
       - name: Install JS dependencies
         run: npm ci
@@ -192,38 +204,84 @@ jobs:
         env:
           CI: 1
 
-      # Release = standalone app with the JS bundled in, signed with the
-      # template's debug key (fine for sideloading), one APK per CPU type:
-      # 64-bit phones and 32-bit phones (Android Go / older budget phones).
-      # Debug = dev client (JS from Metro), 64-bit only.
-      - name: Build APKs
+      # Standalone app with the JS bundled in, signed with the template's debug
+      # key (fine for sideloading). One CPU type per job: 64-bit phones, and
+      # 32-bit phones (Android Go / older budget phones), built in parallel.
+      - name: Build APK
         working-directory: android
-        run: |
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
-          ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=${{ matrix.abi }}
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
 
-      - name: Collect APKs
+      # Which update channel this APK listens to (OTA updates must match it).
+      - name: Runtime version
+        run: npx expo-updates runtimeversion:resolve --platform android | jq -r .runtimeVersion | tee runtime-${{ matrix.abi }}.txt
+
+      - name: Collect APK
         run: |
-          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk Lens-dev.apk
-          cp android/app/build/outputs/apk/release/app-arm64-v8a-release.apk Lens.apk
-          cp android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk Lens-32bit.apk
-          ls -lh Lens-dev.apk Lens.apk Lens-32bit.apk
+          cp android/app/build/outputs/apk/release/app-${{ matrix.abi }}-release.apk ${{ matrix.apk }}
+          ls -lh ${{ matrix.apk }}
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: android
+          name: android-${{ matrix.abi }}
           path: |
-            Lens.apk
-            Lens-32bit.apk
-            Lens-dev.apk
+            ${{ matrix.apk }}
+            runtime-${{ matrix.abi }}.txt
           retention-days: 14
 
+  # Over-the-air update: the JS of this commit for apps built with the same
+  # native code (runtime version = fingerprint). Phones get it in ~2 minutes
+  # without reinstalling; signed with our key (the app rejects anything else).
+  ota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      # GitHub OIDC -> a 1-hour AWS session for the website deploy role (same bucket).
+      - name: AWS credentials (OIDC)
+        env:
+          ROLE: ${{ vars.WEB_DEPLOY_ROLE_ARN }}
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE" --role-session-name "gh-ota-$GITHUB_RUN_ID" \
+            --web-identity-token "$TOKEN" --duration-seconds 3600 --query Credentials --output json)
+          for k in AccessKeyId:AWS_ACCESS_KEY_ID SecretAccessKey:AWS_SECRET_ACCESS_KEY SessionToken:AWS_SESSION_TOKEN; do
+            v=$(echo "$CREDS" | jq -r ".${k%%:*}")
+            echo "::add-mask::$v"
+            echo "${k##*:}=$v" >> "$GITHUB_ENV"
+          done
+          echo "AWS_REGION=ap-south-1" >> "$GITHUB_ENV"
+
+      - name: Publish Android update
+        run: node scripts/ota-publish.mjs android
+        env:
+          OTA_PRIVATE_KEY: ${{ secrets.OTA_PRIVATE_KEY }}
+          WEB_BUCKET: ${{ vars.WEB_BUCKET }}
+          WEB_ORIGIN: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+
+  # Published as soon as Android is ready (the usual test path); iOS adds its
+  # .ipa to the same release in ios-release.
   release:
-    needs: [ios, android]
-    if: ${{ always() && (needs.ios.result == 'success' || needs.android.result == 'success') }}
+    needs: [android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -231,25 +289,39 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
-          # Only the apps (not the build log or the looks LUTs).
-          pattern: '{ios,android}'
+          pattern: 'android-*'
           merge-multiple: true
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IOS: ${{ needs.ios.result }}
-          ANDROID: ${{ needs.android.result }}
         run: |
           ls -lh dist
+          RUNTIME=$(cat dist/runtime-arm64-v8a.txt)
+          rm dist/runtime-*.txt
           TAG="dev-${{ github.run_number }}"
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Lens dev build #${{ github.run_number }}" \
-            --notes "Builds from ${GITHUB_SHA::7} (iOS: $IOS, Android: $ANDROID).
+            --notes "Builds from ${GITHUB_SHA::7} (runtime $RUNTIME: later JS changes for this runtime arrive as in-app updates).
           - Android: **Lens.apk** is the normal app, open it on the phone and install.
           - Older/budget Android phones that say \"App not installed\" with Lens.apk: use **Lens-32bit.apk**.
-          - Android (developers): Lens-dev.apk loads JS from Metro (npm run tunnel).
-          - iPhone/iPad: install Lens-dev.ipa with SideStore (loads JS from Metro)." \
+          - iPhone/iPad: Lens-dev.ipa (added when the iOS build finishes) installs with SideStore and loads JS from Metro." \
             --prerelease
+
+  ios-release:
+    needs: [ios, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ios
+          path: dist
+
+      - name: Add the iOS app to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "dev-${{ github.run_number }}" dist/* --repo "$GITHUB_REPOSITORY"
