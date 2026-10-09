@@ -22,6 +22,8 @@ import {
   selectWaitingForWifi,
   setCellularUploads,
   setKeepFree,
+  setLiveUpload,
+  LIVE_UPLOAD_OPTIONS,
   setRetention,
   unlinkBrowser,
   useStore,
@@ -226,6 +228,7 @@ export default function SettingsScreen() {
   const failed = useStore(selectFailedCount);
   const waitingForWifi = useStore(selectWaitingForWifi);
   const cellularPolicy = useStore((s) => s.settings.cellularUploads);
+  const livePolicy = useStore((s) => s.settings.liveUpload);
   const cellular = useStore((s) => s.cellular);
 
   const usedPct = usage ? Math.min(1, usage.usedBytes / usage.quotaBytes) : 0;
@@ -363,7 +366,11 @@ export default function SettingsScreen() {
 
             <Section
               title="Uploads"
-              footer="Originals always upload at full quality, never compressed. On mobile data you can hold back big files (usually videos) until you're on Wi-Fi."
+              footer={
+                Platform.OS === 'android'
+                  ? "Originals always upload at full quality, never compressed. Videos can upload while you record, so they're in the cloud seconds after you stop. On mobile data you can hold back big files until you're on Wi-Fi."
+                  : "Originals always upload at full quality, never compressed. On mobile data you can hold back big files (usually videos) until you're on Wi-Fi."
+              }
             >
               <Row label="Connection" value={!online ? 'Offline' : cellular ? 'Mobile data' : 'Wi-Fi'} />
               <View style={styles.divider} />
@@ -382,6 +389,24 @@ export default function SettingsScreen() {
                   </Pressable>
                 ))}
               </View>
+              {Platform.OS === 'android' && (
+                <>
+                  <View style={styles.divider} />
+                  <Text style={[styles.rowLabel, { paddingHorizontal: 16, paddingTop: 12 }]}>Upload videos while recording</Text>
+                  <View style={styles.chips}>
+                    {LIVE_UPLOAD_OPTIONS.map((o) => (
+                      <Pressable
+                        key={o.value}
+                        onPress={() => setLiveUpload(o.value)}
+                        style={[styles.chip, livePolicy === o.value && styles.chipOn]}
+                        accessibilityState={{ selected: livePolicy === o.value }}
+                      >
+                        <Text style={[styles.chipText, livePolicy === o.value && styles.chipTextOn]}>{o.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
               {failed > 0 && (
                 <>
                   <View style={styles.divider} />

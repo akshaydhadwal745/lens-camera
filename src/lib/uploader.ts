@@ -64,13 +64,13 @@ export function md5HexToBase64(hex: string): string {
   return out;
 }
 
-function md5Of(file: File): string {
+export function md5Of(file: File): string {
   const hex = file.md5;
   if (!hex) throw new Error('Could not checksum the file');
   return md5HexToBase64(hex);
 }
 
-async function put(file: File, url: string, headers: Record<string, string>, onBytes: (sent: number) => void) {
+export async function put(file: File, url: string, headers: Record<string, string>, onBytes: (sent: number) => void) {
   const result = await file.upload(url, {
     httpMethod: 'PUT',
     uploadType: UploadType.BINARY_CONTENT,
@@ -178,7 +178,18 @@ export async function uploadEntry(
     const total = Math.ceil(entry.size / partSize);
     const expected = (n: number) => Math.min(partSize, entry.size - (n - 1) * partSize);
     const { parts } = await api.uploadedParts(entry.id);
-    const done = new Set(parts.filter((p) => p.size === expected(p.n)).map((p) => p.n));
+    // Upload started while recording: a block sent then may have been rewritten
+    // since (the MP4 header). Keep only parts whose MD5 still matches the file.
+    const stillSame = (p: { n: number; etag?: string }) => {
+      if (!original.streamed) return true;
+      const chunk = writeChunk(source, entry, p.n, partSize);
+      try {
+        return !!p.etag && chunk.md5?.toLowerCase() === p.etag.toLowerCase();
+      } finally {
+        if (chunk.exists) chunk.delete();
+      }
+    };
+    const done = new Set(parts.filter((p) => p.size === expected(p.n) && stillSame(p)).map((p) => p.n));
     let doneBytes = [...done].reduce((sum, n) => sum + expected(n), 0);
     onProgress(doneBytes / entry.size);
 

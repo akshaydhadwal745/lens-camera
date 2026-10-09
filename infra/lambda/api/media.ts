@@ -27,6 +27,9 @@ const MIN_PART_SIZE = 8 * 1024 * 1024;
 /** S3 allows 10,000 parts; stay well under so part size never has to change mid-upload. */
 const TARGET_MAX_PARTS = 9000;
 const MIB = 1024 * 1024;
+/** Uploads that start while recording (size unknown): fixed parts, up to 10,000 (≈80 GB). */
+const LIVE_PART_SIZE = 8 * MIB;
+const MAX_PARTS = 10_000;
 const PRESIGN_SECONDS = 3600;
 /** Originals are written once and read rarely: let S3 move them to cheaper
  * instant-access tiers automatically (no retrieval fees, millisecond access). */
@@ -89,6 +92,8 @@ export type MediaRecord = {
   archived?: boolean;
   /** Archive recovery requested (S3 restore in progress). */
   recoveringSince?: number;
+  /** Uploading while still recording: size is set when the recording ends. */
+  streaming?: boolean;
   gsi1pk?: string;
   gsi1sk?: string;
   /**
@@ -279,19 +284,38 @@ function multipartPlan(item: MediaRecord) {
  * app can call it again after a crash or network loss.
  */
 export async function startUpload(identity: Identity, req: Req): Promise<Res> {
-  const { id, contentType, size, width, height, duration, createdAt } = req.body;
+  const { id, contentType, width, height, duration, createdAt } = req.body;
+  // A recording in progress has no size yet (streaming): its multipart upload
+  // grows while recording and the size is given at /complete.
+  const streaming = req.body.streaming === true;
+  const size = streaming && !req.body.size ? 0 : req.body.size;
   const md5 = md5Param(req.body.md5);
   const derivatives = parseDerivatives(req.body.derivatives);
   const edit = req.body.edit === undefined ? undefined : parseEdit(req.body.edit) ?? undefined;
   if (typeof id !== 'string' || !MEDIA_ID.test(id)) throw new HttpError(400, 'Invalid media id');
   const type = CONTENT_TYPES[contentType];
   if (!type) throw new HttpError(400, 'Unsupported content type');
-  if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, 'Invalid size');
+  if (!Number.isInteger(size) || size < 0 || (!streaming && size === 0)) throw new HttpError(400, 'Invalid size');
+  if (streaming && type.kind !== 'video') throw new HttpError(400, 'Only videos can upload while recording');
   if (size > env.maxFileBytes) throw new HttpError(413, 'File too large');
 
   const location = await parseLocation(identity, req.body.location);
 
   const existing = await getMedia(identity.id, id);
+  if (existing?.streaming && existing.status === 'pending' && !existing.size && size > 0) {
+    // The recording ended before /complete (e.g. the app restarted): now we know its size.
+    await ddb.send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: mediaKey(identity.id, id),
+        UpdateExpression: 'SET #sz = :s',
+        ConditionExpression: '#st = :pending',
+        ExpressionAttributeNames: { '#sz': 'size', '#st': 'status' },
+        ExpressionAttributeValues: { ':s': size, ':pending': 'pending' },
+      }),
+    );
+    existing.size = size;
+  }
   if (existing) {
     if (existing.status !== 'ready' && existing.location?.storageId !== location?.storageId) {
       // Destination changed before the original finished (e.g. their storage is full → Lens).
@@ -305,6 +329,7 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     return json(200, { mode: 'single', url: await singlePutUrl(existing, md5), contentType: existing.contentType, ...extra });
   }
 
+  if (streaming && location) throw new HttpError(400, 'Upload while recording goes to Lens storage');
   if (!location && identity.usedBytes + size > env.quotaBytes) {
     return json(413, { error: 'Lens storage is full', code: 'quota' });
   }
@@ -326,7 +351,8 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
 
   if (location) item.location = location;
   else item.storageClass = ORIGINAL_STORAGE_CLASS;
-  if (!location && size > SINGLE_PUT_MAX) {
+  if (streaming) item.streaming = true;
+  if (!location && (streaming || size > SINGLE_PUT_MAX)) {
     const mpu = await s3.send(
       new CreateMultipartUploadCommand({
         Bucket: env.bucket,
@@ -336,7 +362,7 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
       }),
     );
     item.uploadId = mpu.UploadId;
-    item.partSize = partSizeFor(size);
+    item.partSize = streaming ? LIVE_PART_SIZE : partSizeFor(size);
   }
 
   try {
@@ -476,7 +502,9 @@ export async function uploadedParts(identity: Identity, id: string): Promise<Res
   if (!item.uploadId) throw new HttpError(400, 'Not a multipart upload');
   try {
     const parts = await listAllParts(item);
-    return json(200, { parts: parts.map((p) => ({ n: p.PartNumber, size: p.Size })) });
+    // etag = MD5 of the part (SSE-S3), so the app can re-check parts of a file
+    // that changed after upload (a recording's header is rewritten at the end).
+    return json(200, { parts: parts.map((p) => ({ n: p.PartNumber, size: p.Size, etag: p.ETag?.replace(/"/g, '') })) });
   } catch (error: any) {
     // The bucket aborts multipart uploads idle for 7 days (e.g. a big video
     // waiting for Wi-Fi). Start a fresh one transparently.
@@ -514,7 +542,7 @@ export async function partUrls(identity: Identity, id: string, req: Req): Promis
     : Array.isArray(req.body.partNumbers)
       ? req.body.partNumbers.map((n: unknown) => ({ n }))
       : [];
-  const maxPart = Math.ceil(item.size / (item.partSize ?? partSizeFor(item.size)));
+  const maxPart = item.streaming && !item.size ? MAX_PARTS : Math.ceil(item.size / (item.partSize ?? partSizeFor(item.size)));
   const urls: Record<number, string> = {};
   for (const { n, md5 } of requested.slice(0, 50)) {
     if (!Number.isInteger(n) || (n as number) < 1 || (n as number) > maxPart) throw new HttpError(400, 'Invalid part number');
@@ -533,11 +561,31 @@ export async function partUrls(identity: Identity, id: string, req: Req): Promis
   return json(200, { urls });
 }
 
-/** POST /v1/media/:id/complete: verify the object in S3 and mark it ready. */
-export async function completeUpload(identity: Identity, id: string): Promise<Res> {
+/** POST /v1/media/:id/complete {size?}: verify the object in S3 and mark it ready. */
+export async function completeUpload(identity: Identity, id: string, req?: Req): Promise<Res> {
   const item = await requireMedia(identity, id);
   if (item.location) throw new HttpError(400, 'This item goes to your own storage');
   if (item.status === 'ready') return json(200, { media: await toClient(item) });
+
+  if (item.streaming) {
+    // Recorded while uploading: the final size arrives now.
+    const size = req?.body?.size ?? item.size;
+    if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, 'Missing final size');
+    if (size > env.maxFileBytes) throw new HttpError(413, 'File too large');
+    if (identity.usedBytes + size > env.quotaBytes) return json(413, { error: 'Lens storage is full', code: 'quota' });
+    if (size !== item.size) {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: env.table,
+          Key: mediaKey(identity.id, id),
+          UpdateExpression: 'SET #sz = :s',
+          ExpressionAttributeNames: { '#sz': 'size' },
+          ExpressionAttributeValues: { ':s': size },
+        }),
+      );
+      item.size = size;
+    }
+  }
 
   if (item.uploadId) {
     const parts = await listAllParts(item);

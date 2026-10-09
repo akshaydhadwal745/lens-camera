@@ -66,6 +66,8 @@ module), Android app (basic camera for now), and a web viewer.
 | Sign in: email + code (phones), Google (Android); guest → account, merge on new phone | iOS, Android | ✅ | No | Server tested (e2e). Email needs the SES domain set up |
 | Sessions: 90-day sliding, devices list, log out (others) | iOS, Android | ✅ | No | Server tested (e2e) |
 | Android camera preview: no lag (expo-camera patch, 30 fps) | Android | ✅ | No | `patches/expo-camera+57.0.6.patch` |
+| Upload videos while recording (header held back, re-checked at stop) | Android | ✅ | No | Real app code tested against the live API (`tests/live-upload`) |
+| Heat guard (pause uploads/previews/overlays when hot) | iOS, Android | ✅ | No | Native module `modules/lens-device` |
 | Gallery (Mine / Shared), viewer, HD button | All | ✅ | Partly | |
 | Share with friends by name | All | ✅ | No | Server side tested |
 | Web viewer (link with code) | Web | ✅ | ✅ (headless Chrome) | QR sign-in planned |

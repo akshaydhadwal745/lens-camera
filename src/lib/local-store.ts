@@ -100,6 +100,7 @@ export function loadEntries(): LocalEntry[] {
       contentType: e.contentType ?? CONTENT_TYPES[extOf(e.fileName)] ?? 'image/jpeg',
       size,
       offloadedAt: hasOriginal ? undefined : (e.offloadedAt ?? Date.now()),
+      liveUploading: undefined, // a restart ends live uploading; the regular uploader finishes it
       ...(sizeError ? { error: undefined, attempts: 0, nextAttemptAt: undefined } : {}),
     });
   }
@@ -113,7 +114,7 @@ export function saveEntries(entries: LocalEntry[]) {
 /** Moves a fresh camera file into permanent storage and returns its entry. */
 export function importCapture(input: NewCapture): LocalEntry {
   capturesDir.create({ idempotent: true });
-  const id = newId();
+  const id = input.id ?? newId();
   const source = new File(input.sourceUri);
   const ext = extOf(source.name) || (input.kind === 'video' ? 'mov' : 'jpg');
   const fileName = `${id}.${ext}`;
@@ -130,6 +131,7 @@ export function importCapture(input: NewCapture): LocalEntry {
     height: input.height,
     duration: input.duration,
     edit: input.edit,
+    ...(input.live ? { liveUploading: true, streamed: true } : {}),
   };
 }
 

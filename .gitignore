@@ -46,3 +46,5 @@ yarn-error.*
 # connector test bundle
 tests/connectors/*.mjs
 !tests/connectors/build.mjs
+tests/live-upload/*.mjs
+!tests/live-upload/build.mjs

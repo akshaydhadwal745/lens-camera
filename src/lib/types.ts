@@ -100,6 +100,10 @@ export interface LocalEntry {
   edit?: EditRecipe;
   /** Edit changed after previews were uploaded: push the new look to the cloud. */
   editDirty?: boolean;
+  /** Upload-while-recording is finishing this one; the regular uploader waits. */
+  liveUploading?: boolean;
+  /** Upload started while recording: existing parts are re-checked against the final file. */
+  streamed?: boolean;
   /** Too big for their storage plan (e.g. Box free 250 MB): this one goes to Lens storage. */
   forceLens?: boolean;
   /** Resumable upload state in the user's own storage (e.g. a Drive session URL). */
@@ -153,6 +157,10 @@ export interface GalleryItem {
 export interface NewCapture {
   kind: MediaKind;
   sourceUri: string;
+  /** Pre-assigned id (a video that started uploading while recording). */
+  id?: string;
+  /** Upload-while-recording is handling the original. */
+  live?: boolean;
   /** Look chosen in the camera (non-destructive). */
   edit?: EditRecipe;
   width?: number;

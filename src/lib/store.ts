@@ -42,6 +42,8 @@ import { compact, EditRecipe, forPaste } from './edits';
 import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
 import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
+import { LiveUpload } from './live-upload';
+import { onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
 
 const isWeb = Platform.OS === 'web';
 const DAY = 24 * 3600 * 1000;
@@ -57,7 +59,17 @@ export type Settings = {
   cellularUploads: CellularPolicy;
   /** Storage guardian: keep at least this much free on the phone; 0 = off. */
   keepFreeGB: number;
+  /** Upload videos while recording (Android): on Wi-Fi only, on any network, or never. */
+  liveUpload: LiveUploadPolicy;
 };
+
+export type LiveUploadPolicy = 'wifi' | 'all' | 'off';
+
+export const LIVE_UPLOAD_OPTIONS: { value: LiveUploadPolicy; label: string }[] = [
+  { value: 'wifi', label: 'Wi-Fi only' },
+  { value: 'all', label: 'Wi-Fi + mobile data' },
+  { value: 'off', label: 'Off' },
+];
 
 export const KEEP_FREE_OPTIONS = [
   { gb: 0, label: 'Off' },
@@ -87,7 +99,7 @@ export const RETENTION_OPTIONS = [
   { days: -1, label: 'Always' },
 ];
 
-const DEFAULT_SETTINGS: Settings = { retentionDays: 7, cellularUploads: 'small', keepFreeGB: 2 };
+const DEFAULT_SETTINGS: Settings = { retentionDays: 7, cellularUploads: 'small', keepFreeGB: 2, liveUpload: 'wifi' };
 
 export type State = {
   status: 'booting' | 'ready' | 'needs-link';
@@ -119,6 +131,8 @@ export type State = {
    * Uploads pause until the user signs in again, so nothing lands in a new guest.
    */
   signedOut: boolean;
+  /** Phone heat: when hot, uploads and preview-making pause until it cools. */
+  thermal: ThermalLevel;
 };
 
 let state: State = {
@@ -142,6 +156,7 @@ let state: State = {
   trashLoading: false,
   storage: null,
   signedOut: false,
+  thermal: 'normal',
 };
 
 const listeners = new Set<() => void>();
@@ -259,7 +274,7 @@ export const selectPendingCount = (s: State) => s.entries.filter((e) => !e.uploa
 
 /** Previews always go up (tiny); originals follow the mobile-data setting. */
 function needsWork(e: LocalEntry, s: State, now: number): boolean {
-  if (e.error || (e.nextAttemptAt ?? 0) > now) return false;
+  if (e.error || e.liveUploading || (e.nextAttemptAt ?? 0) > now) return false;
   if (!e.previewsUploaded && e.thumbFile && e.previewFile) return true; // includes backfill for old items
   if (e.editDirty && e.previewsUploaded && e.thumbFile && e.previewFile) return true;
   return !e.uploadedAt && allowedOnThisNetwork(e, s);
@@ -339,6 +354,7 @@ export async function boot() {
   }
 
   runCleanup();
+  if (!isWeb) watchThermal();
   if (!isWeb) void backfillDerivatives();
   if (state.identity || !isWeb) {
     void ensureCloudIdentity().then((ok) => {
@@ -376,6 +392,20 @@ function watchConnectivity() {
       refreshRemote();
       refreshShared();
     }
+  });
+}
+
+// ---------- Heat guard ----------
+
+/** Hot or worse: heavy background work (uploads, preview-making) waits. */
+export const isHot = (level: ThermalLevel) => level === 'hot' || level === 'critical';
+
+function watchThermal() {
+  set({ thermal: thermalLevel() });
+  onThermalChange((level) => {
+    const wasHot = isHot(state.thermal);
+    set({ thermal: level });
+    if (wasHot && !isHot(level)) void backfillDerivatives(); // cooled down: catch up (also restarts uploads)
   });
 }
 
@@ -581,7 +611,8 @@ function updateEntry(id: string, patch: Partial<LocalEntry>) {
 export function capture(input: NewCapture): LocalEntry {
   const entry = importCapture(input);
   setEntries([entry, ...state.entries]);
-  void ensureDerivatives(entry).finally(kickSync);
+  // Previews are made right away unless the phone is hot (then after it cools).
+  if (!isHot(state.thermal)) void ensureDerivatives(entry).finally(kickSync);
   guardSpace(); // make room for the next shot if the phone is filling up
   return entry;
 }
@@ -589,6 +620,7 @@ export function capture(input: NewCapture): LocalEntry {
 /** Older captures (before previews existed): make their previews one at a time. */
 async function backfillDerivatives() {
   for (const entry of state.entries) {
+    if (isHot(state.thermal)) return; // resumes when the phone cools
     if ((entry.thumbFile && entry.previewFile) || entry.offloadedAt) continue;
     await ensureDerivatives(entry);
   }
@@ -620,7 +652,8 @@ export function kickSync() {
 async function syncLoop() {
   syncing = true;
   try {
-    while (state.online) {
+    // Hot phone: stop after the current item; the thermal listener restarts us.
+    while (state.online && !isHot(state.thermal)) {
       const now = Date.now();
       // Newest first, so the shot you just took reaches the cloud first.
       const next = state.entries.find((e) => needsWork(e, state, now));
@@ -879,6 +912,42 @@ export async function deleteItems(
     void refreshTrash();
   }
   return { failed, needsScope };
+}
+
+// ---------- Upload while recording ----------
+
+const liveAllowedNow = (s: State) =>
+  s.online && !isHot(s.thermal) && s.settings.liveUpload !== 'off' && (!s.cellular || s.settings.liveUpload === 'all');
+
+/**
+ * Starts uploading a video while it records, if allowed: Android, signed-in
+ * or guest session present, Lens storage as destination (own storages get the
+ * file after recording), network policy and heat permitting.
+ */
+export function startLiveUpload(id: string): LiveUpload | null {
+  if (isWeb || !LiveUpload.supported || !state.identity || state.signedOut || !liveAllowedNow(state)) return null;
+  const own = state.storage?.storages[0];
+  if (own && own.status !== 'full' && own.status !== 'signed-out') return null;
+  return new LiveUpload(id, { canSend: () => liveAllowedNow(state) });
+}
+
+/** Recording saved as `entry`: finish the live upload, or hand over to the regular uploader. */
+export async function finishLiveUpload(live: LiveUpload, entry: LocalEntry) {
+  const media = await live.finish(captureFile(entry.fileName));
+  if (media) {
+    updateEntry(entry.id, { liveUploading: false, uploadedAt: Date.now(), attempts: 0, error: undefined });
+    upsertRemote(media);
+    guardSpace();
+  } else {
+    updateEntry(entry.id, { liveUploading: false });
+  }
+  kickSync(); // previews (and the original, if the live upload didn't finish)
+}
+
+export function setLiveUpload(policy: LiveUploadPolicy) {
+  const settings = { ...state.settings, liveUpload: policy };
+  savePrefs(settings);
+  set({ settings });
 }
 
 // ---------- Storage (Lens + connected) ----------

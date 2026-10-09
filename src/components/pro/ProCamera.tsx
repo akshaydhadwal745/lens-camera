@@ -39,7 +39,7 @@ import {
   scaleFor,
   snapshotPreset,
 } from '@/lib/pro-camera';
-import { capture, selectGallery, selectPendingCount, useStore } from '@/lib/store';
+import { capture, isHot, selectGallery, selectPendingCount, useStore } from '@/lib/store';
 import { displayUri } from '@/lib/types';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -86,6 +86,7 @@ export function ProCamera() {
 
   const items = useStore(selectGallery);
   const pending = useStore(selectPendingCount);
+  const hot = useStore((st) => isHot(st.thermal));
   const latest = items[0];
   const flash = useRef(new Animated.Value(0)).current;
   const zoomStart = useRef(1);
@@ -398,11 +399,12 @@ export function ProCamera() {
             focusMode={s.focusMode}
             lensPosition={s.lensPosition}
             analysis={{
-              peaking: peakingOn,
-              zebra: s.zebra,
+              // Heat guard: frame analysis overlays switch off while the phone is hot.
+              peaking: peakingOn && !hot,
+              zebra: s.zebra && !hot,
               zebraLevel: s.zebraLevel,
-              falseColor: s.falseColor,
-              histogram: s.histogram,
+              falseColor: s.falseColor && !hot,
+              histogram: s.histogram && !hot,
             }}
             onReady={(e) => setCaps(e.nativeEvent)}
             onStats={(e) => setStats(e.nativeEvent)}

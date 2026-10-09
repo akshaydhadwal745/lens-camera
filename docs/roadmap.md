@@ -5,10 +5,9 @@
 1. **Device testing** of the pro camera, looks, Night/Portrait, editor (needs the
    SideStore install on iPhone) and fixes from it. The storage guardian (built,
    see [cloud-and-storage](features/cloud-and-storage.md)) can be tested in Expo Go.
-2. **Live upload while recording:** record in segments and upload them during
-   recording, so videos are in the cloud seconds after you stop (setting:
-   Wi-Fi only / Wi-Fi + mobile / off).
-3. **Thermal guard:** reduce live analysis and pause uploads when the phone is hot.
+2. ~~Live upload while recording~~ (built for Android; iPhone pro camera later).
+3. ~~Thermal guard~~ (built).
+4. **Video streaming (Step 5):** multi-quality HLS made in the cloud only when needed.
 
 ## Later
 

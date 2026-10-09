@@ -28,8 +28,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconButton } from '@/components/IconButton';
 import { formatDuration } from '@/lib/format';
-import { capture as saveCapture, selectGallery, selectPendingCount, useStore } from '@/lib/store';
-import { displayUri } from '@/lib/types';
+import { capture as saveCapture, finishLiveUpload, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
+import { displayUri, newId } from '@/lib/types';
 
 const FLASH_ORDER: FlashMode[] = ['off', 'auto', 'on'];
 const TORCH_ORDER: FlashMode[] = ['off', 'on'];
@@ -155,12 +155,20 @@ export function BasicCamera() {
     }
     haptic();
     setRecording(true);
+    // Upload while recording (Android, Wi-Fi by default): most of the video is
+    // in the cloud by the time you press stop.
+    const id = newId();
+    const live = startLiveUpload(id);
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 600 });
       if (video?.uri) {
-        saveCapture({ kind: 'video', sourceUri: video.uri, duration: elapsedRef.current });
+        const entry = saveCapture({ kind: 'video', sourceUri: video.uri, duration: elapsedRef.current, id, live: !!live });
+        if (live) void finishLiveUpload(live, entry);
+      } else {
+        live?.cancel();
       }
     } catch (error) {
+      live?.cancel();
       Alert.alert('Recording failed', String(error));
     } finally {
       setRecording(false);

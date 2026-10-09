@@ -46,7 +46,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       const id = seg[2];
       if (seg[3] === 'parts' && method === 'GET') return await uploadedParts(identity, id);
       if (seg[3] === 'parts' && method === 'POST') return await partUrls(identity, id, req);
-      if (seg[3] === 'complete' && method === 'POST') return await completeUpload(identity, id);
+      if (seg[3] === 'complete' && method === 'POST') return await completeUpload(identity, id, req);
       if (seg[3] === 'external' && method === 'POST') return await completeExternal(identity, id, req);
       if (seg[3] === 'previews' && method === 'POST') return await previewsUploaded(identity, id);
       if (seg[3] === 'edit' && method === 'POST') return await startEdit(identity, id, req);

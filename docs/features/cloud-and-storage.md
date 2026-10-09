@@ -17,6 +17,40 @@ the phone keeps only what it needs.
 5. The server checks the stored file and marks it verified. Then the local original
    becomes eligible for the storage guardian.
 
+## Upload while recording (Android)
+
+Videos start uploading **while you record**, so a long video is almost
+entirely in the cloud by the time you press stop.
+
+- The camera writes the video to a file that only grows while recording; when
+  recording stops, Android's MP4 writer rewrites the header at the start and
+  adds its index at the end.
+- Lens starts an S3 multipart upload (size unknown) when recording starts and,
+  every 2 s, sends each finished 8 MiB block, **holding back the first 16 MiB**
+  (header area) and staying 1 MiB behind the writer.
+- When recording stops it re-checks the MD5 of every block already sent against
+  the final file, re-sends any that changed, sends the rest, and completes with
+  the final size. The cloud copy is byte-for-byte the phone's file (every block
+  is also MD5-checked by S3 on arrival).
+- If it's interrupted (app killed, network drop), the regular uploader finishes
+  it and re-checks already-sent blocks against S3's part MD5s.
+- **Setting** (Settings → Uploads → Upload videos while recording): Wi-Fi only
+  (default) · Wi-Fi + mobile data · Off. Pauses when the phone is hot. Only
+  when originals go to Lens storage (own storages get the file after recording).
+- Code: `src/lib/live-upload.ts`, `startLiveUpload`/`finishLiveUpload` in
+  `store.ts`; API `POST /media {streaming: true}`, `POST /media/:id/complete {size}`.
+  Tests: `infra/scripts/e2e.sh`, `tests/live-upload/run.sh`.
+
+## Heat guard
+
+A small native module (`modules/lens-device`: Android `PowerManager` thermal
+status, iOS `ProcessInfo.thermalState`) reports **normal / warm / hot /
+critical**. When **hot or critical**: uploads (including upload-while-recording)
+and preview-making pause, the iPhone pro camera turns off its analysis overlays
+(histogram, zebras, focus peaking, false color), and the gallery shows "Phone is
+hot. Uploads are paused until it cools down". Everything resumes automatically
+when it cools.
+
 ## Storage guardian (the phone never fills up)
 
 Once an original is verified in the cloud, the phone may drop its full-size

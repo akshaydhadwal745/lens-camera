@@ -119,13 +119,17 @@ export const api = {
     createdAt: number;
     /** Original goes to this connected storage instead of Lens. */
     location?: Pick<StorageLocation, 'storageId' | 'provider'>;
+    /** Video still recording: size unknown until /complete. */
+    streaming?: boolean;
   }) => request<UploadPlan>('POST', '/media', body),
   completeExternal: (id: string, ref: string, checksum: string) =>
     request<{ media: RemoteMedia }>('POST', `/media/${id}/external`, { ref, checksum }),
-  uploadedParts: (id: string) => request<{ parts: { n: number; size: number }[] }>('GET', `/media/${id}/parts`),
+  uploadedParts: (id: string) =>
+    request<{ parts: { n: number; size: number; etag?: string }[] }>('GET', `/media/${id}/parts`),
   partUrls: (id: string, parts: { n: number; md5: string }[]) =>
     request<{ urls: Record<string, string> }>('POST', `/media/${id}/parts`, { parts }),
-  complete: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/complete`),
+  /** `size` is required for uploads that started while recording. */
+  complete: (id: string, size?: number) => request<{ media: RemoteMedia }>('POST', `/media/${id}/complete`, size ? { size } : undefined),
   previewsUploaded: (id: string) => request<{ media: RemoteMedia }>('POST', `/media/${id}/previews`),
   startEdit: (
     id: string,

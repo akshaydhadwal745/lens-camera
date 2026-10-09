@@ -234,4 +234,21 @@ call POST /auth/email/start "$TE" -d "{\"email\":\"$MAIL\"}" >/dev/null
 for i in 1 2 3 4 5; do call POST /auth/email/verify "$TE" -d "{\"email\":\"$MAIL\",\"code\":\"111111\"}" >/dev/null; done
 [[ $(call POST /auth/email/verify "$TE" -d "{\"email\":\"$MAIL\",\"code\":\"$(otp "$MAIL")\"}" -o /dev/null -w '%{http_code}') == 429 ]] && ok "too many wrong codes locks that code"
 [[ $(call POST /auth/google "$TE" -d '{"code":"x","state":"forged.state","codeVerifier":"y"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "Google sign-in rejects a forged state"
+# --- upload while recording (streaming multipart, header rewritten at the end) ---
+IDL="$(node -p "Date.now().toString(36).padStart(8,'0')")-live001"
+P8=$((8*1024*1024))
+head -c $((4*P8 + 300000)) /dev/urandom > "$TMP/rec.mp4"
+R=$(call POST /media "$TA" -d "{\"id\":\"$IDL\",\"contentType\":\"video/mp4\",\"size\":0,\"streaming\":true,\"kind\":\"video\"}")
+[[ $(echo "$R" | j .mode) == multipart && $(echo "$R" | j .partSize) == $P8 ]] && ok "recording started: streaming upload, 8 MiB parts"
+send_part() { local n=$1 m url; dd if="$TMP/rec.mp4" bs=$P8 skip=$((n-1)) count=1 status=none > "$TMP/lp"; m=$(md5b64 "$TMP/lp")
+  url=$(call POST "/media/$IDL/parts" "$TA" -d "{\"parts\":[{\"n\":$n,\"md5\":\"$m\"}]}" | j ".urls['$n']")
+  curl -sS -X PUT "$url" -H "content-md5: $m" --data-binary @"$TMP/lp" -o /dev/null -w '%{http_code}'; }
+[[ $(send_part 3) == 200 && $(send_part 4) == 200 ]] && ok "blocks 3-4 sent while recording (header blocks held back)"
+printf 'REWRITTEN-HEADER' | dd of="$TMP/rec.mp4" bs=1 seek=40 conv=notrunc status=none
+[[ $(call GET "/media/$IDL/parts" "$TA" | j ".parts.find(p=>p.n===3).etag") =~ ^[0-9a-f]{32}$ ]] && ok "server reports part MD5s (for re-checks)"
+for n in 1 2 5; do send_part $n >/dev/null; done
+R=$(call POST "/media/$IDL/complete" "$TA" -d "{\"size\":$((4*P8 + 300000))}")
+[[ $(echo "$R" | j .media.originalReady) == true ]] && ok "recording stopped: completed with final size"
+cmp -s <(curl -sS "$(echo "$R" | j .media.url)") "$TMP/rec.mp4" && ok "cloud copy byte-identical to the final file (rewritten header included)"
+call DELETE "/media/$IDL/forever" "$TA" >/dev/null
 echo "ALL PASSED"

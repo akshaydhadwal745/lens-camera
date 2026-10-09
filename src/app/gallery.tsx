@@ -26,6 +26,7 @@ import {
   selectGallery,
   selectPendingCount,
   selectShared,
+  isHot,
   selectStorageIndicator,
   selectStorageStuck,
   selectWaitingForWifi,
@@ -57,6 +58,7 @@ export default function GalleryScreen() {
   const storageStuck = useStore(selectStorageStuck);
   const indicator = useStore(selectStorageIndicator);
   const signedOut = useStore((s) => s.signedOut);
+  const hot = useStore((s) => isHot(s.thermal));
   const isGuest = useStore((s) => !!s.identity && !s.identity.email);
   const [nudgeDismissed, setNudgeDismissed] = useState(() => loadDoc('signin-nudge-dismissed', false));
   const online = useStore((s) => s.online);
@@ -161,6 +163,11 @@ export default function GalleryScreen() {
       <Ionicons name="person-circle-outline" size={16} color="#fff" />
       <Text style={styles.bannerText}>You were signed out. Tap to sign in and keep uploading</Text>
     </Pressable>
+  ) : hot && !isWeb ? (
+    <View style={[styles.banner, { backgroundColor: '#9A3412' }]}>
+      <Ionicons name="thermometer-outline" size={16} color="#fff" />
+      <Text style={styles.bannerText}>Phone is hot. Uploads are paused until it cools down</Text>
+    </View>
   ) : storageStuck ? (
     // Phone nearly full and nothing is safe to remove yet: uploads must finish first.
     <View style={[styles.banner, { backgroundColor: '#7C2D12' }]}>
