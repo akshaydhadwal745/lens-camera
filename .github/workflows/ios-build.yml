@@ -209,7 +209,11 @@ jobs:
       # 32-bit phones (Android Go / older budget phones), built in parallel.
       - name: Build APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=${{ matrix.abi }}
+        # The template's 2 GB heap / 512 MB metaspace ran out in lintVital once
+        # expo-updates was added (runners have 16 GB).
+        run: >
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=${{ matrix.abi }}
+          "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8"
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
