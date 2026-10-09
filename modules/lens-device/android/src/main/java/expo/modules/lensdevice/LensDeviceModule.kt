@@ -45,8 +45,10 @@ class LensDeviceModule : Module() {
     }
 
     Function("stopBackup") {
-      val context = appContext.reactContext ?: return@Function
-      context.stopService(Intent(context, BackupService::class.java))
+      appContext.reactContext?.let { context ->
+        context.stopService(Intent(context, BackupService::class.java))
+      }
+      Unit
     }
 
     OnStartObserving {
