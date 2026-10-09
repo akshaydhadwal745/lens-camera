@@ -1,0 +1,57 @@
+---
+import Breadcrumbs from './Breadcrumbs.astro';
+import { LEGAL, type LegalDoc } from '../content/legal';
+import Layout from '../layouts/Layout.astro';
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  path: string;
+  doc: LegalDoc;
+}
+const { lang, path, doc } = Astro.props;
+---
+
+<Layout lang={lang} path={path} title={doc.title} description={doc.description}>
+  <article class="narrow prose block">
+    <Breadcrumbs lang={lang} trail={[[doc.h1, path]]} />
+    <h1>{doc.h1}</h1>
+    <p class="muted">{lang === 'en' ? 'Last updated' : 'आख़िरी अपडेट'}: {LEGAL.updated[lang]}</p>
+    <p>{doc.intro}</p>
+    {
+      doc.blocks.map((b) => (
+        <section>
+          <h2>{b.h2}</h2>
+          {b.table && (
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {b.table.head.map((h) => (
+                      <th scope="col">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {b.table.rows.map((r) => (
+                    <tr>
+                      {r.map((c) => (
+                        <td>{c}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {b.p?.map((p) => <p>{p}</p>)}
+          {b.ul && (
+            <ul>
+              {b.ul.map((li) => <li>{li}</li>)}
+            </ul>
+          )}
+        </section>
+      ))
+    }
+  </article>
+</Layout>

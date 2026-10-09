@@ -51,10 +51,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "build:web": "expo export --platform web",
+    "build:web": "./scripts/build-web.sh",
     "lint": "expo lint",
     "tunnel": "./scripts/tunnel.sh",
-    "deploy": "expo export --platform web && npm --prefix infra run deploy",
+    "deploy": "npm --prefix infra run deploy",
     "test:api": "cd infra && ./scripts/e2e.sh",
     "tunnel:ngrok": "expo start --tunnel",
     "postinstall": "patch-package"

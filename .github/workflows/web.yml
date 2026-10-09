@@ -1,0 +1,110 @@
+# Website: lens.instagrowapp.com (Astro site + the Expo web app under /app).
+# Builds on every push to main that touches it and deploys to S3 + CloudFront
+# with a short-lived AWS role (GitHub OIDC; no stored keys). Lighthouse checks
+# key pages first: the deploy stops if performance/accessibility/SEO drop.
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'src/**'
+      - 'modules/lens-camera/index.tsx'
+      - 'assets/**'
+      - 'app.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/build-web.sh'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # OIDC to AWS
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build website
+        run: ./scripts/build-web.sh
+
+      - name: Lighthouse (performance, accessibility, SEO)
+        run: |
+          (cd site && npx astro preview --port 4321 >/tmp/preview.log 2>&1 &)
+          sleep 5
+          fail=0
+          for page in / /hi/ /features/night-mode/ /privacy/; do
+            npx -y lighthouse@12 "http://localhost:4321$page" --quiet \
+              --chrome-flags="--headless=new --no-sandbox" \
+              --only-categories=performance,accessibility,seo,best-practices \
+              --output=json --output-path=/tmp/lh.json
+            node -e "
+              const c = require('/tmp/lh.json').categories;
+              const s = Object.fromEntries(Object.values(c).map(x => [x.id, Math.round(x.score * 100)]));
+              console.log('$page', JSON.stringify(s));
+              const min = { performance: 85, accessibility: 100, seo: 100, 'best-practices': 95 };
+              const bad = Object.entries(min).filter(([k, v]) => s[k] < v);
+              if (bad.length) { console.error('below budget:', bad.map(([k]) => k).join(', ')); process.exit(1); }
+            " || fail=1
+          done
+          exit $fail
+
+      # GitHub OIDC -> a 1-hour AWS session for the deploy-only role (AWS CLI is on the runner).
+      - name: AWS credentials (OIDC)
+        env:
+          ROLE: ${{ vars.WEB_DEPLOY_ROLE_ARN }}
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE" --role-session-name "gh-web-$GITHUB_RUN_ID" \
+            --web-identity-token "$TOKEN" --duration-seconds 3600 --query Credentials --output json)
+          for k in AccessKeyId:AWS_ACCESS_KEY_ID SecretAccessKey:AWS_SECRET_ACCESS_KEY SessionToken:AWS_SESSION_TOKEN; do
+            v=$(echo "$CREDS" | jq -r ".${k%%:*}")
+            echo "::add-mask::$v"
+            echo "${k##*:}=$v" >> "$GITHUB_ENV"
+          done
+          echo "AWS_REGION=ap-south-1" >> "$GITHUB_ENV"
+
+      - name: Deploy to S3 + CloudFront
+        env:
+          BUCKET: ${{ vars.WEB_BUCKET }}
+          DISTRIBUTION: ${{ vars.CF_DISTRIBUTION_ID }}
+        run: |
+          cd site/dist
+          # Fingerprinted files never change: cache for a year.
+          aws s3 sync . "s3://$BUCKET" --only-show-errors \
+            --exclude "*" --include "_astro/*" --include "app/_expo/*" --include "app/assets/*" \
+            --cache-control "public, max-age=31536000, immutable"
+          # Everything else (HTML, sitemap, icons): edges keep 5 minutes, browsers revalidate.
+          aws s3 sync . "s3://$BUCKET" --only-show-errors \
+            --exclude "_astro/*" --exclude "app/_expo/*" --exclude "app/assets/*" --exclude "*.webmanifest" \
+            --cache-control "public, max-age=0, s-maxage=300, must-revalidate"
+          aws s3 cp manifest.webmanifest "s3://$BUCKET/manifest.webmanifest" --only-show-errors \
+            --content-type application/manifest+json --cache-control "public, max-age=0, s-maxage=300, must-revalidate"
+          # Remove files that no longer exist (media lives in another bucket).
+          aws s3 sync . "s3://$BUCKET" --only-show-errors --delete --size-only
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*" --query Invalidation.Id --output text

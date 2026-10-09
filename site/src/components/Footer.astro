@@ -1,0 +1,55 @@
+---
+import { featurePages, useCasePages } from '../content/pages';
+import { href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = ui[lang];
+const legal =
+  lang === 'en'
+    ? [
+        ['privacy', 'Privacy policy'],
+        ['terms', 'Terms of service'],
+        ['delete-account', 'Delete your account'],
+        ['security', 'Privacy & security'],
+      ]
+    : [
+        ['privacy', 'प्राइवेसी पॉलिसी'],
+        ['terms', 'सेवा की शर्तें'],
+        ['delete-account', 'अकाउंट डिलीट करें'],
+        ['security', 'प्राइवेसी और सुरक्षा'],
+      ];
+---
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <p><strong class="brand-name">Lens by InstaGrow</strong></p>
+      <p>{t.footer.made}</p>
+      <p>© {new Date().getFullYear()} InstaGrow</p>
+    </div>
+    <nav aria-label={t.footer.product}>
+      <h2>{t.footer.product}</h2>
+      <ul>
+        {featurePages.slice(0, 6).map((p) => <li><a href={href(lang, `features/${p.slug}`)}>{p.name[lang]}</a></li>)}
+        <li><a href={href(lang, 'pricing')}>{t.nav.pricing}</a></li>
+      </ul>
+    </nav>
+    <nav aria-label={t.footer.useCases}>
+      <h2>{t.footer.useCases}</h2>
+      <ul>
+        {useCasePages.map((p) => <li><a href={href(lang, `use-cases/${p.slug}`)}>{p.name[lang]}</a></li>)}
+        <li><a href={href(lang, 'features/web-app')}>{lang === 'en' ? 'Web app' : 'वेब ऐप'}</a></li>
+        <li><a href={href(lang, 'help')}>{t.nav.help}</a></li>
+      </ul>
+    </nav>
+    <nav aria-label={t.footer.company}>
+      <h2>{t.footer.company}</h2>
+      <ul>
+        {legal.map(([p, label]) => <li><a href={href(lang, p)}>{label}</a></li>)}
+      </ul>
+    </nav>
+  </div>
+</footer>

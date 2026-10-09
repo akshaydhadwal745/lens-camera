@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /api/
+Disallow: /signin/
+Disallow: /hi/signin/
+Disallow: /l/
+
+Sitemap: https://lens.instagrowapp.com/sitemap-index.xml

@@ -1,0 +1,103 @@
+---
+import Layout from '../layouts/Layout.astro';
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const c = {
+  en: {
+    title: 'Sign in',
+    description: 'Sign in to Lens on the web by scanning a QR code with your phone, or with your email or Google account.',
+    h1: 'Sign in to Lens',
+    lead: 'Use the same account as your phone. Your library stays in sync.',
+    qrTitle: 'Scan with your phone',
+    qrSteps: ['Open Lens on your phone', 'Go to Settings → Link a computer, or just point your phone camera at the code', 'Tap Approve'],
+    other: 'Or use your account',
+    email: 'Email',
+    sendCode: 'Email me a code',
+    code: '6-digit code',
+    verify: 'Sign in',
+    google: 'Continue with Google',
+    privacy: 'By signing in you agree to our Terms and Privacy policy.',
+    i18n: {
+      qrLabel: 'QR code for signing in',
+      qrWaiting: 'Waiting for your phone… The code refreshes automatically.',
+      qrDenied: 'Sign-in was denied on your phone. Showing a new code…',
+      sending: 'Sending…',
+      codeSent: 'We sent a code to {email}. It expires in 10 minutes.',
+      checking: 'Checking…',
+      genericError: 'Something went wrong. Please try again.',
+    },
+  },
+  hi: {
+    title: 'साइन इन',
+    description: 'फ़ोन से QR कोड स्कैन करके, या अपने ईमेल या Google अकाउंट से वेब पर Lens में साइन इन करें।',
+    h1: 'Lens में साइन इन करें',
+    lead: 'वही अकाउंट इस्तेमाल करें जो फ़ोन में है। आपकी लाइब्रेरी सिंक रहती है।',
+    qrTitle: 'फ़ोन से स्कैन करें',
+    qrSteps: ['फ़ोन पर Lens खोलें', 'Settings → Link a computer पर जाएँ, या बस फ़ोन का कैमरा कोड की ओर करें', 'Approve दबाएँ'],
+    other: 'या अपने अकाउंट से',
+    email: 'ईमेल',
+    sendCode: 'मुझे कोड ईमेल करें',
+    code: '6 अंकों का कोड',
+    verify: 'साइन इन',
+    google: 'Google से जारी रखें',
+    privacy: 'साइन इन करके आप हमारी शर्तें और प्राइवेसी पॉलिसी मानते हैं।',
+    i18n: {
+      qrLabel: 'साइन इन के लिए QR कोड',
+      qrWaiting: 'आपके फ़ोन का इंतज़ार… कोड अपने-आप बदलता रहता है।',
+      qrDenied: 'फ़ोन पर साइन इन मना किया गया। नया कोड दिखा रहे हैं…',
+      sending: 'भेज रहे हैं…',
+      codeSent: '{email} पर कोड भेजा गया। यह 10 मिनट में एक्सपायर होगा।',
+      checking: 'जाँच रहे हैं…',
+      genericError: 'कुछ गड़बड़ हुई। फिर से कोशिश करें।',
+    },
+  },
+}[lang];
+---
+
+<Layout lang={lang} path="signin" title={c.title} description={c.description} noindex>
+  <section class="block">
+    <div class="container" id="signin" data-i18n={JSON.stringify(c.i18n)}>
+      <h1>{c.h1}</h1>
+      <p class="lead">{c.lead}</p>
+      <div class="signin">
+        <div class="card">
+          <h2>{c.qrTitle}</h2>
+          <ol>
+            {c.qrSteps.map((step) => <li>{step}</li>)}
+          </ol>
+          <div class="qr-box" id="qr" aria-live="polite"></div>
+          <p class="status" id="qr-status" role="status"></p>
+        </div>
+        <div class="card">
+          <h2>{c.other}</h2>
+          <form id="email-form" class="field-group">
+            <div class="field">
+              <label for="email">{c.email}</label>
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required />
+            </div>
+            <button class="btn btn-primary" type="submit">{c.sendCode}</button>
+          </form>
+          <form id="code-form" hidden>
+            <div class="field">
+              <label for="code">{c.code}</label>
+              <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required />
+            </div>
+            <button class="btn btn-primary" type="submit">{c.verify}</button>
+          </form>
+          <p class="status" id="email-status" role="status" aria-live="polite"></p>
+          <div class="divider">{lang === 'en' ? 'or' : 'या'}</div>
+          <button class="btn btn-ghost" id="google" type="button">{c.google}</button>
+          <p class="note">{c.privacy}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  import '../scripts/signin';
+</script>

@@ -10,7 +10,15 @@ import {
   TrashItem,
 } from './types';
 
-export const API_URL = `${process.env.EXPO_PUBLIC_API_URL ?? ''}/v1`;
+import { Platform } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+/**
+ * Phones call the API directly with a bearer token. The website calls it on
+ * its own domain (/api, via CloudFront) and is signed in by an HttpOnly cookie
+ * that scripts can't read, so the web app never holds a token.
+ */
+export const API_URL = isWeb ? '/api/v1' : `${process.env.EXPO_PUBLIC_API_URL ?? ''}/v1`;
 export const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? '';
 
 export class ApiError extends Error {
@@ -44,7 +52,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       headers: {
         'content-type': 'application/json',
         ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
+        // Website: cookie session + the header the API requires for changes (CSRF guard).
+        ...(isWeb ? { 'x-lens-web': '1' } : {}),
       },
+      ...(isWeb ? { credentials: 'same-origin' as const } : {}),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -52,7 +63,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401 && authToken) onUnauthorized?.();
+    if (res.status === 401 && (authToken || isWeb)) onUnauthorized?.();
     throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`, data.code);
   }
   return data as T;
@@ -175,4 +186,12 @@ export const api = {
 
   createPairing: () => request<{ code: string; expiresAt: number }>('POST', '/pairing'),
   claimPairing: (code: string) => request<IdentityResponse>('POST', '/pairing/claim', { code }),
+  // QR sign-in for the website: the phone approves or denies a browser.
+  loginSessionInfo: (id: string) => request<{ browser: string; city?: string; status: string }>('GET', `/login-sessions/${id}/info`),
+  approveLoginSession: (id: string) => request<{ approved: boolean }>('POST', `/login-sessions/${id}/approve`),
+  denyLoginSession: (id: string) => request<{ denied: boolean }>('POST', `/login-sessions/${id}/deny`),
+  webSessions: () => request<{ sessions: { id: string; browser: string; createdAt: number }[] }>('GET', '/web-sessions'),
+  signOutAllBrowsers: () => request<{ revoked: number }>('DELETE', '/web-sessions'),
+  /** Website: end this browser's session (clears the cookie). */
+  signOutThisBrowser: () => request<{ signedOut: boolean }>('DELETE', '/web-sessions/current'),
 };

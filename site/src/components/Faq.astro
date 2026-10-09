@@ -1,0 +1,28 @@
+---
+// Questions as native <details> (no JavaScript) + FAQPage structured data.
+import type { Faq } from '../content/pages';
+
+interface Props {
+  title: string;
+  items: Faq[];
+}
+const { title, items } = Astro.props;
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: items.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+};
+---
+
+<section class="faq" aria-labelledby="faq-title">
+  <h2 id="faq-title">{title}</h2>
+  {
+    items.map((f) => (
+      <details>
+        <summary>{f.q}</summary>
+        <p>{f.a}</p>
+      </details>
+    ))
+  }
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+</section>

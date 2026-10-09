@@ -1,0 +1,95 @@
+---
+// Every page: SEO head (title, description, canonical, hreflang, social
+// cards, JSON-LD), header and footer. No client JavaScript unless a page adds it.
+import '../styles/global.css';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import { BRAND, href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  /** Language-neutral path, e.g. "features/night-mode" ("" for home). */
+  path: string;
+  title: string;
+  description: string;
+  /** Private pages (sign-in, QR landing): not indexed. */
+  noindex?: boolean;
+  /** Extra JSON-LD objects for this page. */
+  jsonLd?: object[];
+  /** The home page uses the brand alone as the title. */
+  bareTitle?: boolean;
+}
+
+const { lang, path, title, description, noindex = false, jsonLd = [], bareTitle = false } = Astro.props;
+const site = Astro.site!.origin;
+const url = (l: Lang) => `${site}${href(l, path)}`;
+const fullTitle = bareTitle ? title : `${title} | ${BRAND}`;
+const ogImage = `${site}/og-${lang}.png`;
+const t = ui[lang];
+
+const graph = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': `${site}/#org`,
+    name: 'InstaGrow',
+    url: site,
+    logo: `${site}/icon-512.png`,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${site}/#website`,
+    name: BRAND,
+    url: site,
+    inLanguage: ['en-IN', 'hi-IN'],
+    publisher: { '@id': `${site}/#org` },
+  },
+  ...jsonLd,
+];
+---
+
+<!doctype html>
+<html lang={lang} dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex, nofollow" /> : <link rel="canonical" href={url(lang)} />}
+    {
+      !noindex && (
+        <>
+          <link rel="alternate" hreflang="en-IN" href={url('en')} />
+          <link rel="alternate" hreflang="hi-IN" href={url('hi')} />
+          <link rel="alternate" hreflang="x-default" href={url('en')} />
+        </>
+      )
+    }
+    <meta name="theme-color" content="#0b1020" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta property="og:site_name" content={BRAND} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={url(lang)} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content={lang === 'en' ? 'en_IN' : 'hi_IN'} />
+    <meta property="og:locale:alternate" content={lang === 'en' ? 'hi_IN' : 'en_IN'} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {graph.map((g) => <script type="application/ld+json" set:html={JSON.stringify(g)} />)}
+  </head>
+  <body>
+    <a class="skip" href="#main">{t.skip}</a>
+    <Header lang={lang} path={path} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer lang={lang} />
+  </body>
+</html>

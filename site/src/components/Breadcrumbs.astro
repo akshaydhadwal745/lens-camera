@@ -1,0 +1,35 @@
+---
+// Visible breadcrumbs + BreadcrumbList structured data.
+import { href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  /** [label, language-neutral path] after Home. */
+  trail: [string, string][];
+}
+const { lang, trail } = Astro.props;
+const site = Astro.site!.origin;
+const items: [string, string][] = [[ui[lang].breadcrumbHome, ''], ...trail];
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: items.map(([name, p], i) => ({ '@type': 'ListItem', position: i + 1, name, item: `${site}${href(lang, p)}` })),
+};
+---
+
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <ol>
+    {
+      items.map(([name, p], i) =>
+        i === items.length - 1 ? (
+          <li aria-current="page">{name}</li>
+        ) : (
+          <li>
+            <a href={href(lang, p)}>{name}</a>
+          </li>
+        ),
+      )
+    }
+  </ol>
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+</nav>

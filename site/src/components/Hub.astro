@@ -1,0 +1,50 @@
+---
+// /features/ and /use-cases/: every page in the group, with descriptions.
+import Breadcrumbs from './Breadcrumbs.astro';
+import Cta from './Cta.astro';
+import { featurePages, useCasePages } from '../content/pages';
+import Layout from '../layouts/Layout.astro';
+import { href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  group: 'features' | 'use-cases';
+}
+const { lang, group } = Astro.props;
+const t = ui[lang];
+const list = group === 'features' ? featurePages : useCasePages;
+const copy = {
+  features: {
+    en: { title: 'Features: pro camera, 100 GB backup, Night & Portrait, web app', description: 'Everything Lens does: a pro camera, original-quality backup, your own storage, 4K streaming, sharing, a non-destructive editor and a web app.', h1: 'Features' },
+    hi: { title: 'फ़ीचर: प्रो कैमरा, 100 GB बैकअप, नाइट और पोर्ट्रेट, वेब ऐप', description: 'Lens क्या-क्या करता है: प्रो कैमरा, ओरिजिनल क्वालिटी बैकअप, अपना स्टोरेज, 4K स्ट्रीमिंग, शेयरिंग, एडिटर और वेब ऐप।', h1: 'फ़ीचर' },
+  },
+  'use-cases': {
+    en: { title: 'Use cases: storage full, travel, weddings and events', description: 'How Lens helps when your phone is full, on trips, and at weddings and events.', h1: 'Use cases' },
+    hi: { title: 'इस्तेमाल: स्टोरेज फ़ुल, ट्रैवल, शादी और इवेंट', description: 'फ़ोन फ़ुल होने पर, ट्रिप पर, और शादी व इवेंट में Lens कैसे मदद करता है।', h1: 'इस्तेमाल' },
+  },
+}[group][lang];
+---
+
+<Layout lang={lang} path={group} title={copy.title} description={copy.description}>
+  <section class="hero">
+    <div class="container">
+      <Breadcrumbs lang={lang} trail={[[copy.h1, group]]} />
+      <h1>{copy.h1}</h1>
+      <p class="lead">{copy.description}</p>
+    </div>
+  </section>
+  <section class="block">
+    <div class="container grid">
+      {
+        list.map((p) => (
+          <a class="card" href={href(lang, `${group}/${p.slug}`)}>
+            <div class="icon" aria-hidden="true">{p.icon}</div>
+            <h2 class="h3">{p.name[lang]}</h2>
+            <p>{p.copy[lang].description}</p>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+  <Cta lang={lang} />
+</Layout>

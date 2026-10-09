@@ -52,3 +52,8 @@ tests/live-upload/*.mjs
 # Local Android builds of the native modules
 modules/*/android/build/
 modules/*/android/.cxx/
+
+# Website (Astro)
+site/node_modules/
+site/dist/
+site/.astro/

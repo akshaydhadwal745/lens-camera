@@ -1,0 +1,30 @@
+---
+import { href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  path: string;
+}
+const { lang, path } = Astro.props;
+const t = ui[lang];
+const other: Lang = lang === 'en' ? 'hi' : 'en';
+const current = Astro.url.pathname;
+const link = (p: string) => href(lang, p);
+const isCurrent = (p: string) => (current.startsWith(link(p)) ? 'page' : undefined);
+---
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href={href(lang)}>
+      <img src="/icon-192.png" alt="" width="34" height="34" />
+      <span>Lens <small>by InstaGrow</small></span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a class="hide-sm" href={link('features')} aria-current={isCurrent('features')}>{t.nav.features}</a>
+      <a class="hide-sm" href={link('pricing')} aria-current={isCurrent('pricing')}>{t.nav.pricing}</a>
+      <a class="hide-sm" href={link('help')} aria-current={isCurrent('help')}>{t.nav.help}</a>
+      <a class="lang" href={href(other, path)} hreflang={other} lang={other} title={t.languageLabel}>{t.language}</a>
+      <a class="btn btn-primary btn-sm" href={link('signin')}>{t.signIn}</a>
+    </nav>
+  </div>
+</header>

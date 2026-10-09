@@ -1,0 +1,53 @@
+---
+// Every content page in English (/…) and Hindi (/hi/…), from src/content/.
+import FeaturePage from '../components/FeaturePage.astro';
+import Hub from '../components/Hub.astro';
+import InfoView from '../components/InfoView.astro';
+import LegalView from '../components/LegalView.astro';
+import { helpFaq, infoPages } from '../content/info';
+import { deletion, privacy, terms } from '../content/legal';
+import { pages } from '../content/pages';
+import { type Lang, LANGS } from '../i18n/ui';
+
+type Route =
+  | { kind: 'hub'; group: 'features' | 'use-cases' }
+  | { kind: 'page'; slug: string }
+  | { kind: 'info'; slug: string }
+  | { kind: 'help' }
+  | { kind: 'legal'; doc: 'privacy' | 'terms' | 'delete-account' };
+
+export function getStaticPaths() {
+  const routes: [string, Route][] = [
+    ['features', { kind: 'hub', group: 'features' }],
+    ['use-cases', { kind: 'hub', group: 'use-cases' }],
+    ...pages.map((p): [string, Route] => [`${p.group}/${p.slug}`, { kind: 'page', slug: p.slug }]),
+    ...infoPages.map((p): [string, Route] => [p.slug, { kind: 'info', slug: p.slug }]),
+    ['help', { kind: 'help' }],
+    ['privacy', { kind: 'legal', doc: 'privacy' }],
+    ['terms', { kind: 'legal', doc: 'terms' }],
+    ['delete-account', { kind: 'legal', doc: 'delete-account' }],
+  ];
+  return LANGS.flatMap((lang) =>
+    routes.map(([path, route]) => ({ params: { path: lang === 'en' ? path : `hi/${path}` }, props: { lang, path, route } })),
+  );
+}
+
+const { lang, path, route } = Astro.props as { lang: Lang; path: string; route: Route };
+const helpCopy = {
+  en: { title: 'Help and FAQ', description: 'Answers to common questions about Lens: signing in, backup, freeing space, storage, Trash and your account.', h1: 'Help', lead: 'Quick answers to the most common questions.', sections: [] },
+  hi: { title: 'मदद और सवाल-जवाब', description: 'Lens के आम सवालों के जवाब: साइन इन, बैकअप, जगह ख़ाली करना, स्टोरेज, ट्रैश और अकाउंट।', h1: 'मदद', lead: 'सबसे आम सवालों के तुरंत जवाब।', sections: [] },
+}[lang];
+const securityLinks: [string, string][] = lang === 'en' ? [['Privacy policy', 'privacy'], ['Delete your account', 'delete-account']] : [['प्राइवेसी पॉलिसी', 'privacy'], ['अकाउंट डिलीट करें', 'delete-account']];
+---
+
+{route.kind === 'hub' && <Hub lang={lang} group={route.group} />}
+{route.kind === 'page' && <FeaturePage lang={lang} page={pages.find((p) => p.slug === route.slug)!} />}
+{
+  route.kind === 'info' &&
+    (() => {
+      const p = infoPages.find((x) => x.slug === route.slug)!;
+      return <InfoView lang={lang} path={path} name={p.name[lang]} copy={p.copy[lang]} links={p.slug === 'security' ? securityLinks : []} />;
+    })()
+}
+{route.kind === 'help' && <InfoView lang={lang} path={path} name={helpCopy.h1} copy={helpCopy} faq={helpFaq[lang]} />}
+{route.kind === 'legal' && <LegalView lang={lang} path={path} doc={(route.doc === 'privacy' ? privacy : route.doc === 'terms' ? terms : deletion)[lang]} />}

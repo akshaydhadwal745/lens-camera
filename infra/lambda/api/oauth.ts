@@ -17,7 +17,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { Identity } from './identity';
-import { derivedKey, getParam, HttpError, json, Req, Res } from './lib';
+import { derivedKey, env, getParam, HttpError, json, Req, Res } from './lib';
 
 /** Storage providers + 'google' = Sign in with Google (same Google client as Drive). */
 type OAuthProvider = 'gdrive' | 'dropbox' | 'onedrive' | 'box' | 'google';
@@ -94,7 +94,10 @@ function callbackUrl(req: Req): string {
 
 // ---------- state: base64url(json).base64url(hmac) ----------
 
+/** `i`: the Lens identity, or "web" for a website sign-in (no identity yet). */
 type State = { p: OAuthProvider; i: string; e: number; n: string };
+
+const WEB = 'web';
 
 async function signState(state: State): Promise<string> {
   const body = Buffer.from(JSON.stringify(state)).toString('base64url');
@@ -114,6 +117,30 @@ async function readState(value: unknown): Promise<State> {
 }
 
 // ---------- endpoints ----------
+
+/**
+ * POST /v1/web/auth/google/start {codeChallenge}: Google sign-in URL for the
+ * website. Comes back through the same callback, which then returns to the
+ * website's /signin page instead of the app.
+ */
+export async function webStartGoogle(req: Req): Promise<Res> {
+  if (!env.webOrigin) throw new HttpError(503, 'Website sign-in isn’t set up');
+  const challenge = req.body.codeChallenge;
+  if (typeof challenge !== 'string' || !CHALLENGE.test(challenge)) throw new HttpError(400, 'Invalid code challenge');
+  const { clientId } = await credentials('google');
+  const config = CONFIG.google;
+  const state = await signState({ p: 'google', i: WEB, e: Date.now() + STATE_TTL_MS, n: randomBytes(8).toString('hex') });
+  const url = new URL(config.authorizeUrl);
+  url.searchParams.set('client_id', clientId);
+  url.searchParams.set('redirect_uri', callbackUrl(req));
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', state);
+  if (config.scope) url.searchParams.set('scope', config.scope);
+  url.searchParams.set('code_challenge', challenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  for (const [k, v] of Object.entries(config.extra ?? {})) url.searchParams.set(k, v);
+  return json(200, { url: url.toString(), state });
+}
 
 /** POST /v1/oauth/:provider/start {codeChallenge}: sign-in URL for the in-app browser. */
 export async function startOAuth(identity: Identity, providerName: string, req: Req): Promise<Res> {
@@ -138,25 +165,29 @@ export async function startOAuth(identity: Identity, providerName: string, req: 
   return json(200, { url: url.toString(), state, redirect: APP_REDIRECT });
 }
 
-/** GET /v1/oauth/callback: provider → here → back into the app (public). */
+/** GET /v1/oauth/callback: provider → here → back into the app, or the website (public). */
 export async function oauthCallback(req: Req): Promise<Res> {
-  const out = new URL(APP_REDIRECT);
   const { code, state, error, error_description } = req.query;
+  const params = new URLSearchParams();
+  let web = false;
   if (error) {
-    out.searchParams.set('error', String(error_description ?? error).slice(0, 200));
+    params.set('error', String(error_description ?? error).slice(0, 200));
   } else {
     try {
       const s = await readState(state);
-      out.searchParams.set('provider', s.p);
-      out.searchParams.set('code', String(code ?? ''));
-      out.searchParams.set('state', String(state));
+      web = s.i === WEB;
+      params.set('provider', s.p);
+      params.set('code', String(code ?? ''));
+      params.set('state', String(state));
     } catch (e) {
-      out.searchParams.set('error', e instanceof HttpError ? e.message : 'Sign-in failed');
+      params.set('error', e instanceof HttpError ? e.message : 'Sign-in failed');
     }
   }
+  // Website: the code goes in the fragment (never sent to servers or logged).
+  const location = web && env.webOrigin ? `${env.webOrigin}/signin/#${params}` : `${APP_REDIRECT}?${params}`;
   return {
     statusCode: 302,
-    headers: { location: out.toString(), 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
+    headers: { location, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
     body: '',
   };
 }
@@ -227,9 +258,10 @@ export async function oauthProviders(): Promise<Res> {
  * OpenID Connect the signature check can be skipped; we still check issuer,
  * audience and expiry.
  */
-export async function googleLoginClaims(identity: Identity, req: Req) {
+/** `identity` null = the website (state must have been made for the web). */
+export async function googleLoginClaims(identity: Identity | null, req: Req) {
   const state = await readState(req.body.state);
-  if (state.p !== 'google' || state.i !== identity.id) throw new HttpError(403, 'This sign-in belongs to someone else');
+  if (state.p !== 'google' || state.i !== (identity ? identity.id : WEB)) throw new HttpError(403, 'This sign-in belongs to someone else');
   if (typeof req.body.code !== 'string' || typeof req.body.codeVerifier !== 'string') throw new HttpError(400, 'Missing code');
   const { clientId, clientSecret } = await credentials('google');
   const res = await fetch(CONFIG.google.tokenUrl, {

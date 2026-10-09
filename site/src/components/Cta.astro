@@ -1,0 +1,20 @@
+---
+import { href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = ui[lang];
+---
+
+<section class="block">
+  <div class="container cta">
+    <h2>{t.ctaTitle}</h2>
+    <p class="muted">{t.ctaBody}</p>
+    <div class="actions">
+      <a class="btn btn-primary" href={href(lang, 'download')}>{t.getApp}</a>
+      <a class="btn btn-ghost" href={href(lang, 'signin')}>{t.signIn}</a>
+    </div>
+  </div>
+</section>

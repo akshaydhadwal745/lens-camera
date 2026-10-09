@@ -5,6 +5,8 @@
     "quotaGb": 100,
     "monthlyBudgetUsd": 10,
     "alertEmail": "akshaydhadwal2@gmail.com",
-    "codeDomain": "lens.instagrowapp.com"
+    "codeDomain": "lens.instagrowapp.com",
+    "cdnDomain": "d13kuzzim5hg3c.cloudfront.net",
+    "webOrigin": "https://d13kuzzim5hg3c.cloudfront.net"
   }
 }

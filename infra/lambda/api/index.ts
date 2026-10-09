@@ -1,6 +1,22 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
-import { authenticate, claimPairing, contacts, createPairing, me, register, searchUsers } from './identity';
+import {
+  approveLoginSession,
+  authenticate,
+  claimPairing,
+  contacts,
+  createLoginSession,
+  createPairing,
+  denyLoginSession,
+  listWebSessions,
+  loginSessionInfo,
+  me,
+  pollLoginSession,
+  register,
+  revokeWebSessions,
+  searchUsers,
+  signOutCurrent,
+} from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
 import { completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
@@ -8,8 +24,18 @@ import { removeShared, share, sharedWithMe } from './shares';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { requestStream } from './stream';
-import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth } from './oauth';
-import { continueSignIn, listSessions, revokeOtherSessions, revokeSession, startEmail, verifyEmail, verifyGoogle } from './auth';
+import { exchangeOAuth, oauthCallback, oauthProviders, refreshOAuth, startOAuth, webStartGoogle } from './oauth';
+import {
+  continueSignIn,
+  listSessions,
+  revokeOtherSessions,
+  revokeSession,
+  startEmail,
+  verifyEmail,
+  verifyGoogle,
+  webVerifyEmail,
+  webVerifyGoogle,
+} from './auth';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -25,6 +51,16 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /health') return json(200, { ok: true });
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
 
+    // Website sign-in (public): QR from a phone, email code, or Google. The
+    // session comes back as an HttpOnly cookie through the /api proxy.
+    if (route === 'POST /login-sessions') return await createLoginSession(req);
+    if (seg[1] === 'login-sessions' && seg.length === 3 && method === 'GET') return await pollLoginSession(req, seg[2]);
+    if (route === 'POST /web/auth/email/start') return await startEmail(null, req);
+    if (route === 'POST /web/auth/email/verify') return await webVerifyEmail(req);
+    if (route === 'POST /web/auth/google/start') return await webStartGoogle(req);
+    if (route === 'POST /web/auth/google') return await webVerifyGoogle(req);
+    if (route === 'DELETE /web-sessions/current') return await signOutCurrent(req);
+
     const identity = await authenticate(req);
 
     if (route === 'GET /me') return me(identity);
@@ -38,6 +74,14 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /users') return await searchUsers(identity, req);
     if (route === 'GET /contacts') return await contacts(identity);
     if (route === 'POST /pairing') return await createPairing(identity);
+    // Phone side of QR sign-in, and the phone's list of signed-in browsers.
+    if (seg[1] === 'login-sessions' && seg.length === 4 && seg[3] === 'info' && method === 'GET') return await loginSessionInfo(seg[2]);
+    if (seg[1] === 'login-sessions' && seg.length === 4 && seg[3] === 'approve' && method === 'POST') {
+      return await approveLoginSession(identity, seg[2]);
+    }
+    if (seg[1] === 'login-sessions' && seg.length === 4 && seg[3] === 'deny' && method === 'POST') return await denyLoginSession(identity, seg[2]);
+    if (route === 'GET /web-sessions') return await listWebSessions(identity);
+    if (route === 'DELETE /web-sessions') return await revokeWebSessions(identity);
 
     if (route === 'GET /media') return await listMedia(identity, req);
     if (route === 'POST /media') return await startUpload(identity, req);

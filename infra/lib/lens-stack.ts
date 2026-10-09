@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import {
   CfnOutput,
   Duration,
+  Fn,
   Size,
   RemovalPolicy,
   Stack,
@@ -25,14 +26,18 @@ import {
   aws_s3_deployment as s3deploy,
   aws_ses as ses,
   aws_budgets as budgets,
+  aws_certificatemanager as acm,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 const PRIVATE_KEY_PARAM = '/lens/cloudfront/private-key';
 /** Secret for signed streaming links (gitignored file; same value in SSM for the API). */
 const STREAM_KEY_FILE = path.join(__dirname, '../keys/stream-token.key');
+/** Shared secret CloudFront adds on /api requests (gitignored; `openssl rand -hex 32`). */
+const EDGE_SECRET_FILE = path.join(__dirname, '../keys/edge-secret.key');
 const STREAM_KEY_PARAM = '/lens/stream/token-key';
-const WEB_DIST = path.join(__dirname, '../../dist');
+/** The built website: Astro site + the Expo web app under app/ (see scripts/build-web.sh). */
+const WEB_DIST = path.join(__dirname, '../../site/dist');
 
 /**
  * Cost notes (kept deliberately minimal):
@@ -116,15 +121,66 @@ export class LensStack extends Stack {
     });
     const keyGroup = new cloudfront.KeyGroup(this, 'SigningKeyGroup', { items: [publicKey] });
 
-    // SPA routing for the web viewer: extension-less paths -> /index.html.
+    // ---------- Website routing ----------
+    // Static site (Astro, /…/index.html), the web app SPA under /app/, and the
+    // QR landing /l/<id>/. Clean URLs always end in "/" (one URL per page for
+    // search engines); with a custom domain, the cloudfront.net host redirects to it.
+    const webDomain = (this.node.tryGetContext('webDomain') as string | undefined) ?? '';
+    const certificateArn = (this.node.tryGetContext('webCertificateArn') as string | undefined) ?? '';
+    const canonical = webDomain && certificateArn ? webDomain : '';
     const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
       runtime: cloudfront.FunctionRuntime.JS_2_0,
       code: cloudfront.FunctionCode.fromInline(`
+var CANONICAL = '${canonical}';
+function query(qs) {
+  var parts = [];
+  for (var k in qs) {
+    var v = qs[k];
+    if (v.multiValue) v.multiValue.forEach(function (m) { parts.push(k + '=' + m.value); });
+    else parts.push(v.value === '' ? k : k + '=' + v.value);
+  }
+  return parts.length ? '?' + parts.join('&') : '';
+}
+function redirect(location) {
+  return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: location }, 'cache-control': { value: 'max-age=3600' } } };
+}
 function handler(event) {
   var req = event.request;
-  if (!req.uri.includes('.')) req.uri = '/index.html';
+  var uri = req.uri;
+  var host = req.headers.host ? req.headers.host.value : '';
+  if (CANONICAL && host !== CANONICAL) return redirect('https://' + CANONICAL + uri + query(req.querystring));
+  if (uri === '/app') return redirect('/app/' + query(req.querystring));
+  if (uri.indexOf('/app/') === 0) {
+    if (uri.slice(uri.lastIndexOf('/') + 1).indexOf('.') === -1) req.uri = '/app/index.html';
+    return req;
+  }
+  if (uri.indexOf('/l/') === 0) {
+    req.uri = '/l/index.html';
+    return req;
+  }
+  if (uri.charAt(uri.length - 1) === '/') {
+    req.uri = uri + 'index.html';
+    return req;
+  }
+  if (uri.slice(uri.lastIndexOf('/') + 1).indexOf('.') === -1) return redirect(uri + '/' + query(req.querystring));
   return req;
 }`),
+    });
+    // Security headers for every page (pages add their own script/style CSP hashes).
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'WebSecurityHeaders', {
+      comment: 'Lens website security headers',
+      securityHeadersBehavior: {
+        strictTransportSecurity: { accessControlMaxAge: Duration.days(730), includeSubdomains: true, override: true },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          { header: 'permissions-policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', override: true },
+          { header: 'cross-origin-opener-policy', value: 'same-origin', override: true },
+        ],
+      },
     });
 
     const mediaOrigin = origins.S3BucketOrigin.withOriginAccessControl(mediaBucket);
@@ -151,13 +207,21 @@ function handler(event) {
     });
 
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
-      comment: 'Lens web viewer + signed media',
+      comment: 'Lens website + web app + signed media',
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200, // includes India edges
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       defaultRootObject: 'index.html',
+      ...(canonical
+        ? { domainNames: [canonical], certificate: acm.Certificate.fromCertificateArn(this, 'WebCertificate', certificateArn) }
+        : {}),
+      // Unknown pages: the site's own 404 page with a real 404 status. (S3 answers
+      // 404 because CloudFront may list the web bucket; see the policy below.)
+      errorResponses: [{ httpStatus: 404, responseHttpStatus: 404, responsePagePath: '/404.html', ttl: Duration.minutes(5) }],
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: securityHeaders,
         functionAssociations: [{ function: spaRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
       // m/* originals, d/* derivatives (thumbnail/preview): both private, signed URLs only.
@@ -245,13 +309,19 @@ function handler(event) {
       timeout: Duration.hours(3),
     });
 
+    const edgeSecret = fs.existsSync(EDGE_SECRET_FILE) ? fs.readFileSync(EDGE_SECRET_FILE, 'utf8').trim() : '';
+
     // Per-identity storage quota (testing default 100 GB; becomes the free tier later).
     const quotaGb = Number(this.node.tryGetContext('quotaGb') ?? 100);
 
     const apiEnv = {
       TABLE: table.tableName,
       BUCKET: mediaBucket.bucketName,
-      CDN_DOMAIN: distribution.distributionDomainName,
+      // A literal (context), not a reference: CloudFront also routes /api to this
+      // function, and a reference both ways would be a dependency cycle.
+      CDN_DOMAIN: (this.node.tryGetContext('cdnDomain') as string | undefined) ?? distribution.distributionDomainName,
+      WEB_ORIGIN: (this.node.tryGetContext('webOrigin') as string | undefined) ?? '',
+      EDGE_SECRET: edgeSecret,
       CF_KEY_PAIR_ID: publicKey.publicKeyId,
       CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
       QUOTA_BYTES: String(quotaGb * 1024 ** 3),
@@ -336,8 +406,89 @@ function handler(event) {
       },
     });
 
-    // ---------- Web viewer (deployed only when `npm run build:web` has run) ----------
-    if (fs.existsSync(path.join(WEB_DIST, 'index.html'))) {
+    // ---------- Website API: /api/* on the same domain as the site ----------
+    // Same origin = the website's session can be an HttpOnly, SameSite=Strict
+    // cookie (no CORS, no token in localStorage). Phones keep calling the
+    // Function URL directly with bearer tokens.
+    const apiRewrite = new cloudfront.Function(this, 'ApiRewrite', {
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var req = event.request;
+  req.uri = req.uri.replace(/^\\/api/, '') || '/';
+  return req;
+}`),
+    });
+    const apiOriginPolicy = new cloudfront.OriginRequestPolicy(this, 'ApiOriginPolicy', {
+      comment: 'Lens website API: cookies, query, and the headers the API reads',
+      cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
+      queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
+      // No Host header: the Function URL only answers on its own host name.
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
+        'user-agent',
+        'content-type',
+        'accept-language',
+        'x-login-secret',
+        'x-lens-web',
+        'cloudfront-viewer-address',
+        'cloudfront-viewer-city',
+        'cloudfront-viewer-country',
+      ),
+    });
+    distribution.addBehavior(
+      '/api/*',
+      new origins.HttpOrigin(Fn.select(2, Fn.split('/', apiUrl.url)), {
+        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        customHeaders: edgeSecret ? { 'x-lens-edge': edgeSecret } : undefined,
+      }),
+      {
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: apiOriginPolicy,
+        functionAssociations: [{ function: apiRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+      },
+    );
+
+    // Missing website files answer 404 (not 403), so the 404 page shows.
+    webBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [webBucket.bucketArn],
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        conditions: { StringEquals: { 'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}` } },
+      }),
+    );
+
+    // ---------- Website deploys from GitHub Actions (no stored keys) ----------
+    // The repo's main branch may only sync the web bucket and clear the CDN cache.
+    const github = new iam.OpenIdConnectProvider(this, 'GitHubOidc', {
+      url: 'https://token.actions.githubusercontent.com',
+      clientIds: ['sts.amazonaws.com'],
+    });
+    const webDeployRole = new iam.Role(this, 'WebDeployRole', {
+      roleName: 'lens-web-deploy',
+      description: 'GitHub Actions (main branch) deploys the Lens website',
+      maxSessionDuration: Duration.hours(1),
+      assumedBy: new iam.WebIdentityPrincipal(github.openIdConnectProviderArn, {
+        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
+        StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:akshaydhadwal745/lens-camera:ref:refs/heads/main' },
+      }),
+    });
+    webBucket.grantReadWrite(webDeployRole);
+    webBucket.grantDelete(webDeployRole);
+    webDeployRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudfront:CreateInvalidation'],
+        resources: [`arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`],
+      }),
+    );
+    new CfnOutput(this, 'WebBucket', { value: webBucket.bucketName });
+    new CfnOutput(this, 'DistributionId', { value: distribution.distributionId });
+    new CfnOutput(this, 'WebDeployRoleArn', { value: webDeployRole.roleArn });
+
+    // ---------- Website (local deploys; CI normally syncs site/dist instead) ----------
+    if (process.env.LENS_DEPLOY_WEB === '1' && fs.existsSync(path.join(WEB_DIST, 'index.html'))) {
       new s3deploy.BucketDeployment(this, 'WebDeploy', {
         sources: [s3deploy.Source.asset(WEB_DIST)],
         destinationBucket: webBucket,

@@ -1,0 +1,39 @@
+---
+// /l/<id>/: the QR code on the sign-in page points here. With the Lens app
+// installed, Android/iOS open the app directly (App Links); otherwise this
+// page hands off to the app, or explains how to scan from inside it.
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout lang="en" path="l" title="Approve sign-in" description="Approve a Lens sign-in on your computer." noindex>
+  <section class="block">
+    <div class="narrow">
+      <h1>Sign in on your computer</h1>
+      <p class="lead">Open this in the Lens app to approve the sign-in.</p>
+      <div class="actions">
+        <a class="btn btn-primary" id="open-app" href="/download/">Open in Lens</a>
+      </div>
+      <p class="note">
+        Not working? Open Lens, go to <strong>Settings → Link a computer</strong> and scan the code on your computer again. Only approve a code
+        shown on a screen in front of you. Don't have Lens yet? <a href="/download/">Get the app</a>.
+      </p>
+      <hr />
+      <p class="note" lang="hi">
+        कंप्यूटर पर साइन इन के लिए: Lens ऐप खोलें, <strong>Settings → Link a computer</strong> पर जाएँ और कंप्यूटर पर दिखा कोड फिर से स्कैन करें। सिर्फ़
+        अपने सामने की स्क्रीन पर दिखा कोड ही मंज़ूर करें।
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  // The session id is the path segment after /l/. Android: an intent link opens
+  // the installed app (or the Play listing later); iPhone: the app's scheme.
+  const id = location.pathname.split('/')[2] ?? '';
+  const button = document.getElementById('open-app') as HTMLAnchorElement | null;
+  if (button && /^[A-Za-z0-9_-]{16,32}$/.test(id)) {
+    button.href = /Android/i.test(navigator.userAgent)
+      ? `intent://l/${id}#Intent;scheme=lens;package=com.akshay.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
+      : `lens://l/${id}`;
+  }
+</script>

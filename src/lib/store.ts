@@ -350,6 +350,7 @@ export async function boot() {
 
   if (isWeb) {
     set({ status: identity ? 'ready' : 'needs-link' });
+    watchWebSync();
   } else {
     // The camera works offline; the identity is created on first connectivity.
     set({ status: 'ready' });
@@ -368,6 +369,26 @@ export async function boot() {
       kickSync();
     });
   }
+}
+
+/**
+ * Website: stay in sync automatically. Changes made on phones (new shots,
+ * edits, deletes, shares) appear without reloading: every 30 s while the tab
+ * is visible, and right away when you come back to the tab.
+ */
+const WEB_SYNC_MS = 30_000;
+function watchWebSync() {
+  if (typeof document === 'undefined') return;
+  const sync = () => {
+    if (!state.identity || document.hidden) return;
+    refreshRemote();
+    refreshShared();
+  };
+  setInterval(sync, WEB_SYNC_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) sync();
+  });
+  globalThis.addEventListener?.('online', sync);
 }
 
 function watchConnectivity() {
@@ -544,6 +565,8 @@ export async function linkWithCode(code: string) {
 }
 
 export async function unlinkBrowser() {
+  // Ends the session on the server and clears the HttpOnly cookie.
+  await api.signOutThisBrowser().catch(() => undefined);
   await saveIdentity(null);
   applyIdentity(null);
   set({ status: 'needs-link', remote: [], shared: [], trash: [], storage: null, usage: null });

@@ -283,4 +283,40 @@ for DM in yopmail.com mailinator.com abc.guerrillamail.com; do
   [[ $(call POST /auth/email/start "$TE" -d "{\"email\":\"x$RANDOM@$DM\"}" | j .code) == disposable-email ]] || fail "$DM not refused"
 done; ok "temporary email providers refused (yopmail, mailinator, subdomains)"
 [[ $(call POST /auth/email/start "$TE" -d "{\"email\":\"ok$(date +%s%N)@e2e.lens.invalid\"}" | j .sent) == true ]] && ok "regular addresses still work"
+# --- website sign-in through CloudFront /api (HttpOnly cookie session) ---
+SITE="${SITE:-$(node -p "require('./outputs.json').Lens.WebUrl.replace(/\/$/, '')")}"
+WAPI="$SITE/api/v1"
+JAR="$TMP/jar"
+wcall() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$WAPI$p" -b "$JAR" -c "$JAR" -H 'content-type: application/json' -H 'x-lens-web: 1' "$@"; }
+# QR: browser asks, phone (account A) approves, browser's next poll is signed in.
+Q=$(wcall POST /login-sessions); QID=$(echo "$Q" | j .id); QSEC=$(echo "$Q" | j .secret)
+[[ -n "$QID" && -n "$QSEC" ]] && ok "QR sign-in request created"
+[[ $(wcall GET "/login-sessions/$QID" -H "x-login-secret: $QSEC" | j .status) == waiting ]] && ok "browser waits for the phone"
+[[ $(call GET "/login-sessions/$QID/info" "$TA" | j .browser) != "" ]] && ok "phone sees which browser asks"
+[[ $(wcall GET "/login-sessions/$QID" -H "x-login-secret: wrong" -o /dev/null -w '%{http_code}') == 403 ]] && ok "someone else's secret can't collect it"
+call POST "/login-sessions/$QID/approve" "$TA" >/dev/null
+R=$(wcall GET "/login-sessions/$QID" -H "x-login-secret: $QSEC")
+[[ $(echo "$R" | j .status) == approved && -z $(echo "$R" | j .token) ]] && ok "approved: session in the cookie, no token in the body"
+grep -q "__Host-lens" "$JAR" && grep "__Host-lens" "$JAR" | grep -q "#HttpOnly_" && ok "cookie is __Host- and HttpOnly"
+[[ $(wcall GET /me | j .email) == "$MAILA" ]] && ok "browser is signed in as the phone's account"
+[[ $(wcall GET "/login-sessions/$QID" -H "x-login-secret: $QSEC" -o /dev/null -w '%{http_code}') == 404 ]] && ok "QR can't be used twice"
+[[ $(curl -sS -X POST "$WAPI/pairing" -b "$JAR" -H 'content-type: application/json' -o /dev/null -w '%{http_code}') == 403 ]] && ok "cookie request without the site header refused (CSRF guard)"
+[[ $(call GET /web-sessions "$TA" | j .sessions.length) -ge 1 ]] && ok "phone lists the signed-in browser"
+# Deny.
+Q=$(wcall POST /login-sessions); QID=$(echo "$Q" | j .id); QSEC=$(echo "$Q" | j .secret)
+call POST "/login-sessions/$QID/deny" "$TA" >/dev/null
+[[ $(wcall GET "/login-sessions/$QID" -H "x-login-secret: $QSEC" | j .status) == denied ]] && ok "phone can deny a sign-in"
+# Log out.
+[[ $(wcall DELETE /web-sessions/current | j .signedOut) == true ]] && ok "browser log out"
+[[ $(wcall GET /me -o /dev/null -w '%{http_code}') == 401 ]] && ok "logged-out cookie no longer works"
+# Email code on the website: an existing account, and a brand-new one.
+JAR="$TMP/jar2"
+wcall POST /web/auth/email/start -d "{\"email\":\"$MAILA\"}" >/dev/null
+[[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILA\",\"code\":\"$(otp "$MAILA")\"}" | j .email) == "$MAILA" ]] && ok "web email sign-in finds the existing account"
+[[ $(wcall GET /me | j .email) == "$MAILA" ]] && ok "same account as the phone"
+JAR="$TMP/jar3"; MAILW="w$(date +%s%N)@e2e.lens.invalid"
+wcall POST /web/auth/email/start -d "{\"email\":\"$MAILW\"}" >/dev/null
+[[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"$(otp "$MAILW")\"}" | j .email) == "$MAILW" ]] && ok "web sign-up creates an account"
+[[ $(wcall GET /me | j .quotaBytes) == $((100*1024*1024*1024)) ]] && ok "web account gets 100 GB"
+[[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"000000\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "used code refused"
 echo "ALL PASSED"

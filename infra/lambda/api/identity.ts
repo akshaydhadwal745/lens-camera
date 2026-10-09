@@ -2,7 +2,23 @@ import { randomInt } from 'node:crypto';
 
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-import { ddb, env, hashSecret, HttpError, json, quotaFor, randomId, rateLimit, Req, Res, safeEqual } from './lib';
+import {
+  clearedCookie,
+  ddb,
+  env,
+  hashSecret,
+  HttpError,
+  json,
+  quotaFor,
+  randomId,
+  rateLimit,
+  Req,
+  Res,
+  safeEqual,
+  sessionCookie,
+  WEB_COOKIE,
+  withCookies,
+} from './lib';
 import { randomName } from './names';
 
 export type Identity = { id: string; name: string; usedBytes: number; tokenId: string; email?: string };
@@ -50,6 +66,47 @@ const FINGERPRINT = /^[0-9a-f]{64}$/;
  * a fresh one after a reinstall. Once that guest became a signed-in account,
  * a reinstall starts a new guest (the account needs signing in).
  */
+/**
+ * A new identity with a unique random name (no token). Used for website
+ * sign-ups: someone who signs in on the web first gets an account right away.
+ */
+export async function createIdentity(): Promise<{ id: string; name: string }> {
+  const id = randomId(12);
+  const now = Date.now();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const name = randomName();
+    try {
+      await ddb.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            { Put: { TableName: env.table, Item: { pk: `N#${name}`, sk: 'NAME', deviceId: id }, ConditionExpression: 'attribute_not_exists(pk)' } },
+            {
+              Put: {
+                TableName: env.table,
+                Item: { pk: `D#${id}`, sk: 'PROFILE', name, usedBytes: 0, createdAt: now, gsi1pk: 'NAME', gsi1sk: name },
+                ConditionExpression: 'attribute_not_exists(pk)',
+              },
+            },
+          ],
+        }),
+      );
+      return { id, name };
+    } catch (error: any) {
+      if (error?.name === 'TransactionCanceledException') continue; // name taken, retry
+      throw error;
+    }
+  }
+  throw new HttpError(503, 'Could not allocate a name, try again');
+}
+
+/** Signs a browser in: a web session token in the HttpOnly cookie (never in the body). */
+export async function webSignIn(accountId: string, req: Req, extra: Record<string, unknown> = {}): Promise<Res> {
+  const profile = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${accountId}`, sk: 'PROFILE' } }))).Item;
+  if (!profile) throw new HttpError(409, 'That account no longer exists');
+  const token = await issueToken(accountId, 'web', describeBrowser(req.headers['user-agent'] ?? ''));
+  return withCookies(json(200, { id: accountId, name: profile.name, email: profile.email, ...extra }), [sessionCookie(token)]);
+}
+
 export async function register(req?: Req): Promise<Res> {
   const device = typeof req?.body?.device === 'string' ? req.body.device.slice(0, 80) : undefined;
   const fingerprint =
@@ -118,10 +175,21 @@ export async function register(req?: Req): Promise<Res> {
   throw new HttpError(503, 'Could not allocate a name, try again');
 }
 
-/** Resolves the caller from `Authorization: Bearer <token>`. */
-export async function authenticate(req: Req): Promise<Identity> {
+/** The caller's token: `Authorization: Bearer` (apps) or the website's session cookie. */
+export function requestToken(req: Req): { token: string; fromCookie: boolean } {
   const header = req.headers.authorization ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (header.startsWith('Bearer ')) return { token: header.slice(7), fromCookie: false };
+  return { token: req.cookies[WEB_COOKIE] ?? '', fromCookie: true };
+}
+
+/** Resolves the caller from `Authorization: Bearer <token>` or the website cookie. */
+export async function authenticate(req: Req): Promise<Identity> {
+  const { token, fromCookie } = requestToken(req);
+  // CSRF guard for cookie sessions: changes need our own header, which other
+  // sites can't send without a CORS preflight we never allow (SameSite=Strict too).
+  if (fromCookie && token && req.method !== 'GET' && req.headers['x-lens-web'] !== '1') {
+    throw new HttpError(403, 'Missing request header');
+  }
   const [deviceId, tokenId, secret] = token.split('.');
   if (!deviceId || !tokenId || !secret) throw new HttpError(401, 'Missing or malformed token');
 
@@ -245,17 +313,19 @@ export async function claimPairing(req: Req): Promise<Res> {
     throw error;
   }
   const deviceId = item!.deviceId as string;
+  // Through the website (/api): the session goes into the HttpOnly cookie.
+  if (req.headers['x-lens-web'] === '1') return webSignIn(deviceId, req);
   const profile = await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${deviceId}`, sk: 'PROFILE' } }));
   const token = await issueToken(deviceId, 'web');
   return json(200, { id: deviceId, name: profile.Item!.name, token });
 }
 
 // ---------- QR sign-in for the website (WhatsApp Web style) ----------
-// ON HOLD: implemented but not routed yet (see index.ts).
 // 1. Browser: POST /login-sessions -> {id, secret}; shows a QR containing id.
-// 2. Phone (signed in) scans it: GET /login-sessions/:id/info, then POST .../approve.
+// 2. Phone (signed in) scans it: GET /login-sessions/:id/info, then POST .../approve
+//    (or .../deny).
 // 3. Browser polls GET /login-sessions/:id with its secret; once approved it
-//    receives a fresh web token (exactly once) and the session is deleted.
+//    gets its session (exactly once, as the HttpOnly cookie) and the request is deleted.
 
 const LOGIN_TTL_SECONDS = 120;
 const SESSION_ID = /^[A-Za-z0-9_-]{16,32}$/;
@@ -291,6 +361,8 @@ function describeBrowser(userAgent: string): string {
 
 /** POST /v1/login-sessions (public): a browser asks to be signed in. */
 export async function createLoginSession(req: Req): Promise<Res> {
+  // Loose per-network brake (CGNAT-safe): a QR refreshes about every 2 minutes.
+  if (req.sourceIp) await rateLimit(`qr#${req.sourceIp}`, 600, 'Too many sign-in attempts from this network. Try again later.');
   const id = randomId(16);
   const secret = randomId(24);
   const expiresAt = Math.floor(Date.now() / 1000) + LOGIN_TTL_SECONDS;
@@ -301,6 +373,7 @@ export async function createLoginSession(req: Req): Promise<Res> {
         ...sessionKey(id),
         secretHash: hashSecret(secret),
         browser: describeBrowser(req.headers['user-agent'] ?? ''),
+        ...(req.city ? { city: req.city.slice(0, 60) } : {}),
         status: 'waiting',
         ttl: expiresAt,
       },
@@ -319,7 +392,23 @@ async function liveSession(id: string): Promise<Record<string, any>> {
 /** GET /v1/login-sessions/:id/info (phone): what is asking to sign in. */
 export async function loginSessionInfo(id: string): Promise<Res> {
   const item = await liveSession(id);
-  return json(200, { browser: item.browser, status: item.status });
+  return json(200, { browser: item.browser, city: item.city, status: item.status });
+}
+
+/** POST /v1/login-sessions/:id/deny (phone): "that wasn't me". */
+export async function denyLoginSession(identity: Identity, id: string): Promise<Res> {
+  await liveSession(id);
+  await ddb.send(
+    new UpdateCommand({
+      TableName: env.table,
+      Key: sessionKey(id),
+      UpdateExpression: 'SET #s = :denied',
+      ConditionExpression: '#s = :waiting',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':denied': 'denied', ':waiting': 'waiting' },
+    }),
+  ).catch(() => undefined);
+  return json(200, { denied: true, by: identity.name });
 }
 
 /** POST /v1/login-sessions/:id/approve (phone): sign that browser in as me. */
@@ -348,6 +437,7 @@ export async function pollLoginSession(req: Req, id: string): Promise<Res> {
   const item = await liveSession(id);
   const secret = req.headers['x-login-secret'] ?? '';
   if (!safeEqual(item.secretHash, hashSecret(secret))) throw new HttpError(403, 'Not your session');
+  if (item.status === 'denied') return json(200, { status: 'denied' });
   if (item.status !== 'approved') return json(200, { status: 'waiting' });
 
   // Hand out the token exactly once.
@@ -365,10 +455,7 @@ export async function pollLoginSession(req: Req, id: string): Promise<Res> {
     if (error?.name === 'ConditionalCheckFailedException') throw new HttpError(409, 'Already signed in');
     throw error;
   }
-  const deviceId = item.deviceId as string;
-  const profile = await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${deviceId}`, sk: 'PROFILE' } }));
-  const token = await issueToken(deviceId, 'web', item.browser);
-  return json(200, { status: 'approved', id: deviceId, name: profile.Item!.name, token });
+  return webSignIn(item.deviceId as string, req, { status: 'approved' });
 }
 
 /** GET /v1/web-sessions (phone): browsers signed in as me. */
@@ -388,11 +475,13 @@ export async function revokeWebSessions(identity: Identity): Promise<Res> {
   return json(200, { revoked: tokens.length });
 }
 
-/** DELETE /v1/web-sessions/current (browser): sign this browser out. */
+/** DELETE /v1/web-sessions/current (browser): sign this browser out and clear the cookie. */
 export async function signOutCurrent(req: Req): Promise<Res> {
-  const [deviceId, tokenId] = (req.headers.authorization ?? '').replace(/^Bearer /, '').split('.');
-  await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `D#${deviceId}`, sk: `T#${tokenId}` } }));
-  return json(200, { signedOut: true });
+  const [deviceId, tokenId] = requestToken(req).token.split('.');
+  if (deviceId && tokenId) {
+    await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `D#${deviceId}`, sk: `T#${tokenId}` } }));
+  }
+  return withCookies(json(200, { signedOut: true }), [clearedCookie()]);
 }
 
 async function webTokens(deviceId: string) {

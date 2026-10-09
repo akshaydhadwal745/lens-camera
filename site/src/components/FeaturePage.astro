@@ -1,0 +1,70 @@
+---
+import Breadcrumbs from './Breadcrumbs.astro';
+import Cta from './Cta.astro';
+import Faq from './Faq.astro';
+import { type ContentPage, featurePages, useCasePages } from '../content/pages';
+import Layout from '../layouts/Layout.astro';
+import { href, type Lang, ui } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  page: ContentPage;
+}
+const { lang, page } = Astro.props;
+const t = ui[lang];
+const c = page.copy[lang];
+const path = `${page.group}/${page.slug}`;
+const hubName = page.group === 'features' ? t.nav.features : t.footer.useCases;
+const related = (page.group === 'features' ? featurePages : useCasePages).filter((p) => p.slug !== page.slug).slice(0, 3);
+---
+
+<Layout lang={lang} path={path} title={c.title} description={c.description}>
+  <section class="hero">
+    <div class="narrow">
+      <Breadcrumbs lang={lang} trail={[[hubName, page.group], [page.name[lang], path]]} />
+      <span class="eyebrow">{page.name[lang]}</span>
+      <h1>{c.h1}</h1>
+      <p class="lead">{c.lead}</p>
+      <div class="actions">
+        <a class="btn btn-primary" href={href(lang, 'download')}>{t.getApp}</a>
+        <a class="btn btn-ghost" href={href(lang, 'signin')}>{t.signIn}</a>
+      </div>
+    </div>
+  </section>
+
+  <article class="narrow prose">
+    {
+      c.sections.map((s) => (
+        <section>
+          <h2>{s.h2}</h2>
+          {s.body.map((p) => <p>{p}</p>)}
+          {s.bullets && (
+            <ul class="checks">
+              {s.bullets.map((b) => <li>{b}</li>)}
+            </ul>
+          )}
+        </section>
+      ))
+    }
+    {c.faq && <Faq title={t.faqTitle} items={c.faq} />}
+  </article>
+
+  <section class="block">
+    <div class="container">
+      <h2>{t.related}</h2>
+      <div class="grid">
+        {
+          related.map((p) => (
+            <a class="card" href={href(lang, `${p.group}/${p.slug}`)}>
+              <div class="icon" aria-hidden="true">{p.icon}</div>
+              <h3>{p.name[lang]}</h3>
+              <p>{p.copy[lang].description}</p>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <Cta lang={lang} />
+</Layout>

@@ -21,7 +21,7 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 
-import { Identity, issueToken } from './identity';
+import { createIdentity, Identity, issueToken, webSignIn } from './identity';
 import { ddb, derivedKey, env, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
 import { googleLoginClaims } from './oauth';
 import { isDisposableEmail } from './disposable';
@@ -50,14 +50,19 @@ function normalizeEmail(value: unknown): string {
 
 // ---------- Email codes ----------
 
-/** POST /v1/auth/email/start {email}: emails a 6-digit code. */
-export async function startEmail(identity: Identity, req: Req): Promise<Res> {
+/**
+ * POST /v1/auth/email/start {email}: emails a 6-digit code. Also the website's
+ * POST /v1/web/auth/email/start (no identity yet: limited per network instead).
+ */
+export async function startEmail(identity: Identity | null, req: Req): Promise<Res> {
   const email = normalizeEmail(req.body.email);
   if (isDisposableEmail(email)) {
     throw new HttpError(400, 'Temporary email addresses can’t be used. Please use your regular email.', 'disposable-email');
   }
   await limit(`email#${email}`, CODES_PER_HOUR, 'Too many codes requested. Try again in an hour.');
-  await limit(`device#${identity.id}`, CODES_PER_HOUR * 2, 'Too many codes requested. Try again in an hour.');
+  if (identity) await limit(`device#${identity.id}`, CODES_PER_HOUR * 2, 'Too many codes requested. Try again in an hour.');
+  // Per network for the website: loose (CGNAT puts many people behind one IP).
+  else if (req.sourceIp) await limit(`webcode#${req.sourceIp}`, 200, 'Too many codes requested from this network. Try again in an hour.');
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const isTest = email.endsWith(TEST_DOMAIN);
@@ -97,8 +102,8 @@ export async function startEmail(identity: Identity, req: Req): Promise<Res> {
   return json(200, { sent: true, expiresInSeconds: CODE_TTL_MS / 1000 });
 }
 
-/** POST /v1/auth/email/verify {email, code, device?}: signs in. */
-export async function verifyEmail(identity: Identity, req: Req): Promise<Res> {
+/** Checks and consumes an emailed code; returns the email. */
+async function consumeCode(req: Req): Promise<string> {
   const email = normalizeEmail(req.body.email);
   const code = String(req.body.code ?? '').replace(/\D/g, '');
   if (code.length !== 6) throw new HttpError(400, 'Enter the 6-digit code');
@@ -115,7 +120,37 @@ export async function verifyEmail(identity: Identity, req: Req): Promise<Res> {
   }
   // Single use.
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: key }));
+  return email;
+}
+
+/** POST /v1/auth/email/verify {email, code, device?}: signs in. */
+export async function verifyEmail(identity: Identity, req: Req): Promise<Res> {
+  const email = await consumeCode(req);
   return json(200, await signIn(identity, req, [{ kind: 'email', value: email }], email));
+}
+
+// ---------- Website sign-in (no guest identity on the web) ----------
+
+/** The account for these logins; a new one is created for first-time web sign-ups. */
+async function accountForWeb(logins: { kind: LoginKind; value: string }[], email?: string): Promise<string> {
+  const existing = await findAccount(logins);
+  const accountId = existing ?? (await createIdentity()).id;
+  await linkLogins(accountId, logins, email);
+  return accountId;
+}
+
+/** POST /v1/web/auth/email/verify {email, code}: signs the browser in (session cookie). */
+export async function webVerifyEmail(req: Req): Promise<Res> {
+  const email = await consumeCode(req);
+  return webSignIn(await accountForWeb([{ kind: 'email', value: email }], email), req);
+}
+
+/** POST /v1/web/auth/google {code, state, codeVerifier}: Google sign-in on the website. */
+export async function webVerifyGoogle(req: Req): Promise<Res> {
+  const claims = await googleLoginClaims(null, req);
+  const logins: { kind: LoginKind; value: string }[] = [{ kind: 'google', value: claims.sub }];
+  if (claims.email && claims.emailVerified) logins.push({ kind: 'email', value: claims.email.toLowerCase() });
+  return webSignIn(await accountForWeb(logins, claims.email?.toLowerCase()), req);
 }
 
 // ---------- Google (Android) ----------

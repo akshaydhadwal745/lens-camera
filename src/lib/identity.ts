@@ -1,7 +1,8 @@
 // Session for this phone. It starts as a guest identity created silently on
 // first launch; signing in (email code / Google) turns it into an account, or
 // swaps in the account's session. Kept in the iOS Keychain / Android Keystore.
-// Web: obtained by linking with a code from the phone, kept in localStorage.
+// Web: the session is an HttpOnly cookie set by the website's sign-in (QR,
+// email code or Google); the app only asks the API who is signed in.
 import * as Application from 'expo-application';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
@@ -31,6 +32,16 @@ async function write(value: string | null) {
 }
 
 export async function loadIdentity(): Promise<Identity | null> {
+  if (isWeb) {
+    // Old builds kept a token in localStorage: remove it, the cookie replaces it.
+    globalThis.localStorage?.removeItem(KEY);
+    try {
+      const me = await api.me();
+      return { id: me.id, name: me.name, email: me.email, token: '' };
+    } catch {
+      return null;
+    }
+  }
   const raw = await read();
   if (!raw) return null;
   try {
@@ -42,6 +53,7 @@ export async function loadIdentity(): Promise<Identity | null> {
 }
 
 export async function saveIdentity(identity: Identity | null) {
+  if (isWeb) return; // nothing secret is kept by the web app
   await write(identity ? JSON.stringify(identity) : null);
 }
 

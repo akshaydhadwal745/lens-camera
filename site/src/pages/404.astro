@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { featurePages } from '../content/pages';
+import { href } from '../i18n/ui';
+---
+
+<Layout lang="en" path="404" title="Page not found" description="This page doesn't exist." noindex>
+  <section class="block">
+    <div class="narrow">
+      <h1>Page not found</h1>
+      <p class="lead">This page doesn't exist or has moved. These might help:</p>
+      <ul class="checks">
+        <li><a href={href('en')}>Home</a></li>
+        <li><a href={href('en', 'features')}>All features</a></li>
+        {featurePages.slice(0, 4).map((p) => <li><a href={href('en', `features/${p.slug}`)}>{p.name.en}</a></li>)}
+        <li><a href={href('en', 'help')}>Help</a></li>
+        <li><a href={href('hi')} lang="hi">हिंदी में देखें</a></li>
+      </ul>
+    </div>
+  </section>
+</Layout>

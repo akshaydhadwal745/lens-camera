@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isProCameraAvailable } from '../../modules/lens-camera';
 
-import { api, Session, WEB_URL } from '@/lib/api';
+import { api, Session } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
@@ -165,55 +165,45 @@ function AccountSection() {
   );
 }
 
-function LinkBrowser() {
-  const [pairing, setPairing] = useState<{ code: string; expiresAt: number } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [now, setNow] = useState(Date.now());
-
+/** Computers signed in to the website (QR sign-in), and linking a new one. */
+function ComputersSection() {
+  const [browsers, setBrowsers] = useState<{ id: string; browser: string; createdAt: number }[] | null>(null);
+  const load = () => api.webSessions().then((r) => setBrowsers(r.sessions), () => setBrowsers([]));
   useEffect(() => {
-    if (!pairing) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [pairing]);
-
-  const remaining = pairing ? Math.max(0, Math.round((pairing.expiresAt - now) / 1000)) : 0;
-
-  const create = async () => {
-    setLoading(true);
+    void load();
+  }, []);
+  const logOutAll = async () => {
+    if (!(await confirmDestructive('Log out all computers?', 'Every browser signed in to your Lens account will be signed out.', 'Log out'))) return;
     try {
-      setPairing(await api.createPairing());
-      setNow(Date.now());
+      await api.signOutAllBrowsers();
+      setBrowsers([]);
     } catch (error) {
-      notify('Could not create a code', errorMessage(error));
-    } finally {
-      setLoading(false);
+      notify('Could not log out', errorMessage(error));
     }
   };
-
-  if (pairing && remaining > 0) {
-    const pretty = `${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}`;
-    return (
-      <View style={{ padding: 16, alignItems: 'center' }}>
-        <Text style={styles.muted}>On your computer, open</Text>
-        <Pressable onPress={() => Clipboard.setStringAsync(`${WEB_URL}/link`)}>
-          <Text style={styles.link}>{WEB_URL.replace('https://', '')}/link</Text>
-        </Pressable>
-        <Text style={[styles.muted, { marginTop: 12 }]}>and enter</Text>
-        <Text style={styles.code} selectable>
-          {pretty}
-        </Text>
-        <Text style={styles.muted}>
-          Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <Pressable style={styles.button} onPress={create} disabled={loading}>
-      {loading ? <ActivityIndicator color="#000" /> : <Ionicons name="desktop-outline" size={18} color="#000" />}
-      <Text style={styles.buttonText}>Link a browser</Text>
-    </Pressable>
+    <>
+      <Pressable style={styles.rowButton} onPress={() => router.push('/scan')}>
+        <Ionicons name="qr-code-outline" size={18} color={colors.accent} />
+        <Text style={[styles.rowButtonText, { flex: 1 }]}>Link a computer</Text>
+        <Ionicons name="chevron-forward" size={16} color="#555" />
+      </Pressable>
+      {browsers?.map((b) => (
+        <View key={b.id}>
+          <View style={styles.divider} />
+          <Row label={b.browser} value={`since ${timeAgo(b.createdAt)}`} />
+        </View>
+      ))}
+      {!!browsers?.length && (
+        <>
+          <View style={styles.divider} />
+          <Pressable style={styles.rowButton} onPress={logOutAll}>
+            <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+            <Text style={[styles.rowButtonText, { color: colors.danger }]}>Log out all computers</Text>
+          </Pressable>
+        </>
+      )}
+    </>
   );
 }
 
@@ -430,8 +420,8 @@ export default function SettingsScreen() {
               )}
             </Section>
 
-            <Section title="Web viewer" footer="Watch your photos and videos on any computer. Codes work once and expire after 5 minutes.">
-              {identity ? <LinkBrowser /> : <Text style={[styles.muted, { padding: 16 }]}>Available once you're online.</Text>}
+            <Section title="Computers" footer="Use Lens on any computer: open lens.instagrowapp.com, click Sign in and scan the QR code. Only approve codes on a screen in front of you.">
+              {identity ? <ComputersSection /> : <Text style={[styles.muted, { padding: 16 }]}>Available once you're online.</Text>}
             </Section>
           </>
         )}
@@ -441,9 +431,9 @@ export default function SettingsScreen() {
             <Pressable
               style={styles.rowButton}
               onPress={async () => {
-                if (await confirmDestructive('Sign out?', 'You can link this browser again with a new code.', 'Sign out')) {
+                if (await confirmDestructive('Sign out?', 'You can sign in again any time with your phone, email or Google.', 'Sign out')) {
                   await unlinkBrowser();
-                  router.replace('/link');
+                  window.location.replace('/');
                 }
               }}
             >

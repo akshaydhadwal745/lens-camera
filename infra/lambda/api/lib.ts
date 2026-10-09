@@ -24,6 +24,10 @@ export const env = {
   transcodeQueueOnDemand: process.env.TRANSCODE_QUEUE_ONDEMAND ?? '',
   transcodeJob: process.env.TRANSCODE_JOB ?? '',
   streamKeyParam: process.env.STREAM_KEY_PARAM ?? '/lens/stream/token-key',
+  /** The website (https://lens.instagrowapp.com): web sign-in returns here. */
+  webOrigin: process.env.WEB_ORIGIN ?? '',
+  /** Sent only by our CloudFront (/api): proves the viewer headers are real. */
+  edgeSecret: process.env.EDGE_SECRET ?? '',
 };
 
 export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -51,7 +55,12 @@ export type Req = {
   query: Record<string, string | undefined>;
   body: any;
   headers: Record<string, string | undefined>;
+  /** Request cookies (the website's session cookie arrives via CloudFront `/api`). */
+  cookies: Record<string, string>;
+  /** The visitor's IP: CloudFront's viewer address when proxied, else the direct caller. */
   sourceIp?: string;
+  /** Approximate city (CloudFront geo header), for "who is signing in" prompts. */
+  city?: string;
 };
 
 export type Res = APIGatewayProxyStructuredResultV2;
@@ -66,14 +75,50 @@ export function parseEvent(event: APIGatewayProxyEventV2): Req {
       throw new HttpError(400, 'Body must be JSON');
     }
   }
+  const headers = event.headers ?? {};
+  const cookies: Record<string, string> = {};
+  for (const c of event.cookies ?? []) {
+    const i = c.indexOf('=');
+    if (i > 0) cookies[c.slice(0, i).trim()] = c.slice(i + 1).trim();
+  }
+  // Behind CloudFront (/api) the direct caller is CloudFront; its viewer
+  // header ("ip:port", IPv6 too) holds the real visitor. Trusted only with our
+  // edge secret, so a direct caller can't fake its address.
+  const viaEdge = !!env.edgeSecret && safeEqual(headers['x-lens-edge'] ?? '', env.edgeSecret);
+  const viewer = viaEdge ? headers['cloudfront-viewer-address'] : undefined;
+  const viewerIp = viewer ? viewer.slice(0, viewer.lastIndexOf(':')) : undefined;
+  const city = viaEdge ? headers['cloudfront-viewer-city'] : undefined;
   return {
     method: event.requestContext.http.method,
     path: event.rawPath.replace(/\/+$/, '') || '/',
     query: event.queryStringParameters ?? {},
     body: body ?? {},
-    headers: event.headers ?? {},
-    sourceIp: event.requestContext.http.sourceIp,
+    headers,
+    cookies,
+    sourceIp: viewerIp || event.requestContext.http.sourceIp,
+    city: city ? decodeURIComponent(city) : undefined,
   };
+}
+
+// ---------- Website session cookie ----------
+// The website keeps its session in an HttpOnly cookie (scripts can't read it,
+// unlike localStorage). __Host- prefix: Secure, Path=/, no Domain, so only this
+// exact host gets it. Phones keep using Authorization: Bearer.
+
+export const WEB_COOKIE = '__Host-lens';
+const WEB_SESSION_DAYS = 30;
+
+export function sessionCookie(token: string): string {
+  return `${WEB_COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${WEB_SESSION_DAYS * 86400}`;
+}
+
+export function clearedCookie(): string {
+  return `${WEB_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`;
+}
+
+/** A JSON response that also sets cookies. */
+export function withCookies(res: Res, cookies: string[]): Res {
+  return { ...res, cookies: [...(res.cookies ?? []), ...cookies] };
 }
 
 /** Lens storage limit: guests get less until they sign in. */
