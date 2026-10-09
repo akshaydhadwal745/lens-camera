@@ -28,7 +28,7 @@ public class LensCameraModule: Module {
       Prop("active") { (view: LensCameraView, value: Bool) in
         view.active = value
       }
-      Prop("position") { (view: LensCameraView, value: String) in
+      Prop("facing") { (view: LensCameraView, value: String) in
         view.config.position = value == "front" ? .front : .back
       }
       Prop("lens") { (view: LensCameraView, value: String) in

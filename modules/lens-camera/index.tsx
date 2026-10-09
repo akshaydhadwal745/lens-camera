@@ -33,6 +33,10 @@ export type Capabilities = {
   nightFrames: number;
   flash: boolean;
   torch: boolean;
+  /** Modes this camera supports (Android reports it; iOS supports all). */
+  modes?: CameraMode[];
+  /** Android: what the hardware allows. pro = manual sensor + white balance, basic = auto only. */
+  tier?: 'pro' | 'standard' | 'basic';
 };
 
 export type CameraStats = {
@@ -63,7 +67,8 @@ export type AnalysisSettings = {
 
 export type LensCameraProps = ViewProps & {
   active: boolean;
-  position: 'front' | 'back';
+  /** Which camera. (Not `position`: on Android that name collides with the layout style.) */
+  facing: 'front' | 'back';
   lens: Lens;
   mode: CameraMode;
   videoResolution: '1080p' | '4k';
@@ -89,7 +94,8 @@ export type LensCameraProps = ViewProps & {
   onReady?: (e: NativeSyntheticEvent<Capabilities>) => void;
   onStats?: (e: NativeSyntheticEvent<CameraStats>) => void;
   onAnalysis?: (e: NativeSyntheticEvent<AnalysisResult>) => void;
-  onError?: (e: NativeSyntheticEvent<{ message: string }>) => void;
+  /** `fatal`: the camera couldn't start at all (the app falls back to the basic camera). */
+  onError?: (e: NativeSyntheticEvent<{ message: string; fatal?: boolean }>) => void;
 };
 
 export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };
@@ -105,9 +111,20 @@ export type LensCameraHandle = {
   focusAt(x: number, y: number): Promise<void>;
 };
 
+type CameraModule = {
+  /** Android: everything known about this phone's cameras (Camera info screen). */
+  deviceReport?: () => Promise<Record<string, unknown>>;
+};
+
+const cameraModule = Platform.OS === 'web' ? null : requireOptionalNativeModule<CameraModule>('LensCamera');
+
 /** True in development/production builds that include the native module (not Expo Go / web). */
-export const isProCameraAvailable =
-  Platform.OS === 'ios' && requireOptionalNativeModule('LensCamera') != null;
+export const isProCameraAvailable = cameraModule != null;
+
+/** Android: camera hardware report, or null where not available. */
+export async function cameraDeviceReport(): Promise<Record<string, unknown> | null> {
+  return cameraModule?.deviceReport ? cameraModule.deviceReport() : null;
+}
 
 const NativeView: ComponentType<LensCameraProps & { ref?: Ref<LensCameraHandle> }> | null = isProCameraAvailable
   ? requireNativeView('LensCamera')
@@ -129,9 +146,9 @@ type ImagingModule = {
   hasDepth(uri: string): Promise<boolean>;
 };
 
-const imaging = Platform.OS === 'ios' ? requireOptionalNativeModule<ImagingModule>('LensImaging') : null;
+const imaging = Platform.OS === 'web' ? null : requireOptionalNativeModule<ImagingModule>('LensImaging');
 
-/** True when on-device editing/looks are available (dev/production iOS builds). */
+/** True when on-device editing/looks are available (dev/production builds, not Expo Go). */
 export const isImagingAvailable = imaging != null;
 
 export const LensImaging = imaging;

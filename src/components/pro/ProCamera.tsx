@@ -20,6 +20,7 @@ import {
 } from '../../../modules/lens-camera';
 import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
+import { NamePrompt } from './NamePrompt';
 import { ValueDial } from './ValueDial';
 import { compact, EditRecipe, LOOKS } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
@@ -39,8 +40,8 @@ import {
   scaleFor,
   snapshotPreset,
 } from '@/lib/pro-camera';
-import { capture, isHot, selectGallery, selectPendingCount, useStore } from '@/lib/store';
-import { displayUri } from '@/lib/types';
+import { capture, finishLiveUpload, isHot, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
+import { displayUri, newId } from '@/lib/types';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -59,7 +60,8 @@ function TopButton({ icon, label, active, onPress }: { icon?: IconName; label?: 
   );
 }
 
-export function ProCamera() {
+/** `onUnavailable`: the native camera couldn't start on this phone (fall back to the basic camera). */
+export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string) => void } = {}) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isFocused = useIsFocused();
@@ -83,6 +85,7 @@ export function ProCamera() {
   const [previewSize, setPreviewSize] = useState({ width, height });
   const [processing, setProcessing] = useState<string | null>(null);
   const [lookDial, setLookDial] = useState(false);
+  const [naming, setNaming] = useState(false);
 
   const items = useStore(selectGallery);
   const pending = useStore(selectPendingCount);
@@ -220,24 +223,33 @@ export function ProCamera() {
       return;
     }
     setRecording(true);
+    const recipe = captureRecipe(false, 'video');
+    const baking = !!recipe && s.bakeLooks && !!LensImaging;
+    // Upload while recording (Android, Wi-Fi by default). Not when baking a look:
+    // the uploaded file would be the re-encoded one, not this recording.
+    const id = newId();
+    const live = baking ? null : startLiveUpload(id);
     cameraRef.current
       .startRecording()
       .then(async (video) => {
-        const recipe = captureRecipe(false, 'video');
-        if (recipe && s.bakeLooks && LensImaging) {
+        if (baking) {
           // Baking a look into video re-encodes it (takes a while, uses battery).
           setProcessing('Applying look to video…');
           try {
-            const exported = await LensImaging.exportVideo(video.uri, recipe);
+            const exported = await LensImaging!.exportVideo(video.uri, recipe!);
             capture({ kind: 'video', sourceUri: exported.uri, duration: video.duration });
             return;
           } finally {
             setProcessing(null);
           }
         }
-        capture({ kind: 'video', sourceUri: video.uri, duration: video.duration, edit: recipe });
+        const entry = capture({ kind: 'video', sourceUri: video.uri, duration: video.duration, edit: recipe, id, live: !!live });
+        if (live) void finishLiveUpload(live, entry);
       })
-      .catch((error) => Alert.alert('Recording failed', error instanceof Error ? error.message : String(error)))
+      .catch((error) => {
+        live?.cancel();
+        Alert.alert('Recording failed', error instanceof Error ? error.message : String(error));
+      })
       .finally(() => setRecording(false));
   };
 
@@ -313,14 +325,11 @@ export function ProCamera() {
     setSheet('none');
   };
 
-  const savePreset = () => {
-    Alert.prompt('Save preset', 'Saves exposure, white balance, focus, format and monitoring settings.', (name) => {
-      const trimmed = name?.trim();
-      if (!trimmed) return;
-      const next = [...presets, snapshotPreset(trimmed, s)];
-      setPresets(next);
-      savePresets(next);
-    });
+  const savePreset = (name: string) => {
+    const next = [...presets, snapshotPreset(name, s)];
+    setPresets(next);
+    savePresets(next);
+    setNaming(false);
   };
 
   const deletePreset = (preset: Preset) => {
@@ -368,6 +377,8 @@ export function ProCamera() {
   const params: ManualParam[] = ['iso', 'shutter', 'wb', 'focus', 'ev'];
   const paramTitle: Record<ManualParam, string> = { iso: 'ISO', shutter: 'SHUTTER', wb: 'WB', focus: 'FOCUS', ev: 'EV' };
   const manualExposureAvailable = caps?.manualExposure !== false;
+  // Android reports which modes the phone supports; iOS supports all four.
+  const modes = (['night', 'video', 'photo', 'portrait'] as const).filter((m) => !caps?.modes || caps.modes.includes(m));
 
   return (
     <View style={styles.fill}>
@@ -377,7 +388,7 @@ export function ProCamera() {
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
             active={isFocused}
-            position={s.position}
+            facing={s.position}
             lens={s.position === 'front' || s.mode === 'portrait' ? 'wide' : s.lens}
             mode={s.mode}
             videoResolution={s.videoResolution}
@@ -406,10 +417,14 @@ export function ProCamera() {
               falseColor: s.falseColor && !hot,
               histogram: s.histogram && !hot,
             }}
-            onReady={(e) => setCaps(e.nativeEvent)}
+            onReady={(e) => {
+              setCaps(e.nativeEvent);
+              // A mode this phone can't do (e.g. from a preset): back to Photo.
+              if (e.nativeEvent.modes && !e.nativeEvent.modes.includes(s.mode)) update({ mode: 'photo' });
+            }}
             onStats={(e) => setStats(e.nativeEvent)}
             onAnalysis={(e) => setAnalysis(e.nativeEvent)}
-            onError={(e) => Alert.alert('Camera', e.nativeEvent.message)}
+            onError={(e) => (e.nativeEvent.fatal && onUnavailable ? onUnavailable(e.nativeEvent.message) : Alert.alert('Camera', e.nativeEvent.message))}
           />
 
           <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />
@@ -599,7 +614,7 @@ export function ProCamera() {
         )}
 
         <View style={styles.modes}>
-          {(['night', 'video', 'photo', 'portrait'] as const).map((m) => (
+          {modes.map((m) => (
             <Pressable key={m} onPress={() => switchMode(m)} disabled={recording || busy} hitSlop={8}>
               <Text style={[styles.modeText, s.mode === m && styles.modeOn]}>{m.toUpperCase()}</Text>
             </Pressable>
@@ -742,12 +757,20 @@ export function ProCamera() {
               <Text style={styles.presetHint}>{describePreset(p)}</Text>
             </Pressable>
           ))}
-          <Pressable onPress={savePreset} style={[styles.presetRow, { marginTop: 4 }]}>
+          <Pressable onPress={() => setNaming(true)} style={[styles.presetRow, { marginTop: 4 }]}>
             <Ionicons name="add-circle-outline" size={20} color="#FACC15" />
             <Text style={[styles.presetName, { color: '#FACC15' }]}>Save current settings…</Text>
           </Pressable>
           <Text style={styles.presetFoot}>Long-press a saved preset to delete it.</Text>
         </Sheet>
+      )}
+      {naming && (
+        <NamePrompt
+          title="Save preset"
+          message="Saves exposure, white balance, focus, format and monitoring settings."
+          onSubmit={savePreset}
+          onCancel={() => setNaming(false)}
+        />
       )}
     </View>
   );

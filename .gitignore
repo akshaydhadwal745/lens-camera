@@ -48,3 +48,7 @@ tests/connectors/*.mjs
 !tests/connectors/build.mjs
 tests/live-upload/*.mjs
 !tests/live-upload/build.mjs
+
+# Local Android builds of the native modules
+modules/*/android/build/
+modules/*/android/.cxx/

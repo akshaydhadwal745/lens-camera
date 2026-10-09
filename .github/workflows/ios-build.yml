@@ -15,6 +15,7 @@ on:
       - 'src/**'
       - 'assets/**'
       - 'patches/**'
+      - 'plugins/**'
       - 'app.json'
       - 'package.json'
       - 'package-lock.json'
@@ -52,6 +53,20 @@ jobs:
           echo "Using $XCODE"
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
+
+      # Exact iOS looks as LUTs for Android (artifact "looks"; copy into
+      # modules/lens-camera/android/src/main/assets/looks/ when Looks.swift changes).
+      - name: Bake looks for Android
+        working-directory: modules/lens-camera
+        run: |
+          swiftc -O tools/bake-looks.swift ios/Imaging/Looks.swift -o "$RUNNER_TEMP/bake-looks"
+          "$RUNNER_TEMP/bake-looks" "$RUNNER_TEMP/looks"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: looks
+          path: ${{ runner.temp }}/looks
+          retention-days: 30
 
       - name: Install ccache
         run: brew install ccache
@@ -139,7 +154,7 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -174,26 +189,32 @@ jobs:
         env:
           CI: 1
 
-      # Debug = dev client (JS from Metro). Release = standalone app with the
-      # JS bundled in, signed with the template's debug key (fine for sideloading).
+      # Release = standalone app with the JS bundled in, signed with the
+      # template's debug key (fine for sideloading), one APK per CPU type:
+      # 64-bit phones and 32-bit phones (Android Go / older budget phones).
+      # Debug = dev client (JS from Metro), 64-bit only.
       - name: Build APKs
         working-directory: android
-        run: ./gradlew assembleDebug assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        run: |
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+          ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
 
       - name: Collect APKs
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk Lens-dev.apk
-          cp android/app/build/outputs/apk/release/app-release.apk Lens.apk
-          ls -lh Lens-dev.apk Lens.apk
+          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk Lens-dev.apk
+          cp android/app/build/outputs/apk/release/app-arm64-v8a-release.apk Lens.apk
+          cp android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk Lens-32bit.apk
+          ls -lh Lens-dev.apk Lens.apk Lens-32bit.apk
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android
           path: |
             Lens.apk
+            Lens-32bit.apk
             Lens-dev.apk
           retention-days: 14
 
@@ -207,6 +228,8 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
+          # Only the apps (not the build log or the looks LUTs).
+          pattern: '{ios,android}'
           merge-multiple: true
 
       - name: Publish release
@@ -223,6 +246,7 @@ jobs:
             --title "Lens dev build #${{ github.run_number }}" \
             --notes "Builds from ${GITHUB_SHA::7} (iOS: $IOS, Android: $ANDROID).
           - Android: **Lens.apk** is the normal app, open it on the phone and install.
+          - Older/budget Android phones that say \"App not installed\" with Lens.apk: use **Lens-32bit.apk**.
           - Android (developers): Lens-dev.apk loads JS from Metro (npm run tunnel).
           - iPhone/iPad: install Lens-dev.ipa with SideStore (loads JS from Metro)." \
             --prerelease

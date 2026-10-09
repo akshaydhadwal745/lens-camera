@@ -1,0 +1,48 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.lenscamera'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.lenscamera"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
+}
+
+// Same fix as expo-camera: CameraX needs the real ListenableFuture class, which
+// React Native's Guava would otherwise replace with an empty jar.
+configurations.configureEach {
+  resolutionStrategy.force "com.google.guava:listenablefuture:1.0"
+}
+
+dependencies {
+  // Same CameraX version expo-camera already ships, so the APK carries one copy.
+  def camerax_version = "1.6.0"
+  implementation "androidx.camera:camera-core:${camerax_version}"
+  implementation "androidx.camera:camera-camera2:${camerax_version}"
+  implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+  implementation "androidx.camera:camera-video:${camerax_version}"
+  implementation "androidx.camera:camera-view:${camerax_version}"
+  implementation "androidx.camera:camera-extensions:${camerax_version}"
+  implementation "androidx.exifinterface:exifinterface:1.4.2"
+  implementation "androidx.core:core-ktx:1.18.0"
+
+  // Video export with looks. Same Media3 version expo-video ships.
+  def media3_version = "1.9.0"
+  implementation "androidx.media3:media3-transformer:${media3_version}"
+  implementation "androidx.media3:media3-effect:${media3_version}"
+  implementation "androidx.media3:media3-common:${media3_version}"
+
+  // Portrait: person segmentation, model bundled in the app (no Play services needed).
+  implementation "com.google.mlkit:segmentation-selfie:16.0.0-beta6"
+
+  testImplementation "junit:junit:4.13.2"
+}

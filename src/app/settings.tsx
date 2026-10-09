@@ -6,6 +6,8 @@ import { ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isProCameraAvailable } from '../../modules/lens-camera';
+
 import { api, Session, WEB_URL } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import {
@@ -362,6 +364,16 @@ export default function SettingsScreen() {
                   Free up space now{local.freeableCount ? ` (${formatBytes(local.freeable)})` : ''}
                 </Text>
               </Pressable>
+              {Platform.OS === 'android' && isProCameraAvailable && (
+                <>
+                  <View style={styles.divider} />
+                  <Pressable style={styles.rowButton} onPress={() => router.push('/camera-info')}>
+                    <Ionicons name="hardware-chip-outline" size={18} color={colors.accent} />
+                    <Text style={[styles.rowButtonText, { flex: 1 }]}>Camera info</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#555" />
+                  </Pressable>
+                </>
+              )}
             </Section>
 
             <Section

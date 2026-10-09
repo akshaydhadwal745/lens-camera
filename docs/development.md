@@ -53,3 +53,23 @@ src/app/            screens (Expo Router)       src/lib/        state, upload, e
 src/components/     UI (pro camera, tiles…)     modules/lens-camera/  native iOS camera + imaging
 infra/              CDK stack, Lambda API, scripts   docs/          this documentation
 ```
+
+## Android: local build + emulator
+
+The Android toolchain lives in the home folder (no sudo): JDK 17 in
+`~/.local/jdk`, Android SDK in `~/Android/Sdk` (platform 36, build-tools 36,
+NDK 27.1, CMake 3.22). `source ~/.local/bin/android-env.sh` sets JAVA_HOME,
+ANDROID_HOME, PATH and loads nvm.
+
+```bash
+CI=1 npx expo prebuild --platform android --clean --no-install && git checkout package.json
+cd android
+./gradlew :lens-camera:testReleaseUnitTest                         # Kotlin unit tests
+./gradlew assembleRelease -PreactNativeArchitectures=x86_64        # emulator APK
+emulator -avd lens_test -no-window -gpu swiftshader_indirect \
+  -camera-back virtualscene -camera-front emulated &               # AVD with a 3D test room
+adb install -r app/build/outputs/apk/release/app-x86_64-release.apk
+```
+
+The first build takes ~35 min; later ones are incremental (2–3 min). The
+emulator is slow (software GPU), so judge correctness there, smoothness on a phone.

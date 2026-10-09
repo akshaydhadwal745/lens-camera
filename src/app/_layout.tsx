@@ -30,6 +30,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="camera-info" options={{ presentation: 'modal' }} />
         <Stack.Screen name="signin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="oauth" options={{ animation: 'none' }} />
         <Stack.Screen name="link" />
