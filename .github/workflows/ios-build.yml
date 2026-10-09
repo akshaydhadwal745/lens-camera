@@ -162,6 +162,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
+      # One CPU type failing (e.g. a flaky download) must not cancel the other.
+      fail-fast: false
       matrix:
         include:
           - abi: arm64-v8a
@@ -198,6 +200,18 @@ jobs:
 
       - name: Install JS dependencies
         run: npm ci
+
+      # The NDK download is occasionally corrupt on runners ("ZipFile unknown
+      # archive"): install it up front, with retries, instead of mid-build.
+      - name: Install NDK
+        run: |
+          NDK=$(sed -n 's/^ndkVersion = "\(.*\)"/\1/p' node_modules/react-native/gradle/libs.versions.toml)
+          for i in 1 2 3; do
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK" > /tmp/ndk.log 2>&1 && break
+            echo "NDK $NDK install attempt $i failed; retrying"; tail -3 /tmp/ndk.log
+            rm -rf "$ANDROID_HOME/ndk/$NDK"; sleep 10
+          done
+          test -f "$ANDROID_HOME/ndk/$NDK/source.properties"
 
       - name: Generate native project
         run: npx expo prebuild --platform android --clean --no-install
@@ -286,6 +300,8 @@ jobs:
   # .ipa to the same release in ios-release.
   release:
     needs: [android]
+    # Publish whatever built: the 64-bit Lens.apk is what almost every phone needs.
+    if: ${{ always() && needs.android.result != 'cancelled' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -301,6 +317,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -lh dist
+          test -f dist/Lens.apk || { echo "64-bit APK missing: nothing to publish"; exit 1; }
           RUNTIME=$(cat dist/runtime-arm64-v8a.txt)
           rm dist/runtime-*.txt
           TAG="dev-${{ github.run_number }}"
