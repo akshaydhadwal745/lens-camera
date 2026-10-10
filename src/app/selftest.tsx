@@ -139,7 +139,7 @@ export default function SelfTestScreen() {
           return { ...base, status: ok ? 'pass' : 'fail', ms: Date.now() - t0, message: ok ? undefined : `video ${v.duration}s, ${size} bytes`, details: { duration: v.duration, bytes: size, ...previewDetails } };
         }
 
-        const photo = step.action === 'night' ? await cam.takeNightPhoto(4) : await cam.takePhoto({ raw: step.props.raw, flash: 'off' });
+        const photo = step.action === 'night' ? await cam.takeNightPhoto(4) : await cam.takePhoto({ raw: step.props.raw, flash: step.flash ?? 'off' });
         const file = new File(photo.uri);
         const bytes = file.size ?? 0;
         const check = checkPhoto(photo, caps);

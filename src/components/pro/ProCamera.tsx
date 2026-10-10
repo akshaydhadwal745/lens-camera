@@ -197,7 +197,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     return compact(recipe) ?? undefined;
   };
 
-  const autoNight = !stored.pro && s.mode === 'photo' && lowLight && !nightOff && (!caps?.modes || caps.modes.includes('night'));
+  // Flash set to AUTO or ON is the user's choice for low light: it wins over automatic Night.
+  const nightCandidate = !stored.pro && s.mode === 'photo' && lowLight && s.flash === 'off' && (!caps?.modes || caps.modes.includes('night'));
+  const autoNight = nightCandidate && !nightOff;
 
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
@@ -575,7 +577,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         {stats?.adjusting ? <ActivityIndicator size="small" color="#FACC15" style={{ marginLeft: 6 }} /> : null}
       </View>
 
-      {!stored.pro && s.mode === 'photo' && lowLight && !recording && (
+      {nightCandidate && !recording && (
         <Pressable
           onPress={() => {
             haptic(Haptics.ImpactFeedbackStyle.Light);

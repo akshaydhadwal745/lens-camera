@@ -20,7 +20,9 @@ needs. Product principle: an intelligent camera, not a feature-heavy one
 `isLowLight` (hysteresis): on at ISO ≥ 1250, or 1/15 s at ISO ≥ 640; off once
 ISO ≤ 800 and faster than 1/20 s. While on, Photo shows a yellow **Night** badge
 and the shutter takes a 4-frame merged shot (`AUTO_NIGHT_FRAMES`, "Hold still…").
-Tapping the badge turns it off for this session ("Night off"). Thresholds are a
+Tapping the badge turns it off for this session ("Night off"). Flash set to
+AUTO or ON wins over automatic Night (no badge then): an explicit flash choice
+is respected. Thresholds are a
 first guess; the Quality Lab / self-test data will tune them.
 
 ## Pro (`pro: true`, the PRO button)

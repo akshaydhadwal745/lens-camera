@@ -18,6 +18,7 @@ pass/fail per step. Runs:
 |---|---|
 | Back camera photo | photo saved; ≥ 90 % of the largest JPEG = pass, 50–90 % = warn (e.g. Pixel 8a keeps 12 of 16 MP: 16 MP isn't guaranteed with a live preview), < 50 % = fail (the S8 bug: 1.5 of 12 MP). Maker modes only warn (their own sizes) |
 | Landscape / other landscape / back to portrait | preview re-binds for the forced screen rotation (`targetRotation` 1/3, then 0), photo still full size |
+| Flash photo (phones with a flash) | photo with flash forced on saves, full size |
 | Every other back lens (0.6×, 2×…) | photo full size for that lens |
 | Front camera photo, front landscape | as above (mirroring + preview path recorded) |
 | Night | merged photo saved (4 frames), full size |

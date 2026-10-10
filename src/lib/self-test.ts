@@ -25,6 +25,8 @@ export type SelfTestStep = {
   props: SelfTestProps;
   orientation?: Orientation;
   action: 'photo' | 'night' | 'video' | 'upload';
+  /** Photo with the flash forced on (phones with a flash). */
+  flash?: 'on';
   /**
    * Rotation steps: the preview must re-bind for this screen rotation. (The
    * photo's own orientation follows the phone's motion sensor, which a phone in
@@ -51,6 +53,7 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
     { id: 'reverse-landscape', label: 'Other landscape photo', props: DEFAULT_PROPS, orientation: 'reverseLandscape', action: 'photo', expectScreen: 'landscape' },
     { id: 'portrait-again', label: 'Back to portrait', props: DEFAULT_PROPS, orientation: 'portrait', action: 'photo', expectScreen: 'portrait' },
   ];
+  if (back.flash) steps.push({ id: 'flash', label: 'Flash photo', props: DEFAULT_PROPS, action: 'photo', flash: 'on' });
   for (const l of back.lenses ?? []) {
     if (l.id !== 'wide') steps.push({ id: `lens-${l.id}`, label: `${l.factor}× lens photo`, props: { ...DEFAULT_PROPS, lens: l.id }, action: 'photo' });
   }
