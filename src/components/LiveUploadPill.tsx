@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { formatBytes } from '@/lib/format';
 import { liveUploadBlocker, useStore } from '@/lib/store';
@@ -20,7 +21,7 @@ export function LiveUploadPill({ liveId }: { liveId: string | null }) {
   if (!text) return null;
   return (
     <View style={styles.pill} accessibilityLabel={`Upload: ${text}`}>
-      <Ionicons name={liveId ? 'cloud-upload' : 'cloud-outline'} size={13} color={liveId ? '#93C5FD' : '#ccc'} />
+      <Ionicons name={liveId ? 'cloud-upload' : 'cloud-outline'} size={13} color={liveId ? '#2997FF' : '#E8E8ED'} />
       <Text style={styles.text} numberOfLines={1}>
         {text}
       </Text>

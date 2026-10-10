@@ -19,10 +19,11 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { font, glass } from '@/lib/theme';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -293,7 +294,7 @@ export function BasicCamera() {
         displayUri(latest) ? (
           <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
         ) : (
-          <View style={[styles.thumbImage, styles.center, { backgroundColor: '#222' }]}>
+          <View style={[styles.thumbImage, styles.center, { backgroundColor: '#2C2C2E' }]}>
             <Ionicons name="videocam" size={22} color="#fff" />
           </View>
         )
@@ -441,7 +442,7 @@ export function BasicCamera() {
           {thumbnail}
         </View>
       ) : (
-        <View style={[styles.bottomControls, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={[styles.bottomControls, { bottom: insets.bottom + 12 }]}>
           {modeSwitch}
           <View style={styles.captureRow}>
             {thumbnail}
@@ -459,78 +460,81 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
 
   permTitle: { color: '#fff', fontSize: 22, fontWeight: '700', marginTop: 16 },
-  permBody: { color: '#aaa', fontSize: 15, textAlign: 'center', marginTop: 8, maxWidth: 320 },
-  permButton: { backgroundColor: '#FFD60A', borderRadius: 24, paddingHorizontal: 28, paddingVertical: 12, marginTop: 24 },
-  permButtonText: { color: '#000', fontWeight: '700', fontSize: 16 },
+  permBody: { color: '#A1A1A6', fontSize: 15, textAlign: 'center', marginTop: 8, maxWidth: 320 },
+  permButton: { backgroundColor: '#F5F5F7', borderRadius: 980, paddingHorizontal: 28, paddingVertical: 14, marginTop: 24 },
+  permButtonText: { color: '#000', fontWeight: '600', fontSize: 16 },
   permLink: { marginTop: 16, padding: 8 },
-  permLinkText: { color: '#FFD60A', fontSize: 15 },
+  permLinkText: { color: '#2997FF', fontSize: 15 },
 
   toolbar: {
     position: 'absolute',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    ...glass,
     borderRadius: 24,
     padding: 4,
   },
   recBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, flexShrink: 1 },
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF3B30' },
-  recText: { color: '#fff', fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  recText: { color: '#fff', fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
 
+  // The glass tray (design B), floating above the bottom edge.
   bottomControls: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingTop: 12,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    left: 12,
+    right: 12,
+    ...glass,
+    backgroundColor: 'rgba(18,18,20,0.62)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 34,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   captureRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 32,
-    marginTop: 12,
+    paddingHorizontal: 26,
+    marginTop: 16,
   },
   sideControls: {
     position: 'absolute',
     width: 96,
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    ...glass,
+    backgroundColor: 'rgba(18,18,20,0.62)',
     borderRadius: 48,
     paddingVertical: 20,
   },
 
   modes: { flexDirection: 'row', justifyContent: 'center', gap: 24 },
   modesVertical: { flexDirection: 'column', gap: 12 },
-  modeText: { color: '#fff', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
-  modeActive: { color: '#FFD60A' },
+  modeText: { color: '#A1A1A6', fontSize: 13, fontWeight: '600', letterSpacing: 0.8 },
+  modeActive: { color: '#FACC15' },
 
   shutterOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 4,
     borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#fff' },
+  shutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#fff' },
   shutterVideo: { backgroundColor: '#FF3B30' },
   shutterRecording: { width: 28, height: 28, borderRadius: 6 },
 
   thumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#fff',
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  thumbImage: { width: '100%', height: '100%', borderRadius: 8 },
+  thumbImage: { width: '100%', height: '100%', borderRadius: 14 },
   pendingBadge: {
     position: 'absolute',
     top: -8,
@@ -538,34 +542,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#0071E3',
     borderRadius: 10,
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderWidth: 1.5,
     borderColor: '#000',
   },
-  pendingOffline: { backgroundColor: '#64748B' },
-  pendingText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  pendingOffline: { backgroundColor: '#636366' },
+  pendingText: { color: '#fff', fontSize: 10, fontFamily: font.monoSemibold },
   flip: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   gridLine: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.5)' },
-  countdown: { color: '#fff', fontSize: 120, fontWeight: '200' },
+  countdown: { color: '#fff', fontSize: 120, fontFamily: font.mono },
   zoomBadge: {
     position: 'absolute',
     alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    ...glass,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  zoomText: { color: '#FFD60A', fontWeight: '700' },
+  zoomText: { color: '#F5F5F7', fontFamily: font.monoMedium },
   shutterFlash: { backgroundColor: '#000' },
 });

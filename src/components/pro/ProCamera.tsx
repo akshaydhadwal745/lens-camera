@@ -4,7 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useIsFocused } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -46,6 +47,7 @@ import {
   snapshotPreset,
 } from '@/lib/pro-camera';
 import { capture, finishLiveUpload, isHot, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
+import { font, glass, palette, radius } from '@/lib/theme';
 import { displayUri, newId } from '@/lib/types';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -59,7 +61,7 @@ function haptic(style = Haptics.ImpactFeedbackStyle.Medium) {
 function TopButton({ icon, label, active, onPress }: { icon?: IconName; label?: string; active?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} hitSlop={6} style={styles.topButton} accessibilityRole="button" accessibilityLabel={label ?? icon}>
-      {icon ? <Ionicons name={icon} size={20} color={active ? '#FACC15' : '#fff'} /> : null}
+      {icon ? <Ionicons name={icon} size={18} color={active ? palette.accent : palette.text} /> : null}
       {label ? <Text style={[styles.topLabel, active && styles.topLabelOn]}>{label}</Text> : null}
     </Pressable>
   );
@@ -200,6 +202,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Flash set to AUTO or ON is the user's choice for low light: it wins over automatic Night.
   const nightCandidate = !stored.pro && s.mode === 'photo' && lowLight && s.flash === 'off' && (!caps?.modes || caps.modes.includes('night'));
   const autoNight = nightCandidate && !nightOff;
+  // Whether the top-left glass pill has anything in it (else it's hidden).
+  const hasTools =
+    stored.pro ||
+    nightCandidate ||
+    (s.mode === 'photo' || s.mode === 'portrait' ? caps?.flash !== false || !!caps?.screenFlash : s.mode !== 'night' && caps?.torch !== false);
 
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
@@ -492,7 +499,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       </GestureDetector>
 
       {/* ---------- Top HUD ---------- */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 4 }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         {recording ? (
           <View style={styles.rec}>
             <View style={styles.recDot} />
@@ -503,57 +510,70 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           </View>
         ) : (
           <>
-            {s.mode === 'photo' || s.mode === 'portrait' ? (
-              (caps?.flash !== false || caps?.screenFlash) && (
+            <View style={hasTools ? styles.glassPill : null}>
+              {s.mode === 'photo' || s.mode === 'portrait' ? (
+                (caps?.flash !== false || caps?.screenFlash) && (
+                  <TopButton
+                    icon={s.flash === 'off' ? 'flash-off' : s.flash === 'auto' ? 'flash-outline' : 'flash'}
+                    label={s.flash.toUpperCase()}
+                    active={s.flash !== 'off'}
+                    onPress={() => update({ flash: s.flash === 'off' ? 'auto' : s.flash === 'auto' ? 'on' : 'off' })}
+                  />
+                )
+              ) : s.mode === 'night' ? null : (
+                caps?.torch !== false && (
+                  <TopButton icon={s.torch ? 'flashlight' : 'flashlight-outline'} label="TORCH" active={s.torch} onPress={() => update({ torch: !s.torch })} />
+                )
+              )}
+              {stored.pro && s.mode === 'photo' && caps?.raw && (
+                <TopButton label={caps.proRaw ? 'ProRAW' : 'RAW'} active={s.raw} onPress={() => update({ raw: !s.raw })} />
+              )}
+              {stored.pro && s.mode === 'photo' && caps?.ultraHdr && !s.raw && (
+                <TopButton label="HDR" active={s.hdrPhoto} onPress={() => update({ hdrPhoto: !s.hdrPhoto })} />
+              )}
+              {stored.pro && s.mode === 'video' && (
+                <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
+              )}
+              {stored.pro && s.mode === 'video' && caps?.appleLog && <TopButton label="LOG" active={s.appleLog} onPress={() => update({ appleLog: !s.appleLog })} />}
+              {stored.pro && s.mode === 'video' && caps?.hdrVideo && !s.appleLog && (
+                <TopButton label="HDR" active={s.hdrVideo} onPress={() => update({ hdrVideo: !s.hdrVideo })} />
+              )}
+              {stored.pro && s.mode === 'video' && (
                 <TopButton
-                  icon={s.flash === 'off' ? 'flash-off' : s.flash === 'auto' ? 'flash-outline' : 'flash'}
-                  label={s.flash.toUpperCase()}
-                  active={s.flash !== 'off'}
-                  onPress={() => update({ flash: s.flash === 'off' ? 'auto' : s.flash === 'auto' ? 'on' : 'off' })}
+                  label={`${s.fps}`}
+                  active={s.fps !== 30}
+                  onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
                 />
-              )
-            ) : s.mode === 'night' ? null : (
-              caps?.torch !== false && (
-                <TopButton icon={s.torch ? 'flashlight' : 'flashlight-outline'} label="TORCH" active={s.torch} onPress={() => update({ torch: !s.torch })} />
-              )
-            )}
-            {stored.pro && s.mode === 'photo' && caps?.raw && (
-              <TopButton label={caps.proRaw ? 'ProRAW' : 'RAW'} active={s.raw} onPress={() => update({ raw: !s.raw })} />
-            )}
-            {stored.pro && s.mode === 'photo' && caps?.ultraHdr && !s.raw && (
-              <TopButton label="HDR" active={s.hdrPhoto} onPress={() => update({ hdrPhoto: !s.hdrPhoto })} />
-            )}
-            {stored.pro && s.mode === 'video' && (
-              <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
-            )}
-            {stored.pro && s.mode === 'video' && caps?.appleLog && <TopButton label="LOG" active={s.appleLog} onPress={() => update({ appleLog: !s.appleLog })} />}
-            {stored.pro && s.mode === 'video' && caps?.hdrVideo && !s.appleLog && (
-              <TopButton label="HDR" active={s.hdrVideo} onPress={() => update({ hdrVideo: !s.hdrVideo })} />
-            )}
-            {stored.pro && s.mode === 'video' && (
-              <TopButton
-                label={`${s.fps}`}
-                active={s.fps !== 30}
-                onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
-              />
-            )}
-            {stored.pro && s.mode !== 'video' && (
-              <TopButton
-                icon="timer-outline"
-                label={s.timer ? `${s.timer}s` : 'OFF'}
-                active={s.timer > 0}
-                onPress={() => update({ timer: s.timer === 0 ? 3 : s.timer === 3 ? 10 : 0 })}
-              />
-            )}
-            {stored.pro && (
-              <>
-                <TopButton icon="pulse" label="MONITOR" active={s.peaking || s.zebra || s.falseColor} onPress={() => setSheet('monitor')} />
-                <TopButton icon="bookmark-outline" label="PRESETS" onPress={() => setSheet('presets')} />
-              </>
-            )}
-            <TopButton
-              label="PRO"
-              active={stored.pro}
+              )}
+              {stored.pro && s.mode !== 'video' && (
+                <TopButton
+                  icon="timer-outline"
+                  label={s.timer ? `${s.timer}s` : 'OFF'}
+                  active={s.timer > 0}
+                  onPress={() => update({ timer: s.timer === 0 ? 3 : s.timer === 3 ? 10 : 0 })}
+                />
+              )}
+              {stored.pro && (
+                <>
+                  <TopButton icon="pulse" label="MONITOR" active={s.peaking || s.zebra || s.falseColor} onPress={() => setSheet('monitor')} />
+                  <TopButton icon="bookmark-outline" label="PRESETS" onPress={() => setSheet('presets')} />
+                </>
+              )}
+              {nightCandidate && (
+                <Pressable
+                  onPress={() => {
+                    haptic(Haptics.ImpactFeedbackStyle.Light);
+                    setNightOff((v) => !v);
+                  }}
+                  style={[styles.nightButton, nightOff && styles.nightButtonOff]}
+                  accessibilityLabel={nightOff ? 'Night off. Tap to turn on' : 'Night on. Tap to turn off'}
+                >
+                  <Ionicons name="moon" size={14} color={nightOff ? palette.text : '#000'} />
+                  <Text style={[styles.nightText, nightOff && { color: palette.text }]}>{nightOff ? 'Night off' : 'Night'}</Text>
+                </Pressable>
+              )}
+            </View>
+            <Pressable
               onPress={() => {
                 haptic(Haptics.ImpactFeedbackStyle.Light);
                 setParam(null);
@@ -561,38 +581,29 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 setSheet('none');
                 update({ pro: !stored.pro });
               }}
-            />
+              style={styles.proPill}
+              accessibilityRole="button"
+              accessibilityLabel={stored.pro ? 'Pro controls on' : 'Pro controls off'}
+            >
+              <Text style={[styles.proText, stored.pro && { color: palette.accent }]}>PRO</Text>
+            </Pressable>
           </>
         )}
       </View>
 
       {s.histogram && (
-        <View style={[styles.histogramWrap, { top: insets.top + 64 }]}>
+        <View style={[styles.histogramWrap, { top: insets.top + 72 }]}>
           <Histogram data={analysis} />
         </View>
       )}
 
-      <View style={[styles.zoomBadge, { top: insets.top + 64 }]} pointerEvents="none">
+      <View style={[styles.zoomBadge, { top: insets.top + 72 }]} pointerEvents="none">
         <Text style={styles.zoomText}>{(lensFactor * s.zoom).toFixed(1)}×</Text>
-        {stats?.adjusting ? <ActivityIndicator size="small" color="#FACC15" style={{ marginLeft: 6 }} /> : null}
+        {stats?.adjusting ? <ActivityIndicator size="small" color={palette.accent} style={{ marginLeft: 6 }} /> : null}
       </View>
 
-      {nightCandidate && !recording && (
-        <Pressable
-          onPress={() => {
-            haptic(Haptics.ImpactFeedbackStyle.Light);
-            setNightOff((v) => !v);
-          }}
-          style={[styles.nightBadge, { top: insets.top + 64 }, nightOff && styles.nightBadgeOff]}
-          accessibilityLabel={nightOff ? 'Night off. Tap to turn on' : 'Night on. Tap to turn off'}
-        >
-          <Ionicons name="moon" size={14} color={nightOff ? '#fff' : '#000'} />
-          <Text style={[styles.nightBadgeText, nightOff && { color: '#fff' }]}>{nightOff ? 'Night off' : 'Night'}</Text>
-        </Pressable>
-      )}
-
       {/* ---------- Bottom controls ---------- */}
-      <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.bottom, { bottom: insets.bottom + 12 }]}>
         {stored.pro && param && dialScale && (
           <ValueDial
             title={paramTitle[param]}
@@ -697,7 +708,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               displayUri(latest) ? (
                 <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
               ) : (
-                <View style={[styles.thumbImage, styles.center, { backgroundColor: '#222' }]}>
+                <View style={[styles.thumbImage, styles.center, { backgroundColor: palette.surface2 }]}>
                   <Ionicons name="videocam" size={22} color="#fff" />
                 </View>
               )
@@ -715,7 +726,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           <Pressable
             onPress={onShutter}
             disabled={busy || !caps}
-            style={({ pressed }) => [styles.shutter, pressed && { transform: [{ scale: 0.94 }] }]}
+            style={({ pressed }) => [styles.shutter, (autoNight || s.mode === 'night') && styles.shutterNight, pressed && { transform: [{ scale: 0.94 }] }]}
             accessibilityLabel={s.mode === 'video' ? (recording ? 'Stop recording' : 'Record') : 'Take photo'}
           >
             <View style={[styles.shutterInner, s.mode === 'video' && styles.shutterVideo, recording && styles.shutterRec]} />
@@ -727,7 +738,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             style={[styles.flip, recording && { opacity: 0.3 }]}
             accessibilityLabel="Switch camera"
           >
-            <Ionicons name="camera-reverse-outline" size={26} color="#fff" />
+            <Ionicons name="camera-reverse-outline" size={24} color={palette.text} />
           </Pressable>
         </View>
       </View>
@@ -829,7 +840,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           ))}
           <Pressable onPress={() => setNaming(true)} style={[styles.presetRow, { marginTop: 4 }]}>
             <Ionicons name="add-circle-outline" size={20} color="#FACC15" />
-            <Text style={[styles.presetName, { color: '#FACC15' }]}>Save current settings…</Text>
+            <Text style={[styles.presetName, { color: palette.accent }]}>Save current settings…</Text>
           </Pressable>
           <Text style={styles.presetFoot}>Long-press a saved preset to delete it.</Text>
         </Sheet>
@@ -860,9 +871,9 @@ function describePreset(p: Preset): string {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  permTitle: { color: '#fff', fontSize: 22, fontWeight: '700', marginTop: 16 },
-  permButton: { backgroundColor: '#FACC15', borderRadius: 24, paddingHorizontal: 28, paddingVertical: 12, marginTop: 24 },
-  permButtonText: { color: '#000', fontWeight: '700', fontSize: 16 },
+  permTitle: { color: palette.text, fontSize: 22, fontFamily: font.bold, marginTop: 16 },
+  permButton: { backgroundColor: palette.text, borderRadius: radius.pill, paddingHorizontal: 28, paddingVertical: 14, marginTop: 24 },
+  permButtonText: { color: '#000', fontFamily: font.semibold, fontSize: 16 },
 
   topBar: {
     position: 'absolute',
@@ -870,64 +881,71 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    gap: 8,
+    paddingHorizontal: 16,
   },
-  topButton: { alignItems: 'center', minWidth: 44, minHeight: 40, justifyContent: 'center' },
-  topLabel: { color: '#fff', fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.5 },
-  topLabelOn: { color: '#FACC15' },
-  rec: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40 },
-  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF3B30' },
-  recText: { color: '#fff', fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  badge: { color: '#000', backgroundColor: '#FACC15', fontSize: 10, fontWeight: '800', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+  // Floating glass pills over the viewfinder (design B).
+  glassPill: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 2, padding: 4, borderRadius: 24, flexShrink: 1 },
+  topButton: { alignItems: 'center', minWidth: 40, minHeight: 40, justifyContent: 'center', paddingHorizontal: 2 },
+  topLabel: { color: palette.text, fontSize: 9, fontFamily: font.monoMedium, marginTop: 1, letterSpacing: 0.6 },
+  topLabelOn: { color: palette.accent },
+  nightButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 14, borderRadius: 20, backgroundColor: palette.accent },
+  nightButtonOff: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  nightText: { color: '#000', fontSize: 14, fontFamily: font.semibold },
+  proPill: { ...glass, height: 48, paddingHorizontal: 18, borderRadius: 24, justifyContent: 'center' },
+  proText: { color: palette.text, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8 },
+  rec: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 22 },
+  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.rec },
+  recText: { color: palette.text, fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
+  badge: { color: '#000', backgroundColor: palette.accent, fontSize: 10, fontFamily: font.monoSemibold, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
 
   histogramWrap: { position: 'absolute', right: 12 },
   zoomBadge: {
     position: 'absolute',
-    left: 12,
+    left: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 12,
+    ...glass,
+    borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  zoomText: { color: '#FACC15', fontWeight: '700', fontSize: 13 },
+  zoomText: { color: palette.text, fontFamily: font.monoMedium, fontSize: 13 },
 
-  processing: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
-  processingText: { color: '#fff', fontWeight: '600' },
+  processing: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22 },
+  processingText: { color: palette.text, fontFamily: font.medium },
   looksRow: { paddingHorizontal: 12, gap: 8, paddingVertical: 6 },
-  lookChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.12)' },
-  lookChipOn: { backgroundColor: '#FACC15' },
-  lookChipText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  lookChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.08)' },
+  lookChipOn: { backgroundColor: palette.accent },
+  lookChipText: { color: palette.text, fontSize: 12, fontFamily: font.semibold },
   lookChipTextOn: { color: '#000' },
-  focusMark: { position: 'absolute', width: 72, height: 72, borderWidth: 1.5, borderColor: '#FACC15', borderRadius: 4 },
-  countdown: { color: '#fff', fontSize: 120, fontWeight: '200' },
+  focusMark: { position: 'absolute', width: 72, height: 72, borderWidth: 1.5, borderColor: 'rgba(250,204,21,0.9)', borderRadius: 6 },
+  countdown: { color: palette.text, fontSize: 120, fontFamily: font.mono },
 
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', paddingTop: 6 },
+  // The glass tray: everything you touch to shoot lives in one floating card.
+  bottom: { position: 'absolute', left: 12, right: 12, ...glass, backgroundColor: 'rgba(18,18,20,0.62)', borderColor: 'rgba(255,255,255,0.12)', borderRadius: radius.bar, paddingTop: 12, paddingBottom: 16, overflow: 'hidden' },
   params: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 6, paddingVertical: 4 },
-  param: { alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8, minWidth: 60 },
+  param: { alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 10, minWidth: 56 },
   paramActive: { backgroundColor: 'rgba(250,204,21,0.15)' },
-  paramTitle: { color: '#999', fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
-  paramValue: { color: '#fff', fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'], marginTop: 1 },
-  paramValueManual: { color: '#FACC15' },
+  paramTitle: { color: palette.muted, fontSize: 9, fontFamily: font.monoMedium, letterSpacing: 0.8 },
+  paramValue: { color: palette.text, fontSize: 14, fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], marginTop: 1 },
+  paramValueManual: { color: palette.accent },
 
-  lenses: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 6 },
-  lens: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  lensOn: { backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1, borderColor: '#FACC15' },
-  lensText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  lensTextOn: { color: '#FACC15' },
+  lenses: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 },
+  lens: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  lensOn: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  lensText: { color: '#C8C8CC', fontSize: 12, fontFamily: font.semibold },
+  lensTextOn: { color: palette.text, fontFamily: font.bold, fontSize: 13 },
 
-  modes: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 10 },
-  modeText: { color: '#fff', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
-  modeOn: { color: '#FACC15' },
+  modes: { flexDirection: 'row', justifyContent: 'center', gap: 26, marginTop: 14 },
+  modeText: { color: palette.muted, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8 },
+  modeOn: { color: palette.accent },
 
-  captureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 32, marginTop: 12 },
-  thumb: { width: 52, height: 52, borderRadius: 10, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' },
-  thumbImage: { width: '100%', height: '100%', borderRadius: 8 },
+  captureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, marginTop: 16 },
+  thumb: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+  thumbImage: { width: '100%', height: '100%', borderRadius: 14 },
   pending: {
     position: 'absolute',
     top: -8,
@@ -935,35 +953,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: '#2563EB',
+    backgroundColor: palette.action,
     borderRadius: 10,
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderWidth: 1.5,
     borderColor: '#000',
   },
-  pendingText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#fff' },
-  shutterVideo: { backgroundColor: '#FF3B30' },
+  pendingText: { color: '#fff', fontSize: 10, fontFamily: font.monoSemibold },
+  shutter: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: palette.text, alignItems: 'center', justifyContent: 'center' },
+  // Yellow ring = Lens is doing something smart (Night) for this shot.
+  shutterNight: { borderColor: palette.accent },
+  shutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: palette.text },
+  shutterVideo: { backgroundColor: palette.rec },
   shutterRec: { width: 28, height: 28, borderRadius: 6 },
-  flip: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  flip: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
 
   presetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, minHeight: 50 },
-  presetName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  presetHint: { color: '#888', fontSize: 12, flex: 1, textAlign: 'right' },
-  presetFoot: { color: '#666', fontSize: 12, paddingHorizontal: 18, paddingTop: 6 },
-  nightBadge: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#FACC15',
-  },
-  nightBadgeOff: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  nightBadgeText: { color: '#000', fontSize: 13, fontWeight: '700' },
+  presetName: { color: palette.text, fontSize: 15, fontFamily: font.semibold },
+  presetHint: { color: palette.muted, fontSize: 12, fontFamily: font.mono, flex: 1, textAlign: 'right' },
+  presetFoot: { color: palette.dim, fontSize: 12, fontFamily: font.regular, paddingHorizontal: 18, paddingTop: 6 },
 });

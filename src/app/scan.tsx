@@ -3,7 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useRef } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/lib/ui';
@@ -66,11 +67,11 @@ const styles = StyleSheet.create({
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
   headerButton: { width: 44, height: 44, justifyContent: 'center' },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  cameraWrap: { flex: 1, margin: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: '#111' },
-  frame: { position: 'absolute', top: '20%', left: '15%', right: '15%', aspectRatio: 1, borderWidth: 3, borderColor: colors.accent, borderRadius: 16 },
-  button: { backgroundColor: colors.accent, borderRadius: 24, paddingHorizontal: 24, paddingVertical: 12 },
-  buttonText: { color: '#000', fontWeight: '700', fontSize: 16 },
+  cameraWrap: { flex: 1, margin: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: '#1C1C1E' },
+  frame: { position: 'absolute', top: '20%', left: '15%', right: '15%', aspectRatio: 1, borderWidth: 3, borderColor: '#FACC15', borderRadius: 16 },
+  button: { backgroundColor: colors.action, borderRadius: 24, paddingHorizontal: 24, paddingVertical: 12 },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   help: { paddingHorizontal: 24 },
-  helpText: { color: '#ccc', fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  helpText: { color: '#E8E8ED', fontSize: 15, textAlign: 'center', lineHeight: 22 },
   bold: { fontWeight: '700', color: '#fff' },
 });

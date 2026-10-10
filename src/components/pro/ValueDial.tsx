@@ -1,6 +1,8 @@
 import * as Haptics from 'expo-haptics';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { font } from '@/lib/theme';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 const SPACING = 12;
@@ -85,12 +87,12 @@ export function ValueDial({ title, values, index, label, onIndex, auto, onAuto, 
 const styles = StyleSheet.create({
   root: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: '#aaa', fontSize: 11, fontWeight: '700', letterSpacing: 1, width: 70 },
-  value: { color: '#FACC15', fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  title: { color: '#A1A1A6', fontSize: 11, fontFamily: font.monoMedium, letterSpacing: 1, width: 70 },
+  value: { color: '#FACC15', fontSize: 18, fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'] },
   valueAuto: { color: '#fff' },
   auto: { width: 70, alignItems: 'flex-end' },
   autoOn: {},
-  autoText: { color: '#888', fontSize: 11, fontWeight: '800', letterSpacing: 1, borderWidth: 1, borderColor: '#555', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
+  autoText: { color: '#86868B', fontSize: 11, fontFamily: font.monoSemibold, letterSpacing: 1, borderWidth: 1, borderColor: '#636366', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   autoTextOn: { color: '#000', backgroundColor: '#FACC15', borderColor: '#FACC15', overflow: 'hidden' },
   ruler: { height: 34, justifyContent: 'center', overflow: 'hidden' },
   tick: { position: 'absolute', width: 1.5, backgroundColor: '#fff', top: 8 },

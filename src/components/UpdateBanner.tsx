@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import { useEffect, useState } from 'react';
-import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AvailableUpdate, checkForNewApk } from '@/lib/app-update';
@@ -52,7 +53,7 @@ export function UpdateBanner() {
     return (
       <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 90 }]}>
         <Pressable style={styles.banner} onPress={() => void Linking.openURL(apk.url)} accessibilityRole="button">
-          <Ionicons name="download-outline" size={16} color="#000" />
+          <Ionicons name="download-outline" size={16} color="#fff" />
           <Text style={styles.text}>New Lens version · Download ({formatBytes(apk.size)})</Text>
         </Pressable>
       </View>
@@ -62,7 +63,7 @@ export function UpdateBanner() {
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 90 }]}>
       <Pressable style={styles.banner} onPress={() => void Updates.reloadAsync()} accessibilityRole="button">
-        <Ionicons name="sparkles" size={16} color="#000" />
+        <Ionicons name="sparkles" size={16} color="#fff" />
         <Text style={styles.text}>New version ready · Tap to restart</Text>
       </Pressable>
     </View>
@@ -75,7 +76,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.action,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -84,5 +85,5 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  text: { color: '#000', fontSize: 14, fontWeight: '700' },
+  text: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

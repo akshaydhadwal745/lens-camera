@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { deleteForever, refreshTrash, restoreItem, useStore } from '@/lib/store';
@@ -134,7 +135,7 @@ export default function TrashScreen() {
       >
         {items.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name={tab === 'trash' ? 'trash-outline' : 'archive-outline'} size={40} color="#555" />
+            <Ionicons name={tab === 'trash' ? 'trash-outline' : 'archive-outline'} size={40} color="#636366" />
             <Text style={styles.emptyText}>{loading ? 'Loading…' : tab === 'trash' ? 'Trash is empty' : 'Nothing in the Archive'}</Text>
           </View>
         ) : (
@@ -171,16 +172,16 @@ export default function TrashScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  done: { color: colors.accent, fontSize: 17, fontWeight: '600' },
+  fill: { flex: 1, backgroundColor: '#000' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, minHeight: 56 },
+  title: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: -1 },
+  done: { color: colors.link, fontSize: 17, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 4 },
   tab: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#2C2C2E', minHeight: 36, justifyContent: 'center' },
-  tabOn: { backgroundColor: colors.accent },
+  tabOn: { backgroundColor: colors.text },
   tabText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   tabTextOn: { color: '#000' },
-  explain: { color: '#888', fontSize: 13, lineHeight: 18, paddingHorizontal: 16, paddingVertical: 12 },
+  explain: { color: '#86868B', fontSize: 13, lineHeight: 18, paddingHorizontal: 16, paddingVertical: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   empty: { alignItems: 'center', gap: 10, paddingTop: 80 },
   emptyText: { color: colors.muted, fontSize: 15 },

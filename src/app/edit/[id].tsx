@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isImagingAvailable, LensEditView, LensImaging } from '../../../modules/lens-camera';
@@ -304,7 +305,7 @@ export default function EditScreen() {
         <View style={styles.tabs}>
           {tabs.map((t) => (
             <Pressable key={t.id} onPress={() => setTab(t.id)} style={styles.tab}>
-              <Ionicons name={t.icon} size={20} color={tab === t.id ? colors.accent : '#aaa'} />
+              <Ionicons name={t.icon} size={20} color={tab === t.id ? colors.accent : '#A1A1A6'} />
               <Text style={[styles.tabText, tab === t.id && { color: colors.accent }]}>{t.label}</Text>
             </Pressable>
           ))}
@@ -317,11 +318,11 @@ export default function EditScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  message: { color: '#ccc', textAlign: 'center', fontSize: 15 },
+  message: { color: '#E8E8ED', textAlign: 'center', fontSize: 15 },
   link: { color: colors.accent, fontSize: 16 },
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
-  headerText: { color: colors.accent, fontSize: 17 },
+  headerText: { color: colors.link, fontSize: 17 },
   bold: { fontWeight: '700', textAlign: 'right' },
   headerCenter: { flexDirection: 'row', gap: 8 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#2C2C2E' },
@@ -343,13 +344,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   panel: { backgroundColor: '#0E0E10', paddingTop: 6 },
-  hint: { color: '#888', fontSize: 13, paddingHorizontal: 16, paddingVertical: 10, textAlign: 'center' },
+  hint: { color: '#86868B', fontSize: 13, paddingHorizontal: 16, paddingVertical: 10, textAlign: 'center' },
   looks: { paddingHorizontal: 12, gap: 10, paddingVertical: 8 },
   look: { alignItems: 'center', width: 68 },
-  lookThumb: { width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#222', borderWidth: 2, borderColor: 'transparent' },
+  lookThumb: { width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#2C2C2E', borderWidth: 2, borderColor: 'transparent' },
   lookThumbOn: { borderColor: colors.accent },
   lookImage: { width: '100%', height: '100%' },
-  lookName: { color: '#aaa', fontSize: 11, marginTop: 4 },
+  lookName: { color: '#A1A1A6', fontSize: 11, marginTop: 4 },
   lookNameOn: { color: colors.accent, fontWeight: '700' },
   chips: { paddingHorizontal: 12, gap: 8, paddingVertical: 10 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: '#2C2C2E' },
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
   chipText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   chipTextOn: { color: '#000' },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.accent, marginLeft: 2 },
-  tabs: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#333', paddingTop: 8 },
+  tabs: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#2C2C2E', paddingTop: 8 },
   tab: { alignItems: 'center', minWidth: 64, minHeight: 44, justifyContent: 'center' },
-  tabText: { color: '#aaa', fontSize: 11, marginTop: 2 },
+  tabText: { color: '#A1A1A6', fontSize: 11, marginTop: 2 },
 });

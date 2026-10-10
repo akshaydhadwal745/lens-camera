@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api, Person } from '@/lib/api';
@@ -100,9 +101,9 @@ export default function ShareScreen() {
         </Text>
         <Pressable onPress={send} disabled={!chosen.size || !ready.length || sending} hitSlop={10} style={styles.headerButton}>
           {sending ? (
-            <ActivityIndicator color={colors.accent} />
+            <ActivityIndicator color={colors.link} />
           ) : (
-            <Text style={[styles.headerAction, styles.bold, (!chosen.size || !ready.length) && { color: '#555' }]}>Send</Text>
+            <Text style={[styles.headerAction, styles.bold, (!chosen.size || !ready.length) && { color: '#636366' }]}>Send</Text>
           )}
         </Pressable>
       </View>
@@ -114,18 +115,18 @@ export default function ShareScreen() {
       )}
 
       <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#888" />
+        <Ionicons name="search" size={18} color="#86868B" />
         <TextInput
           value={query}
           onChangeText={setQuery}
           placeholder="Search people by name"
-          placeholderTextColor="#666"
+          placeholderTextColor="#636366"
           autoCapitalize="none"
           autoCorrect={false}
           style={styles.input}
           returnKeyType="search"
         />
-        {searching && <ActivityIndicator size="small" color="#888" />}
+        {searching && <ActivityIndicator size="small" color="#86868B" />}
       </View>
 
       {chosen.size > 0 && (
@@ -160,7 +161,7 @@ export default function ShareScreen() {
             <Pressable onPress={() => toggle(item)} style={styles.row} accessibilityState={{ selected: on }}>
               <Avatar name={item.name} />
               <Text style={styles.name}>{item.name}</Text>
-              <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? colors.accent : '#555'} />
+              <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? colors.link : '#636366'} />
             </Pressable>
           );
         }}
@@ -170,13 +171,13 @@ export default function ShareScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
+  fill: { flex: 1, backgroundColor: '#000' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 52 },
   headerButton: { minHeight: 44, minWidth: 64, justifyContent: 'center' },
-  headerAction: { color: colors.accent, fontSize: 17 },
+  headerAction: { color: colors.link, fontSize: 17 },
   bold: { fontWeight: '700', textAlign: 'right' },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  note: { color: '#FBBF24', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
+  note: { color: '#FACC15', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -189,12 +190,12 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, color: '#fff', fontSize: 16 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.text, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
   chipText: { color: '#000', fontWeight: '600', fontSize: 13 },
-  section: { color: '#888', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 6 },
+  section: { color: '#86868B', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, minHeight: 56 },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   name: { flex: 1, color: '#fff', fontSize: 16 },
-  empty: { color: '#777', fontSize: 14, paddingHorizontal: 16, paddingTop: 12, lineHeight: 20 },
+  empty: { color: '#86868B', fontSize: 14, paddingHorizontal: 16, paddingTop: 12, lineHeight: 20 },
 });

@@ -1,3 +1,4 @@
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -7,12 +8,16 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BrandIntro } from '@/components/BrandIntro';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { boot, useStore } from '@/lib/store';
+import { fontFiles } from '@/lib/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const status = useStore((s) => s.status);
   const [introVisible, setIntroVisible] = useState(true);
+  // Geist + IBM Plex Mono (bundled). Until they load (a moment on first launch)
+  // the intro is showing anyway; text falls back to the system font if a file fails.
+  useFonts(fontFiles);
 
   useEffect(() => {
     // The animated intro takes over from the static native splash.

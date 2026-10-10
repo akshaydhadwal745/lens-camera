@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Bottom sheet over the camera. */
@@ -69,24 +70,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#141416',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    backgroundColor: '#1C1C1E',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingTop: 8,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  done: { color: '#FACC15', fontSize: 16, fontWeight: '600' },
+  done: { color: '#2997FF', fontSize: 16, fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, minHeight: 50 },
   label: { color: '#fff', fontSize: 15 },
-  hint: { color: '#888', fontSize: 12, marginTop: 2 },
+  hint: { color: '#86868B', fontSize: 12, marginTop: 2 },
   switch: { width: 46, height: 28, borderRadius: 14, backgroundColor: '#3A3A3C', padding: 3 },
   switchOn: { backgroundColor: '#FACC15' },
   knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
   knobOn: { transform: [{ translateX: 18 }], backgroundColor: '#000' },
   choice: { paddingHorizontal: 18, paddingVertical: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14, backgroundColor: '#2C2C2E' },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 980, backgroundColor: '#2C2C2E' },
   chipOn: { backgroundColor: '#FACC15' },
   chipText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   chipTextOn: { color: '#000' },

@@ -5,7 +5,8 @@
 import { File } from 'expo-file-system';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView } from '../../modules/lens-camera';
@@ -26,7 +27,7 @@ import { capture as saveCapture, getState } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
 const MARK = { pass: '✓', warn: '!', fail: '✗', skip: '–' } as const;
-const MARK_COLOR = { pass: '#7d7', warn: '#fc6', fail: '#f87', skip: '#999' } as const;
+const MARK_COLOR = { pass: '#30D158', warn: '#FACC15', fail: '#FF453A', skip: '#86868B' } as const;
 
 const ANALYSIS = { peaking: false, zebra: false, zebraLevel: 0.95, falseColor: false, histogram: false };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -270,7 +271,7 @@ export default function SelfTestScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}>
         <Text style={styles.muted}>{buildLabel()}</Text>
         {report ? (
-          <Text style={[styles.summary, { color: report.failed ? '#f87' : '#7d7' }]}>
+          <Text style={[styles.summary, { color: report.failed ? '#FF453A' : '#30D158' }]}>
             {report.passed} passed · {report.warnings} warnings · {report.failed} failed · {report.skipped} skipped ·{' '}
             {(report.totalMs / 1000).toFixed(0)} s
           </Text>
@@ -289,7 +290,7 @@ export default function SelfTestScreen() {
               <Text style={styles.stepTitle}>
                 {s.label} <Text style={styles.muted}>{(s.ms / 1000).toFixed(1)} s</Text>
               </Text>
-              {s.message ? <Text style={[styles.stepMessage, s.status === 'warn' && { color: '#fc6' }]}>{s.message}</Text> : null}
+              {s.message ? <Text style={[styles.stepMessage, s.status === 'warn' && { color: '#FACC15' }]}>{s.message}</Text> : null}
               {s.details?.saved ? (
                 <Text style={styles.muted}>
                   {String(s.details.saved)} of {String(s.details.max ?? '?')}
@@ -307,18 +308,18 @@ const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
-  headerText: { color: colors.accent, fontSize: 17 },
+  headerText: { color: colors.link, fontSize: 17 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  preview: { width: '100%', aspectRatio: 3 / 4, maxHeight: '45%', backgroundColor: '#111', overflow: 'hidden' },
+  preview: { width: '100%', aspectRatio: 3 / 4, maxHeight: '45%', backgroundColor: '#1C1C1E', overflow: 'hidden' },
   busy: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 10, backgroundColor: 'rgba(0,0,0,0.7)', flexDirection: 'row', gap: 8, alignItems: 'center' },
   busyText: { color: '#fff', fontSize: 13, flex: 1 },
-  muted: { color: '#888', fontSize: 12, marginTop: 4 },
+  muted: { color: '#86868B', fontSize: 12, marginTop: 4 },
   summary: { fontSize: 16, fontWeight: '700', marginTop: 10 },
-  primary: { marginTop: 14, backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  primaryText: { color: '#000', fontSize: 16, fontWeight: '700' },
-  error: { color: '#f87', marginTop: 10, fontSize: 13 },
+  primary: { marginTop: 14, backgroundColor: colors.action, borderRadius: 980, paddingVertical: 14, alignItems: 'center' },
+  primaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  error: { color: '#FF453A', marginTop: 10, fontSize: 13 },
   row: { flexDirection: 'row', gap: 10, marginTop: 12 },
   mark: { fontSize: 16, width: 18, textAlign: 'center' },
   stepTitle: { color: '#fff', fontSize: 14 },
-  stepMessage: { color: '#f87', fontSize: 12, marginTop: 2 },
+  stepMessage: { color: '#FF453A', fontSize: 12, marginTop: 2 },
 });

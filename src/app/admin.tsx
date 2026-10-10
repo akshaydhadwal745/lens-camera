@@ -3,7 +3,8 @@
 // Every action here is recorded in the audit log.
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdminAffiliate, AdminPayout, api, ContactMessage } from '@/lib/api';
@@ -62,7 +63,7 @@ function Inbox() {
         ))}
       </View>
       {!rows ? (
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.link} />
       ) : rows.length === 0 ? (
         <Text style={styles.empty}>No messages.</Text>
       ) : (
@@ -121,7 +122,7 @@ function Affiliates() {
         ))}
       </View>
       {!rows ? (
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.link} />
       ) : rows.length === 0 ? (
         <Text style={styles.empty}>None</Text>
       ) : (
@@ -162,7 +163,7 @@ function Referrals() {
       notify('Error', errorMessage(e));
     }
   };
-  if (!rows) return <ActivityIndicator color={colors.accent} />;
+  if (!rows) return <ActivityIndicator color={colors.link} />;
   if (rows.length === 0) return <Text style={styles.empty}>No rewards waiting for review.</Text>;
   return (
     <>
@@ -219,12 +220,12 @@ function Payouts() {
   return (
     <>
       <View style={[styles.actions, { paddingHorizontal: 16 }]}>
-        <TextInput style={[styles.input, { flex: 1 }]} value={month} onChangeText={setMonth} placeholder="YYYY-MM" placeholderTextColor="#666" />
+        <TextInput style={[styles.input, { flex: 1 }]} value={month} onChangeText={setMonth} placeholder="YYYY-MM" placeholderTextColor="#636366" />
         <Button label="Create" onPress={run} />
         <Button label="Export" onPress={exportSheet} />
       </View>
       {!rows ? (
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.link} />
       ) : rows.length === 0 ? (
         <Text style={styles.empty}>No payouts for {month}.</Text>
       ) : (
@@ -247,7 +248,7 @@ function Payouts() {
                   value={refs[p.affiliateId] ?? ''}
                   onChangeText={(v) => setRefs({ ...refs, [p.affiliateId]: v })}
                   placeholder="UPI reference"
-                  placeholderTextColor="#666"
+                  placeholderTextColor="#636366"
                 />
                 <Button label="Mark paid" onPress={() => paid(p)} />
               </View>
@@ -288,21 +289,21 @@ export default function AdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  done: { color: colors.accent, fontSize: 17, fontWeight: '600' },
+  fill: { flex: 1, backgroundColor: '#000' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, minHeight: 56 },
+  title: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: -1 },
+  done: { color: colors.link, fontSize: 17, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   chip: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#2C2C2E' },
-  chipOn: { backgroundColor: colors.accent },
+  chipOn: { backgroundColor: colors.text },
   chipText: { color: '#fff', fontSize: 14, fontWeight: '500', textTransform: 'capitalize' },
-  card: { backgroundColor: '#1C1C1E', borderRadius: 14, marginHorizontal: 16, padding: 14, gap: 4 },
+  card: { backgroundColor: '#1C1C1E', borderRadius: 20, marginHorizontal: 16, padding: 14, gap: 4 },
   name: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  body: { color: '#ddd', fontSize: 14 },
+  body: { color: '#E8E8ED', fontSize: 14 },
   small: { color: colors.muted, fontSize: 12 },
   empty: { color: colors.muted, textAlign: 'center', marginTop: 24 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' },
   smallButton: { backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 14, minHeight: 40, justifyContent: 'center' },
-  smallButtonText: { color: colors.accent, fontWeight: '700' },
+  smallButtonText: { color: colors.link, fontWeight: '700' },
   input: { color: '#fff', fontSize: 15, backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 12, minHeight: 40 },
 });

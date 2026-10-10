@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
@@ -20,8 +21,8 @@ import { checkStorages, kickSync, refreshStorage, requestProvider, useStore } fr
 import { ConnectedStorage, ProviderId } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
-const RECENT_COLOR = colors.accent;
-const SAVER_COLOR = '#60A5FA';
+const RECENT_COLOR = colors.link;
+const SAVER_COLOR = '#2997FF';
 
 function Section({ title, children, footer }: { title: string; children: ReactNode; footer?: string }) {
   return (
@@ -63,9 +64,9 @@ function LensStorageCard() {
       </View>
       {!storage.signedIn && (
         <Pressable style={styles.guestNote} onPress={() => router.push('/signin')}>
-          <Ionicons name="person-circle-outline" size={18} color={colors.accent} />
+          <Ionicons name="person-circle-outline" size={18} color={colors.link} />
           <Text style={[styles.legendText, { color: '#fff' }]}>
-            Guests get {formatBytes(quotaBytes)}. <Text style={{ color: colors.accent, fontWeight: '700' }}>Sign in</Text> to get{' '}
+            Guests get {formatBytes(quotaBytes)}. <Text style={{ color: colors.link, fontWeight: '700' }}>Sign in</Text> to get{' '}
             {formatBytes(storage.lens.signedInQuotaBytes)} free.
           </Text>
         </Pressable>
@@ -86,7 +87,7 @@ function statusText(s: ConnectedStorage): { text: string; color: string } {
     case 'ok':
       return { text: 'Working', color: '#4ADE80' };
     case 'low':
-      return { text: 'Almost full', color: '#FBBF24' };
+      return { text: 'Almost full', color: '#FACC15' };
     case 'full':
       return { text: 'Full: new shots go to Lens storage', color: colors.danger };
     case 'signed-out':
@@ -186,7 +187,7 @@ function Field(props: {
         value={props.value}
         onChangeText={props.onChange}
         placeholder={props.placeholder}
-        placeholderTextColor="#666"
+        placeholderTextColor="#636366"
         style={styles.input}
         secureTextEntry={props.secure}
         autoCapitalize="none"
@@ -269,7 +270,7 @@ function CredentialsSheet({ provider, onDone }: { provider: 's3' | 'webdav'; onD
       </Text>
       <View style={styles.actions}>
         <Pressable style={[styles.button, { flex: 1 }, !complete && { opacity: 0.5 }]} onPress={submit} disabled={!complete || busy}>
-          {busy ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Test & connect</Text>}
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Test & connect</Text>}
         </Pressable>
         <Pressable style={styles.smallButton} onPress={onDone}>
           <Text style={styles.smallButtonText}>Cancel</Text>
@@ -305,7 +306,7 @@ function RequestProvider() {
         value={provider}
         onChangeText={setProvider}
         placeholder="Which storage do you use?"
-        placeholderTextColor="#666"
+        placeholderTextColor="#636366"
         style={styles.input}
         maxLength={80}
         autoCapitalize="words"
@@ -315,13 +316,13 @@ function RequestProvider() {
         value={note}
         onChangeText={setNote}
         placeholder="Anything we should know? (optional)"
-        placeholderTextColor="#666"
+        placeholderTextColor="#636366"
         style={[styles.input, { minHeight: 64, textAlignVertical: 'top' }]}
         maxLength={500}
         multiline
       />
       <Pressable style={[styles.button, !provider.trim() && { opacity: 0.5 }]} onPress={send} disabled={!provider.trim() || sending}>
-        {sending ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Send request</Text>}
+        {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send request</Text>}
       </Pressable>
     </View>
   );
@@ -386,7 +387,7 @@ export default function StorageScreen() {
           }
         >
           <View style={[styles.providerRow, { padding: 16 }]}>
-            <Ionicons name={own ? providerInfo(own.provider).icon : 'cloud-outline'} size={24} color={colors.accent} />
+            <Ionicons name={own ? providerInfo(own.provider).icon : 'cloud-outline'} size={24} color={colors.link} />
             <Text style={styles.providerName}>{own ? own.label : 'Lens storage'}</Text>
           </View>
         </Section>
@@ -419,9 +420,9 @@ export default function StorageScreen() {
                     <Text style={styles.muted}>{p.blurb}</Text>
                   </View>
                   {connecting === p.id ? (
-                    <ActivityIndicator color={colors.accent} />
+                    <ActivityIndicator color={colors.link} />
                   ) : (
-                    <Text style={[styles.connect, !canConnect(p.id) && { color: '#666' }]}>
+                    <Text style={[styles.connect, !canConnect(p.id) && { color: '#636366' }]}>
                       {canConnect(p.id) ? 'Connect' : (p.unavailable ?? 'Soon')}
                     </Text>
                   )}
@@ -440,31 +441,31 @@ export default function StorageScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  done: { color: colors.accent, fontSize: 17, fontWeight: '600' },
+  fill: { flex: 1, backgroundColor: '#000' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, minHeight: 56 },
+  title: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: -1 },
+  done: { color: colors.link, fontSize: 17, fontWeight: '600' },
   section: { marginTop: 20, paddingHorizontal: 16 },
-  sectionTitle: { color: '#888', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 },
-  card: { backgroundColor: '#1C1C1E', borderRadius: 14, overflow: 'hidden' },
-  footer: { color: '#777', fontSize: 12, marginTop: 8, marginHorizontal: 4, lineHeight: 17 },
+  sectionTitle: { color: '#86868B', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 },
+  card: { backgroundColor: '#1C1C1E', borderRadius: 20, overflow: 'hidden' },
+  footer: { color: '#86868B', fontSize: 12, marginTop: 8, marginHorizontal: 4, lineHeight: 17 },
   big: { color: '#fff', fontSize: 20, fontWeight: '700' },
   muted: { color: colors.muted, fontSize: 13, fontWeight: '400' },
-  bar: { height: 10, borderRadius: 5, backgroundColor: '#333', overflow: 'hidden', flexDirection: 'row' },
+  bar: { height: 10, borderRadius: 5, backgroundColor: '#2C2C2E', overflow: 'hidden', flexDirection: 'row' },
   legendRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
-  legendText: { color: '#bbb', fontSize: 13, lineHeight: 18, flex: 1 },
+  legendText: { color: '#A1A1A6', fontSize: 13, lineHeight: 18, flex: 1 },
   legendName: { color: '#fff', fontWeight: '700' },
   guestNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2C2C2E', borderRadius: 10, padding: 10 },
   providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   providerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 56 },
   providerName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  connect: { color: colors.accent, fontSize: 15, fontWeight: '600' },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#333', marginLeft: 50 },
-  fieldLabel: { color: '#bbb', fontSize: 13, fontWeight: '600' },
+  connect: { color: colors.link, fontSize: 15, fontWeight: '600' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#2C2C2E', marginLeft: 50 },
+  fieldLabel: { color: '#A1A1A6', fontSize: 13, fontWeight: '600' },
   input: { backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#fff', fontSize: 15 },
-  button: { backgroundColor: colors.accent, borderRadius: 12, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  button: { backgroundColor: colors.action, borderRadius: 980, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   smallButton: { backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
   dangerButton: { backgroundColor: '#2A1515' },

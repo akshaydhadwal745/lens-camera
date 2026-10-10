@@ -3,7 +3,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cameraDeviceReport } from '../../modules/lens-camera';
@@ -70,7 +71,7 @@ export default function CameraInfoScreen() {
           hitSlop={10}
           style={[styles.headerButton, { alignItems: 'flex-end' }]}
         >
-          <Ionicons name="share-outline" size={20} color={report ? colors.accent : '#555'} />
+          <Ionicons name="share-outline" size={20} color={report ? colors.link : '#636366'} />
         </Pressable>
       </View>
       {!report ? (
@@ -121,11 +122,11 @@ export default function CameraInfoScreen() {
             </View>
           ))}
           <Pressable style={styles.lab} onPress={() => router.push('/selftest')}>
-            <Ionicons name="checkmark-done-outline" size={18} color={colors.accent} />
+            <Ionicons name="checkmark-done-outline" size={18} color={colors.link} />
             <Text style={styles.labText}>Run self-test</Text>
           </Pressable>
           <Pressable style={styles.lab} onPress={() => router.push('/lab')}>
-            <Ionicons name="flask-outline" size={18} color={colors.accent} />
+            <Ionicons name="flask-outline" size={18} color={colors.link} />
             <Text style={styles.labText}>Quality Lab</Text>
           </Pressable>
         </ScrollView>
@@ -148,17 +149,17 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
-  headerText: { color: colors.accent, fontSize: 17 },
+  headerText: { color: colors.link, fontSize: 17 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
   device: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  muted: { color: '#999', fontSize: 13, marginTop: 4 },
-  card: { backgroundColor: '#151517', borderRadius: 12, padding: 14, marginTop: 14 },
-  label: { color: '#888', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
+  muted: { color: '#86868B', fontSize: 13, marginTop: 4 },
+  card: { backgroundColor: '#1C1C1E', borderRadius: 20, padding: 14, marginTop: 14 },
+  label: { color: '#86868B', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   value: { color: '#fff', fontSize: 15, marginTop: 3 },
   cameraTitle: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 6 },
   line: { flexDirection: 'row', paddingVertical: 3 },
-  lineLabel: { color: '#888', fontSize: 13, width: 100 },
-  lineValue: { color: '#ddd', fontSize: 13, flex: 1 },
-  lab: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: '#151517' },
-  labText: { color: colors.accent, fontSize: 15, fontWeight: '600' },
+  lineLabel: { color: '#86868B', fontSize: 13, width: 100 },
+  lineValue: { color: '#E8E8ED', fontSize: 13, flex: 1 },
+  lab: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1C1C1E' },
+  labText: { color: colors.link, fontSize: 15, fontWeight: '600' },
 });

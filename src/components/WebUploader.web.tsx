@@ -3,7 +3,8 @@
 // each one lands. Leaving the page mid-upload asks for confirmation.
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { refreshRemote } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
@@ -112,12 +113,12 @@ export function WebUploader() {
   return (
     <>
       <Pressable onPress={pick} style={styles.button} accessibilityRole="button" accessibilityLabel="Upload photos and videos">
-        <Ionicons name="cloud-upload-outline" size={18} color="#000" />
+        <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
         <Text style={styles.buttonText}>Upload</Text>
       </Pressable>
       {dragging && (
         <View style={styles.drop} pointerEvents="none">
-          <Ionicons name="cloud-upload-outline" size={48} color={colors.accent} />
+          <Ionicons name="cloud-upload-outline" size={48} color={colors.link} />
           <Text style={styles.dropText}>Drop photos and videos to upload at original quality</Text>
         </View>
       )}
@@ -127,7 +128,7 @@ export function WebUploader() {
             <Text style={styles.panelTitle}>{active ? `Uploading ${active} file${active === 1 ? '' : 's'}…` : `${done} uploaded`}</Text>
             {!active && (
               <Pressable onPress={() => setJobs((jobsRef.current = []))} hitSlop={8} accessibilityLabel="Close">
-                <Ionicons name="close" size={18} color="#aaa" />
+                <Ionicons name="close" size={18} color="#A1A1A6" />
               </Pressable>
             )}
           </View>
@@ -148,8 +149,8 @@ export function WebUploader() {
 }
 
 const styles = StyleSheet.create({
-  button: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.accent, paddingHorizontal: 14, minHeight: 36, borderRadius: 18, marginRight: 8 },
-  buttonText: { color: '#000', fontWeight: '700' },
+  button: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.action, paddingHorizontal: 14, minHeight: 36, borderRadius: 18, marginRight: 8 },
+  buttonText: { color: '#fff', fontWeight: '600' },
   drop: {
     position: 'fixed' as 'absolute',
     top: 0,
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     backgroundColor: 'rgba(0,0,0,0.75)',
     borderWidth: 3,
-    borderColor: colors.accent,
+    borderColor: colors.link,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
     bottom: 16,
     width: 340,
     zIndex: 90,
-    backgroundColor: '#111827',
+    backgroundColor: '#1C1C1E',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#1F2937',
@@ -181,6 +182,6 @@ const styles = StyleSheet.create({
   panelHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   panelTitle: { color: '#fff', fontWeight: '700' },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, gap: 8 },
-  name: { color: '#ccc', flex: 1, fontSize: 13 },
-  state: { color: colors.accent, fontSize: 13, maxWidth: 160 },
+  name: { color: '#E8E8ED', flex: 1, fontSize: 13 },
+  state: { color: colors.link, fontSize: 13, maxWidth: 160 },
 });

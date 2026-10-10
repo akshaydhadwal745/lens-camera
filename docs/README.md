@@ -35,6 +35,7 @@ native camera module on each platform), and a web viewer.
 | Design: own storage + Lens tiers | [design/own-storage.md](design/own-storage.md) |
 | Design: Android pro camera, looks, editor, Night, Portrait | [design/android-camera.md](design/android-camera.md) |
 | Design: website + web app | [design/website.md](design/website.md) |
+| Design: app look (camera glass, the roll, viewer, settings), tokens + fonts | [design/app-design.md](design/app-design.md) |
 | Design: user referrals + affiliate program | [design/referrals-and-affiliates.md](design/referrals-and-affiliates.md) |
 | Design: Lens Studio, the premium cloud photo + video editor (proposed) | [design/cloud-editor.md](design/cloud-editor.md) |
 

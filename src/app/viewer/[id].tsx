@@ -9,10 +9,10 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ZoomableImage } from '@/components/ZoomableImage';
@@ -26,6 +26,7 @@ import { providerInfo } from '@/lib/storage/providers';
 import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { keepOnly, prefetchVideo } from '@/lib/video-prefetch';
+import { font, glass, palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const isWeb = Platform.OS === 'web';
@@ -91,7 +92,7 @@ function VideoPage({
       <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.center]}>
         {playable ? (
           <Pressable onPress={open} style={styles.playButton} accessibilityLabel="Play video" hitSlop={12}>
-            <Ionicons name="play" size={40} color="#fff" style={{ marginLeft: 4 }} />
+            <Ionicons name="play" size={36} color={palette.text} style={{ marginLeft: 4 }} />
           </Pressable>
         ) : (
           <Text style={styles.pendingVideo}>
@@ -126,8 +127,12 @@ function SyncLine({ item }: { item: GalleryItem }) {
       </View>
     );
   }
-  const where =
-    item.sync === 'synced'
+  return <Text style={[styles.sub, item.sync === 'failed' && { color: colors.danger }]} numberOfLines={2}>{whereText(item)}</Text>;
+}
+
+/** Where this item lives right now, in words. */
+function whereText(item: GalleryItem): string {
+  return item.sync === 'synced'
       ? item.location
         ? `In your ${providerInfo(item.location.provider).name}${item.localUri ? ' · on this device' : ''}`
         : item.localUri
@@ -148,15 +153,26 @@ function SyncLine({ item }: { item: GalleryItem }) {
         : item.sync === 'failed'
           ? `Upload failed: ${item.error ?? 'unknown error'}`
           : 'Waiting to upload';
-  return <Text style={[styles.sub, item.sync === 'failed' && { color: colors.danger }]}>{where}</Text>;
 }
 
+/** "12 MP · 3.1 MB" / "4K · 0:48 · 180 MB" for the info pill. */
+function metaText(item: GalleryItem): string {
+  const parts: string[] = [];
+  const long = Math.max(item.width ?? 0, item.height ?? 0);
+  if (item.kind === 'photo' && item.width && item.height) parts.push(`${Math.max(1, Math.round((item.width * item.height) / 1e6))} MP`);
+  if (item.kind === 'video' && long) parts.push(long >= 3840 ? '4K' : long >= 1920 ? 'HD' : `${Math.min(item.width ?? 0, item.height ?? 0)}p`);
+  if (item.kind === 'video' && item.duration != null) parts.push(formatDuration(item.duration));
+  if (item.size) parts.push(formatBytes(item.size));
+  return parts.join(' · ');
+}
+
+/** An icon in the glass action bar (its label is for screen readers). */
 function Action({
   icon,
   label,
   onPress,
   disabled,
-  color = '#fff',
+  color = palette.text,
 }: {
   icon: ComponentProps<typeof Ionicons>['name'];
   label: string;
@@ -165,9 +181,14 @@ function Action({
   color?: string;
 }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={[styles.action, disabled && { opacity: 0.35 }]} accessibilityLabel={label}>
-      <Ionicons name={icon} size={24} color={color} />
-      <Text style={[styles.actionText, { color }]}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [styles.action, pressed && { backgroundColor: 'rgba(255,255,255,0.1)' }, disabled && { opacity: 0.35 }]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={23} color={color} />
     </Pressable>
   );
 }
@@ -263,6 +284,8 @@ export default function ViewerScreen() {
     });
 
   if (!current) return <View style={styles.fill} />;
+  const safe = current.sync === 'synced' && !current.ownerName;
+  const meta = metaText(current);
 
   return (
     <View style={styles.fill}>
@@ -304,53 +327,60 @@ export default function ViewerScreen() {
 
       {chrome && (
         <>
-          <View style={[styles.topBar, { paddingTop: insets.top + 4 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close" style={styles.barButton}>
-              <Ionicons name="chevron-back" size={28} color="#fff" />
+          {/* Design B: glass controls float over the photo. */}
+          <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+            <Pressable onPress={() => router.back()} hitSlop={6} accessibilityLabel="Back to the roll" style={styles.glassCircle}>
+              <Ionicons name="chevron-back" size={24} color={palette.text} />
             </Pressable>
-            <View style={{ alignItems: 'center', flex: 1 }}>
-              <Text style={styles.date}>{formatDate(current.createdAt)}</Text>
-              <SyncLine item={current} />
-            </View>
-            {current.kind === 'photo' && !current.localUri && (current.remoteUrl || current.location) && !loadOriginalFor(current) && !(isWeb && !webCanShowOriginal(current)) ? (
-              <Pressable
-                onPress={() => setHd((prev) => new Set(prev).add(current.id))}
-                style={styles.barButton}
-                accessibilityLabel="Load full quality"
-              >
-                <Text style={styles.hd}>HD</Text>
-              </Pressable>
-            ) : (
-              <Text style={[styles.sub, styles.barButton, { textAlign: 'center' }]}>
-                {index + 1}/{items.length}
+            <View style={styles.infoPill}>
+              <Text style={styles.date} numberOfLines={1}>
+                {formatDate(current.createdAt)}
               </Text>
-            )}
+              {safe && meta ? <Text style={styles.sub} numberOfLines={1}>{meta}</Text> : <SyncLine item={current} />}
+            </View>
+            <View style={styles.topRight}>
+              {current.kind === 'photo' && !current.localUri && (current.remoteUrl || current.location) && !loadOriginalFor(current) && !(isWeb && !webCanShowOriginal(current)) ? (
+                <Pressable onPress={() => setHd((prev) => new Set(prev).add(current.id))} style={styles.hdPill} accessibilityLabel="Load full quality">
+                  <Text style={styles.hd}>HD</Text>
+                </Pressable>
+              ) : null}
+              {safe ? (
+                <Pressable onPress={() => notify('Safe', whereText(current))} style={styles.safePill} accessibilityLabel={`Safe. ${whereText(current)}`}>
+                  <Ionicons name="checkmark" size={14} color={palette.safe} />
+                  <Text style={styles.safeText}>Safe</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
-          <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+          <View style={[styles.bottomBar, { bottom: insets.bottom + 16 }]}>
+            <Action icon="share-outline" label="Share" disabled={busy} onPress={() => run(() => shareMedia(current))} />
             {!shared && isImagingAvailable && (
-              <Action
-                icon="color-wand-outline"
-                label="Edit"
+              <Pressable
                 onPress={() => router.push({ pathname: '/edit/[id]', params: { id: current.id } })}
-              />
+                style={({ pressed }) => [styles.editPill, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Edit"
+              >
+                <Ionicons name="color-wand-outline" size={18} color="#000" />
+                <Text style={styles.editText}>Edit</Text>
+              </Pressable>
             )}
             {!shared && (
               <Action
                 icon="paper-plane-outline"
-                label="Send"
+                label="Send to friends"
                 disabled={current.sync !== 'synced'}
                 onPress={() => router.push({ pathname: '/share', params: { ids: current.id } })}
               />
             )}
-            <Action icon="share-outline" label="Share" disabled={busy} onPress={() => run(() => shareMedia(current))} />
             <Action
               icon="download-outline"
               label={saveLabel}
               disabled={busy}
               onPress={() => run(() => saveToDevice(current), isWeb ? undefined : 'Saved to Photos')}
             />
-            <Action icon="trash-outline" label={shared ? 'Remove' : 'Delete'} color={colors.danger} disabled={busy} onPress={onDelete} />
+            <Action icon="trash-outline" label={shared ? 'Remove' : 'Delete'} disabled={busy} onPress={onDelete} />
           </View>
 
           {isWeb && width > 700 && (
@@ -378,63 +408,60 @@ const styles = StyleSheet.create({
   topBar: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    gap: 8,
   },
-  barButton: { width: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  hd: {
-    color: '#000',
-    backgroundColor: '#FACC15',
-    fontWeight: '800',
-    fontSize: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  pendingVideo: { color: '#ccc', textAlign: 'center', marginTop: 12, fontSize: 13, paddingHorizontal: 24 },
+  glassCircle: { ...glass, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  infoPill: { ...glass, flexShrink: 1, minHeight: 48, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 24, justifyContent: 'center' },
+  topRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  safePill: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 12, borderRadius: 16 },
+  safeText: { color: palette.text, fontSize: 12, fontWeight: '600' },
+  hdPill: { height: 32, paddingHorizontal: 10, borderRadius: 16, backgroundColor: palette.accent, justifyContent: 'center' },
+  hd: { color: '#000', fontFamily: font.monoSemibold, fontSize: 12 },
+  pendingVideo: { color: palette.soft, textAlign: 'center', marginTop: 12, fontSize: 13, paddingHorizontal: 24 },
   center: { alignItems: 'center', justifyContent: 'center' },
   playButton: {
+    ...glass,
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  videoLength: { color: '#fff', fontSize: 13, fontWeight: '600', marginTop: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 3 },
-  date: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  sub: { color: '#aaa', fontSize: 12, marginTop: 2 },
-  transfer: { alignSelf: 'stretch', alignItems: 'center' },
+  videoLength: { color: palette.text, fontSize: 12, fontFamily: font.monoMedium, marginTop: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 3 },
+  date: { color: palette.text, fontSize: 14, fontWeight: '600' },
+  sub: { color: '#C8C8CC', fontSize: 11, marginTop: 1 },
+  transfer: { alignSelf: 'stretch' },
   transferTrack: { alignSelf: 'stretch', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', marginTop: 4, overflow: 'hidden' },
-  transferFill: { height: '100%', backgroundColor: '#3B82F6' },
+  transferFill: { height: '100%', backgroundColor: palette.link },
   bottomBar: {
+    ...glass,
+    backgroundColor: 'rgba(18,18,20,0.62)',
+    borderColor: 'rgba(255,255,255,0.12)',
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
-    paddingTop: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 32,
   },
-  action: { alignItems: 'center', minWidth: 64, minHeight: 44, justifyContent: 'center' },
-  actionText: { fontSize: 12, marginTop: 4 },
+  action: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  editPill: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 52, paddingHorizontal: 22, borderRadius: 26, backgroundColor: palette.text },
+  editText: { color: '#000', fontSize: 15, fontWeight: '600' },
   navArrow: {
+    ...glass,
     position: 'absolute',
     top: '50%',
     marginTop: -28,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },

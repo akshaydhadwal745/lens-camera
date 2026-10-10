@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
@@ -98,7 +99,7 @@ export default function SignInScreen() {
       </View>
 
       <View style={styles.body}>
-        <Ionicons name="shield-checkmark-outline" size={48} color={colors.accent} />
+        <Ionicons name="shield-checkmark-outline" size={48} color={colors.link} />
         <Text style={styles.title}>{signedOut ? 'Sign in again' : 'Keep your photos safe'}</Text>
         <Text style={styles.subtitle}>
           {signedOut
@@ -112,7 +113,7 @@ export default function SignInScreen() {
               value={email}
               onChangeText={setEmail}
               placeholder="you@example.com"
-              placeholderTextColor="#666"
+              placeholderTextColor="#636366"
               style={styles.input}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -124,7 +125,7 @@ export default function SignInScreen() {
               editable={!busy}
             />
             <Pressable style={[styles.button, !email.trim() && styles.disabled]} onPress={send} disabled={!email.trim() || !!busy}>
-              {busy === 'send' ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Email me a code</Text>}
+              {busy === 'send' ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Email me a code</Text>}
             </Pressable>
 
             {googleReady && (
@@ -140,7 +141,7 @@ export default function SignInScreen() {
                   ) : (
                     <>
                       <Ionicons name="logo-google" size={18} color="#000" />
-                      <Text style={styles.buttonText}>Continue with Google</Text>
+                      <Text style={styles.googleText}>Continue with Google</Text>
                     </>
                   )}
                 </Pressable>
@@ -161,7 +162,7 @@ export default function SignInScreen() {
                 if (digits.length === 6) void verify(digits);
               }}
               placeholder="123456"
-              placeholderTextColor="#555"
+              placeholderTextColor="#636366"
               style={[styles.input, styles.codeInput]}
               keyboardType="number-pad"
               autoComplete="one-time-code"
@@ -170,10 +171,10 @@ export default function SignInScreen() {
               editable={!busy}
             />
             <Pressable style={[styles.button, code.length !== 6 && styles.disabled]} onPress={() => verify()} disabled={code.length !== 6 || !!busy}>
-              {busy === 'verify' ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Sign in</Text>}
+              {busy === 'verify' ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
             </Pressable>
             <Pressable onPress={send} disabled={resendIn > 0 || !!busy} style={styles.linkButton}>
-              <Text style={[styles.link, resendIn > 0 && { color: '#666' }]}>
+              <Text style={[styles.link, resendIn > 0 && { color: '#636366' }]}>
                 {resendIn > 0 ? `Send a new code in ${resendIn}s` : 'Send a new code'}
               </Text>
             </Pressable>
@@ -188,19 +189,19 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
+  fill: { flex: 1, backgroundColor: '#000' },
   header: { height: 52, paddingHorizontal: 16, justifyContent: 'center' },
   headerButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  done: { color: colors.accent, fontSize: 17, fontWeight: '600' },
+  done: { color: colors.link, fontSize: 17, fontWeight: '600' },
   body: { paddingHorizontal: 24, paddingTop: 24, gap: 14, maxWidth: 480, width: '100%', alignSelf: 'center', alignItems: 'stretch' },
   title: { color: '#fff', fontSize: 26, fontWeight: '800', marginTop: 8 },
   subtitle: { color: colors.muted, fontSize: 15, lineHeight: 21, marginBottom: 8 },
   input: { backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, color: '#fff', fontSize: 17 },
   codeInput: { fontSize: 28, letterSpacing: 10, textAlign: 'center', fontVariant: ['tabular-nums'] },
-  button: { backgroundColor: colors.accent, borderRadius: 12, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
+  button: { backgroundColor: colors.action, borderRadius: 980, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
   googleButton: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 980,
     minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
@@ -208,13 +209,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   disabled: { opacity: 0.5 },
-  buttonText: { color: '#000', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  googleText: { color: '#000', fontSize: 16, fontWeight: '600' },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: '#333' },
-  orText: { color: '#777', fontSize: 13 },
+  orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: '#2C2C2E' },
+  orText: { color: '#86868B', fontSize: 13 },
   sentTo: { color: colors.muted, fontSize: 15 },
   linkButton: { alignSelf: 'center', padding: 8 },
-  link: { color: colors.accent, fontSize: 15, fontWeight: '600' },
-  hint: { color: '#666', fontSize: 13, textAlign: 'center' },
+  link: { color: colors.link, fontSize: 15, fontWeight: '600' },
+  hint: { color: '#636366', fontSize: 13, textAlign: 'center' },
   error: { color: colors.danger, fontSize: 14, textAlign: 'center' },
 });

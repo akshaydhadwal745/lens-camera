@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { Image } from 'expo-image';
 import { Href, router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isProCameraAvailable } from '../../modules/lens-camera';
@@ -32,10 +32,11 @@ import {
   unlinkBrowser,
   useStore,
 } from '@/lib/store';
+import { font, palette, type as typeStyle } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const isWeb = Platform.OS === 'web';
-const mark = require('../../assets/splash-icon.png');
+const formatGB = (bytes: number) => (bytes >= 1e9 ? `${Math.round(bytes / 1e9)} GB` : formatBytes(bytes));
 
 function Section({ title, children, footer }: { title: string; children: ReactNode; footer?: string }) {
   return (
@@ -54,6 +55,35 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
+}
+
+/** A row that opens another screen: white label, grey value, chevron. */
+function LinkRow({
+  icon,
+  label,
+  value,
+  valueColor,
+  onPress,
+}: {
+  icon?: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value?: string;
+  valueColor?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={({ pressed }) => [styles.rowButton, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
+      {icon ? <Ionicons name={icon} size={18} color={palette.muted} /> : null}
+      <Text style={[styles.rowLabel, { flex: 1 }]}>{label}</Text>
+      {value ? <Text style={[styles.rowValue, valueColor ? { color: valueColor } : null]}>{value}</Text> : null}
+      <Ionicons name="chevron-forward" size={16} color="#636366" />
+    </Pressable>
+  );
+}
+
+function initials(name?: string): string {
+  const parts = (name ?? '').trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? parts[0]?.[1] ?? '')).toUpperCase() || 'L';
 }
 
 function timeAgo(ms: number): string {
@@ -89,7 +119,7 @@ function AccountSection() {
         }
       >
         <Pressable style={styles.button} onPress={() => router.push('/signin')}>
-          <Ionicons name="person-circle-outline" size={18} color="#000" />
+          <Ionicons name="person-circle-outline" size={18} color="#fff" />
           <Text style={styles.buttonText}>{signedOut ? 'Sign in again' : 'Sign in'}</Text>
         </Pressable>
       </Section>
@@ -145,7 +175,7 @@ function AccountSection() {
               {s.kind === 'web' ? '🖥  ' : '📱  '}
               {s.label}
             </Text>
-            <Text style={[styles.rowValue, s.current && { color: colors.accent }]}>{s.current ? 'This phone' : timeAgo(s.lastUsedAt)}</Text>
+            <Text style={[styles.rowValue, s.current && { color: palette.safe }]}>{s.current ? 'This phone' : timeAgo(s.lastUsedAt)}</Text>
           </View>
         ))
       )}
@@ -153,7 +183,7 @@ function AccountSection() {
         <>
           <View style={styles.divider} />
           <Pressable style={styles.rowButton} onPress={logOutOthers} disabled={busy}>
-            <Ionicons name="exit-outline" size={18} color={colors.accent} />
+            <Ionicons name="exit-outline" size={18} color={palette.link} />
             <Text style={styles.rowButtonText}>Log out other devices</Text>
           </Pressable>
         </>
@@ -173,9 +203,9 @@ function EarnSection({ signedIn }: { signedIn: boolean }) {
   useEffect(() => {
     if (signedIn) api.me().then((m) => setAdmin(!!m.admin), () => undefined);
   }, [signedIn]);
-  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; to: '/invite' | '/partners' | '/admin' }[] = [
-    { icon: 'gift-outline', label: 'Invite friends: +10 GB each', to: '/invite' },
-    { icon: 'trending-up-outline', label: 'Affiliate program', to: '/partners' },
+  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; to: '/invite' | '/partners' | '/admin' }[] = [
+    { icon: 'gift-outline', label: 'Invite friends', value: '+10 GB each', to: '/invite' },
+    { icon: 'trending-up-outline', label: 'Affiliate program', value: '50%', to: '/partners' },
     ...(admin ? [{ icon: 'shield-checkmark-outline' as const, label: 'Admin', to: '/admin' as const }] : []),
   ];
   return (
@@ -183,11 +213,7 @@ function EarnSection({ signedIn }: { signedIn: boolean }) {
       {rows.map((r, i) => (
         <View key={r.to}>
           {i > 0 && <View style={styles.divider} />}
-          <Pressable style={styles.rowButton} onPress={() => router.push((signedIn ? r.to : '/signin') as Href)}>
-            <Ionicons name={r.icon} size={18} color={colors.accent} />
-            <Text style={[styles.rowButtonText, { flex: 1 }]}>{r.label}</Text>
-            <Ionicons name="chevron-forward" size={16} color="#555" />
-          </Pressable>
+          <LinkRow icon={r.icon} label={r.label} value={r.value} valueColor={palette.accent} onPress={() => router.push((signedIn ? r.to : '/signin') as Href)} />
         </View>
       ))}
     </Section>
@@ -243,11 +269,7 @@ function ComputersSection() {
   };
   return (
     <>
-      <Pressable style={styles.rowButton} onPress={() => router.push('/scan')}>
-        <Ionicons name="qr-code-outline" size={18} color={colors.accent} />
-        <Text style={[styles.rowButtonText, { flex: 1 }]}>Link a computer</Text>
-        <Ionicons name="chevron-forward" size={16} color="#555" />
-      </Pressable>
+      <LinkRow icon="qr-code-outline" label="Link a computer" value="Scan QR" onPress={() => router.push('/scan')} />
       {browsers?.map((b) => (
         <View key={b.id}>
           <View style={styles.divider} />
@@ -283,7 +305,11 @@ export default function SettingsScreen() {
   const livePolicy = useStore((s) => s.settings.liveUpload);
   const cellular = useStore((s) => s.cellular);
 
+  const lens = useStore((s) => s.storage?.lens);
   const usedPct = usage ? Math.min(1, usage.usedBytes / usage.quotaBytes) : 0;
+  // Recent (newest, fastest storage) then Saver, as on the Storage screen.
+  const recentPct = lens && usage ? Math.min(usedPct, lens.recentBytes / usage.quotaBytes) : usedPct;
+  const saverPct = Math.max(0, usedPct - recentPct);
 
   // Fresh free-space reading (and a guardian pass) whenever Settings opens.
   useEffect(() => {
@@ -305,60 +331,77 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.fill, { paddingTop: insets.top || 12 }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>{isWeb ? 'Account' : 'Settings'}</Text>
+        <Text style={typeStyle.largeTitle}>{isWeb ? 'Account' : 'Settings'}</Text>
         <Pressable onPress={() => router.back()} hitSlop={10} style={{ minHeight: 44, justifyContent: 'center' }}>
           <Text style={styles.done}>Done</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
-        <View style={styles.identity}>
-          <Image source={mark} style={{ width: 72, height: 72 }} contentFit="contain" />
+        {/* Design A: who you are + your space, in one card. */}
+        <View style={styles.accountCard}>
           {identity ? (
-            <>
-              <Text style={styles.muted}>You are</Text>
-              <Pressable
-                onPress={() => Clipboard.setStringAsync(identity.name).then(() => notify('Name copied'))}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-              >
-                <Text style={styles.name}>{identity.name}</Text>
-                <Ionicons name="copy-outline" size={16} color={colors.muted} />
-              </Pressable>
-              <Text style={[styles.muted, { textAlign: 'center' }]}>Friends can find you by this name to send you photos.</Text>
-            </>
+            <Pressable
+              onPress={() => identity.name && Clipboard.setStringAsync(identity.name).then(() => notify('Name copied', 'Friends can find you by this name to send you photos.'))}
+              style={styles.accountRow}
+              accessibilityLabel={`You are ${identity.name}. Tap to copy your name`}
+            >
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials(identity.name || identity.email)}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {identity.name || identity.email || 'Lens'}
+                </Text>
+                <Text style={styles.muted} numberOfLines={1}>
+                  {identity.email ?? 'Guest · photos tied to this phone'}
+                </Text>
+              </View>
+              <Ionicons name="copy-outline" size={16} color={palette.dim} />
+            </Pressable>
           ) : (
             <Text style={styles.muted}>{online ? 'Setting up your cloud identity…' : 'Connect to the internet to set up your cloud identity.'}</Text>
           )}
+          <View style={styles.spaceRow}>
+            <Text style={styles.spaceBig}>
+              {usage ? formatGB(usage.usedBytes) : '—'}
+              <Text style={styles.spaceOf}>{usage ? `  of ${formatGB(usage.quotaBytes)}` : ''}</Text>
+            </Text>
+            {identity && (
+              <Pressable onPress={() => router.push((identity.email ? '/invite' : '/signin') as Href)} hitSlop={8}>
+                <Text style={styles.link}>{identity.email ? 'Get +10 GB' : 'Get 100 GB free'}</Text>
+              </Pressable>
+            )}
+          </View>
+          <View style={styles.bar}>
+            <View style={[styles.barFill, { width: `${recentPct * 100}%` }]} />
+            <View style={[styles.barFill, { width: `${saverPct * 100}%`, backgroundColor: palette.cloud }]} />
+          </View>
+          {lens && lens.usedBytes > 0 && (
+            <View style={styles.legend}>
+              <Text style={styles.legendText}>
+                <Text style={{ color: palette.link }}>●</Text> Recent {formatGB(Math.min(lens.usedBytes, lens.recentBytes))}
+              </Text>
+              {lens.usedBytes > lens.recentBytes && (
+                <Text style={styles.legendText}>
+                  <Text style={{ color: palette.cloud }}>●</Text> Saver {formatGB(lens.usedBytes - lens.recentBytes)}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
-        {!isWeb && <AccountSection />}
-
-        <Section title="Storage">
-          <View style={{ padding: 16 }}>
-            <View style={styles.bar}>
-              <View style={[styles.barFill, { width: `${usedPct * 100}%` }]} />
+        {identity && (
+          <View style={styles.section}>
+            <View style={styles.card}>
+              <LinkRow icon="cloud-outline" label="Storage" value="Lens & your own" onPress={() => router.push('/storage')} />
+              <View style={styles.divider} />
+              <LinkRow icon="trash-outline" label="Trash & Archive" onPress={() => router.push('/trash')} />
             </View>
-            <Text style={[styles.muted, { marginTop: 8 }]}>
-              {usage ? `${formatBytes(usage.usedBytes)} of ${formatBytes(usage.quotaBytes)} used` : 'Loading…'}
-            </Text>
           </View>
-          {identity && (
-            <>
-              <View style={styles.divider} />
-              <Pressable style={styles.rowButton} onPress={() => router.push('/storage')}>
-                <Ionicons name="server-outline" size={18} color={colors.accent} />
-                <Text style={[styles.rowButtonText, { flex: 1 }]}>Storage: Lens & your own</Text>
-                <Ionicons name="chevron-forward" size={16} color="#555" />
-              </Pressable>
-              <View style={styles.divider} />
-              <Pressable style={styles.rowButton} onPress={() => router.push('/trash')}>
-                <Ionicons name="trash-outline" size={18} color={colors.accent} />
-                <Text style={[styles.rowButtonText, { flex: 1 }]}>Trash & Archive</Text>
-                <Ionicons name="chevron-forward" size={16} color="#555" />
-              </Pressable>
-            </>
-          )}
-        </Section>
+        )}
+
+        {!isWeb && <AccountSection />}
 
         {identity && <EarnSection signedIn={!!identity.email} />}
 
@@ -411,19 +454,15 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.divider} />
               <Pressable style={styles.rowButton} onPress={onFreeUp} disabled={!local.freeableCount}>
-                <Ionicons name="trash-bin-outline" size={18} color={local.freeableCount ? colors.accent : '#555'} />
-                <Text style={[styles.rowButtonText, !local.freeableCount && { color: '#555' }]}>
+                <Ionicons name="trash-bin-outline" size={18} color={local.freeableCount ? palette.link : '#636366'} />
+                <Text style={[styles.rowButtonText, !local.freeableCount && { color: '#636366' }]}>
                   Free up space now{local.freeableCount ? ` (${formatBytes(local.freeable)})` : ''}
                 </Text>
               </Pressable>
               {Platform.OS === 'android' && isProCameraAvailable && (
                 <>
                   <View style={styles.divider} />
-                  <Pressable style={styles.rowButton} onPress={() => router.push('/camera-info')}>
-                    <Ionicons name="hardware-chip-outline" size={18} color={colors.accent} />
-                    <Text style={[styles.rowButtonText, { flex: 1 }]}>Camera info</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#555" />
-                  </Pressable>
+                  <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
                 </>
               )}
             </Section>
@@ -516,42 +555,50 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  done: { color: colors.accent, fontSize: 17, fontWeight: '600' },
-  identity: { alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 24 },
-  name: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  muted: { color: colors.muted, fontSize: 14 },
-  section: { marginTop: 20, paddingHorizontal: 16 },
-  sectionTitle: { color: '#888', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 },
-  card: { backgroundColor: '#1C1C1E', borderRadius: 14, overflow: 'hidden' },
-  footer: { color: '#777', fontSize: 12, marginTop: 8, marginHorizontal: 4, lineHeight: 17 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, minHeight: 48 },
-  rowLabel: { color: '#fff', fontSize: 15 },
-  rowValue: { color: colors.muted, fontSize: 15 },
-  rowButton: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, minHeight: 48 },
-  rowButtonText: { color: colors.accent, fontSize: 15, fontWeight: '500' },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#333', marginLeft: 16 },
-  bar: { height: 8, borderRadius: 4, backgroundColor: '#333', overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: colors.brand },
+  fill: { flex: 1, backgroundColor: palette.bg },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, minHeight: 56 },
+  done: { color: palette.link, fontSize: 17, fontWeight: '500' },
+  accountCard: { marginTop: 12, marginHorizontal: 16, backgroundColor: palette.surface, borderRadius: 20, padding: 18 },
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: palette.surface2, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: palette.text, fontSize: 18, fontWeight: '700' },
+  name: { color: palette.text, fontSize: 17, fontWeight: '600' },
+  spaceRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 18 },
+  spaceBig: { color: palette.text, fontSize: 30, fontWeight: '700', letterSpacing: -0.8 },
+  spaceOf: { color: palette.muted, fontSize: 15, fontWeight: '500', letterSpacing: 0 },
+  legend: { flexDirection: 'row', gap: 16, marginTop: 10 },
+  legendText: { color: palette.muted, fontSize: 12 },
+  muted: { color: palette.muted, fontSize: 13, marginTop: 2 },
+  section: { marginTop: 22, paddingHorizontal: 16 },
+  sectionTitle: { color: palette.muted, fontSize: 13, fontWeight: '600', marginBottom: 8, marginLeft: 4 },
+  card: { backgroundColor: palette.surface, borderRadius: 20, overflow: 'hidden' },
+  footer: { color: palette.dim, fontSize: 12, marginTop: 8, marginHorizontal: 4, lineHeight: 17 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 52 },
+  rowLabel: { color: palette.text, fontSize: 16 },
+  rowValue: { color: palette.muted, fontSize: 14, flexShrink: 1, textAlign: 'right' },
+  rowButton: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 52 },
+  rowButtonText: { color: palette.link, fontSize: 16 },
+  pressed: { backgroundColor: palette.surface2 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: palette.surface2, marginLeft: 16 },
+  bar: { flexDirection: 'row', height: 6, borderRadius: 3, backgroundColor: palette.surface2, overflow: 'hidden', marginTop: 10 },
+  barFill: { height: '100%', backgroundColor: palette.link },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16, paddingTop: 10 },
-  chip: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#2C2C2E' },
-  chipOn: { backgroundColor: colors.accent },
-  chipText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  chipTextOn: { color: '#000', fontWeight: '700' },
+  chip: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: palette.surface2 },
+  chipOn: { backgroundColor: palette.text },
+  chipText: { color: palette.soft, fontSize: 14, fontWeight: '500' },
+  chipTextOn: { color: '#000', fontWeight: '600' },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: palette.action,
     margin: 16,
-    borderRadius: 12,
-    minHeight: 46,
+    borderRadius: 980,
+    minHeight: 48,
   },
-  buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
-  link: { color: '#60A5FA', fontSize: 16, fontWeight: '600', marginTop: 4 },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  link: { color: palette.link, fontSize: 14, fontWeight: '500' },
   code: { color: '#fff', fontSize: 36, fontWeight: '800', letterSpacing: 4, marginVertical: 8, fontVariant: ['tabular-nums'] },
-  buildLabel: { color: '#666', fontSize: 12, textAlign: 'center', marginTop: 28, marginBottom: 8 },
+  buildLabel: { color: palette.dim, fontSize: 10, fontFamily: font.mono, letterSpacing: 1, textTransform: 'uppercase', textAlign: 'center', marginTop: 28, marginBottom: 8 },
 });

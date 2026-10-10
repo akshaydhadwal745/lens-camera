@@ -3,7 +3,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
@@ -43,7 +44,7 @@ export default function ApproveSignIn() {
 
   return (
     <View style={[styles.fill, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-      <Ionicons name="desktop-outline" size={56} color={colors.accent} style={{ alignSelf: 'center' }} />
+      <Ionicons name="desktop-outline" size={56} color={colors.link} style={{ alignSelf: 'center' }} />
       <Text style={styles.title}>Sign in on a computer?</Text>
       {!identity ? (
         <Text style={styles.body}>Open Lens and sign in first, then scan the code again.</Text>
@@ -66,7 +67,7 @@ export default function ApproveSignIn() {
             Only approve a code shown on a screen in front of you. Never approve a code someone sent you.
           </Text>
           <Pressable style={[styles.button, styles.approve]} onPress={() => answer(true)} disabled={busy} accessibilityRole="button">
-            {busy ? <ActivityIndicator color="#000" /> : <Text style={styles.approveText}>Approve</Text>}
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.approveText}>Approve</Text>}
           </Pressable>
           <Pressable style={[styles.button, styles.deny]} onPress={() => answer(false)} disabled={busy} accessibilityRole="button">
             <Text style={styles.denyText}>Deny</Text>
@@ -85,15 +86,15 @@ export default function ApproveSignIn() {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000', paddingHorizontal: 24 },
   title: { color: '#fff', fontSize: 24, fontWeight: '800', textAlign: 'center', marginTop: 16 },
-  body: { color: '#ccc', fontSize: 16, textAlign: 'center', marginTop: 16, lineHeight: 23 },
-  error: { color: '#FCA5A5' },
-  card: { backgroundColor: '#111827', borderRadius: 16, padding: 20, marginTop: 24, alignItems: 'center' },
+  body: { color: '#E8E8ED', fontSize: 16, textAlign: 'center', marginTop: 16, lineHeight: 23 },
+  error: { color: '#FF453A' },
+  card: { backgroundColor: '#1C1C1E', borderRadius: 16, padding: 20, marginTop: 24, alignItems: 'center' },
   browser: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  muted: { color: '#94A3B8', fontSize: 15, marginTop: 4 },
-  warn: { color: '#FCD34D', fontSize: 14, textAlign: 'center', marginTop: 16, lineHeight: 20 },
+  muted: { color: '#A1A1A6', fontSize: 15, marginTop: 4 },
+  warn: { color: '#FACC15', fontSize: 14, textAlign: 'center', marginTop: 16, lineHeight: 20 },
   button: { minHeight: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
-  approve: { backgroundColor: colors.accent, marginTop: 'auto' },
-  approveText: { color: '#000', fontWeight: '800', fontSize: 17 },
-  deny: { borderWidth: 1, borderColor: '#333' },
+  approve: { backgroundColor: colors.action, marginTop: 'auto' },
+  approveText: { color: '#fff', fontWeight: '600', fontSize: 17 },
+  deny: { borderWidth: 1, borderColor: '#2C2C2E' },
   denyText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

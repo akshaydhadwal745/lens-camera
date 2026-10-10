@@ -4,11 +4,13 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoSource, VideoView } from 'expo-video';
 import { ComponentProps, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, LayoutChangeEvent, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, LayoutChangeEvent, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatDate, formatDuration } from '@/lib/format';
+import { font, glass, palette } from '@/lib/theme';
 import { providerInfo } from '@/lib/storage/providers';
 import type { MediaSource } from '@/lib/storage/types';
 import { useOriginal } from '@/lib/storage/useOriginal';
@@ -219,15 +221,15 @@ export default function PlayerScreen() {
 
       {controls && (
         <>
-          <View style={[styles.top, { paddingTop: insets.top + 4, paddingLeft: insets.left + 8, paddingRight: insets.right + 8 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconButton} accessibilityLabel="Close player">
-              <Ionicons name="chevron-back" size={28} color="#fff" />
+          <View style={[styles.top, { paddingTop: insets.top + 8, paddingLeft: insets.left + 16, paddingRight: insets.right + 16 }]} pointerEvents="box-none">
+            <Pressable onPress={() => router.back()} hitSlop={6} style={styles.glassCircle} accessibilityLabel="Close player">
+              <Ionicons name="chevron-back" size={24} color={palette.text} />
             </Pressable>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={styles.title}>{formatDate(item.createdAt)}</Text>
-              {stream.preparing && <Text style={styles.sub}>Preparing smooth playback for next time…</Text>}
+            <View style={styles.infoPill}>
+              <Text style={styles.title} numberOfLines={1}>{formatDate(item.createdAt)}</Text>
+              {stream.preparing && <Text style={styles.sub} numberOfLines={1}>Preparing smooth playback for next time…</Text>}
             </View>
-            <View style={styles.iconButton}>{quality && <Text style={styles.quality}>{quality}</Text>}</View>
+            {quality && <Text style={styles.quality}>{quality}</Text>}
           </View>
 
           {!loading && hasSource && (
@@ -245,7 +247,7 @@ export default function PlayerScreen() {
             </View>
           )}
 
-          <View style={[styles.bottom, { paddingBottom: insets.bottom + 12, paddingLeft: insets.left + 16, paddingRight: insets.right + 16 }]}>
+          <View style={[styles.bottom, { bottom: insets.bottom + 16, left: insets.left + 16, right: insets.right + 16 }]}>
             <View style={styles.timeRow}>
               <Text style={styles.time}>{formatDuration(shownTime)}</Text>
               <GestureDetector gesture={scrub}>
@@ -273,7 +275,7 @@ export default function PlayerScreen() {
                 style={styles.tool}
                 accessibilityLabel={muted ? 'Unmute' : 'Mute'}
               >
-                <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={22} color="#fff" />
+                <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={22} color={palette.text} />
               </Pressable>
               <Pressable onPress={cycleSpeed} style={styles.tool} accessibilityLabel={`Speed ${playbackRate}x`}>
                 <Text style={styles.speed}>{playbackRate}×</Text>
@@ -307,9 +309,10 @@ function RoundButton({
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  message: { color: '#ccc', fontSize: 15, textAlign: 'center', paddingHorizontal: 24 },
+  message: { color: '#E8E8ED', fontSize: 15, textAlign: 'center', paddingHorizontal: 24 },
   textButton: { marginTop: 16, paddingHorizontal: 16, paddingVertical: 10 },
-  textButtonLabel: { color: '#FACC15', fontSize: 15, fontWeight: '600' },
+  textButtonLabel: { color: palette.link, fontSize: 15, fontWeight: '600' },
+  // Design B: glass controls over the video.
   top: {
     position: 'absolute',
     top: 0,
@@ -317,53 +320,63 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    gap: 8,
   },
-  iconButton: { width: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  sub: { color: '#aaa', fontSize: 12, marginTop: 2 },
+  glassCircle: { ...glass, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  infoPill: { ...glass, flexShrink: 1, minHeight: 48, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 24, justifyContent: 'center' },
+  title: { color: palette.text, fontSize: 14, fontWeight: '600' },
+  sub: { color: '#C8C8CC', fontSize: 11, marginTop: 1 },
   quality: {
+    marginLeft: 'auto',
     color: '#000',
-    backgroundColor: '#fff',
+    backgroundColor: palette.text,
     fontSize: 11,
-    fontWeight: '800',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    fontFamily: font.monoSemibold,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 36 },
   round: {
+    ...glass,
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   roundBig: { width: 76, height: 76, borderRadius: 38 },
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 12, backgroundColor: 'rgba(0,0,0,0.45)' },
+  bottom: {
+    ...glass,
+    backgroundColor: 'rgba(18,18,20,0.62)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    position: 'absolute',
+    borderRadius: 28,
+    paddingTop: 10,
+    paddingBottom: 4,
+    paddingHorizontal: 14,
+  },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  time: { color: '#fff', fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'], minWidth: 40, textAlign: 'center' },
+  time: { color: palette.text, fontSize: 12, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], minWidth: 40, textAlign: 'center' },
   track: { flex: 1, height: 28, justifyContent: 'center' },
-  trackBg: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', overflow: 'hidden' },
-  trackFill: { height: '100%', backgroundColor: '#FACC15' },
-  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, marginLeft: -7, backgroundColor: '#FACC15' },
+  trackBg: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
+  trackFill: { height: '100%', backgroundColor: palette.text },
+  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, marginLeft: -7, backgroundColor: palette.text },
   thumbActive: { width: 20, height: 20, borderRadius: 10, marginLeft: -10 },
-  toolRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  toolRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   tool: { minWidth: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  speed: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  speed: { color: palette.text, fontSize: 14, fontFamily: font.monoSemibold },
   skipHint: {
+    ...glass,
     position: 'absolute',
     top: '45%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  skipText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  skipText: { color: palette.text, fontSize: 14, fontFamily: font.monoSemibold },
 });

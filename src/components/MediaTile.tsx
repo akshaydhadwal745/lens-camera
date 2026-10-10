@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { formatDuration } from '@/lib/format';
+import { font } from '@/lib/theme';
 import { useStore } from '@/lib/store';
 import { displayUri, GalleryItem } from '@/lib/types';
 
@@ -13,6 +15,8 @@ type Props = {
   selecting: boolean;
   selected: boolean;
   showOwner?: boolean;
+  /** Frame number on the roll (#2412), shown bottom-left. */
+  frame?: number;
   onPress: (item: GalleryItem) => void;
   onLongPress: (item: GalleryItem) => void;
   /** Finger down: a strong hint it's about to open (preloading starts here). */
@@ -44,7 +48,7 @@ function SyncBadge({ item }: { item: GalleryItem }) {
     // Visible everywhere already; the full-quality original is still on its way.
     return (
       <View style={[styles.badge, styles.badgeQuiet]}>
-        <Ionicons name="cloud-upload-outline" size={12} color="#93C5FD" />
+        <Ionicons name="cloud-upload-outline" size={12} color="#2997FF" />
       </View>
     );
   }
@@ -58,14 +62,14 @@ function SyncBadge({ item }: { item: GalleryItem }) {
   }
   if (item.sync === 'failed') {
     return (
-      <View style={[styles.badge, { backgroundColor: '#DC2626' }]}>
+      <View style={[styles.badge, { backgroundColor: '#FF453A' }]}>
         <Ionicons name="alert" size={12} color="#fff" />
       </View>
     );
   }
   if (item.sync === 'uploading') {
     return (
-      <View style={[styles.badge, { backgroundColor: '#2563EB' }]}>
+      <View style={[styles.badge, { backgroundColor: '#0071E3' }]}>
         <Text style={styles.badgeText}>{Math.round((progress ?? 0) * 100)}%</Text>
       </View>
     );
@@ -77,7 +81,7 @@ function SyncBadge({ item }: { item: GalleryItem }) {
   );
 }
 
-export const MediaTile = memo(function MediaTile({ item, size, selecting, selected, showOwner, onPress, onLongPress, onPressIn }: Props) {
+export const MediaTile = memo(function MediaTile({ item, size, selecting, selected, showOwner, frame, onPress, onLongPress, onPressIn }: Props) {
   const uri = displayUri(item);
   return (
     <Pressable
@@ -87,7 +91,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
       accessibilityRole="button"
       accessibilityLabel={`${item.kind === 'video' ? 'Video' : 'Photo'}${item.ownerName ? ` from ${item.ownerName}` : ''}`}
       accessibilityState={{ selected }}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, borderRadius: 4, overflow: 'hidden' }}
     >
       {uri ? (
         <Image source={{ uri }} style={styles.image} contentFit="cover" transition={150} recyclingKey={item.id} cachePolicy="memory-disk" />
@@ -103,6 +107,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
       )}
 
       {item.kind === 'video' && item.duration != null && <Text style={styles.duration}>{formatDuration(item.duration)}</Text>}
+      {frame != null && !selecting && <Text style={styles.frame}>#{frame}</Text>}
       {showOwner && item.ownerName && (
         <Text style={styles.owner} numberOfLines={1}>
           {item.ownerName}
@@ -122,16 +127,26 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
 });
 
 const styles = StyleSheet.create({
-  image: { width: '100%', height: '100%', backgroundColor: '#111' },
-  videoTile: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#1c1c1e' },
+  image: { width: '100%', height: '100%', backgroundColor: '#1C1C1E' },
+  videoTile: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#1C1C1E' },
   playOverlay: { alignItems: 'center', justifyContent: 'center' },
   duration: {
     position: 'absolute',
     right: 6,
     bottom: 4,
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontFamily: font.monoMedium,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 3,
+  },
+  frame: {
+    position: 'absolute',
+    left: 5,
+    bottom: 4,
+    color: '#F5F5F7',
+    fontSize: 10,
+    fontFamily: font.mono,
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowRadius: 3,
   },
@@ -159,9 +174,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   barTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, backgroundColor: 'rgba(0,0,0,0.5)' },
-  barFill: { height: '100%', backgroundColor: '#3B82F6' },
+  barFill: { height: '100%', backgroundColor: '#0071E3' },
   badgeQuiet: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  badgeText: { color: '#fff', fontSize: 9, fontFamily: font.monoSemibold },
   check: {
     position: 'absolute',
     left: 6,

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 type Props = {
   icon: ComponentProps<typeof Ionicons>['name'];
@@ -23,7 +24,7 @@ export function IconButton({ icon, onPress, label, active, size = 24, disabled, 
       style={({ pressed }) => [styles.button, pressed && styles.pressed, disabled && styles.disabled]}
     >
       <View style={styles.inner}>
-        <Ionicons name={icon} size={size} color={active ? '#FFD60A' : '#fff'} />
+        <Ionicons name={icon} size={size} color={active ? '#FACC15' : '#fff'} />
         {label ? <Text style={[styles.label, active && styles.activeLabel]}>{label}</Text> : null}
       </View>
     </Pressable>
@@ -43,5 +44,5 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.5 },
   disabled: { opacity: 0.3 },
   label: { color: '#fff', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  activeLabel: { color: '#FFD60A' },
+  activeLabel: { color: '#FACC15' },
 });

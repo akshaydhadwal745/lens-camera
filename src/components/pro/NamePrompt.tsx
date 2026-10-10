@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 
 /** Asks for a short name. Works on Android too (Alert.prompt is iOS-only). */
 export function NamePrompt({
@@ -30,7 +31,7 @@ export function NamePrompt({
             autoFocus
             maxLength={40}
             placeholder="Name"
-            placeholderTextColor="#777"
+            placeholderTextColor="#86868B"
             returnKeyType="done"
             onSubmitEditing={submit}
             style={styles.input}
@@ -53,7 +54,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: { width: '100%', maxWidth: 360, backgroundColor: '#1C1C1E', borderRadius: 16, padding: 20 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  message: { color: '#aaa', fontSize: 13, marginTop: 6 },
+  message: { color: '#A1A1A6', fontSize: 13, marginTop: 6 },
   input: {
     marginTop: 14,
     backgroundColor: '#2C2C2E',
@@ -65,6 +66,6 @@ const styles = StyleSheet.create({
   },
   buttons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 16 },
   button: { minHeight: 36, justifyContent: 'center' },
-  cancel: { color: '#aaa', fontSize: 16 },
+  cancel: { color: '#A1A1A6', fontSize: 16 },
   save: { color: '#FACC15', fontSize: 16, fontWeight: '700' },
 });

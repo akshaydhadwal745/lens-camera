@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 const mark = require('../../assets/splash-icon.png');
 const useNativeDriver = Platform.OS !== 'web';
@@ -57,6 +58,7 @@ export function BrandIntro({ done, onFinished }: { done: boolean; onFinished: ()
 const styles = StyleSheet.create({
   root: { backgroundColor: '#0B1020', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   mark: { width: 200, height: 200 },
-  title: { color: '#fff', fontSize: 34, fontWeight: '800', letterSpacing: 1, textAlign: 'center', marginTop: -16 },
-  tagline: { color: '#94A3B8', fontSize: 14, textAlign: 'center', marginTop: 6 },
+  // Matches the native splash background (app.json) so there's no flash; the type is the Keynote wordmark.
+  title: { color: '#F5F5F7', fontSize: 40, fontWeight: '700', letterSpacing: -1.5, textAlign: 'center', marginTop: -16 },
+  tagline: { color: '#A1A1A6', fontSize: 15, textAlign: 'center', marginTop: 6 },
 });

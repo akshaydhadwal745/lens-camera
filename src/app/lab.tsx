@@ -6,7 +6,8 @@
 import { router } from 'expo-router';
 import { File } from 'expo-file-system';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Capabilities, cameraDeviceReport, LensCameraHandle, LensCameraView } from '../../modules/lens-camera';
@@ -258,7 +259,7 @@ export default function QualityLabScreen() {
           value={note}
           onChangeText={setNote}
           placeholder="Note (optional): what's in the scene"
-          placeholderTextColor="#666"
+          placeholderTextColor="#636366"
           style={styles.input}
         />
         <Pressable onPress={capture} disabled={!report || busy != null} style={[styles.primary, (!report || busy != null) && { opacity: 0.4 }]}>
@@ -276,7 +277,7 @@ export default function QualityLabScreen() {
             </Text>
             {set.note ? <Text style={styles.muted}>{set.note}</Text> : null}
             {set.steps.map((s) => (
-              <Text key={s.id} style={[styles.step, s.error ? { color: '#f87' } : null]}>
+              <Text key={s.id} style={[styles.step, s.error ? { color: '#FF453A' } : null]}>
                 {s.error ? '✗' : '✓'} {s.label}
                 {s.error ? ` — ${s.error}` : ` · ${s.files.length} file${s.files.length === 1 ? '' : 's'} · ${(s.durationMs / 1000).toFixed(1)} s`}
               </Text>
@@ -302,7 +303,7 @@ export default function QualityLabScreen() {
                 disabled={busy != null}
                 style={styles.secondary}
               >
-                <Text style={[styles.secondaryText, { color: '#f87' }]}>Delete</Text>
+                <Text style={[styles.secondaryText, { color: '#FF453A' }]}>Delete</Text>
               </Pressable>
             </View>
           </View>
@@ -316,26 +317,26 @@ const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
-  headerText: { color: colors.accent, fontSize: 17 },
+  headerText: { color: colors.link, fontSize: 17 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  preview: { width: '100%', aspectRatio: 3 / 4, maxHeight: '50%', backgroundColor: '#111', overflow: 'hidden' },
+  preview: { width: '100%', aspectRatio: 3 / 4, maxHeight: '50%', backgroundColor: '#1C1C1E', overflow: 'hidden' },
   busy: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 10, backgroundColor: 'rgba(0,0,0,0.7)', flexDirection: 'row', gap: 8, alignItems: 'center' },
   busyText: { color: '#fff', fontSize: 13, flex: 1 },
-  muted: { color: '#999', fontSize: 12, marginTop: 8 },
+  muted: { color: '#86868B', fontSize: 12, marginTop: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: '#1c1c1e' },
-  chipOn: { backgroundColor: colors.accent },
-  chipText: { color: '#ddd', fontSize: 13 },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: '#1C1C1E' },
+  chipOn: { backgroundColor: colors.text },
+  chipText: { color: '#E8E8ED', fontSize: 13 },
   chipTextOn: { color: '#000', fontWeight: '600' },
-  input: { marginTop: 12, backgroundColor: '#151517', color: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
-  primary: { marginTop: 14, backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  primaryText: { color: '#000', fontSize: 16, fontWeight: '700' },
-  error: { color: '#f87', marginTop: 10, fontSize: 13 },
-  card: { backgroundColor: '#151517', borderRadius: 12, padding: 14, marginTop: 14 },
+  input: { marginTop: 12, backgroundColor: '#1C1C1E', color: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  primary: { marginTop: 14, backgroundColor: colors.action, borderRadius: 980, paddingVertical: 14, alignItems: 'center' },
+  primaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  error: { color: '#FF453A', marginTop: 10, fontSize: 13 },
+  card: { backgroundColor: '#1C1C1E', borderRadius: 20, padding: 14, marginTop: 14 },
   cardTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  step: { color: '#ccc', fontSize: 12, marginTop: 4 },
+  step: { color: '#E8E8ED', fontSize: 12, marginTop: 4 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10, alignItems: 'center' },
-  secondary: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#222' },
-  secondaryText: { color: colors.accent, fontSize: 13, fontWeight: '600' },
-  done: { color: '#7d7', fontSize: 12 },
+  secondary: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#2C2C2E' },
+  secondaryText: { color: colors.link, fontSize: 13, fontWeight: '600' },
+  done: { color: '#30D158', fontSize: 12 },
 });

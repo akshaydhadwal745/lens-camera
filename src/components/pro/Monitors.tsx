@@ -1,6 +1,7 @@
 import { Accelerometer } from 'expo-sensors';
 import { memo, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import type { AnalysisResult } from '../../../modules/lens-camera';
 import type { Grid, Guide } from '@/lib/pro-camera';
@@ -18,8 +19,8 @@ export const Histogram = memo(function Histogram({ data }: { data: AnalysisResul
         ))}
       </View>
       <View style={styles.clipRow}>
-        <View style={[styles.clip, lowWarn && { backgroundColor: '#3B82F6' }]} />
-        <View style={[styles.clip, highWarn && { backgroundColor: '#EF4444' }]} />
+        <View style={[styles.clip, lowWarn && { backgroundColor: '#0071E3' }]} />
+        <View style={[styles.clip, highWarn && { backgroundColor: '#FF453A' }]} />
       </View>
     </View>
   );

@@ -1,5 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
+import { palette } from './theme';
+
 const isWeb = Platform.OS === 'web';
 
 export function notify(title: string, message?: string) {
@@ -46,13 +48,18 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Older screens use these names; values follow the design language in theme.ts. */
 export const colors = {
-  bg: '#000',
-  surface: '#111827',
-  border: '#1F2937',
-  text: '#fff',
-  muted: '#94A3B8',
-  accent: '#FACC15',
-  brand: '#2563EB',
-  danger: '#EF4444',
+  bg: palette.bg,
+  surface: palette.surface,
+  border: palette.surface2,
+  text: palette.text,
+  muted: palette.muted,
+  accent: palette.accent,
+  brand: palette.action,
+  /** Links, text buttons, icons that do something. */
+  link: palette.link,
+  /** Primary buttons (blue pill, white text). */
+  action: palette.action,
+  danger: palette.danger,
 };

@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api, Referrals } from '@/lib/api';
@@ -67,7 +68,7 @@ export default function InviteScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
         {error ? (
           <View style={styles.hero}>
-            <Ionicons name="gift-outline" size={44} color={colors.accent} />
+            <Ionicons name="gift-outline" size={44} color={colors.link} />
             <Text style={styles.heroTitle}>Get +10 GB for every friend</Text>
             <Text style={styles.muted}>{error}</Text>
             {/sign in/i.test(error) && (
@@ -77,11 +78,11 @@ export default function InviteScreen() {
             )}
           </View>
         ) : !data ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
+          <ActivityIndicator color={colors.link} style={{ marginTop: 48 }} />
         ) : (
           <>
             <View style={styles.hero}>
-              <Ionicons name="gift-outline" size={44} color={colors.accent} />
+              <Ionicons name="gift-outline" size={44} color={colors.link} />
               <Text style={styles.heroTitle}>+{reward} for every friend</Text>
               <Text style={[styles.muted, { textAlign: 'center' }]}>
                 Share your link. When a friend installs Lens and signs in on their phone, you get {reward} more storage, for good.
@@ -92,7 +93,7 @@ export default function InviteScreen() {
               </Text>
               <View style={styles.buttons}>
                 <Pressable style={[styles.button, { flex: 1 }]} onPress={share} accessibilityRole="button">
-                  <Ionicons name="share-outline" size={18} color="#000" />
+                  <Ionicons name="share-outline" size={18} color="#fff" />
                   <Text style={styles.buttonText}>Share link</Text>
                 </Pressable>
                 <Pressable style={[styles.button, styles.secondary, { flex: 1 }]} onPress={copy} accessibilityRole="button">
@@ -127,7 +128,7 @@ export default function InviteScreen() {
                           <Text style={styles.rowLabel}>{f.name}</Text>
                           <Text style={styles.small}>{STATE_TEXT[f.state]}</Text>
                         </View>
-                        {f.bytes > 0 && <Text style={[styles.rowValue, { color: colors.accent }]}>+{formatBytes(f.bytes)}</Text>}
+                        {f.bytes > 0 && <Text style={[styles.rowValue, { color: '#FACC15' }]}>+{formatBytes(f.bytes)}</Text>}
                       </View>
                     </View>
                   ))}
@@ -144,13 +145,13 @@ export default function InviteScreen() {
                     value={code}
                     onChangeText={setCode}
                     placeholder="Friend’s code"
-                    placeholderTextColor="#666"
+                    placeholderTextColor="#636366"
                     autoCapitalize="characters"
                     autoCorrect={false}
                     maxLength={12}
                   />
                   <Pressable style={[styles.button, { margin: 0, paddingHorizontal: 16 }]} onPress={claim} disabled={claiming || code.trim().length < 6}>
-                    {claiming ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Add</Text>}
+                    {claiming ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Add</Text>}
                   </Pressable>
                 </View>
                 <Text style={styles.footer}>You can add a code within 7 days of joining.</Text>
@@ -169,10 +170,10 @@ export default function InviteScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: '#0B0B0D' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  done: { color: colors.accent, fontSize: 17, fontWeight: '600' },
+  fill: { flex: 1, backgroundColor: '#000' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, minHeight: 56 },
+  title: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: -1 },
+  done: { color: colors.link, fontSize: 17, fontWeight: '600' },
   hero: { alignItems: 'center', gap: 10, padding: 24 },
   heroTitle: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' },
   muted: { color: colors.muted, fontSize: 14, lineHeight: 20 },
@@ -184,19 +185,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.action,
     marginTop: 12,
     borderRadius: 12,
     minHeight: 46,
   },
   secondary: { backgroundColor: '#2C2C2E' },
-  buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
-  sectionTitle: { color: '#888', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginTop: 20, marginBottom: 8, marginLeft: 20 },
-  card: { backgroundColor: '#1C1C1E', borderRadius: 14, overflow: 'hidden', marginHorizontal: 16 },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  sectionTitle: { color: '#86868B', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginTop: 20, marginBottom: 8, marginLeft: 20 },
+  card: { backgroundColor: '#1C1C1E', borderRadius: 20, overflow: 'hidden', marginHorizontal: 16 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, minHeight: 52, gap: 8 },
   rowLabel: { color: '#fff', fontSize: 15 },
   rowValue: { color: colors.muted, fontSize: 15 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#333', marginLeft: 16 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#2C2C2E', marginLeft: 16 },
   input: { flex: 1, color: '#fff', fontSize: 17, backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 12, minHeight: 46, letterSpacing: 2 },
-  footer: { color: '#777', fontSize: 12, marginTop: 10, marginHorizontal: 20, lineHeight: 17 },
+  footer: { color: '#86868B', fontSize: 12, marginTop: 10, marginHorizontal: 20, lineHeight: 17 },
 });
