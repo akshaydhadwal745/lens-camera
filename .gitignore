@@ -63,3 +63,8 @@ site/.astro/
 
 # OTA publish output
 dist-ota/
+
+# Quality R&D tooling
+research/.venv/
+research/quality/data/
+research/quality/out/
