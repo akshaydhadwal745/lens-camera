@@ -108,6 +108,24 @@ range with a Camera2 request option (no effect on size selection); the basic
 camera's patch no longer forces 30 fps. Guard: the bound photo size is logged
 and reported (`photoSize` in capabilities and Lab metadata).
 
+## Finding 2 (2026-10-10): first cross-device data (Test Lab Robo + diagnostics, dev-35)
+
+| Phone | Level | Photo saved / max JPEG | Preview | Preview path |
+|---|---|---|---|---|
+| Galaxy S24 (Android 16) | LEVEL_3 | 4080×3060 / 4080×3060 (100 %) | 1440×1080 | cameraTransform, st 90 |
+| realme C53 (Android 15) | LIMITED | 4080×3072 / 4080×3072 (100 %) | 960×720 | cameraTransform |
+| Pixel 8a (Android 14) | FULL | **4032×3024 / 4624×3472 (76 %)**, plain JPEG, bind attempt 0 | 1600×1200 | cameraTransform, st 90 (S8: 270) |
+| Galaxy A10, TECNO POP 7 | — | not installed: 32-bit only (needs Lens-32bit.apk) | | |
+
+- The full-resolution fix holds on Samsung and realme.
+- Pixel 8a: CameraX picks 12 MP although 16 MP is listed. Open question (sensor
+  mode? CameraX size rule?); Pixel's own camera also saves ~12.5 MP by default.
+  The self-test flags it (< 90 %) until explained.
+- The SurfaceTexture rotation differs per phone (S8 270°, Pixel/S24 90°): the
+  old α-based formula could never have been right everywhere; the CameraX rule is.
+- Test Lab phones sit in dark racks (ISO 7000+): screenshots can't judge the
+  preview visually; the self-test checks rotation via the camera's data.
+
 ## Built (2026-10-10, dev-33)
 
 - **Capability report** (`deviceReport`, Camera info screen): now also lists the
