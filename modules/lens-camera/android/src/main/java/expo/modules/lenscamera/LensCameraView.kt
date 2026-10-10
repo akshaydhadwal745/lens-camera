@@ -201,6 +201,18 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
 
+  fun takeBurst(frames: Int, promise: Promise) {
+    controller.takeBurst(frames) { result ->
+      result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
+    }
+  }
+
+  /** Thermal status (0 none … 6 shutdown; -1 before Android 10), for the Quality Lab. */
+  fun thermalStatus(): Int {
+    val power = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return -1
+    return if (android.os.Build.VERSION.SDK_INT >= 29) power.currentThermalStatus else -1
+  }
+
   private fun isHot(): Boolean {
     val power = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return false
     return android.os.Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= android.os.PowerManager.THERMAL_STATUS_SEVERE

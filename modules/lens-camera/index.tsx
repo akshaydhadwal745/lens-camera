@@ -39,7 +39,17 @@ export type Capabilities = {
   tier?: 'pro' | 'standard' | 'basic';
   /** Android 14+: Ultra HDR photos (JPEG with an HDR gain map). */
   ultraHdr?: boolean;
+  /** Android: the maker extension mode bound right now ("none" if none). */
+  extension?: LabExtension;
+  /** Android: format the photo use case was bound with. */
+  photoFormat?: 'jpeg' | 'ultraHdr' | 'raw';
 };
+
+export type LabExtension = 'none' | 'auto' | 'hdr' | 'night' | 'bokeh' | 'faceRetouch';
+
+/** One frame of a Quality Lab burst. */
+export type BurstFrame = { uri: string; ms: number; iso: number | null; exposureNs: number | null; focusDiopters: number | null };
+export type BurstResult = { frames: BurstFrame[]; raw: boolean; extension: LabExtension };
 
 export type CameraStats = {
   iso: number;
@@ -96,6 +106,10 @@ export type LensCameraProps = ViewProps & {
   raw?: boolean;
   /** Android: Ultra HDR photos where supported. */
   hdrPhoto?: boolean;
+  /** Android, Quality Lab only: bind a phone-maker extension mode in Photo mode. */
+  extension?: LabExtension;
+  /** Android, Quality Lab only: photo capture tuned for quality (default) or speed. */
+  captureMode?: 'quality' | 'latency';
   analysis: AnalysisSettings;
   onReady?: (e: NativeSyntheticEvent<Capabilities>) => void;
   onStats?: (e: NativeSyntheticEvent<CameraStats>) => void;
@@ -111,6 +125,10 @@ export type LensCameraHandle = {
   takePhoto(options: { raw: boolean; flash: 'off' | 'on' | 'auto' }): Promise<PhotoResult>;
   /** Night mode: burst of `frames`, aligned and merged on the device. */
   takeNightPhoto(frames: number): Promise<PhotoResult>;
+  /** Android, Quality Lab: `frames` shots kept as they are (no merge). */
+  takeBurst?(frames: number): Promise<BurstResult>;
+  /** Android, Quality Lab: thermal status 0 (none) … 6, or -1 if unknown. */
+  thermalStatus?(): Promise<number>;
   /** Resolves when recording stops. */
   startRecording(): Promise<VideoResult>;
   stopRecording(): Promise<void>;

@@ -1,5 +1,6 @@
 package expo.modules.lenscamera
 
+import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.Exceptions
@@ -31,13 +32,23 @@ class LensCameraModule : Module() {
     AsyncFunction("deviceReport") { promise: Promise ->
       val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
       val future = ProcessCameraProvider.getInstance(context)
+      val main = ContextCompat.getMainExecutor(context)
       future.addListener({
         try {
-          promise.resolve(DeviceProfile(context, future.get()).report())
+          val provider = future.get()
+          // With the maker's extensions (if the phone has any): which ones exist.
+          val ext = ExtensionsManager.getInstanceAsync(context, provider)
+          ext.addListener({
+            try {
+              promise.resolve(DeviceProfile(context, provider).report(runCatching { ext.get() }.getOrNull()))
+            } catch (e: Exception) {
+              promise.reject("ERR_CAMERA_INFO", e.message, e)
+            }
+          }, main)
         } catch (e: Exception) {
           promise.reject("ERR_CAMERA_INFO", e.message, e)
         }
-      }, ContextCompat.getMainExecutor(context))
+      }, main)
     }
 
     View(LensCameraView::class) {
@@ -70,6 +81,8 @@ class LensCameraModule : Module() {
       Prop("lensPosition") { view: LensCameraView, value: Double -> view.config = view.config.copy(lensPosition = value) }
       Prop("raw") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(raw = value) }
       Prop("hdrPhoto") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(hdrPhoto = value) }
+      Prop("extension") { view: LensCameraView, value: String -> view.config = view.config.copy(extension = value) }
+      Prop("captureMode") { view: LensCameraView, value: String -> view.config = view.config.copy(captureMode = value) }
       Prop("analysis") { view: LensCameraView, value: AnalysisProps ->
         view.analysis = AnalysisOptions(value.peaking, value.zebra, value.zebraLevel, value.falseColor, value.histogram)
       }
@@ -80,6 +93,14 @@ class LensCameraModule : Module() {
 
       AsyncFunction("takeNightPhoto") { view: LensCameraView, frames: Int, promise: Promise ->
         view.takeNightPhoto(frames, promise)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("takeBurst") { view: LensCameraView, frames: Int, promise: Promise ->
+        view.takeBurst(frames, promise)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("thermalStatus") { view: LensCameraView ->
+        view.thermalStatus()
       }.runOnQueue(Queues.MAIN)
 
       AsyncFunction("startRecording") { view: LensCameraView, promise: Promise ->

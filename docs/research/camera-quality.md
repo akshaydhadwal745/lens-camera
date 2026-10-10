@@ -87,6 +87,29 @@ Pick the tier order from the data: a pipeline is used on a phone only if it
 beats the single frame on noise and sharpness without blowing exposure, and
 stays under ~1.5 s and a small temperature rise. Document the results here.
 
+## Built (2026-10-10, dev-33)
+
+- **Capability report** (`deviceReport`, Camera info screen): now also lists the
+  maker's extension modes (CameraX and Camera2), noise-reduction and edge modes,
+  sensor orientation, chipset, and the largest JPEG / YUV / RAW size with its
+  maximum back-to-back rate. Opening Camera info or the Lab sends it anonymously
+  to `POST /v1/lab/probes` → `s3://<media bucket>/lab/probes/<maker_model>/<hash>.json`
+  (identical reports stored once; no account link). Not yet sent automatically
+  for every user (needs a privacy-policy line first).
+- **Quality Lab** (Settings → Camera info → Quality Lab, Android): "Capture set"
+  runs every pipeline the phone supports on the same scene, each after the camera
+  rebinds and settles 1.5 s:
+  single JPEG · single Ultra HDR (Android 14+) · burst ×8 quality capture ·
+  burst ×8 fast capture · RAW DNG burst ×6 (RAW phones) · maker AUTO / HDR /
+  NIGHT (where available) · today's Lens Night (8-frame merge).
+  Each step records files, per-frame time, ISO, exposure, focus, total time and
+  thermal status before/after. "Add reference" attaches the phone camera app's
+  photo of the same scene. Sets stay on the phone until uploaded
+  (`POST /v1/lab/sets` → `lab/sets/<setId>/`, Content-MD5 checked per file,
+  meta.json with the full device report).
+- Native: `CameraConfig.extension` / `captureMode` (lab-only props),
+  `takeBurst(frames)` (kept frames, no merge), `thermalStatus()`.
+
 ## Sources
 
 - Android camera extensions: https://developer.android.com/media/camera/camera-extensions , https://source.android.com/docs/core/camera/camerax-vendor-extensions

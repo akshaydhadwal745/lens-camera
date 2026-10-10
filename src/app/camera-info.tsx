@@ -26,6 +26,10 @@ type Camera = {
   fps?: string[];
   videoQualities?: string[];
   hdrVideo?: string[];
+  extensions?: string[] | null;
+  camera2Extensions?: string[] | null;
+  noiseReductionModes?: string[];
+  streams?: Record<string, { size: string; maxFps: number | null; stallMs: number } | null> | null;
 };
 
 type Report = {
@@ -107,8 +111,19 @@ export default function CameraInfoScreen() {
               {c.fps?.length ? <Line label="Frame rates" value={c.fps.join(', ')} /> : null}
               {c.awbPresets.length ? <Line label="White balance" value={c.awbPresets.join(', ')} /> : null}
               <Line label="Features" value={c.capabilities.join(', ').toLowerCase().replace(/_/g, ' ')} />
+              <Line label="Maker modes" value={c.extensions?.length ? c.extensions.join(', ') : 'none'} />
+              {c.noiseReductionModes?.length ? <Line label="Noise reduction" value={c.noiseReductionModes.join(', ')} /> : null}
+              {c.streams
+                ? Object.entries(c.streams)
+                    .filter(([, v]) => v)
+                    .map(([k, v]) => <Line key={k} label={k.toUpperCase()} value={`${v!.size}${v!.maxFps ? ` · up to ${v!.maxFps} fps` : ''}`} />)
+                : null}
             </View>
           ))}
+          <Pressable style={styles.lab} onPress={() => router.push('/lab')}>
+            <Ionicons name="flask-outline" size={18} color={colors.accent} />
+            <Text style={styles.labText}>Quality Lab</Text>
+          </Pressable>
         </ScrollView>
       )}
     </View>
@@ -140,4 +155,6 @@ const styles = StyleSheet.create({
   line: { flexDirection: 'row', paddingVertical: 3 },
   lineLabel: { color: '#888', fontSize: 13, width: 100 },
   lineValue: { color: '#ddd', fontSize: 13, flex: 1 },
+  lab: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: '#151517' },
+  labText: { color: colors.accent, fontSize: 15, fontWeight: '600' },
 });

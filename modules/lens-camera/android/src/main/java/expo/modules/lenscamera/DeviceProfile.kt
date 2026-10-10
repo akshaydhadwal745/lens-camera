@@ -6,6 +6,8 @@ import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
+import android.graphics.ImageFormat
+import android.hardware.camera2.CameraExtensionCharacteristics
 import android.os.Build
 import android.util.Range
 import android.util.SizeF
@@ -15,6 +17,8 @@ import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.DynamicRange
+import androidx.camera.extensions.ExtensionMode
+import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.Quality
 import androidx.camera.video.Recorder
@@ -186,8 +190,9 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
 
   // ---------- Report for the "Camera info" screen ----------
 
+  /** [ext]: CameraX extensions (the phone maker's own processing), if loaded. */
   @SuppressLint("NewApi")
-  fun report(): Map<String, Any?> {
+  fun report(ext: ExtensionsManager? = null): Map<String, Any?> {
     val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val mem = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
     val back = mainBack
@@ -200,10 +205,13 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
         "abis" to Build.SUPPORTED_ABIS.toList(),
         "ramGB" to (mem.totalMem / 1e9 * 10).roundToInt() / 10.0,
         "lowRam" to am.isLowRamDevice,
+        "hardware" to Build.HARDWARE,
+        "board" to Build.BOARD,
+        "soc" to if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}" else null,
       ),
       "tier" to tierOf(back),
       "lenses" to backLenses.map { mapOf("id" to it.id, "factor" to it.factor, "via" to if (it.camera != null) "camera ${it.camera.id}" else "zoom") },
-      "cameras" to cameras.map { describe(it) },
+      "cameras" to cameras.map { describe(it, ext) },
     )
   }
 
@@ -214,9 +222,18 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
     else -> "standard"
   }
 
-  private fun describe(c: CameraFacts): Map<String, Any?> {
+  private fun describe(c: CameraFacts, ext: ExtensionsManager?): Map<String, Any?> {
     val video = runCatching { Recorder.getVideoCapabilities(c.info) }.getOrNull()
     return mapOf(
+      // Quality R&D (docs/research/camera-quality.md): what each photo pipeline can use.
+      "extensions" to ext?.let { e ->
+        EXTENSION_MODES.filter { (_, mode) -> runCatching { e.isExtensionAvailable(c.info.cameraSelector, mode) }.getOrDefault(false) }.map { it.first }
+      },
+      "camera2Extensions" to camera2Extensions(c.id),
+      "noiseReductionModes" to c.get(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES)?.map { noiseReductionName(it) },
+      "edgeModes" to c.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES)?.map { edgeName(it) },
+      "sensorOrientation" to c.get(CameraCharacteristics.SENSOR_ORIENTATION),
+      "streams" to streams(c),
       "id" to c.id,
       "facing" to when {
         c.facingBack -> "back"
@@ -240,6 +257,60 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
     )
   }
 
+  /** Largest JPEG / YUV / RAW size and how fast it can be captured back to back. */
+  private fun streams(c: CameraFacts): Map<String, Any?>? {
+    val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
+    fun entry(format: Int): Map<String, Any?>? = runCatching {
+      val size = map.getOutputSizes(format)?.maxByOrNull { it.width.toLong() * it.height } ?: return@runCatching null
+      val frameNs = map.getOutputMinFrameDuration(format, size)
+      val stallNs = map.getOutputStallDuration(format, size)
+      mapOf(
+        "size" to "${size.width}x${size.height}",
+        "maxFps" to if (frameNs > 0) (1e9 / frameNs * 10).roundToInt() / 10.0 else null,
+        "stallMs" to stallNs / 1_000_000,
+      )
+    }.getOrNull()
+    return mapOf(
+      "jpeg" to entry(ImageFormat.JPEG),
+      "yuv" to entry(ImageFormat.YUV_420_888),
+      "raw" to entry(ImageFormat.RAW_SENSOR),
+    )
+  }
+
+  @SuppressLint("NewApi")
+  private fun camera2Extensions(id: String): List<String>? {
+    if (Build.VERSION.SDK_INT < 31) return null
+    return runCatching {
+      manager.getCameraExtensionCharacteristics(id).supportedExtensions.map {
+        when (it) {
+          CameraExtensionCharacteristics.EXTENSION_AUTOMATIC -> "auto"
+          CameraExtensionCharacteristics.EXTENSION_BOKEH -> "bokeh"
+          CameraExtensionCharacteristics.EXTENSION_FACE_RETOUCH -> "faceRetouch"
+          CameraExtensionCharacteristics.EXTENSION_HDR -> "hdr"
+          CameraExtensionCharacteristics.EXTENSION_NIGHT -> "night"
+          else -> "ext$it"
+        }
+      }
+    }.getOrNull()
+  }
+
+  private fun noiseReductionName(m: Int) = when (m) {
+    CameraMetadata.NOISE_REDUCTION_MODE_OFF -> "off"
+    CameraMetadata.NOISE_REDUCTION_MODE_FAST -> "fast"
+    CameraMetadata.NOISE_REDUCTION_MODE_HIGH_QUALITY -> "highQuality"
+    CameraMetadata.NOISE_REDUCTION_MODE_MINIMAL -> "minimal"
+    CameraMetadata.NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG -> "zsl"
+    else -> "mode$m"
+  }
+
+  private fun edgeName(m: Int) = when (m) {
+    CameraMetadata.EDGE_MODE_OFF -> "off"
+    CameraMetadata.EDGE_MODE_FAST -> "fast"
+    CameraMetadata.EDGE_MODE_HIGH_QUALITY -> "highQuality"
+    CameraMetadata.EDGE_MODE_ZERO_SHUTTER_LAG -> "zsl"
+    else -> "mode$m"
+  }
+
   private fun formatNs(ns: Long): String {
     val s = ns / 1e9
     return if (s >= 0.5) "%.1fs".format(s) else "1/${max(1, (1 / s).roundToInt())}"
@@ -254,6 +325,15 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
   }
 
   companion object {
+    /** CameraX extension modes, by the name the app and the lab use. */
+    val EXTENSION_MODES = listOf(
+      "auto" to ExtensionMode.AUTO,
+      "hdr" to ExtensionMode.HDR,
+      "night" to ExtensionMode.NIGHT,
+      "bokeh" to ExtensionMode.BOKEH,
+      "faceRetouch" to ExtensionMode.FACE_RETOUCH,
+    )
+
     fun levelName(level: Int) = when (level) {
       CameraMetadata.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY -> "LEGACY"
       CameraMetadata.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED -> "LIMITED"

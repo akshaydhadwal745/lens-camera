@@ -256,6 +256,13 @@ export const api = {
     markPaid: (affiliateId: string, month: string, reference: string) =>
       request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),
   },
+  // Camera quality R&D (docs/research/camera-quality.md).
+  lab: {
+    /** Anonymous camera capability report (no photos, not linked to the account). */
+    probe: (report: Record<string, unknown>) => request<{ ok: boolean }>('POST', '/lab/probes', { report }),
+    createSet: (files: { name: string; bytes: number; md5: string }[], meta: Record<string, unknown>) =>
+      request<{ setId: string; urls: Record<string, string> }>('POST', '/lab/sets', { files, meta }),
+  },
   /** Website: end this browser's session (clears the cookie). */
   signOutThisBrowser: () => request<{ signedOut: boolean }>('DELETE', '/web-sessions/current'),
 };

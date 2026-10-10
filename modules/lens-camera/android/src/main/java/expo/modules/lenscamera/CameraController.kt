@@ -12,6 +12,7 @@ import android.hardware.camera2.TotalCaptureResult
 import android.hardware.camera2.params.ColorSpaceTransform
 import android.hardware.camera2.params.RggbChannelVector
 import android.util.Log
+import android.os.SystemClock
 import android.util.Range
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraControl
@@ -76,6 +77,14 @@ data class CameraConfig(
   val raw: Boolean = false,
   /** Photo mode: Ultra HDR JPEG (Android 14+, where supported). */
   val hdrPhoto: Boolean = true,
+  /**
+   * Quality Lab only (docs/research/camera-quality.md): bind one of the phone
+   * maker's extension modes ("auto", "hdr", "night", "bokeh", "faceRetouch")
+   * in Photo mode, or "none".
+   */
+  val extension: String = "none",
+  /** Quality Lab only: "quality" (default) or "latency" photo capture. */
+  val captureMode: String = "quality",
 ) {
   val isVideo get() = mode == "video"
   val isNight get() = mode == "night"
@@ -83,6 +92,7 @@ data class CameraConfig(
   fun needsRebind(old: CameraConfig) =
     position != old.position || lens != old.lens || isVideo != old.isVideo || isNight != old.isNight ||
       mode != old.mode || raw != old.raw || hdrPhoto != old.hdrPhoto ||
+      extension != old.extension || captureMode != old.captureMode ||
       (isVideo && (videoResolution != old.videoResolution || hdrVideo != old.hdrVideo || fps != old.fps || stabilization != old.stabilization))
 }
 
@@ -107,6 +117,8 @@ class CameraController(private val context: Context) {
   private var extensions: ExtensionsManager? = null
   /** True while bound with the maker's Night mode. */
   private var nightExtension = false
+  /** The maker's extension mode bound right now ("none" if none). */
+  private var boundExtension = "none"
   private var profile: DeviceProfile? = null
   private var owner: LifecycleOwner? = null
   private var previewSurface: Preview.SurfaceProvider? = null
@@ -254,7 +266,19 @@ class CameraController(private val context: Context) {
     val ext = extensions
     nightExtension = config.isNight && ext != null &&
       runCatching { ext.isExtensionAvailable(baseSelector, ExtensionMode.NIGHT) }.getOrDefault(false)
-    val selector = if (nightExtension) ext!!.getExtensionEnabledCameraSelector(baseSelector, ExtensionMode.NIGHT) else baseSelector
+    // Quality Lab: one of the maker's modes in Photo mode, when the phone has it.
+    val labMode = DeviceProfile.EXTENSION_MODES.firstOrNull { it.first == config.extension }?.second
+      ?.takeIf { config.mode == "photo" && ext != null && runCatching { ext.isExtensionAvailable(baseSelector, it) }.getOrDefault(false) }
+    boundExtension = when {
+      labMode != null -> config.extension
+      nightExtension -> "night"
+      else -> "none"
+    }
+    val selector = when {
+      labMode != null -> ext!!.getExtensionEnabledCameraSelector(baseSelector, labMode)
+      nightExtension -> ext!!.getExtensionEnabledCameraSelector(baseSelector, ExtensionMode.NIGHT)
+      else -> baseSelector
+    }
     for (attempt in attempts) {
       try {
         p.unbindAll()
@@ -315,7 +339,10 @@ class CameraController(private val context: Context) {
       photoFormat = if (video.plainPhoto) ImageCapture.OUTPUT_FORMAT_JPEG else choosePhotoFormat(cam)
       imageCapture = ImageCapture.Builder()
         // Night bursts need quick successive shots; everything else, best quality.
-        .setCaptureMode(if (config.isNight && !nightExtension) ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+        .setCaptureMode(
+          if ((config.isNight && !nightExtension) || config.captureMode == "latency") ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+          else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY,
+        )
         // 95 in every mode (CameraX would use 85 for quick captures, e.g. Night frames).
         .setJpegQuality(95)
         .setOutputFormat(photoFormat)
@@ -487,6 +514,12 @@ class CameraController(private val context: Context) {
     val fpsRanges = runCatching { f.info.supportedFrameRateRanges }.getOrNull().orEmpty()
     val lenses = if (config.position == "back") profile?.backLenses.orEmpty() else emptyList()
     return mapOf(
+      "extension" to boundExtension,
+      "photoFormat" to when (photoFormat) {
+        ImageCapture.OUTPUT_FORMAT_RAW -> "raw"
+        ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR -> "ultraHdr"
+        else -> "jpeg"
+      },
       "position" to config.position,
       "lens" to (lens?.id ?: "wide"),
       "mode" to config.mode,
@@ -625,6 +658,48 @@ class CameraController(private val context: Context) {
               dir.deleteRecursively()
               done(Result.failure(CameraException("Night photo failed: ${e.message}")))
             }
+          }
+
+          override fun onError(exception: ImageCaptureException) {
+            dir.deleteRecursively()
+            done(Result.failure(CameraException(exception.message ?: "Capture failed")))
+          }
+        },
+      )
+    }
+    next()
+  }
+
+  /**
+   * Quality Lab: [frames] shots back to back with the bound photo use case
+   * (JPEG, Ultra HDR or RAW DNG), kept as they are (no merge) so pipelines can
+   * be compared offline on identical input. Each frame reports when it was
+   * saved and the sensor settings the preview was using at that moment.
+   */
+  fun takeBurst(frames: Int, done: (Result<Map<String, Any?>>) -> Unit) {
+    val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
+    capture.flashMode = ImageCapture.FLASH_MODE_OFF
+    val count = frames.coerceIn(1, 16)
+    val raw = photoFormat == ImageCapture.OUTPUT_FORMAT_RAW
+    val dir = File(outputDir(), "burst-${UUID.randomUUID()}").apply { mkdirs() }
+    val shots = mutableListOf<Map<String, Any?>>()
+    val started = SystemClock.elapsedRealtime()
+    fun next() {
+      val file = File(dir, "${shots.size}.${if (raw) "dng" else "jpg"}")
+      capture.takePicture(
+        ImageCapture.OutputFileOptions.Builder(file).build(),
+        io,
+        object : ImageCapture.OnImageSavedCallback {
+          override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+            shots += mapOf(
+              "uri" to "file://${file.absolutePath}",
+              "ms" to SystemClock.elapsedRealtime() - started,
+              "iso" to lastIso,
+              "exposureNs" to lastExposureNs,
+              "focusDiopters" to lastFocusDiopters?.toDouble(),
+            )
+            if (shots.size < count) return main.execute { next() }
+            done(Result.success(mapOf("frames" to shots.toList(), "raw" to raw, "extension" to boundExtension)))
           }
 
           override fun onError(exception: ImageCaptureException) {

@@ -33,6 +33,7 @@ export default function RootLayout() {
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />
         <Stack.Screen name="camera-info" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="lab" />
         <Stack.Screen name="invite" options={{ presentation: 'modal' }} />
         <Stack.Screen name="partners" options={{ presentation: 'modal' }} />
         <Stack.Screen name="admin" options={{ presentation: 'modal' }} />

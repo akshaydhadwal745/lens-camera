@@ -18,6 +18,7 @@ import {
   signOutCurrent,
 } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
+import { createSet, saveProbe } from './lab';
 import { completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
 import { removeShared, share, sharedWithMe } from './shares';
@@ -128,6 +129,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (route === 'GET /admin/contact') return await listContact(req);
       if (seg[2] === 'contact' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeContact(identity.id, decodeURIComponent(seg[3]));
     }
+
+    // Camera quality R&D: capability reports + Quality Lab sets.
+    if (route === 'POST /lab/probes') return await saveProbe(identity, req);
+    if (route === 'POST /lab/sets') return await createSet(identity, req);
 
     if (route === 'GET /media') return await listMedia(identity, req);
     if (route === 'POST /media') return await startUpload(identity, req);
