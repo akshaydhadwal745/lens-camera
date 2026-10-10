@@ -33,64 +33,6 @@ export const helpFaq: Record<Lang, Faq[]> = {
 
 export const infoPages: InfoPage[] = [
   {
-    slug: 'pricing',
-    name: { en: 'Pricing', hi: 'कीमत' },
-    copy: {
-      en: {
-        title: 'Pricing: 100 GB free photo and video backup',
-        description: 'Lens is free: 100 GB of original-quality backup when you sign in, the full pro camera and editor, and the web app. Paid plans with more storage are coming.',
-        h1: 'Simple pricing. Start free.',
-        lead: 'Everything in Lens is free today, including 100 GB of original-quality backup.',
-        sections: [
-          {
-            h2: 'Free',
-            body: ['₹0, no card needed.'],
-            bullets: [
-              '100 GB Lens storage at original quality (5 GB before you sign in)',
-              'Pro camera, Night, Portrait, 13 looks and the full editor',
-              'Connect your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS',
-              '4K adaptive video streaming',
-              'Sharing with friends',
-              'Web app with QR sign-in and upload from your computer',
-              'Trash for 30 days, Archive for 1 year',
-              '+10 GB more for every friend you invite, no limit',
-            ],
-          },
-          {
-            h2: 'Coming later',
-            body: ['Paid plans will add more Lens storage and extra features such as choosing where photos and videos go, and sharing originals from your own storage. The free plan stays.'],
-          },
-        ],
-      },
-      hi: {
-        title: 'कीमत: 100 GB मुफ़्त फ़ोटो और वीडियो बैकअप',
-        description: 'Lens मुफ़्त है: साइन इन करने पर ओरिजिनल क्वालिटी में 100 GB बैकअप, पूरा प्रो कैमरा और एडिटर, और वेब ऐप। ज़्यादा स्टोरेज वाले पेड प्लान आ रहे हैं।',
-        h1: 'आसान कीमत। मुफ़्त में शुरू करें।',
-        lead: 'आज Lens में सब कुछ मुफ़्त है, ओरिजिनल क्वालिटी में 100 GB बैकअप भी।',
-        sections: [
-          {
-            h2: 'फ़्री',
-            body: ['₹0, कार्ड की ज़रूरत नहीं।'],
-            bullets: [
-              'ओरिजिनल क्वालिटी में 100 GB Lens स्टोरेज (साइन इन से पहले 5 GB)',
-              'प्रो कैमरा, नाइट, पोर्ट्रेट, 13 लुक्स और पूरा एडिटर',
-              'अपना Google Drive, OneDrive, Dropbox, Box, S3 या NAS जोड़ें',
-              '4K एडैप्टिव वीडियो स्ट्रीमिंग',
-              'दोस्तों के साथ शेयरिंग',
-              'QR साइन इन और कंप्यूटर से अपलोड वाला वेब ऐप',
-              '30 दिन ट्रैश, 1 साल आर्काइव',
-              'हर इनवाइट किए दोस्त पर +10 GB और, कोई सीमा नहीं',
-            ],
-          },
-          {
-            h2: 'बाद में आएगा',
-            body: ['पेड प्लान में ज़्यादा Lens स्टोरेज और अतिरिक्त फ़ीचर होंगे, जैसे फ़ोटो और वीडियो कहाँ जाएँ यह चुनना, और अपने स्टोरेज से ओरिजिनल शेयर करना। फ़्री प्लान रहेगा।'],
-          },
-        ],
-      },
-    },
-  },
-  {
     slug: 'security',
     name: { en: 'Privacy & security', hi: 'प्राइवेसी और सुरक्षा' },
     copy: {

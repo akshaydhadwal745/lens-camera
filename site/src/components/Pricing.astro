@@ -1,0 +1,153 @@
+---
+// Pricing in the "Keynote" style of the home page. Facts must match the app:
+// guest 5 GB, signed in 100 GB, +10 GB per invited friend (no limit), own
+// storage connectors, paid plans not built yet.
+import Faq from './Faq.astro';
+import Layout from '../layouts/Layout.astro';
+import { href, type Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+
+const c = {
+  en: {
+    title: 'Pricing: 100 GB free photo and video backup',
+    description: 'Lens is free: 100 GB of original-quality backup when you sign in, the full camera and editor, and the web app. Paid plans with more storage are coming; the free plan stays.',
+    kicker: 'Pricing',
+    h1: 'Free.',
+    lead: 'Everything in Lens is free today, including 100 GB of original-quality backup.',
+    planName: 'Lens Free',
+    planSize: '100 GB',
+    planNote: 'No card needed. 5 GB to try before you sign in.',
+    get: 'Get Lens',
+    web: 'Use it on the web',
+    includedTitle: 'Everything included',
+    included: [
+      'Backup at original quality, checksum-verified',
+      'Camera with automatic Night and Portrait',
+      'Pro mode, RAW and Ultra HDR, 13 looks',
+      'Full editor, changes always reversible',
+      'Video up to 4K, streaming on any device',
+      'Your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS',
+      'Sharing with friends',
+      'Web app with QR sign-in and uploads',
+      'Trash for 30 days, Archive for 1 year',
+    ],
+    inviteTitle: 'Need more space? Bring friends.',
+    inviteText: 'Every friend who joins with your invite adds 10 GB to your storage. There’s no limit.',
+    inviteStat: '+10 GB',
+    inviteStatNote: 'per friend, forever',
+    inviteAlt: 'Two friends laughing together in a car',
+    laterTitle: 'Coming later',
+    laterBadge: 'Soon',
+    laterText: 'Paid plans will add more Lens storage and extras, like choosing where each photo and video goes, and sharing originals straight from your own storage.',
+    laterKeep: 'The free plan stays.',
+    faqTitle: 'Questions',
+    faq: [
+      { q: 'Is it really free?', a: 'Yes. Sign in with your email or Google account and you get 100 GB of backup at original quality, the camera, the editor and the web app, without a card.' },
+      { q: 'What happens when my 100 GB is full?', a: 'Invite friends for +10 GB each, or connect your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS and new photos go there. Paid plans with more Lens storage are coming.' },
+      { q: 'Is the free plan lower quality?', a: 'No. Every plan stores the exact original file. Nothing is ever compressed to save space.' },
+      { q: 'Can I try it without signing in?', a: 'Yes. Lens works right away with 5 GB. Sign in any time to get 100 GB; your photos come with you.' },
+    ],
+  },
+  hi: {
+    title: 'कीमत: 100 GB मुफ़्त फ़ोटो और वीडियो बैकअप',
+    description: 'Lens मुफ़्त है: साइन इन करने पर ओरिजिनल क्वालिटी में 100 GB बैकअप, पूरा कैमरा और एडिटर, और वेब ऐप। ज़्यादा स्टोरेज वाले पेड प्लान आ रहे हैं; फ़्री प्लान रहेगा।',
+    kicker: 'कीमत',
+    h1: 'मुफ़्त।',
+    lead: 'आज Lens में सब कुछ मुफ़्त है, ओरिजिनल क्वालिटी में 100 GB बैकअप भी।',
+    planName: 'Lens फ़्री',
+    planSize: '100 GB',
+    planNote: 'कार्ड की ज़रूरत नहीं। साइन इन से पहले आज़माने के लिए 5 GB।',
+    get: 'Lens पाएँ',
+    web: 'वेब पर इस्तेमाल करें',
+    includedTitle: 'सब कुछ शामिल',
+    included: [
+      'ओरिजिनल क्वालिटी में बैकअप, जाँचा हुआ',
+      'अपने-आप नाइट और पोर्ट्रेट वाला कैमरा',
+      'प्रो मोड, RAW और Ultra HDR, 13 लुक्स',
+      'पूरा एडिटर, हर बदलाव वापस लिया जा सकता है',
+      '4K तक वीडियो, हर डिवाइस पर स्ट्रीमिंग',
+      'अपना Google Drive, OneDrive, Dropbox, Box, S3 या NAS',
+      'दोस्तों के साथ शेयरिंग',
+      'QR साइन इन और अपलोड वाला वेब ऐप',
+      '30 दिन ट्रैश, 1 साल आर्काइव',
+    ],
+    inviteTitle: 'और जगह चाहिए? दोस्तों को लाएँ।',
+    inviteText: 'आपके इनवाइट से जुड़ने वाला हर दोस्त आपके स्टोरेज में 10 GB जोड़ता है। कोई सीमा नहीं।',
+    inviteStat: '+10 GB',
+    inviteStatNote: 'हर दोस्त पर, हमेशा',
+    inviteAlt: 'कार में साथ हँसते दो दोस्त',
+    laterTitle: 'बाद में आएगा',
+    laterBadge: 'जल्द',
+    laterText: 'पेड प्लान में ज़्यादा Lens स्टोरेज और अतिरिक्त फ़ीचर होंगे, जैसे हर फ़ोटो और वीडियो कहाँ जाए यह चुनना, और अपने स्टोरेज से सीधे ओरिजिनल शेयर करना।',
+    laterKeep: 'फ़्री प्लान रहेगा।',
+    faqTitle: 'सवाल',
+    faq: [
+      { q: 'क्या सच में मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और ओरिजिनल क्वालिटी में 100 GB बैकअप, कैमरा, एडिटर और वेब ऐप पाएँ, बिना कार्ड के।' },
+      { q: '100 GB भर जाए तो क्या होगा?', a: 'हर दोस्त को इनवाइट करने पर +10 GB, या अपना Google Drive, OneDrive, Dropbox, Box, S3 या NAS जोड़ें, नई फ़ोटो वहाँ जाएँगी। ज़्यादा Lens स्टोरेज वाले पेड प्लान आ रहे हैं।' },
+      { q: 'क्या फ़्री प्लान में क्वालिटी कम है?', a: 'नहीं। हर प्लान ठीक वही ओरिजिनल फ़ाइल रखता है। जगह बचाने के लिए कभी कुछ कंप्रेस नहीं होता।' },
+      { q: 'क्या बिना साइन इन आज़मा सकते हैं?', a: 'हाँ। Lens तुरंत 5 GB के साथ चलता है। 100 GB के लिए कभी भी साइन इन करें; आपकी फ़ोटो साथ आती हैं।' },
+    ],
+  },
+}[lang];
+---
+
+<Layout lang={lang} path="pricing" title={c.title} description={c.description}>
+  <section class="pr-hero">
+    <p class="kn-kicker">{c.kicker}</p>
+    <h1 class="dl-title">{c.h1}</h1>
+    <p class="kn-lead pr-lead">{c.lead}</p>
+  </section>
+
+  <section class="pr-plan-wrap">
+    <div class="pr-plan">
+      <div class="pr-plan-main">
+        <p class="pr-plan-name">{c.planName}</p>
+        <p class="pr-size">{c.planSize}</p>
+        <p class="pr-note">{c.planNote}</p>
+        <div class="actions">
+          <a class="btn btn-primary" href={href(lang, 'download')}>{c.get}</a>
+          <a class="btn btn-ghost" href={href(lang, 'signin')}>{c.web}</a>
+        </div>
+      </div>
+      <div class="pr-plan-list">
+        <h2>{c.includedTitle}</h2>
+        <ul class="checks">
+          {c.included.map((i) => <li>{i}</li>)}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-band">
+    <div class="kn-split">
+      <div class="kn-frame pr-invite-photo">
+        <img src="/media/card-sharing.webp" alt={c.inviteAlt} width="640" height="400" loading="lazy" decoding="async" />
+      </div>
+      <div class="kn-split-copy">
+        <h2 class="kn-display-md">{c.inviteTitle}</h2>
+        <p>{c.inviteText}</p>
+        <div class="kn-big-stats pr-invite-stat">
+          <div><strong>{c.inviteStat}</strong><span>{c.inviteStatNote}</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-wide">
+    <div class="pr-later">
+      <span class="badge">{c.laterBadge}</span>
+      <h2>{c.laterTitle}</h2>
+      <p>{c.laterText} <strong>{c.laterKeep}</strong></p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="narrow">
+      <Faq title={c.faqTitle} items={c.faq} />
+    </div>
+  </section>
+</Layout>
