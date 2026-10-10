@@ -1,35 +1,8 @@
-// Pricing, security, help and download pages, English + Hindi.
+// Security and affiliates pages, English + Hindi.
 import type { Lang } from '../i18n/ui';
-import type { Faq, PageCopy } from './pages';
+import type { PageCopy } from './pages';
 
 export type InfoPage = { slug: string; name: Record<Lang, string>; copy: Record<Lang, PageCopy> };
-
-export const helpFaq: Record<Lang, Faq[]> = {
-  en: [
-    { q: 'How do I sign in on a computer?', a: 'Open lens.instagrowapp.com and click Sign in. Scan the QR code with your phone and tap Approve, or sign in with the same email or Google account you use in the app.' },
-    { q: 'How do I sign in on a new phone?', a: 'Install Lens and sign in with the same email or Google account. All your photos and videos are there; previews download first, originals when you open them.' },
-    { q: 'Why is a photo still "uploading"?', a: 'Backup follows your mobile-data setting (everything, small files only, or Wi-Fi only) and pauses when your phone is very hot. It continues automatically.' },
-    { q: 'How do I free up space on my phone?', a: 'Settings → On this device: choose how many days originals stay on the phone and how much space to keep free, or tap "Free up space now". Only files already verified in the cloud are removed.' },
-    { q: 'I deleted something by mistake', a: 'Deleted items stay in Trash for 30 days and can be restored instantly. After that they move to Archive for one year, where they can still be recovered.' },
-    { q: 'How do I connect Google Drive, OneDrive or Dropbox?', a: 'Tap the storage button in the gallery (or Settings → Storage), pick your provider and sign in. New photos go there from then on.' },
-    { q: 'How do I sign a browser out?', a: 'On the website: Account → Log out. From your phone: Settings → Account → signed-in browsers → Log out.' },
-    { q: 'How do I delete my account?', a: 'See the Delete your account page: it explains how, and exactly what is deleted.' },
-    { q: 'How do I get more free storage?', a: 'Invite friends: Settings → Invite friends. You get +10 GB for every friend who installs Lens and signs in on their phone. There is no limit; each person and phone counts once.' },
-    { q: 'How do I contact you?', a: 'Use the contact form at lens.instagrowapp.com/contact/. We reply by email, usually within two working days.' },
-  ],
-  hi: [
-    { q: 'कंप्यूटर पर साइन इन कैसे करें?', a: 'lens.instagrowapp.com खोलें और साइन इन पर क्लिक करें। फ़ोन से QR कोड स्कैन करके मंज़ूरी दें, या उसी ईमेल या Google अकाउंट से साइन इन करें जो ऐप में है।' },
-    { q: 'नए फ़ोन पर साइन इन कैसे करें?', a: 'Lens इंस्टॉल करें और उसी ईमेल या Google अकाउंट से साइन इन करें। आपकी सारी फ़ोटो और वीडियो वहाँ हैं; पहले प्रीव्यू आते हैं, ओरिजिनल खोलने पर।' },
-    { q: 'फ़ोटो अभी भी "अपलोड हो रही" क्यों है?', a: 'बैकअप आपकी मोबाइल डेटा सेटिंग (सब कुछ, सिर्फ़ छोटी फ़ाइलें, या सिर्फ़ Wi-Fi) के हिसाब से चलता है और फ़ोन बहुत गर्म होने पर रुकता है। यह अपने-आप फिर शुरू हो जाता है।' },
-    { q: 'फ़ोन में जगह कैसे ख़ाली करें?', a: 'Settings → On this device: चुनें कि ओरिजिनल कितने दिन फ़ोन पर रहें और कितनी जगह ख़ाली रखनी है, या "Free up space now" दबाएँ। सिर्फ़ वही फ़ाइलें हटती हैं जो क्लाउड में जाँची जा चुकी हैं।' },
-    { q: 'ग़लती से कुछ डिलीट हो गया', a: 'डिलीट की गई चीज़ें 30 दिन ट्रैश में रहती हैं और तुरंत वापस लाई जा सकती हैं। उसके बाद वे एक साल के लिए आर्काइव में जाती हैं, जहाँ से अब भी वापस मिल सकती हैं।' },
-    { q: 'Google Drive, OneDrive या Dropbox कैसे जोड़ें?', a: 'गैलरी में स्टोरेज बटन (या Settings → Storage) दबाएँ, अपना प्रोवाइडर चुनें और साइन इन करें। उसके बाद नई फ़ोटो वहीं जाती हैं।' },
-    { q: 'ब्राउज़र से साइन आउट कैसे करें?', a: 'वेबसाइट पर: Account → Log out। फ़ोन से: Settings → Account → signed-in browsers → Log out।' },
-    { q: 'अपना अकाउंट कैसे डिलीट करें?', a: '"अकाउंट डिलीट करें" पेज देखें: वहाँ तरीका और ठीक-ठीक क्या डिलीट होता है, बताया गया है।' },
-    { q: 'और मुफ़्त स्टोरेज कैसे पाएँ?', a: 'दोस्तों को इनवाइट करें: Settings → Invite friends। हर दोस्त जो Lens इंस्टॉल करके अपने फ़ोन पर साइन इन करे, उस पर आपको +10 GB मिलता है। कोई सीमा नहीं; हर व्यक्ति और फ़ोन एक बार गिना जाता है।' },
-    { q: 'आपसे संपर्क कैसे करें?', a: 'lens.instagrowapp.com/contact/ पर संपर्क फ़ॉर्म भरें। हम ईमेल से जवाब देते हैं, आमतौर पर दो कामकाजी दिनों में।' },
-  ],
-};
 
 export const infoPages: InfoPage[] = [
   {

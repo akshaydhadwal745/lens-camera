@@ -1,10 +1,11 @@
 ---
 // Every content page in English (/…) and Hindi (/hi/…), from src/content/.
 import FeaturePage from '../components/FeaturePage.astro';
+import Help from '../components/Help.astro';
 import Hub from '../components/Hub.astro';
 import InfoView from '../components/InfoView.astro';
 import LegalView from '../components/LegalView.astro';
-import { helpFaq, infoPages } from '../content/info';
+import { infoPages } from '../content/info';
 import { affiliateTerms, deletion, privacy, terms } from '../content/legal';
 import { pages } from '../content/pages';
 import { type Lang, LANGS } from '../i18n/ui';
@@ -34,10 +35,6 @@ export function getStaticPaths() {
 }
 
 const { lang, path, route } = Astro.props as { lang: Lang; path: string; route: Route };
-const helpCopy = {
-  en: { title: 'Help and FAQ', description: 'Answers to common questions about Lens: signing in, backup, freeing space, storage, Trash and your account.', h1: 'Help', lead: 'Quick answers to the most common questions.', sections: [] },
-  hi: { title: 'मदद और सवाल-जवाब', description: 'Lens के आम सवालों के जवाब: साइन इन, बैकअप, जगह ख़ाली करना, स्टोरेज, ट्रैश और अकाउंट।', h1: 'मदद', lead: 'सबसे आम सवालों के तुरंत जवाब।', sections: [] },
-}[lang];
 const affiliateLinks: [string, string][] = lang === 'en' ? [['Affiliate terms', 'affiliate-terms']] : [['एफ़िलिएट शर्तें', 'affiliate-terms']];
 const securityLinks: [string, string][] = lang === 'en' ? [['Privacy policy', 'privacy'], ['Delete your account', 'delete-account']] : [['प्राइवेसी पॉलिसी', 'privacy'], ['अकाउंट डिलीट करें', 'delete-account']];
 ---
@@ -51,5 +48,5 @@ const securityLinks: [string, string][] = lang === 'en' ? [['Privacy policy', 'p
       return <InfoView lang={lang} path={path} name={p.name[lang]} copy={p.copy[lang]} faq={p.copy[lang].faq} links={p.slug === 'security' ? securityLinks : p.slug === 'affiliates' ? affiliateLinks : []} />;
     })()
 }
-{route.kind === 'help' && <InfoView lang={lang} path={path} name={helpCopy.h1} copy={helpCopy} faq={helpFaq[lang]} />}
+{route.kind === 'help' && <Help lang={lang} />}
 {route.kind === 'legal' && <LegalView lang={lang} path={path} doc={{ privacy, terms, 'delete-account': deletion, 'affiliate-terms': affiliateTerms }[route.doc][lang]} />}
