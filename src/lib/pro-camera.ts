@@ -7,6 +7,12 @@ export type Guide = 'off' | '1:1' | '4:5' | '16:9' | '2.39:1';
 export type ManualParam = 'iso' | 'shutter' | 'wb' | 'focus' | 'ev';
 
 export type ProSettings = {
+  /**
+   * Pro controls on (manual exposure, RAW, LOG, monitors, looks while
+   * shooting…). Off by default: the camera decides everything itself and the
+   * screen stays simple (docs/features/simple-camera.md).
+   */
+  pro: boolean;
   mode: CameraMode;
   position: 'front' | 'back';
   lens: Lens;
@@ -52,6 +58,7 @@ export type ProSettings = {
 };
 
 export const DEFAULT_SETTINGS: ProSettings = {
+  pro: false,
   mode: 'photo',
   position: 'back',
   lens: 'wide',
@@ -92,6 +99,52 @@ export const DEFAULT_SETTINGS: ProSettings = {
   grid: 'thirds',
   guide: 'off',
 };
+
+/**
+ * What the camera actually uses. Pro on: the user's settings. Pro off (the
+ * default): everything technical is automatic. The saved pro settings are kept
+ * untouched, so switching Pro back on restores them.
+ */
+export function effectiveSettings(s: ProSettings): ProSettings {
+  if (s.pro) return s;
+  return {
+    ...s,
+    // Night is automatic in simple mode (low light → multi-frame shot).
+    mode: s.mode === 'night' ? 'photo' : s.mode,
+    raw: false,
+    hdrPhoto: true,
+    appleLog: false,
+    hdrVideo: false,
+    fps: 30,
+    timer: 0,
+    look: null,
+    lookIntensity: 1,
+    bakeLooks: false,
+    exposureMode: 'auto',
+    ev: 0,
+    whiteBalanceMode: 'auto',
+    focusMode: 'auto',
+    histogram: false,
+    peaking: false,
+    zebra: false,
+    falseColor: false,
+    level: false,
+    grid: 'off',
+    guide: 'off',
+  };
+}
+
+/**
+ * Low light, with hysteresis so the Night badge doesn't flicker: on at ISO ≥ 1250
+ * (or a slow 1/15 s at ISO ≥ 640), off again only once ISO ≤ 800 and faster than 1/20 s.
+ */
+export function isLowLight(wasLow: boolean, iso: number, shutter: number): boolean {
+  if (wasLow) return !(iso <= 800 && shutter < 1 / 20);
+  return iso >= 1250 || (shutter >= 1 / 15 && iso >= 640);
+}
+
+/** Frames for an automatic Night shot (fewer than Night mode's default: quicker, less heat). */
+export const AUTO_NIGHT_FRAMES = 4;
 
 /** Fields a preset captures (look + exposure + monitoring, not lens/position). */
 export const PRESET_KEYS = [

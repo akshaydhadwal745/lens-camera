@@ -27,10 +27,13 @@ import { reportCameraError, reportCameraReady, reportPreview } from '@/lib/diagn
 import { compact, EditRecipe, LOOKS } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
 import {
+  AUTO_NIGHT_FRAMES,
   BUILT_IN_PRESETS,
+  effectiveSettings,
   formatEv,
   formatFocus,
   formatShutter,
+  isLowLight,
   loadPresets,
   loadSettings,
   ManualParam,
@@ -72,7 +75,13 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
 
-  const [s, setS] = useState<ProSettings>(loadSettings);
+  // `stored`: what the user chose (saved). `s`: what the camera uses — with Pro
+  // off, everything technical is automatic (effectiveSettings).
+  const [stored, setS] = useState<ProSettings>(loadSettings);
+  const s = useMemo(() => effectiveSettings(stored), [stored]);
+  // Simple mode: low light switches photos to a multi-frame Night shot by itself.
+  const [lowLight, setLowLight] = useState(false);
+  const [nightOff, setNightOff] = useState(false);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const [stats, setStats] = useState<CameraStats | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -101,9 +110,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   // Persist settings (debounced; dials change them rapidly).
   useEffect(() => {
-    const t = setTimeout(() => saveSettings(s), 400);
+    const t = setTimeout(() => saveSettings(stored), 400);
     return () => clearTimeout(t);
-  }, [s]);
+  }, [stored]);
 
   useEffect(() => {
     if (!recording) return;
@@ -188,6 +197,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     return compact(recipe) ?? undefined;
   };
 
+  const autoNight = !stored.pro && s.mode === 'photo' && lowLight && !nightOff && (!caps?.modes || caps.modes.includes('night'));
+
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
     setBusy(true);
@@ -196,9 +207,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     Animated.timing(flash, { toValue: 0, duration: 220, useNativeDriver: true }).start();
     try {
       let photo: PhotoResult;
-      if (s.mode === 'night') {
+      if (s.mode === 'night' || autoNight) {
         setProcessing('Hold still…');
-        photo = await cameraRef.current.takeNightPhoto(s.nightFrames);
+        photo = await cameraRef.current.takeNightPhoto(autoNight ? AUTO_NIGHT_FRAMES : s.nightFrames);
       } else {
         photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
       }
@@ -383,7 +394,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const paramTitle: Record<ManualParam, string> = { iso: 'ISO', shutter: 'SHUTTER', wb: 'WB', focus: 'FOCUS', ev: 'EV' };
   const manualExposureAvailable = caps?.manualExposure !== false;
   // Android reports which modes the phone supports; iOS supports all four.
-  const modes = (['night', 'video', 'photo', 'portrait'] as const).filter((m) => !caps?.modes || caps.modes.includes(m));
+  // Simple mode: no Night button (low light is handled automatically).
+  const modes = (['night', 'video', 'photo', 'portrait'] as const).filter(
+    (m) => (!caps?.modes || caps.modes.includes(m)) && (stored.pro || m !== 'night'),
+  );
 
   return (
     <View style={styles.fill}>
@@ -430,7 +444,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               // A mode this phone can't do (e.g. from a preset): back to Photo.
               if (e.nativeEvent.modes && !e.nativeEvent.modes.includes(s.mode)) update({ mode: 'photo' });
             }}
-            onStats={(e) => setStats(e.nativeEvent)}
+            onStats={(e) => {
+              const st = e.nativeEvent;
+              setStats(st);
+              setLowLight((was) => isLowLight(was, st.iso, st.shutter));
+            }}
             onAnalysis={(e) => setAnalysis(e.nativeEvent)}
             onError={(e) => {
               reportCameraError(e.nativeEvent.fatal ? 'fallbackBasic' : 'cameraError', e.nativeEvent.message);
@@ -497,27 +515,27 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 <TopButton icon={s.torch ? 'flashlight' : 'flashlight-outline'} label="TORCH" active={s.torch} onPress={() => update({ torch: !s.torch })} />
               )
             )}
-            {s.mode === 'photo' && caps?.raw && (
+            {stored.pro && s.mode === 'photo' && caps?.raw && (
               <TopButton label={caps.proRaw ? 'ProRAW' : 'RAW'} active={s.raw} onPress={() => update({ raw: !s.raw })} />
             )}
-            {s.mode === 'photo' && caps?.ultraHdr && !s.raw && (
+            {stored.pro && s.mode === 'photo' && caps?.ultraHdr && !s.raw && (
               <TopButton label="HDR" active={s.hdrPhoto} onPress={() => update({ hdrPhoto: !s.hdrPhoto })} />
             )}
-            {s.mode === 'video' && (
+            {stored.pro && s.mode === 'video' && (
               <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
             )}
-            {s.mode === 'video' && caps?.appleLog && <TopButton label="LOG" active={s.appleLog} onPress={() => update({ appleLog: !s.appleLog })} />}
-            {s.mode === 'video' && caps?.hdrVideo && !s.appleLog && (
+            {stored.pro && s.mode === 'video' && caps?.appleLog && <TopButton label="LOG" active={s.appleLog} onPress={() => update({ appleLog: !s.appleLog })} />}
+            {stored.pro && s.mode === 'video' && caps?.hdrVideo && !s.appleLog && (
               <TopButton label="HDR" active={s.hdrVideo} onPress={() => update({ hdrVideo: !s.hdrVideo })} />
             )}
-            {s.mode === 'video' && (
+            {stored.pro && s.mode === 'video' && (
               <TopButton
                 label={`${s.fps}`}
                 active={s.fps !== 30}
                 onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
               />
             )}
-            {s.mode !== 'video' && (
+            {stored.pro && s.mode !== 'video' && (
               <TopButton
                 icon="timer-outline"
                 label={s.timer ? `${s.timer}s` : 'OFF'}
@@ -525,8 +543,23 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 onPress={() => update({ timer: s.timer === 0 ? 3 : s.timer === 3 ? 10 : 0 })}
               />
             )}
-            <TopButton icon="pulse" label="MONITOR" active={s.peaking || s.zebra || s.falseColor} onPress={() => setSheet('monitor')} />
-            <TopButton icon="bookmark-outline" label="PRESETS" onPress={() => setSheet('presets')} />
+            {stored.pro && (
+              <>
+                <TopButton icon="pulse" label="MONITOR" active={s.peaking || s.zebra || s.falseColor} onPress={() => setSheet('monitor')} />
+                <TopButton icon="bookmark-outline" label="PRESETS" onPress={() => setSheet('presets')} />
+              </>
+            )}
+            <TopButton
+              label="PRO"
+              active={stored.pro}
+              onPress={() => {
+                haptic(Haptics.ImpactFeedbackStyle.Light);
+                setParam(null);
+                setLookDial(false);
+                setSheet('none');
+                update({ pro: !stored.pro });
+              }}
+            />
           </>
         )}
       </View>
@@ -542,9 +575,23 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         {stats?.adjusting ? <ActivityIndicator size="small" color="#FACC15" style={{ marginLeft: 6 }} /> : null}
       </View>
 
+      {!stored.pro && s.mode === 'photo' && lowLight && !recording && (
+        <Pressable
+          onPress={() => {
+            haptic(Haptics.ImpactFeedbackStyle.Light);
+            setNightOff((v) => !v);
+          }}
+          style={[styles.nightBadge, { top: insets.top + 64 }, nightOff && styles.nightBadgeOff]}
+          accessibilityLabel={nightOff ? 'Night off. Tap to turn on' : 'Night on. Tap to turn off'}
+        >
+          <Ionicons name="moon" size={14} color={nightOff ? '#fff' : '#000'} />
+          <Text style={[styles.nightBadgeText, nightOff && { color: '#fff' }]}>{nightOff ? 'Night off' : 'Night'}</Text>
+        </Pressable>
+      )}
+
       {/* ---------- Bottom controls ---------- */}
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>
-        {param && dialScale && (
+        {stored.pro && param && dialScale && (
           <ValueDial
             title={paramTitle[param]}
             values={dialScale.values}
@@ -557,27 +604,29 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           />
         )}
 
-        <View style={styles.params}>
-          {params.map((p) => {
-            const manual = isManual(p);
-            const disabled = (p === 'iso' || p === 'shutter') && !manualExposureAvailable;
-            return (
-              <Pressable
-                key={p}
-                disabled={disabled}
-                onPress={() => setParam(param === p ? null : p)}
-                onLongPress={() => setAuto(p)}
-                style={[styles.param, param === p && styles.paramActive, disabled && { opacity: 0.35 }]}
-                accessibilityLabel={`${paramTitle[p]} ${manual ? 'manual' : 'auto'}`}
-              >
-                <Text style={styles.paramTitle}>{manual ? paramTitle[p] : `${paramTitle[p]} A`}</Text>
-                <Text style={[styles.paramValue, manual && styles.paramValueManual]}>{paramLabel(p, currentValue(p))}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {stored.pro && (
+          <View style={styles.params}>
+            {params.map((p) => {
+              const manual = isManual(p);
+              const disabled = (p === 'iso' || p === 'shutter') && !manualExposureAvailable;
+              return (
+                <Pressable
+                  key={p}
+                  disabled={disabled}
+                  onPress={() => setParam(param === p ? null : p)}
+                  onLongPress={() => setAuto(p)}
+                  style={[styles.param, param === p && styles.paramActive, disabled && { opacity: 0.35 }]}
+                  accessibilityLabel={`${paramTitle[p]} ${manual ? 'manual' : 'auto'}`}
+                >
+                  <Text style={styles.paramTitle}>{manual ? paramTitle[p] : `${paramTitle[p]} A`}</Text>
+                  <Text style={[styles.paramValue, manual && styles.paramValueManual]}>{paramLabel(p, currentValue(p))}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-        {lookDial && s.look && (
+        {stored.pro && lookDial && s.look && (
           <ValueDial
             title="LOOK"
             values={INTENSITY}
@@ -590,25 +639,27 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onAuto={() => update({ lookIntensity: 1 })}
           />
         )}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looksRow}>
-          <Pressable onPress={() => { update({ look: null }); setLookDial(false); }} style={[styles.lookChip, !s.look && styles.lookChipOn]}>
-            <Text style={[styles.lookChipText, !s.look && styles.lookChipTextOn]}>No look</Text>
-          </Pressable>
-          {LOOKS.map((l) => (
-            <Pressable
-              key={l.id}
-              onPress={() => {
-                haptic(Haptics.ImpactFeedbackStyle.Light);
-                if (s.look === l.id) setLookDial((d) => !d);
-                else update({ look: l.id });
-              }}
-              style={[styles.lookChip, s.look === l.id && styles.lookChipOn]}
-              accessibilityLabel={l.description}
-            >
-              <Text style={[styles.lookChipText, s.look === l.id && styles.lookChipTextOn]}>{l.name}</Text>
+        {stored.pro && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looksRow}>
+            <Pressable onPress={() => { update({ look: null }); setLookDial(false); }} style={[styles.lookChip, !s.look && styles.lookChipOn]}>
+              <Text style={[styles.lookChipText, !s.look && styles.lookChipTextOn]}>No look</Text>
             </Pressable>
-          ))}
-        </ScrollView>
+            {LOOKS.map((l) => (
+              <Pressable
+                key={l.id}
+                onPress={() => {
+                  haptic(Haptics.ImpactFeedbackStyle.Light);
+                  if (s.look === l.id) setLookDial((d) => !d);
+                  else update({ look: l.id });
+                }}
+                style={[styles.lookChip, s.look === l.id && styles.lookChipOn]}
+                accessibilityLabel={l.description}
+              >
+                <Text style={[styles.lookChipText, s.look === l.id && styles.lookChipTextOn]}>{l.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
 
         {s.position === 'back' && s.mode !== 'portrait' && lenses.length > 1 && (
           <View style={styles.lenses}>
@@ -900,4 +951,17 @@ const styles = StyleSheet.create({
   presetName: { color: '#fff', fontSize: 15, fontWeight: '600' },
   presetHint: { color: '#888', fontSize: 12, flex: 1, textAlign: 'right' },
   presetFoot: { color: '#666', fontSize: 12, paddingHorizontal: 18, paddingTop: 6 },
+  nightBadge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#FACC15',
+  },
+  nightBadgeOff: { backgroundColor: 'rgba(0,0,0,0.55)' },
+  nightBadgeText: { color: '#000', fontSize: 13, fontWeight: '700' },
 });
