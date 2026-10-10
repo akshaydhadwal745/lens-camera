@@ -1,102 +1,154 @@
 ---
-// Android download: the promoted build from /downloads/android/latest.json
-// (scripts/promote-release.sh), read in the browser so a new build needs no
-// website deploy. docs/features/app-distribution.md.
+// Android download in the "Keynote" style of the home page. The promoted
+// build comes from /downloads/android/latest.json (scripts/promote-release.sh),
+// read in the browser so a new build needs no website deploy. On a computer, a
+// QR code (rendered at build time) opens this page on the phone.
+// docs/features/app-distribution.md.
+import { renderSVG } from 'uqr';
+import Faq from './Faq.astro';
 import Layout from '../layouts/Layout.astro';
-import type { Lang } from '../i18n/ui';
+import { href, type Lang } from '../i18n/ui';
 
 interface Props {
   lang: Lang;
 }
 const { lang } = Astro.props;
+const pageUrl = `${Astro.site!.origin}${href(lang, 'download')}`;
+const qr = renderSVG(pageUrl, { border: 1, ecc: 'M' }).replace('<svg ', '<svg role="img" aria-label="QR code: open this page on your phone" ');
+
 const c = {
   en: {
     title: 'Download Lens for Android',
-    description: 'Download the Lens camera app for Android 7 and newer. Shoot endlessly; your phone never fills up.',
-    h1: 'Download Lens for Android',
-    lead: 'Android 7.0 or newer. Google Play is coming; until then, install it from here.',
+    description: 'Download the Lens camera app for Android 7 and newer. Every shot at full quality, backed up the moment you take it. 100 GB free.',
+    kicker: 'Lens for Android',
+    h1: 'Get Lens.',
+    lead: 'The pro camera with the cloud built in. Free, with 100 GB of backup when you sign in.',
     button: 'Download Lens',
-    older: 'Older or budget phone and the app won’t install? Get the 32-bit version',
-    stepsTitle: 'How to install',
-    steps: [
-      'Tap Download Lens and open the file when it finishes.',
-      'If Android asks, allow your browser to “Install unknown apps”, then go back and tap Install.',
-      'Google Play Protect may say the app is unrecognised because Lens isn’t on Google Play yet. Tap “More details” → “Install anyway”.',
+    meta: 'Android 7.0 or newer',
+    older: 'Older or budget phone? Get the 32-bit version',
+    qrTitle: 'On a computer?',
+    qrText: 'Scan with your phone’s camera to download Lens there.',
+    trust: [
+      ['Verified', 'Signed by Lens. Every download has a published checksum.'],
+      ['Self-updating', 'Small updates arrive in the background. Big ones ask first.'],
+      ['Yours', 'Original quality, no compression. Delete everything anytime.'],
     ],
-    updatesTitle: 'Updates',
-    updates: 'Lens updates itself in the background. When a bigger update needs a new download, the app shows “New Lens version · Download”.',
-    replaceTitle: 'Had a test version before?',
-    replace: 'If installing says “App not installed”, uninstall the old Lens first, then install this one. Photos already in your Lens cloud stay safe; sign in again to see them.',
-    iphone: 'iPhone: an iPhone version is built and will follow the Android launch.',
-    i18n: { version: 'Version {build} · {size}', checksum: 'SHA-256: {sha}', unavailable: 'The download isn’t available right now. Please try again in a few minutes.' },
+    stepsTitle: 'Installed in a minute.',
+    steps: [
+      ['Download', 'Tap Download Lens and open the file when it finishes.'],
+      ['Allow', 'If Android asks, let your browser “Install unknown apps”. Then go back and tap Install.'],
+      ['Install anyway', 'Lens isn’t on Google Play yet, so Play Protect may call it unrecognised. Tap “More details”, then “Install anyway”.'],
+    ],
+    faqTitle: 'Good to know',
+    faq: [
+      { q: 'I had a test version. Installing says “App not installed”.', a: 'Uninstall the old Lens first, then install this one. Photos already in your Lens cloud stay safe: sign in again to see them.' },
+      { q: 'When is Lens coming to Google Play?', a: 'Soon. Lens launches on Google Play after its testing period. If you install from here, you keep getting updates either way.' },
+      { q: 'Is there an iPhone version?', a: 'An iPhone version is built and will follow the Android launch. Meanwhile your library works in any browser on lens.instagrowapp.com.' },
+      { q: 'How do I check the download is genuine?', a: 'Lens is signed with our own key, and the SHA-256 checksum of the current download is shown below. Compare it with the file you downloaded.' },
+    ],
+    checksum: 'SHA-256',
+    i18n: { version: 'Version {build} · {size}', unavailable: 'The download isn’t available right now. Please try again in a few minutes.' },
   },
   hi: {
     title: 'Android के लिए Lens डाउनलोड करें',
-    description: 'Android 7 और नए फ़ोन के लिए Lens कैमरा ऐप डाउनलोड करें। जितनी चाहें फ़ोटो लें; फ़ोन कभी नहीं भरेगा।',
-    h1: 'Android के लिए Lens डाउनलोड करें',
-    lead: 'Android 7.0 या नया। Google Play जल्द आ रहा है; तब तक यहाँ से इंस्टॉल करें।',
+    description: 'Android 7 और नए फ़ोन के लिए Lens कैमरा ऐप डाउनलोड करें। हर शॉट पूरी क्वालिटी में, लेते ही बैकअप। 100 GB मुफ़्त।',
+    kicker: 'Android के लिए Lens',
+    h1: 'Lens पाएँ।',
+    lead: 'क्लाउड के साथ बना प्रो कैमरा। मुफ़्त, साइन इन करने पर 100 GB बैकअप के साथ।',
     button: 'Lens डाउनलोड करें',
-    older: 'पुराना या बजट फ़ोन है और ऐप इंस्टॉल नहीं हो रहा? 32-बिट वर्शन लें',
-    stepsTitle: 'इंस्टॉल कैसे करें',
-    steps: [
-      'Lens डाउनलोड करें दबाएँ और डाउनलोड पूरा होने पर फ़ाइल खोलें।',
-      'अगर Android पूछे, तो अपने ब्राउज़र को “Install unknown apps” की अनुमति दें, फिर वापस जाकर Install दबाएँ।',
-      'Google Play Protect कह सकता है कि ऐप पहचाना नहीं गया, क्योंकि Lens अभी Google Play पर नहीं है। “More details” → “Install anyway” दबाएँ।',
+    meta: 'Android 7.0 या नया',
+    older: 'पुराना या बजट फ़ोन? 32-बिट वर्शन लें',
+    qrTitle: 'कंप्यूटर पर हैं?',
+    qrText: 'Lens वहीं डाउनलोड करने के लिए फ़ोन के कैमरे से स्कैन करें।',
+    trust: [
+      ['भरोसेमंद', 'Lens द्वारा साइन किया हुआ। हर डाउनलोड का चेकसम दिया गया है।'],
+      ['ख़ुद अपडेट', 'छोटे अपडेट बैकग्राउंड में आते हैं। बड़े अपडेट पहले पूछते हैं।'],
+      ['आपका', 'ओरिजिनल क्वालिटी, कोई कंप्रेशन नहीं। जब चाहें सब डिलीट करें।'],
     ],
-    updatesTitle: 'अपडेट',
-    updates: 'Lens बैकग्राउंड में ख़ुद अपडेट होता है। जब किसी बड़े अपडेट के लिए नया डाउनलोड चाहिए, ऐप “New Lens version · Download” दिखाता है।',
-    replaceTitle: 'पहले टेस्ट वर्शन इस्तेमाल किया था?',
-    replace: 'अगर इंस्टॉल करते समय “App not installed” आए, तो पहले पुराना Lens अनइंस्टॉल करें, फिर यह इंस्टॉल करें। Lens क्लाउड में मौजूद फ़ोटो सुरक्षित रहती हैं; उन्हें देखने के लिए फिर से साइन इन करें।',
-    iphone: 'iPhone: iPhone वर्शन बना हुआ है और Android लॉन्च के बाद आएगा।',
-    i18n: { version: 'वर्शन {build} · {size}', checksum: 'SHA-256: {sha}', unavailable: 'डाउनलोड अभी उपलब्ध नहीं है। कुछ मिनट बाद फिर कोशिश करें।' },
+    stepsTitle: 'एक मिनट में इंस्टॉल।',
+    steps: [
+      ['डाउनलोड', 'Lens डाउनलोड करें दबाएँ और डाउनलोड पूरा होने पर फ़ाइल खोलें।'],
+      ['अनुमति दें', 'अगर Android पूछे, तो ब्राउज़र को “Install unknown apps” की अनुमति दें। फिर वापस जाकर Install दबाएँ।'],
+      ['फिर भी इंस्टॉल', 'Lens अभी Google Play पर नहीं है, इसलिए Play Protect इसे पहचाना नहीं गया कह सकता है। “More details”, फिर “Install anyway” दबाएँ।'],
+    ],
+    faqTitle: 'जानने लायक',
+    faq: [
+      { q: 'मेरे पास टेस्ट वर्शन था। इंस्टॉल करने पर “App not installed” आता है।', a: 'पहले पुराना Lens अनइंस्टॉल करें, फिर यह इंस्टॉल करें। Lens क्लाउड में मौजूद फ़ोटो सुरक्षित रहती हैं: देखने के लिए फिर से साइन इन करें।' },
+      { q: 'Lens Google Play पर कब आएगा?', a: 'जल्द। टेस्टिंग के बाद Lens Google Play पर लॉन्च होगा। यहाँ से इंस्टॉल करने पर भी अपडेट मिलते रहेंगे।' },
+      { q: 'क्या iPhone वर्शन है?', a: 'iPhone वर्शन बना हुआ है और Android लॉन्च के बाद आएगा। तब तक आपकी लाइब्रेरी lens.instagrowapp.com पर किसी भी ब्राउज़र में चलती है।' },
+      { q: 'कैसे जाँचें कि डाउनलोड असली है?', a: 'Lens हमारी अपनी की से साइन है, और मौजूदा डाउनलोड का SHA-256 चेकसम नीचे दिया है। डाउनलोड की गई फ़ाइल से मिलाएँ।' },
+    ],
+    checksum: 'SHA-256',
+    i18n: { version: 'वर्शन {build} · {size}', unavailable: 'डाउनलोड अभी उपलब्ध नहीं है। कुछ मिनट बाद फिर कोशिश करें।' },
   },
 }[lang];
 ---
 
 <Layout lang={lang} path="download" title={c.title} description={c.description}>
-  <section class="block">
-    <div class="container" id="download" data-i18n={JSON.stringify(c.i18n)}>
-      <h1>{c.h1}</h1>
-      <p class="lead">{c.lead}</p>
-      <div class="card download-card">
-        <a class="btn btn-primary download-btn" id="apk-64" href="#" aria-disabled="true">{c.button}</a>
-        <p class="note" id="apk-version" role="status" aria-live="polite"></p>
-        <p class="note"><a id="apk-32" href="#" hidden>{c.older}</a></p>
-        <p class="note checksum" id="apk-sha"></p>
+  <div id="download" data-i18n={JSON.stringify(c.i18n)}>
+    <section class="dl-hero">
+      <div class="dl-hero-grid">
+        <div class="dl-copy">
+          <p class="kn-kicker">{c.kicker}</p>
+          <h1 class="dl-title">{c.h1}</h1>
+          <p class="kn-lead dl-lead">{c.lead}</p>
+          <a class="btn btn-primary dl-button" id="apk-64" href="#" aria-disabled="true">{c.button}</a>
+          <p class="dl-meta"><span id="apk-version" role="status" aria-live="polite"></span><span>{c.meta}</span></p>
+          <p class="dl-older"><a id="apk-32" href="#" hidden>{c.older}</a></p>
+        </div>
+        <div class="dl-visual">
+          <div class="kn-phone dl-phone" aria-hidden="true">
+            <div class="kn-phone-screen">
+              <video data-src="/media/video.mp4" poster="/media/video-poster.webp" muted loop playsinline preload="none"></video>
+            </div>
+          </div>
+          <div class="dl-qr">
+            <div class="dl-qr-code" set:html={qr} />
+            <div>
+              <strong>{c.qrTitle}</strong>
+              <p>{c.qrText}</p>
+            </div>
+          </div>
+        </div>
       </div>
-      <h2>{c.stepsTitle}</h2>
-      <ol class="steps">
-        {c.steps.map((step) => <li>{step}</li>)}
-      </ol>
-      <h2>{c.updatesTitle}</h2>
-      <p>{c.updates}</p>
-      <h2>{c.replaceTitle}</h2>
-      <p>{c.replace}</p>
-      <p class="note">{c.iphone}</p>
-    </div>
-  </section>
-</Layout>
+    </section>
 
-<style>
-  .download-card {
-    display: grid;
-    gap: 0.5rem;
-    max-width: 32rem;
-    margin: 1.5rem 0 2rem;
-  }
-  .download-btn[aria-disabled='true'] {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-  .checksum {
-    font-family: ui-monospace, monospace;
-    font-size: 0.75rem;
-    word-break: break-all;
-  }
-  .steps li {
-    margin: 0.4rem 0;
-  }
-</style>
+    <section class="dl-trust">
+      {
+        c.trust.map(([h, p]) => (
+          <div>
+            <strong>{h}</strong>
+            <p>{p}</p>
+          </div>
+        ))
+      }
+    </section>
+
+    <section class="kn-band">
+      <div class="kn-wide kn-flush">
+        <h2 class="kn-display-md">{c.stepsTitle}</h2>
+        <ol class="dl-steps">
+          {
+            c.steps.map(([h, p], i) => (
+              <li>
+                <span class="dl-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+                <h3>{h}</h3>
+                <p>{p}</p>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="narrow">
+        <Faq title={c.faqTitle} items={c.faq} />
+        <p class="dl-sha"><span>{c.checksum}</span> <code id="apk-sha">…</code></p>
+      </div>
+    </section>
+  </div>
+</Layout>
 
 <script>
   import '../scripts/download';

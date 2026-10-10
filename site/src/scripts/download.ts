@@ -1,4 +1,5 @@
-// Fills the download page from /downloads/android/latest.json (promoted build).
+// Download page: fills the button from /downloads/android/latest.json (the
+// promoted build), and plays the phone's video loop once the page has loaded.
 type File = { url: string; size: number; sha256: string };
 type Latest = { build: number; files: Partial<Record<'arm64-v8a' | 'armeabi-v7a', File>> };
 
@@ -20,7 +21,7 @@ if (root) {
       main.href = a64.url;
       main.removeAttribute('aria-disabled');
       version.textContent = fill(t.version, { build: `dev-${latest.build}`, size: mb(a64.size) });
-      sha.textContent = fill(t.checksum, { sha: a64.sha256 });
+      sha.textContent = a64.sha256;
       if (a32) {
         older.href = a32.url;
         older.hidden = false;
@@ -29,4 +30,21 @@ if (root) {
     .catch(() => {
       version.textContent = t.unavailable;
     });
+
+  // Decoration: after load, only while visible, never with "reduce motion".
+  const start = () => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const v = e.target as HTMLVideoElement;
+        if (e.isIntersecting) {
+          if (!v.src) v.src = v.dataset.src ?? '';
+          v.play().catch(() => {});
+        } else v.pause();
+      }
+    });
+    root.querySelectorAll<HTMLVideoElement>('video[data-src]').forEach((v) => io.observe(v));
+  };
+  if (document.readyState === 'complete') start();
+  else window.addEventListener('load', start, { once: true });
 }
