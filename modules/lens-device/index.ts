@@ -29,6 +29,10 @@ type LensDeviceNative = {
   canRead(uri: string): boolean;
   copyMedia(uri: string, destination: string): Promise<number>;
   addListener(event: 'onThermalChange', listener: (e: { level: ThermalLevel }) => void): { remove(): void };
+  testLoop?(): { scenario: number; resultUri: string | null } | null;
+  writeTestResult?(uri: string, text: string): Promise<boolean>;
+  finishTestLoop?(): void;
+  setOrientation?(value: 'portrait' | 'landscape' | 'reverseLandscape' | 'auto'): void;
 };
 
 const native = requireOptionalNativeModule<LensDeviceNative>('LensDevice');
@@ -108,3 +112,22 @@ export const mediaPicker = native?.pickMedia
       },
     }
   : null;
+
+/**
+ * Self-test hooks (Android). `launch`: set when Firebase Test Lab started the
+ * app as a "game loop" (it then runs the camera self-test and finishes).
+ */
+export const selfTestHooks = {
+  launch(): { scenario: number; resultUri: string | null } | null {
+    try {
+      return native?.testLoop?.() ?? null;
+    } catch {
+      return null;
+    }
+  },
+  writeResult: (uri: string, text: string): Promise<boolean> => native?.writeTestResult?.(uri, text) ?? Promise.resolve(false),
+  finish: () => native?.finishTestLoop?.(),
+  /** Forces the screen orientation ("auto" = follow the phone again). */
+  setOrientation: (value: 'portrait' | 'landscape' | 'reverseLandscape' | 'auto') => native?.setOrientation?.(value),
+  available: () => typeof native?.setOrientation === 'function',
+};

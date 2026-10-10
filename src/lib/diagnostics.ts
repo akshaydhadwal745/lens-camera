@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 import type { Capabilities, CameraDiagnostics } from '../../modules/lens-camera';
 import { api } from './api';
 import { buildInfo } from './build-info';
+import type { SelfTestReport } from './self-test';
 
 export type DiagnosticEvent = { kind: string; at: string; details: Record<string, unknown> };
 
@@ -121,4 +122,19 @@ export function reportCameraError(kind: 'fallbackBasic' | 'cameraError', message
 /** Basic camera (fallback): the photo size it saved. */
 export function reportBasicPhoto(width: number, height: number) {
   record('basicPhoto', { size: `${width}x${height}` }, `${width}x${height}`);
+}
+
+/** Self-test result: always sent (not deduped); trimmed to fit one report. */
+export async function sendSelfTest(report: SelfTestReport) {
+  if (Platform.OS !== 'android') return;
+  const steps = report.steps.map((s) => ({ ...s, message: s.message?.slice(0, 200) }));
+  try {
+    await api.diagnostics({
+      device: device(),
+      build: buildInfo(),
+      events: [{ kind: 'selftest', at: new Date().toISOString(), details: { ...report, steps } }],
+    });
+  } catch {
+    // Offline: the result is still on screen (and in Test Lab's result file).
+  }
 }

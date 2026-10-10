@@ -84,7 +84,8 @@
       ],
       "expo-web-browser",
       "expo-background-task",
-      "./plugins/with-abi-splits.js"
+      "./plugins/with-abi-splits.js",
+      "./plugins/with-test-loop.js"
     ],
     "experiments": {
       "typedRoutes": true,

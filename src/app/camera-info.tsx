@@ -120,6 +120,10 @@ export default function CameraInfoScreen() {
                 : null}
             </View>
           ))}
+          <Pressable style={styles.lab} onPress={() => router.push('/selftest')}>
+            <Ionicons name="checkmark-done-outline" size={18} color={colors.accent} />
+            <Text style={styles.labText}>Run self-test</Text>
+          </Pressable>
           <Pressable style={styles.lab} onPress={() => router.push('/lab')}>
             <Ionicons name="flask-outline" size={18} color={colors.accent} />
             <Text style={styles.labText}>Quality Lab</Text>

@@ -68,6 +68,11 @@ def main():
         for kind in ('glFallback', 'fallbackBasic', 'cameraError'):
             for e in k.get(kind, []):
                 print(f"  {kind} dev-{e['build']}: {e.get('message')}")
+        for t in k.get('selftest', []):
+            print(f"  selftest dev-{t['build']}: {t.get('passed')} passed, {t.get('failed')} failed, {t.get('skipped')} skipped")
+            for st in t.get('steps', []):
+                if st.get('status') != 'pass':
+                    print(f"    {st.get('status')} {st.get('label')}: {st.get('message')}")
         for b in k.get('basicPhoto', []):
             print(f"  basicPhoto dev-{b['build']}: {b.get('size')}")
 

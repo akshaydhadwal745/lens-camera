@@ -22,6 +22,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * status (API 29+), reduced to normal / warm / hot / critical. Android 7–9 have
  * no thermal API, so the battery temperature stands in (checked every 30 s).
  */
+private const val TEST_LOOP = "com.google.intent.action.TEST_LOOP"
+
 class LensDeviceModule : Module() {
   private var listener: PowerManager.OnThermalStatusChangedListener? = null
   private val handler = Handler(Looper.getMainLooper())
@@ -45,6 +47,38 @@ class LensDeviceModule : Module() {
     Events("onThermalChange")
 
     Function("thermalLevel") { currentLevel() }
+
+    // ---------- Self-test (Firebase Test Lab "game loop") ----------
+
+    // Test Lab starts the app with this action; `data` is the file to write
+    // results to. Null when the app was opened normally.
+    Function("testLoop") {
+      val intent = appContext.currentActivity?.intent ?: return@Function null
+      if (intent.action != TEST_LOOP) return@Function null
+      mapOf("scenario" to intent.getIntExtra("scenario", 1), "resultUri" to intent.data?.toString())
+    }
+
+    AsyncFunction("writeTestResult") { uri: String, text: String ->
+      val resolver = appContext.reactContext?.contentResolver ?: return@AsyncFunction false
+      resolver.openOutputStream(android.net.Uri.parse(uri), "w")?.use { it.write(text.toByteArray()) } != null
+    }
+
+    // Ends the game loop (Test Lab waits for the activity to finish).
+    Function("finishTestLoop") {
+      appContext.currentActivity?.finish()
+      Unit
+    }
+
+    // Self-test: rotate the screen without anyone holding the phone.
+    Function("setOrientation") { value: String ->
+      appContext.currentActivity?.requestedOrientation = when (value) {
+        "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        "landscape" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        "reverseLandscape" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+      }
+      Unit
+    }
 
     // Import from the phone's gallery: the user picks; we get links (no copies, no permission).
     lateinit var pickerLauncher: AppContextActivityResultLauncher<PickMediaInput, List<PickedMedia>>
