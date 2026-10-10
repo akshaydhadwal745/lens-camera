@@ -30,6 +30,11 @@ const related = (page.group === 'features' ? featurePages : useCasePages).filter
         <a class="btn btn-ghost" href={href(lang, 'signin')}>{t.signIn}</a>
       </div>
     </div>
+    <div class="container">
+      <div class="kn-frame feature-shot">
+        <img src={`/media/feat-${page.slug}.webp`} alt="" width="1200" height="900" fetchpriority="high" decoding="async" />
+      </div>
+    </div>
   </section>
 
   <article class="narrow prose">
@@ -56,7 +61,7 @@ const related = (page.group === 'features' ? featurePages : useCasePages).filter
         {
           related.map((p) => (
             <a class="card" href={href(lang, `${p.group}/${p.slug}`)}>
-              <div class="icon" aria-hidden="true">{p.icon}</div>
+              <img class="card-media" src={`/media/card-${p.slug}.webp`} alt="" width="640" height="400" loading="lazy" decoding="async" />
               <h3>{p.name[lang]}</h3>
               <p>{p.copy[lang].description}</p>
             </a>

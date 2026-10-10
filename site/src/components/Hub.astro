@@ -38,7 +38,7 @@ const copy = {
       {
         list.map((p) => (
           <a class="card" href={href(lang, `${group}/${p.slug}`)}>
-            <div class="icon" aria-hidden="true">{p.icon}</div>
+            <img class="card-media" src={`/media/card-${p.slug}.webp`} alt="" width="640" height="400" loading="lazy" decoding="async" />
             <h2 class="h3">{p.name[lang]}</h2>
             <p>{p.copy[lang].description}</p>
           </a>

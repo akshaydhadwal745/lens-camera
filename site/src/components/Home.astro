@@ -1,81 +1,137 @@
 ---
-import Cta from './Cta.astro';
+// Home: the "Keynote" design (canvas board Keynote.dc.html, picked 2026-10-10).
+// Cinematic video hero, one big idea per section, real photos. Media lives in
+// public/media (WebP + short silent MP4 loops with WebP posters).
 import Faq from './Faq.astro';
-import { featurePages, useCasePages } from '../content/pages';
+import { featurePages } from '../content/pages';
 import Layout from '../layouts/Layout.astro';
-import { BRAND, href, type Lang, ui } from '../i18n/ui';
+import { BRAND, href, type Lang } from '../i18n/ui';
 
 interface Props {
   lang: Lang;
 }
 const { lang } = Astro.props;
-const t = ui[lang];
 const site = Astro.site!.origin;
 
 const copy = {
   en: {
-    title: 'Lens by InstaGrow: pro camera + 100 GB free photo backup at original quality',
+    title: 'Lens: the pro camera with the cloud built in. 100 GB free, original quality.',
     description:
-      'Shoot endlessly, your phone never fills up. A pro camera with Night and Portrait modes, 100 GB free backup at original quality, your own Google Drive or Dropbox, and a web app.',
-    eyebrow: 'Camera + cloud, in one app',
-    h1: 'Shoot endlessly. Your phone never fills up.',
-    lead: 'Lens is a pro camera that backs up every photo and video at original quality the moment you take it, then frees your phone for you.',
-    web: 'Use on the web',
-    note: 'Free: 100 GB when you sign in. Android first; iPhone coming.',
-    trust: [
-      ['Original quality, always', 'Never compressed. Every upload is verified.'],
-      ['100 GB free', 'Or connect Google Drive, OneDrive, Dropbox, Box or a NAS.'],
-      ['Stored in India', 'AWS Mumbai. Encrypted. Delete anytime.'],
+      'Shoot endlessly, your phone never fills up. A pro camera with Night and Portrait, 4K video, and every photo backed up at original quality: 100 GB free, plus a web app.',
+    kicker: 'Lens',
+    h1: 'Every shot. Full quality. Forever.',
+    lead: 'The pro camera with the cloud built in. 100 GB free.',
+    get: 'Get Lens',
+    web: 'Use it on the web',
+    statementDim: 'Shoot without limits.',
+    statementOn: 'Every photo and video is backed up at original quality the moment you take it.',
+    statementDim2: 'Then your phone frees itself.',
+    statementOn2: 'No compression. No full storage. No lost memories.',
+    nightTitle: 'Night mode.',
+    nightText: 'Several exposures merged into one clean, detailed shot.',
+    nightTextOn: 'Even when it’s nearly dark.',
+    nightChips: ['Night · frames merged', 'Full resolution'],
+    nightAlt: 'A rainy street at night, lit by cyan street lamps',
+    portraitTitle: 'Portrait.',
+    portraitSub: 'Refocus later.',
+    portraitText: 'Lens separates people from the background on your phone. Change the blur, or remove it, whenever you like. The original is never touched.',
+    portraitAlt: 'Portrait of a woman lit by green and red neon',
+    videoTitle: 'Video that keeps up.',
+    videoText: 'Record up to 4K at 60 fps, with HDR and stabilization where your phone supports them. Lens uploads while you’re still filming, and long videos play back instantly on any device.',
+    videoStats: [
+      ['4K', 'up to 60 fps'],
+      ['HDR', 'where supported'],
+      ['0 s', 'wait to upload'],
     ],
-    featuresTitle: 'Everything a camera roll should have been',
-    featuresLead: 'A camera, a backup and a gallery that work together, on your phone and on the web.',
-    howTitle: 'How it works',
-    how: [
-      ['Shoot', 'Use the Lens camera: pro controls, Night, Portrait and live looks.'],
-      ['It backs up instantly', 'Original quality, verified, even while you record video.'],
-      ['Your phone stays free', 'Lens removes full-size copies that are safe in the cloud and keeps sharp previews.'],
+    backupTitle: 'Backed up before you lower your phone.',
+    backupText: 'Every original is uploaded, verified and safe. Lens then clears full-size copies from your phone and keeps sharp previews, so your gallery still works offline.',
+    backupStats: [
+      ['100 GB', 'free when you sign in'],
+      ['Original', 'quality, checksum-verified'],
+      ['+10 GB', 'for every friend you invite'],
     ],
-    useTitle: 'Made for the moments that fill your phone',
+    webTitle: 'Now on the big screen.',
+    webText: 'Open lens.instagrowapp.com, scan the code with your phone and your whole library is there. Upload from your computer and it syncs back to your phone.',
+    webNav: ['Library', 'Shared', 'Trash'],
+    specsTitle: 'Tech specs',
+    specs: [
+      ['Camera', ['Automatic Night in low light', 'Portrait with adjustable blur', 'Pro mode: ISO, shutter, focus, white balance', 'RAW and Ultra HDR, 13 looks']],
+      ['Video', ['Up to 4K at 60 fps', 'HDR and stabilization', 'Upload while recording', 'Streaming up to 4K']],
+      ['Storage', ['100 GB free when you sign in', 'Original quality, verified', 'Google Drive, OneDrive, Dropbox, Box, S3, NAS', 'Trash 30 days, Archive 1 year']],
+      ['Platforms', ['Android 7 and later', 'Web app in any browser', 'iPhone coming soon']],
+    ],
+    finale: 'Never delete a memory again.',
+    finaleGet: 'Get Lens free',
+    faqTitle: 'Questions',
     faq: [
       { q: 'Is Lens free?', a: 'Yes. Sign in with your email or Google account and you get 100 GB of backup free. Without signing in you can try Lens with 5 GB. Paid plans with more storage will come later.' },
       { q: 'Will my photos lose quality?', a: 'No. Lens stores the exact original file. Previews are extra, for speed. When you open, share or save a photo you get the original.' },
-      { q: 'Which phones does Lens work on?', a: 'Lens launches on Android 7 and newer, from budget phones to flagships, and shows only the camera features your phone supports. An iPhone version is built and coming later.' },
+      { q: 'Which phones does Lens work on?', a: 'Android 7 and newer, from budget phones to flagships. Lens adapts to what your phone’s camera can do. An iPhone version is built and coming later.' },
       { q: 'Can I see my photos on a computer?', a: 'Yes. Open this website, scan the QR code with your phone, and your library is on your computer, in sync with your phone.' },
-      { q: 'Where are my photos stored?', a: 'In Amazon Web Services, Mumbai region (India), encrypted at rest. Or in your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS if you connect one.' },
+      { q: 'Where are my photos stored?', a: 'With Amazon Web Services, encrypted at rest. Or in your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS if you connect one.' },
     ],
   },
   hi: {
-    title: 'Lens by InstaGrow: प्रो कैमरा + ओरिजिनल क्वालिटी में 100 GB मुफ़्त फ़ोटो बैकअप',
+    title: 'Lens: क्लाउड वाला प्रो कैमरा। 100 GB मुफ़्त, ओरिजिनल क्वालिटी।',
     description:
-      'जितनी चाहें फ़ोटो लें, फ़ोन कभी फ़ुल नहीं होगा। नाइट और पोर्ट्रेट मोड वाला प्रो कैमरा, ओरिजिनल क्वालिटी में 100 GB मुफ़्त बैकअप, आपका अपना Google Drive या Dropbox, और वेब ऐप।',
-    eyebrow: 'कैमरा + क्लाउड, एक ही ऐप में',
-    h1: 'जितनी चाहें फ़ोटो लें। फ़ोन कभी फ़ुल नहीं होगा।',
-    lead: 'Lens एक प्रो कैमरा है जो हर फ़ोटो और वीडियो का लेते ही ओरिजिनल क्वालिटी में बैकअप करता है, फिर आपके लिए फ़ोन ख़ाली करता है।',
+      'जितनी चाहें फ़ोटो लें, फ़ोन कभी फ़ुल नहीं होगा। नाइट और पोर्ट्रेट वाला प्रो कैमरा, 4K वीडियो, और हर फ़ोटो का ओरिजिनल क्वालिटी में बैकअप: 100 GB मुफ़्त, साथ में वेब ऐप।',
+    kicker: 'Lens',
+    h1: 'हर शॉट। पूरी क्वालिटी। हमेशा।',
+    lead: 'क्लाउड के साथ बना प्रो कैमरा। 100 GB मुफ़्त।',
+    get: 'Lens पाएँ',
     web: 'वेब पर इस्तेमाल करें',
-    note: 'मुफ़्त: साइन इन करने पर 100 GB। पहले Android; iPhone जल्द।',
-    trust: [
-      ['हमेशा ओरिजिनल क्वालिटी', 'कभी कंप्रेस नहीं। हर अपलोड की जाँच होती है।'],
-      ['100 GB मुफ़्त', 'या Google Drive, OneDrive, Dropbox, Box या NAS जोड़ें।'],
-      ['भारत में स्टोर', 'AWS मुंबई। एन्क्रिप्टेड। कभी भी डिलीट करें।'],
+    statementDim: 'बिना रुके फ़ोटो लें।',
+    statementOn: 'हर फ़ोटो और वीडियो का लेते ही ओरिजिनल क्वालिटी में बैकअप होता है।',
+    statementDim2: 'फिर फ़ोन ख़ुद ख़ाली हो जाता है।',
+    statementOn2: 'कोई कंप्रेशन नहीं। फ़ुल स्टोरेज नहीं। कोई याद नहीं खोती।',
+    nightTitle: 'नाइट मोड।',
+    nightText: 'कई एक्सपोज़र मिलकर एक साफ़, बारीक फ़ोटो बनाते हैं।',
+    nightTextOn: 'लगभग अँधेरे में भी।',
+    nightChips: ['नाइट · फ़्रेम मिलाए गए', 'पूरा रिज़ॉल्यूशन'],
+    nightAlt: 'रात में बारिश वाली सड़क, नीली स्ट्रीट लाइटों से रोशन',
+    portraitTitle: 'पोर्ट्रेट।',
+    portraitSub: 'फ़ोकस बाद में बदलें।',
+    portraitText: 'Lens फ़ोन पर ही लोगों को बैकग्राउंड से अलग करता है। ब्लर जब चाहें बदलें या हटाएँ। ओरिजिनल कभी नहीं बदलता।',
+    portraitAlt: 'हरी और लाल नियॉन रोशनी में एक महिला का पोर्ट्रेट',
+    videoTitle: 'वीडियो जो साथ चले।',
+    videoText: '60 fps पर 4K तक रिकॉर्ड करें, HDR और स्टेबिलाइज़ेशन के साथ, जहाँ आपका फ़ोन सपोर्ट करे। फ़िल्म करते समय ही Lens अपलोड करता है, और लंबे वीडियो हर डिवाइस पर तुरंत चलते हैं।',
+    videoStats: [
+      ['4K', '60 fps तक'],
+      ['HDR', 'जहाँ सपोर्ट हो'],
+      ['0 s', 'अपलोड का इंतज़ार'],
     ],
-    featuresTitle: 'कैमरा रोल में जो होना चाहिए था, वो सब',
-    featuresLead: 'कैमरा, बैकअप और गैलरी जो साथ मिलकर काम करते हैं, फ़ोन पर भी और वेब पर भी।',
-    howTitle: 'यह कैसे काम करता है',
-    how: [
-      ['फ़ोटो लें', 'Lens कैमरा इस्तेमाल करें: प्रो कंट्रोल, नाइट, पोर्ट्रेट और लाइव लुक्स।'],
-      ['तुरंत बैकअप', 'ओरिजिनल क्वालिटी, जाँचा हुआ, वीडियो रिकॉर्ड करते समय भी।'],
-      ['फ़ोन ख़ाली रहता है', 'क्लाउड में सुरक्षित बड़ी फ़ाइलें Lens हटा देता है और साफ़ प्रीव्यू रखता है।'],
+    backupTitle: 'फ़ोन नीचे करने से पहले बैकअप।',
+    backupText: 'हर ओरिजिनल अपलोड, जाँचा और सुरक्षित। फिर Lens फ़ोन से बड़ी फ़ाइलें हटाता है और साफ़ प्रीव्यू रखता है, ताकि गैलरी ऑफ़लाइन भी चले।',
+    backupStats: [
+      ['100 GB', 'साइन इन पर मुफ़्त'],
+      ['ओरिजिनल', 'क्वालिटी, जाँची हुई'],
+      ['+10 GB', 'हर बुलाए दोस्त पर'],
     ],
-    useTitle: 'उन पलों के लिए बना जो फ़ोन भर देते हैं',
+    webTitle: 'अब बड़ी स्क्रीन पर।',
+    webText: 'lens.instagrowapp.com खोलें, फ़ोन से कोड स्कैन करें और पूरी लाइब्रेरी वहाँ है। कंप्यूटर से अपलोड करें, फ़ोन पर सिंक हो जाता है।',
+    webNav: ['लाइब्रेरी', 'शेयर किए', 'ट्रैश'],
+    specsTitle: 'तकनीकी जानकारी',
+    specs: [
+      ['कैमरा', ['कम रोशनी में अपने-आप नाइट', 'बदलने लायक ब्लर वाला पोर्ट्रेट', 'प्रो मोड: ISO, शटर, फ़ोकस, व्हाइट बैलेंस', 'RAW और Ultra HDR, 13 लुक्स']],
+      ['वीडियो', ['60 fps पर 4K तक', 'HDR और स्टेबिलाइज़ेशन', 'रिकॉर्ड करते हुए अपलोड', '4K तक स्ट्रीमिंग']],
+      ['स्टोरेज', ['साइन इन पर 100 GB मुफ़्त', 'ओरिजिनल क्वालिटी, जाँची हुई', 'Google Drive, OneDrive, Dropbox, Box, S3, NAS', 'ट्रैश 30 दिन, आर्काइव 1 साल']],
+      ['प्लेटफ़ॉर्म', ['Android 7 और नए', 'किसी भी ब्राउज़र में वेब ऐप', 'iPhone जल्द']],
+    ],
+    finale: 'अब कोई याद डिलीट न करें।',
+    finaleGet: 'Lens मुफ़्त पाएँ',
+    faqTitle: 'सवाल',
     faq: [
-      { q: 'क्या Lens मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और 100 GB बैकअप मुफ़्त पाएँ। बिना साइन इन के आप 5 GB के साथ आज़मा सकते हैं। ज़्यादा स्टोरेज वाले पेड प्लान बाद में आएँगे।' },
-      { q: 'क्या मेरी फ़ोटो की क्वालिटी कम होगी?', a: 'नहीं। Lens ठीक वही ओरिजिनल फ़ाइल रखता है। प्रीव्यू सिर्फ़ तेज़ी के लिए अलग से हैं। फ़ोटो खोलने, शेयर या सेव करने पर आपको ओरिजिनल मिलता है।' },
-      { q: 'Lens किन फ़ोन पर चलता है?', a: 'Lens Android 7 और नए वर्शन पर लॉन्च हो रहा है, बजट फ़ोन से फ़्लैगशिप तक, और सिर्फ़ वही कैमरा फ़ीचर दिखाता है जो आपका फ़ोन सपोर्ट करता है। iPhone वर्शन बना हुआ है और बाद में आएगा।' },
-      { q: 'क्या कंप्यूटर पर फ़ोटो देख सकते हैं?', a: 'हाँ। यह वेबसाइट खोलें, फ़ोन से QR कोड स्कैन करें, और आपकी लाइब्रेरी कंप्यूटर पर, फ़ोन के साथ सिंक।' },
-      { q: 'मेरी फ़ोटो कहाँ स्टोर होती हैं?', a: 'Amazon Web Services के मुंबई रीजन (भारत) में, एन्क्रिप्टेड। या आपके अपने Google Drive, OneDrive, Dropbox, Box, S3 या NAS में, अगर आप जोड़ते हैं।' },
+      { q: 'क्या Lens मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और 100 GB बैकअप मुफ़्त पाएँ। बिना साइन इन के 5 GB के साथ आज़माएँ। ज़्यादा स्टोरेज वाले पेड प्लान बाद में आएँगे।' },
+      { q: 'क्या मेरी फ़ोटो की क्वालिटी कम होगी?', a: 'नहीं। Lens ठीक वही ओरिजिनल फ़ाइल रखता है। प्रीव्यू सिर्फ़ तेज़ी के लिए हैं। फ़ोटो खोलने, शेयर या सेव करने पर ओरिजिनल मिलता है।' },
+      { q: 'Lens किन फ़ोन पर चलता है?', a: 'Android 7 और नए, बजट फ़ोन से फ़्लैगशिप तक। Lens आपके फ़ोन के कैमरे के हिसाब से ढल जाता है। iPhone वर्शन बना हुआ है और बाद में आएगा।' },
+      { q: 'क्या कंप्यूटर पर फ़ोटो देख सकते हैं?', a: 'हाँ। यह वेबसाइट खोलें, फ़ोन से QR कोड स्कैन करें, और लाइब्रेरी कंप्यूटर पर, फ़ोन के साथ सिंक।' },
+      { q: 'मेरी फ़ोटो कहाँ स्टोर होती हैं?', a: 'Amazon Web Services में, एन्क्रिप्टेड। या आपके अपने Google Drive, OneDrive, Dropbox, Box, S3 या NAS में, अगर आप जोड़ते हैं।' },
     ],
   },
 }[lang];
+
+const mosaic = ['mosaic-1', 'mosaic-2', 'mosaic-3', 'mosaic-4', 'mosaic-5', 'mosaic-6', 'mosaic-7', 'mosaic-8'];
+const library = ['lib-1', 'lib-2', 'lib-3', 'lib-4', 'lib-5', 'lib-6', 'portrait', 'mosaic-5', 'mosaic-3', 'mosaic-7', 'mosaic-4', 'mosaic-6', 'mosaic-8', 'mosaic-2', 'mosaic-1'];
 
 const appSchema = {
   '@context': 'https://schema.org',
@@ -86,102 +142,167 @@ const appSchema = {
   description: copy.description,
   url: `${site}${href(lang)}`,
   image: `${site}/icon-512.png`,
-  inLanguage: lang === 'en' ? 'en-IN' : 'hi-IN',
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+  inLanguage: lang === 'en' ? 'en' : 'hi',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   featureList: featurePages.map((p) => p.name[lang]),
   publisher: { '@id': `${site}/#org` },
 };
 ---
 
 <Layout lang={lang} path="" title={copy.title} description={copy.description} bareTitle jsonLd={[appSchema]}>
-  <section class="hero">
-    <div class="container hero-grid">
-      <div>
-        <span class="eyebrow">{copy.eyebrow}</span>
-        <h1>{copy.h1}</h1>
-        <p class="lead">{copy.lead}</p>
-        <div class="actions">
-          <a class="btn btn-primary" href={href(lang, 'download')}>{t.getApp}</a>
-          <a class="btn btn-ghost" href={href(lang, 'signin')}>{copy.web}</a>
+  <section class="kn-hero">
+    <video class="kn-bg" src="/media/hero.mp4" poster="/media/hero-poster.webp" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
+    <div class="kn-shade"></div>
+    <div class="kn-hero-copy">
+      <p class="kn-kicker">{copy.kicker}</p>
+      <h1>{copy.h1}</h1>
+      <p class="kn-lead">{copy.lead}</p>
+      <div class="actions kn-center">
+        <a class="btn btn-primary" href={href(lang, 'download')}>{copy.get}</a>
+        <a class="btn btn-ghost" href={href(lang, 'signin')}>{copy.web}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-statement">
+    <p>
+      {copy.statementDim} <span>{copy.statementOn}</span>
+      {copy.statementDim2} <span>{copy.statementOn2}</span>
+    </p>
+  </section>
+
+  <section class="kn-wide">
+    <div class="kn-head">
+      <h2 class="kn-display">{copy.nightTitle}</h2>
+      <p>{copy.nightText} <span>{copy.nightTextOn}</span></p>
+    </div>
+    <div class="kn-frame kn-night">
+      <img src="/media/night.webp" alt={copy.nightAlt} width="1800" height="1008" loading="lazy" decoding="async" />
+      <div class="kn-chips">
+        {copy.nightChips.map((c) => <span>{c}</span>)}
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-band">
+    <div class="kn-split">
+      <div class="kn-frame kn-portrait">
+        <img src="/media/portrait.webp" alt={copy.portraitAlt} width="1100" height="1650" loading="lazy" decoding="async" />
+      </div>
+      <div class="kn-split-copy">
+        <h2 class="kn-display-md">{copy.portraitTitle}<br /><span>{copy.portraitSub}</span></h2>
+        <p>{copy.portraitText}</p>
+        <div class="kn-slider" aria-hidden="true">
+          <div class="kn-slider-labels"><span>f/1.4</span><strong>f/2.8</strong><span>f/16</span></div>
+          <div class="kn-slider-track"><div class="kn-slider-fill"></div><div class="kn-slider-knob"></div></div>
         </div>
-        <p class="note">{copy.note}</p>
-      </div>
-      <div class="hero-art" aria-hidden="true">
-        <img src="/mark.svg" alt="" width="512" height="512" />
       </div>
     </div>
   </section>
 
-  <section class="block alt">
-    <h2 class="sr-only">{lang === 'en' ? 'Why Lens' : 'Lens क्यों'}</h2>
-    <div class="container grid grid-3">
-      {
-        copy.trust.map(([h, p]) => (
-          <div class="card">
-            <h3>{h}</h3>
-            <p>{p}</p>
+  <section class="kn-wide kn-video">
+    <div class="kn-phone">
+      <div class="kn-phone-screen">
+        <video src="/media/video.mp4" poster="/media/video-poster.webp" autoplay muted loop playsinline preload="none" aria-hidden="true"></video>
+        <span class="kn-rec">● 4K 60</span>
+      </div>
+    </div>
+    <div class="kn-split-copy">
+      <h2 class="kn-display-md">{copy.videoTitle}</h2>
+      <p>{copy.videoText}</p>
+      <div class="kn-stats">
+        {copy.videoStats.map(([v, l]) => <div><strong>{v}</strong><span>{l}</span></div>)}
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-band">
+    <div class="kn-wide kn-flush">
+      <h2 class="kn-display-md kn-measure">{copy.backupTitle}</h2>
+      <p class="kn-text kn-measure-sm">{copy.backupText}</p>
+      <div class="kn-mosaic">
+        {mosaic.map((m) => <img src={`/media/${m}.webp`} alt="" loading="lazy" decoding="async" />)}
+      </div>
+      <div class="kn-big-stats">
+        {copy.backupStats.map(([v, l]) => <div><strong>{v}</strong><span>{l}</span></div>)}
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-wide kn-centered">
+    <h2 class="kn-display-md">{copy.webTitle}</h2>
+    <p class="kn-text kn-measure-sm kn-auto">{copy.webText}</p>
+    <div class="kn-laptop" aria-hidden="true">
+      <div class="kn-laptop-lid">
+        <div class="kn-laptop-screen">
+          <div class="kn-laptop-side">
+            <strong>Lens</strong>
+            {copy.webNav.map((n, i) => <span class={i === 0 ? 'on' : undefined}>{n}</span>)}
           </div>
-        ))
-      }
+          <div class="kn-laptop-grid">
+            {library.map((m) => <img src={`/media/${m}.webp`} alt="" loading="lazy" decoding="async" />)}
+          </div>
+        </div>
+      </div>
+      <div class="kn-laptop-base"></div>
     </div>
   </section>
 
-  <section class="block">
-    <div class="container">
-      <div class="section-head">
-        <h2>{copy.featuresTitle}</h2>
-        <p class="lead">{copy.featuresLead}</p>
-      </div>
-      <div class="grid grid-3">
+  <section class="kn-specs">
+    <div class="narrow">
+      <h2>{copy.specsTitle}</h2>
+      <div class="kn-spec-grid">
         {
-          featurePages.map((p) => (
-            <a class="card" href={href(lang, `features/${p.slug}`)}>
-              <div class="icon" aria-hidden="true">{p.icon}</div>
-              <h3>{p.name[lang]}</h3>
-              <p>{p.copy[lang].description}</p>
-            </a>
-          ))
-        }
-      </div>
-    </div>
-  </section>
-
-  <section class="block alt">
-    <div class="container">
-      <div class="section-head"><h2>{copy.howTitle}</h2></div>
-      <ol class="steps">
-        {
-          copy.how.map(([h, p]) => (
-            <li>
+          copy.specs.map(([h, items]) => (
+            <div>
               <h3>{h}</h3>
-              <p class="muted">{p}</p>
-            </li>
-          ))
-        }
-      </ol>
-    </div>
-  </section>
-
-  <section class="block">
-    <div class="container">
-      <div class="section-head"><h2>{copy.useTitle}</h2></div>
-      <div class="grid">
-        {
-          useCasePages.map((p) => (
-            <a class="card" href={href(lang, `use-cases/${p.slug}`)}>
-              <div class="icon" aria-hidden="true">{p.icon}</div>
-              <h3>{p.name[lang]}</h3>
-              <p>{p.copy[lang].lead}</p>
-            </a>
+              <ul>
+                {(items as string[]).map((i) => <li>{i}</li>)}
+              </ul>
+            </div>
           ))
         }
       </div>
     </div>
   </section>
 
-  <div class="narrow">
-    <Faq title={t.faqTitle} items={copy.faq} />
-  </div>
+  <section class="kn-finale">
+    <video class="kn-bg" src="/media/finale.mp4" poster="/media/finale-poster.webp" autoplay muted loop playsinline preload="none" aria-hidden="true"></video>
+    <div class="kn-shade kn-shade-strong"></div>
+    <div class="kn-finale-copy">
+      <h2 class="kn-display">{copy.finale}</h2>
+      <div class="actions kn-center">
+        <a class="btn btn-primary" href={href(lang, 'download')}>{copy.finaleGet}</a>
+        <a class="btn btn-ghost" href={href(lang, 'signin')}>{copy.web}</a>
+      </div>
+    </div>
+  </section>
 
-  <Cta lang={lang} />
+  <section class="block">
+    <div class="narrow">
+      <Faq title={copy.faqTitle} items={copy.faq} />
+    </div>
+  </section>
 </Layout>
+
+<script>
+  // Background loops are decoration: respect "reduce motion", and only play
+  // videos while they're on screen (saves data and battery on phones).
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const videos = document.querySelectorAll<HTMLVideoElement>('.kn-hero video, .kn-video video, .kn-finale video');
+  if (reduce) {
+    videos.forEach((v) => {
+      v.removeAttribute('autoplay');
+      v.pause();
+    });
+  } else if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const v = e.target as HTMLVideoElement;
+        if (e.isIntersecting) v.play().catch(() => {});
+        else v.pause();
+      }
+    });
+    videos.forEach((v) => io.observe(v));
+  }
+</script>

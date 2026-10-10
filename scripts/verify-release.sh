@@ -13,7 +13,7 @@ set -euo pipefail
 N=${1:?usage: verify-release.sh <build number>}
 REPO=akshaydhadwal745/lens-camera
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-AAPT2=${AAPT2:-$(ls -d ~/Android/Sdk/build-tools/*/ | sort -V | tail -1)aapt2}
+AAPT2=${AAPT2:-$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/ | sort -V | tail -1)aapt2}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 T=$(gh auth token)

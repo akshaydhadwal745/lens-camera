@@ -1,0 +1,57 @@
+# Makes a verified build the public download (website + in-app prompt).
+# Actions → "Promote release" → Run workflow → build number.
+# scripts/promote-release.sh checks the release, the update server, both APKs'
+# SHA-256 and that they're signed with Lens's release key, then publishes
+# downloads/android/latest.json.
+name: Promote release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'Build number to promote (dev-N)'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      # GitHub OIDC -> a 1-hour AWS session for the website deploy role.
+      - name: AWS credentials (OIDC)
+        env:
+          ROLE: ${{ vars.WEB_DEPLOY_ROLE_ARN }}
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE" --role-session-name "gh-promote-$GITHUB_RUN_ID" \
+            --web-identity-token "$TOKEN" --duration-seconds 3600 --query Credentials --output json)
+          for k in AccessKeyId:AWS_ACCESS_KEY_ID SecretAccessKey:AWS_SECRET_ACCESS_KEY SessionToken:AWS_SESSION_TOKEN; do
+            v=$(echo "$CREDS" | jq -r ".${k%%:*}")
+            echo "::add-mask::$v"
+            echo "${k##*:}=$v" >> "$GITHUB_ENV"
+          done
+          echo "AWS_REGION=ap-south-1" >> "$GITHUB_ENV"
+
+      - name: Promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AWS_PROFILE: ''
+          WEB_BUCKET: ${{ vars.WEB_BUCKET }}
+          DISTRIBUTION_ID: ${{ vars.CF_DISTRIBUTION_ID }}
+          BUILD: ${{ inputs.build }}
+        run: |
+          [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "build must be a number"; exit 1; }
+          scripts/promote-release.sh "$BUILD"
