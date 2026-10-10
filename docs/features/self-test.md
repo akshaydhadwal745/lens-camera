@@ -46,3 +46,6 @@ Native hooks (lens-device): `testLoop()`, `writeTestResult(uri, text)`,
   on the old rotation (fixed in dev-37: rotation re-checked every 250 ms). The
   other failures were grading (portrait mask without a person, Pixel 16 MP limit,
   maker-mode sizes), now warnings.
+- **dev-37, 2026-10-10** (emulators Android 14/15/16): all **11 pass, 0 fail**
+  (1 warning each: portrait without a person). The Android 14 180° step that
+  failed on dev-36 now passes. Real phones next.
