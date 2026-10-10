@@ -35,8 +35,11 @@ The camera feed is drawn with OpenGL ES 2.0 (works on every Android 7+ GPU,
 including old budget ones). One pass per frame does the live look and the
 monitoring overlays (zebra, focus peaking, false colour); the histogram comes
 from a tiny 96×72 copy read 4× a second. There is **no extra camera stream**:
-a third stream was what made the old Android camera lag. Preview runs at a
-steady 30 fps. If OpenGL fails on a phone, the plain CameraX preview is used
+a third stream was what made the old Android camera lag. Video previews run at a
+steady 30 fps; photo modes use a variable 15–30 fps range (like the phone's own
+camera), so auto exposure can use up to 1/15 s in dim light instead of pushing
+ISO (a fixed 30 fps made indoor photos dark and grainy). The viewfinder shader
+uses `highp` where available (mediump texture coordinates looked soft on Mali). If OpenGL fails on a phone, the plain CameraX preview is used
 (no live looks, everything else works).
 
 **Rotation (dev-31):** `GlPreview` follows the same rule as CameraX's own

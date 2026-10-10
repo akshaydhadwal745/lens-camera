@@ -277,7 +277,14 @@ class CameraController(private val context: Context) {
     val previewBuilder = Preview.Builder()
       .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(ratio).build())
     // Night (our own merge): let auto exposure use slower frames for more light.
-    val rate = if (config.isNight && !nightExtension) nightFrameRate(cam) else previewFrameRate(cam, if (config.isVideo) video.fps else 30)
+    // Photo modes: like the phone's own camera, let auto exposure drop to 15 fps
+    // in dim light. A fixed 30 fps capped the shutter at 1/30 s, so indoors the
+    // camera pushed ISO instead: dark, grainy (and smeared by noise reduction).
+    val rate = when {
+      config.isNight && !nightExtension -> nightFrameRate(cam)
+      config.isVideo -> previewFrameRate(cam, video.fps)
+      else -> photoFrameRate(cam) ?: previewFrameRate(cam, 30)
+    }
     rate?.let { previewBuilder.setTargetFrameRate(it) }
     // Per-frame metadata (ISO, shutter, focus, white balance) for the HUD.
     Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(captureCallback)
@@ -349,6 +356,12 @@ class CameraController(private val context: Context) {
     val ranges = runCatching { cam.info.supportedFrameRateRanges }.getOrNull().orEmpty()
     return ranges.firstOrNull { it.lower == fps && it.upper == fps }
       ?: ranges.filter { it.upper == fps }.maxByOrNull { it.lower }
+  }
+
+  /** Variable rate for photos: up to 30 fps, down to 15 fps (not lower: hand shake). */
+  private fun photoFrameRate(cam: CameraFacts): Range<Int>? {
+    val ranges = runCatching { cam.info.supportedFrameRateRanges }.getOrNull().orEmpty()
+    return ranges.filter { it.upper == 30 && it.lower >= 15 && it.lower < 30 }.minByOrNull { it.lower }
   }
 
   private fun nightFrameRate(cam: CameraFacts): Range<Int>? {

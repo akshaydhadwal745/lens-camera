@@ -411,7 +411,13 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
     private const val FRAGMENT = """
       #extension GL_OES_EGL_image_external : require
+      // highp where the GPU has it: mediump texture coordinates (fp16) are too
+      // coarse for a 1440 px camera frame on Mali GPUs (Galaxy S8): soft preview.
+      #ifdef GL_FRAGMENT_PRECISION_HIGH
+      precision highp float;
+      #else
       precision mediump float;
+      #endif
       varying vec2 vTex;
       uniform samplerExternalOES uCam;
       uniform sampler2D uLut;
@@ -455,7 +461,13 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     /** Luma of the visible frame (before looks) into the red channel. */
     private const val ANALYSIS_FRAGMENT = """
       #extension GL_OES_EGL_image_external : require
+      // highp where the GPU has it: mediump texture coordinates (fp16) are too
+      // coarse for a 1440 px camera frame on Mali GPUs (Galaxy S8): soft preview.
+      #ifdef GL_FRAGMENT_PRECISION_HIGH
+      precision highp float;
+      #else
       precision mediump float;
+      #endif
       varying vec2 vTex;
       uniform samplerExternalOES uCam;
       void main() {
