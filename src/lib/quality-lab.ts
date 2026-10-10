@@ -6,6 +6,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import type { BurstFrame, LabExtension } from '../../modules/lens-camera';
 import { api } from './api';
+import { buildInfo } from './build-info';
 import { md5Of, put } from './uploader';
 
 /** Camera props a lab step sets. */
@@ -156,7 +157,7 @@ export async function uploadSet(set: LabSet, report: Record<string, unknown>, on
   const total = files.reduce((n, f) => n + f.bytes, 0);
   const { setId, urls } = await api.lab.createSet(
     files.map(({ name, bytes, md5 }) => ({ name, bytes, md5 })),
-    { scene: set.scene, note: set.note, createdAt: set.createdAt, steps: set.steps, device: report },
+    { scene: set.scene, note: set.note, createdAt: set.createdAt, steps: set.steps, device: report, build: buildInfo() },
   );
   let done = 0;
   for (const f of files) {

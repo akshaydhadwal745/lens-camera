@@ -1,28 +1,18 @@
 diff --git a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-index 999a22c..2060c3e 100644
+index 999a22c..5076965 100644
 --- a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
 +++ b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-@@ -27,6 +27,7 @@ import androidx.camera.core.CameraSelector
- import androidx.camera.core.CameraState
- import androidx.camera.core.DisplayOrientedMeteringPointFactory
- import androidx.camera.core.FocusMeteringAction
-+import android.util.Range
- import androidx.camera.core.ImageAnalysis
- import androidx.camera.core.ImageCapture
- import androidx.camera.core.ImageCaptureException
-@@ -467,8 +468,11 @@ class ExpoCameraView(
+@@ -467,6 +467,9 @@ class ExpoCameraView(
      }
  
      val resolutionSelector = buildResolutionSelector()
-+    // Lens patch: ask for a steady 30 fps preview so auto-exposure doesn't drop
-+    // the frame rate (and add motion lag) in ordinary indoor light.
++    // Lens patch note: no fixed target frame rate here. CameraX only picks photo
++    // sizes that can stream at the target rate, so 30 fps cut photos to
++    // 1440×1080 on the Galaxy S8 (and capped the shutter at 1/30 s indoors).
      val preview = Preview.Builder()
        .setResolutionSelector(resolutionSelector)
-+      .setTargetFrameRate(Range(30, 30))
        .build()
-       .also {
-         it.surfaceProvider = previewView.surfaceProvider
-@@ -514,7 +518,10 @@ class ExpoCameraView(
+@@ -514,7 +517,10 @@ class ExpoCameraView(
      imageCaptureUseCase = imageCaptureBuilder.build()
  
      val videoCapture = createVideoCapture()

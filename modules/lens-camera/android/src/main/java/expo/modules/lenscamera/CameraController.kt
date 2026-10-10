@@ -285,6 +285,7 @@ class CameraController(private val context: Context) {
         val group = buildUseCases(cam, attempt)
         camera = p.bindToLifecycle(o, selector, group)
         bound = attempt
+        Log.i(TAG, "bound $attempt photo ${imageCapture?.resolutionInfo?.resolution} preview ${this.preview?.resolutionInfo?.resolution}")
         applyLive()
         onReady?.invoke(capabilities())
         return
@@ -309,7 +310,16 @@ class CameraController(private val context: Context) {
       config.isVideo -> previewFrameRate(cam, video.fps)
       else -> photoFrameRate(cam) ?: previewFrameRate(cam, 30)
     }
-    rate?.let { previewBuilder.setTargetFrameRate(it) }
+    // Video: CameraX's target frame rate (it picks stream sizes that can run at
+    // it). Photo modes: set the auto-exposure range on the camera directly
+    // instead. A target frame rate makes CameraX choose only photo sizes that can
+    // also stream at that rate: the Galaxy S8 then saved 1440×1080 (1.5 MP)
+    // photos instead of its full 4032×3024.
+    if (config.isVideo) {
+      rate?.let { previewBuilder.setTargetFrameRate(it) }
+    } else {
+      rate?.let { Camera2Interop.Extender(previewBuilder).setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it) }
+    }
     // Per-frame metadata (ISO, shutter, focus, white balance) for the HUD.
     Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(captureCallback)
     if (config.isVideo && video.stabilized && config.stabilization != "standard" &&
@@ -515,6 +525,8 @@ class CameraController(private val context: Context) {
     val lenses = if (config.position == "back") profile?.backLenses.orEmpty() else emptyList()
     return mapOf(
       "extension" to boundExtension,
+      // What the photo use case really got (e.g. "4032x3024"): catches silent downsizing.
+      "photoSize" to imageCapture?.resolutionInfo?.resolution?.let { "${it.width}x${it.height}" },
       "photoFormat" to when (photoFormat) {
         ImageCapture.OUTPUT_FORMAT_RAW -> "raw"
         ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR -> "ultraHdr"

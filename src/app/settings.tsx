@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isProCameraAvailable } from '../../modules/lens-camera';
 
 import { api, Session } from '@/lib/api';
+import { buildLabel } from '@/lib/build-info';
 import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
@@ -505,6 +506,10 @@ export default function SettingsScreen() {
         )}
 
         {identity && <DeleteAccountSection onDeleted={() => (isWeb ? window.location.replace('/') : router.replace('/'))} />}
+
+        <Text style={styles.buildLabel} selectable>
+          Lens · {buildLabel()}
+        </Text>
       </ScrollView>
     </View>
   );
@@ -548,4 +553,5 @@ const styles = StyleSheet.create({
   buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
   link: { color: '#60A5FA', fontSize: 16, fontWeight: '600', marginTop: 4 },
   code: { color: '#fff', fontSize: 36, fontWeight: '800', letterSpacing: 4, marginVertical: 8, fontVariant: ['tabular-nums'] },
+  buildLabel: { color: '#666', fontSize: 12, textAlign: 'center', marginTop: 28, marginBottom: 8 },
 });

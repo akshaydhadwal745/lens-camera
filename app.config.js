@@ -32,4 +32,13 @@ function nativeRuntimeVersion() {
   return `n-${hash.digest('hex').slice(0, 20)}`;
 }
 
-module.exports = ({ config }) => ({ ...config, runtimeVersion: nativeRuntimeVersion() });
+// CI sets LENS_BUILD (the run number, = the dev-N release) so the installed APK
+// can show which build it is. Not part of the runtime version: a new build
+// number alone doesn't change native code.
+function withBuildNumber(config) {
+  const build = Number(process.env.LENS_BUILD);
+  if (!Number.isInteger(build) || build <= 0) return config;
+  return { ...config, android: { ...config.android, versionCode: build } };
+}
+
+module.exports = ({ config }) => ({ ...withBuildNumber(config), runtimeVersion: nativeRuntimeVersion() });

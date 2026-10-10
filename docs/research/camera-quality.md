@@ -4,6 +4,15 @@ Status: research done 2026-10-10, testing not started. Goal: one photo pipeline
 that works across a wide range of Android phones, chosen by measured results,
 not per-model tuning or guesses.
 
+## Principle: automatic, not more settings (user, 2026-10-10)
+
+Lens should be intelligent, not feature-heavy. The R&D exists to find out what
+the app can decide **by itself** (pipeline per scene and per device, frame
+count, exposure, HDR, Night), so the default experience is one shutter button
+and the best result. Advanced controls stay available only where genuinely
+needed (pro users), never required. Every pipeline we test must end up as an
+automatic decision rule, not as a new toggle.
+
 ## Problem
 
 On the Galaxy S8, Lens photos are softer, darker and grainier than the Samsung
@@ -86,6 +95,18 @@ LIMITED level), one Pixel. Borrowed or second-hand phones are enough.
 Pick the tier order from the data: a pipeline is used on a phone only if it
 beats the single frame on noise and sharpness without blowing exposure, and
 stays under ~1.5 s and a small temperature rise. Document the results here.
+
+## Finding 1 (2026-10-10): Lens photos were 1.5 MP on the Galaxy S8
+
+Real photos from the S8: every Lens photo was **1440×1080, re-encoded**, while
+the Samsung camera saved **4032×3024** (Samsung HAL JPEG with MakerNote), at the
+same exposure. Cause: a CameraX *target frame rate* (30 fps upper bound) makes
+CameraX choose only photo sizes that can also stream at that rate; the S8's full
+size can't, so CameraX silently dropped to 1440×1080. This alone explains most
+of the "blurry" complaint. Fix (dev-34): photo modes set the auto-exposure fps
+range with a Camera2 request option (no effect on size selection); the basic
+camera's patch no longer forces 30 fps. Guard: the bound photo size is logged
+and reported (`photoSize` in capabilities and Lab metadata).
 
 ## Built (2026-10-10, dev-33)
 
