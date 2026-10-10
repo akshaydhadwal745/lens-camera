@@ -56,20 +56,28 @@ jobs:
         run: |
           (cd site && npx astro preview --port 4321 >/tmp/preview.log 2>&1 &)
           sleep 5
-          fail=0
-          for page in / /hi/ /features/night-mode/ /privacy/; do
-            npx -y lighthouse@12 "http://localhost:4321$page" --quiet \
+          PAGES="/ /hi/ /features/night-mode/ /privacy/ /download/"
+          # Warm up: the first page measured used to absorb the server's and
+          # Chrome's cold start (home scored 80 in CI, 100 a minute later).
+          for page in $PAGES; do curl -s -o /dev/null "http://localhost:4321$page"; done
+          check() {
+            npx -y lighthouse@12 "http://localhost:4321$1" --quiet \
               --chrome-flags="--headless=new --no-sandbox" \
               --only-categories=performance,accessibility,seo,best-practices \
               --output=json --output-path=/tmp/lh.json
             node -e "
               const c = require('/tmp/lh.json').categories;
               const s = Object.fromEntries(Object.values(c).map(x => [x.id, Math.round(x.score * 100)]));
-              console.log('$page', JSON.stringify(s));
+              console.log('$1', JSON.stringify(s));
               const min = { performance: 85, accessibility: 100, seo: 100, 'best-practices': 95 };
               const bad = Object.entries(min).filter(([k, v]) => s[k] < v);
               if (bad.length) { console.error('below budget:', bad.map(([k]) => k).join(', ')); process.exit(1); }
-            " || fail=1
+            "
+          }
+          fail=0
+          # One retry per page: lab performance scores vary run to run.
+          for page in $PAGES; do
+            check "$page" || check "$page" || fail=1
           done
           exit $fail
 
