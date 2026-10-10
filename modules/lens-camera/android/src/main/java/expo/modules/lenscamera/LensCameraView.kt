@@ -3,6 +3,7 @@ package expo.modules.lenscamera
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
 import android.view.OrientationEventListener
@@ -65,6 +66,19 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
 
+  // Screen rotation. onSizeChanged alone misses a direct 180° turn
+  // (landscape-left <-> landscape-right keeps the same size), which left the
+  // viewfinder upside down.
+  private val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+  private val displayListener = object : DisplayManager.DisplayListener {
+    override fun onDisplayAdded(displayId: Int) = Unit
+    override fun onDisplayRemoved(displayId: Int) = Unit
+    override fun onDisplayChanged(displayId: Int) {
+      val d = display ?: return
+      if (d.displayId == displayId) controller.setDisplayRotation(d.rotation)
+    }
+  }
+
   private val statsTick = object : Runnable {
     override fun run() {
       controller.stats()?.let { onStats(it) }
@@ -101,11 +115,14 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    displayManager.registerDisplayListener(displayListener, handler)
+    display?.let { controller.setDisplayRotation(it.rotation) }
     updateRunning()
   }
 
   override fun onDetachedFromWindow() {
     super.onDetachedFromWindow()
+    displayManager.unregisterDisplayListener(displayListener)
     updateRunning()
   }
 
@@ -114,7 +131,6 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       gl.look = look
       gl.lookIntensity = lookIntensity
       gl.analysis = analysis
-      gl.mirror = config.position == "front"
     }
     display?.let { controller.setDisplayRotation(it.rotation) }
     if (running) controller.update(config)
@@ -146,6 +162,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     running = false
     handler.removeCallbacks(statsTick)
     orientationListener.disable()
+    displayManager.unregisterDisplayListener(displayListener)
     controller.release()
     glPreview?.release()
     glPreview = null

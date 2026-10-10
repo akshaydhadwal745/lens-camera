@@ -59,12 +59,17 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var surfaceTexture: SurfaceTexture? = null
   private var inputSurface: Surface? = null
   private var bufferSize = Size(1, 1)
-  private var rotationDegrees = 0
+  // From CameraX's TransformationInfo (see computeUvMatrix).
+  @Volatile private var rotationDegrees = 0
+  @Volatile private var targetRotation = Surface.ROTATION_0
+  @Volatile private var hasCameraTransform = false
+  @Volatile private var isMirroring = false
   private var viewWidth = 1
   private var viewHeight = 1
   private val stMatrix = FloatArray(16)
   private val uvMatrix = FloatArray(16)
-  private val focusMatrix = FloatArray(16)
+  /** stMatrix · uvMatrix of the last frame: view uv -> buffer, for tap-to-focus. */
+  @Volatile private var focusMatrix = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
   private var lutTexture = 0
   private var lutId: String? = null
   private var analysisFbo = 0
@@ -75,7 +80,6 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var failed = false
 
   // Set from the main thread, read on the GL thread.
-  @Volatile var mirror = false
   @Volatile var look: String? = null
   @Volatile var lookIntensity = 1.0
   @Volatile var analysis = AnalysisOptions()
@@ -138,7 +142,13 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       val surface = Surface(st)
       inputSurface = surface
       firstFrame = true
-      request.setTransformationInfoListener(glExecutor) { info -> rotationDegrees = info.rotationDegrees }
+      request.setTransformationInfoListener(glExecutor) { info ->
+        rotationDegrees = info.rotationDegrees
+        targetRotation = info.targetRotation
+        hasCameraTransform = info.hasCameraTransform()
+        isMirroring = info.isMirroring
+        Log.i(TAG, "transform rotation ${info.rotationDegrees} target ${info.targetRotation} cameraTransform ${info.hasCameraTransform()} mirroring ${info.isMirroring}")
+      }
       request.provideSurface(surface, glExecutor) {
         // CameraX is done with this surface (camera switched or stopped).
         if (inputSurface === surface) releaseInput() else {
@@ -239,7 +249,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       core.swap(window)
       if (firstFrame) {
         firstFrame = false
-        Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")
+        Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees target $targetRotation cameraTransform $hasCameraTransform (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")
         mainHandler.post { onFirstFrame?.invoke() }
       }
     } catch (e: Exception) {
@@ -269,39 +279,52 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   }
 
   /**
-   * View uv (0…1, origin bottom-left) -> buffer uv: centre-crop to fill the view
-   * ("aspect fill", like iOS), mirror for the front camera, then undo the
-   * rotation CameraX reports for making the buffer upright.
+   * View uv (0…1, origin bottom-left) -> uv of the image the SurfaceTexture
+   * matrix gives us: centre-crop to fill the view ("aspect fill", like iOS),
+   * then rotate/mirror the way CameraX's own PreviewView does:
+   *
+   * - The camera already applied its transform (camera writes straight into our
+   *   SurfaceTexture, e.g. Galaxy S8): stMatrix holds the sensor rotation and the
+   *   front-camera mirror for the phone's natural (portrait) orientation. Only
+   *   the screen rotation is left to undo, and nothing is mirrored again.
+   * - Otherwise the buffer is in sensor orientation: rotate by CameraX's
+   *   rotationDegrees (clockwise on screen = counter-clockwise for view -> buffer
+   *   in bottom-up uv) and mirror if CameraX says so.
+   *
+   * Earlier versions combined rotationDegrees with the angle read back out of
+   * stMatrix; that depended on the phone and on sign guesses (dev-23…30).
    */
   private fun computeUvMatrix() {
-    // When the camera writes straight into our SurfaceTexture (no CameraX
-    // processing in between), Android puts the sensor rotation into the buffer
-    // transform, so stMatrix already contains a rotation that we must account
-    // for. And texture coordinates run bottom-up (stMatrix ends with a vertical
-    // flip), so in uv space the rotation goes the other way: −(R + α).
-    // Galaxy S8 (α read as 270): +R+α was right in portrait only (R = 90, where
-    // ± agree) and 180° off in both landscapes; −(R + α) is right in all three.
-    val residual = Math.floorMod(-(rotationDegrees + stMatrixRotation()), 360)
-    fillUvMatrix(uvMatrix, residual)
-    // Tap-to-focus works in raw buffer coordinates: the full CameraX rotation,
-    // in the same (bottom-up) direction.
-    fillUvMatrix(focusMatrix, Math.floorMod(-rotationDegrees, 360))
-  }
-
-  private fun fillUvMatrix(out: FloatArray, degrees: Int) {
+    val degrees = if (hasCameraTransform) {
+      Math.floorMod(-surfaceDegrees(targetRotation), 360)
+    } else {
+      Math.floorMod(rotationDegrees, 360)
+    }
+    val mirror = !hasCameraTransform && isMirroring
     val rotated = rotationDegrees % 180 != 0
     val bw = (if (rotated) bufferSize.height else bufferSize.width).toFloat()
     val bh = (if (rotated) bufferSize.width else bufferSize.height).toFloat()
     val scale = max(viewWidth / bw, viewHeight / bh)
     val fx = viewWidth / (bw * scale)
     val fy = viewHeight / (bh * scale)
-    Matrix.setIdentityM(out, 0)
-    Matrix.translateM(out, 0, 0.5f, 0.5f, 0f)
-    // Buffer -> upright is a clockwise rotation; going back is counter-clockwise.
-    Matrix.rotateM(out, 0, degrees.toFloat(), 0f, 0f, 1f)
-    if (mirror) Matrix.scaleM(out, 0, -1f, 1f, 1f)
-    Matrix.scaleM(out, 0, fx, fy, 1f)
-    Matrix.translateM(out, 0, -0.5f, -0.5f, 0f)
+    Matrix.setIdentityM(uvMatrix, 0)
+    Matrix.translateM(uvMatrix, 0, 0.5f, 0.5f, 0f)
+    Matrix.rotateM(uvMatrix, 0, degrees.toFloat(), 0f, 0f, 1f)
+    if (mirror) Matrix.scaleM(uvMatrix, 0, -1f, 1f, 1f)
+    Matrix.scaleM(uvMatrix, 0, fx, fy, 1f)
+    Matrix.translateM(uvMatrix, 0, -0.5f, -0.5f, 0f)
+    // Tap-to-focus uses exactly what the shader samples: the texture
+    // coordinate, which is the buffer position (origin top-left).
+    val m = FloatArray(16)
+    Matrix.multiplyMM(m, 0, stMatrix, 0, uvMatrix, 0)
+    focusMatrix = m
+  }
+
+  private fun surfaceDegrees(rotation: Int) = when (rotation) {
+    Surface.ROTATION_90 -> 90
+    Surface.ROTATION_180 -> 180
+    Surface.ROTATION_270 -> 270
+    else -> 0
   }
 
   /**
@@ -347,15 +370,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
   /**
    * A point in the view (fractions, origin top-left) as a fraction of the camera
-   * buffer (sensor orientation), for tap-to-focus. Same transform as the shader.
+   * buffer (origin top-left), for tap-to-focus. Same transform as the shader.
    */
   fun viewToBuffer(x: Float, y: Float): Pair<Float, Float> {
-    val m = focusMatrix.copyOf()
-    val uv = floatArrayOf(x, 1 - y, 0f, 1f)
     val out = FloatArray(4)
-    Matrix.multiplyMV(out, 0, m, 0, uv, 0)
-    // Buffer uv has origin bottom-left; metering points use top-left.
-    return out[0].coerceIn(0f, 1f) to (1 - out[1]).coerceIn(0f, 1f)
+    Matrix.multiplyMV(out, 0, focusMatrix, 0, floatArrayOf(x, 1 - y, 0f, 1f), 0)
+    return out[0].coerceIn(0f, 1f) to out[1].coerceIn(0f, 1f)
   }
 
   fun release() {

@@ -39,16 +39,22 @@ a third stream was what made the old Android camera lag. Preview runs at a
 steady 30 fps. If OpenGL fails on a phone, the plain CameraX preview is used
 (no live looks, everything else works).
 
-**Rotation:** CameraX reports how far the raw sensor image must turn to be
-upright. When the camera writes straight into our SurfaceTexture, some phones
-(e.g. Galaxy S8) already put the sensor rotation into the buffer transform, so
-`GlPreview` combines CameraX's rotation with the angle read from the
-SurfaceTexture matrix, rotating the opposite way in texture space (bottom-up
-coordinates): `−(R + α)`. On the S8: ignoring α was 90° off, `R − α` 180°
-off, `R + α` right only in portrait (180° off in landscape), `−(R + α)` right
-in portrait and both landscapes. Tap-to-focus keeps the full
-rotation (raw buffer coordinates). The log line `first frame … rotation R (st S)`
-shows both values.
+**Rotation (dev-31):** `GlPreview` follows the same rule as CameraX's own
+PreviewView, using `SurfaceRequest.TransformationInfo`:
+- `hasCameraTransform()` true (the camera writes straight into our
+  SurfaceTexture, e.g. Galaxy S8): the SurfaceTexture matrix already holds the
+  sensor rotation and the front-camera mirror for portrait, so only the screen
+  rotation is undone (`−targetRotation`) and nothing is mirrored again.
+- otherwise: rotate by `rotationDegrees` and mirror when `isMirroring()`.
+
+The screen rotation comes from a `DisplayManager` listener (a direct 180° turn,
+landscape-left ↔ landscape-right, doesn't change the view size, so
+`onSizeChanged` alone missed it). Tap-to-focus maps through exactly what the
+shader samples (SurfaceTexture matrix × view matrix), so it can't drift from the
+picture. Log lines `transform rotation … target … cameraTransform … mirroring …`
+show the values. dev-23…30 combined `rotationDegrees` with an angle read out of
+the SurfaceTexture matrix plus a second mirror; that was phone-specific and
+broke landscape and the front camera.
 
 ## Night (Android)
 
