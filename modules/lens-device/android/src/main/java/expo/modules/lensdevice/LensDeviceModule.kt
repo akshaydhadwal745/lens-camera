@@ -48,6 +48,9 @@ class LensDeviceModule : Module() {
 
     Function("thermalLevel") { currentLevel() }
 
+    // CPU types this phone runs, best first (e.g. arm64-v8a): which APK to offer.
+    Function("supportedAbis") { Build.SUPPORTED_ABIS.toList() }
+
     // ---------- Self-test (Firebase Test Lab "game loop") ----------
 
     // Test Lab starts the app with this action; `data` is the file to write

@@ -29,6 +29,7 @@ type LensDeviceNative = {
   canRead(uri: string): boolean;
   copyMedia(uri: string, destination: string): Promise<number>;
   addListener(event: 'onThermalChange', listener: (e: { level: ThermalLevel }) => void): { remove(): void };
+  supportedAbis?(): string[];
   testLoop?(): { scenario: number; resultUri: string | null } | null;
   writeTestResult?(uri: string, text: string): Promise<boolean>;
   finishTestLoop?(): void;
@@ -131,3 +132,12 @@ export const selfTestHooks = {
   setOrientation: (value: 'portrait' | 'landscape' | 'reverseLandscape' | 'auto') => native?.setOrientation?.(value),
   available: () => typeof native?.setOrientation === 'function',
 };
+
+/** Android CPU types, best first (e.g. ["arm64-v8a", "armeabi-v7a"]); empty where unknown. */
+export function supportedAbis(): string[] {
+  try {
+    return native?.supportedAbis?.() ?? [];
+  } catch {
+    return [];
+  }
+}

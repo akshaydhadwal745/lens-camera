@@ -108,6 +108,6 @@ jobs:
           aws s3 cp manifest.webmanifest "s3://$BUCKET/manifest.webmanifest" --only-show-errors \
             --content-type application/manifest+json --cache-control "public, max-age=0, s-maxage=300, must-revalidate"
           # Remove files that no longer exist (media lives in another bucket;
-          # ota/ holds app updates published by the App builds workflow).
-          aws s3 sync . "s3://$BUCKET" --only-show-errors --delete --size-only --exclude "ota/*"
+          # ota/ holds app updates and downloads/ the APKs, both published by the App builds workflow).
+          aws s3 sync . "s3://$BUCKET" --only-show-errors --delete --size-only --exclude "ota/*" --exclude "downloads/*"
           aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*" --query Invalidation.Id --output text

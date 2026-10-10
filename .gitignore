@@ -68,3 +68,6 @@ dist-ota/
 research/.venv/
 research/quality/data/
 research/quality/out/
+
+# Secrets: never commit anything under infra/keys/
+infra/keys/

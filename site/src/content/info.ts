@@ -235,30 +235,4 @@ export const infoPages: InfoPage[] = [
       },
     },
   },
-  {
-    slug: 'download',
-    name: { en: 'Get the app', hi: 'ऐप पाएँ' },
-    copy: {
-      en: {
-        title: 'Get the Lens app for Android',
-        description: 'Lens by InstaGrow is coming to Google Play for Android 7 and newer. Meanwhile, use Lens on the web.',
-        h1: 'Lens is coming to Google Play',
-        lead: 'Lens launches first on Android (7.0 and newer). The Google Play listing is on its way.',
-        sections: [
-          { h2: 'In the meantime', body: ['Already have a Lens account? Use the web app on any computer: sign in with your email or Google account.'] },
-          { h2: 'iPhone', body: ['An iPhone version is built and will follow the Android launch.'] },
-        ],
-      },
-      hi: {
-        title: 'Android के लिए Lens ऐप पाएँ',
-        description: 'Lens by InstaGrow Android 7 और नए वर्शन के लिए जल्द Google Play पर आ रहा है। तब तक वेब पर Lens इस्तेमाल करें।',
-        h1: 'Lens जल्द Google Play पर',
-        lead: 'Lens सबसे पहले Android (7.0 और नए) पर लॉन्च हो रहा है। Google Play लिस्टिंग आने वाली है।',
-        sections: [
-          { h2: 'तब तक', body: ['पहले से Lens अकाउंट है? किसी भी कंप्यूटर पर वेब ऐप इस्तेमाल करें: अपने ईमेल या Google अकाउंट से साइन इन करें।'] },
-          { h2: 'iPhone', body: ['iPhone वर्शन बना हुआ है और Android लॉन्च के बाद आएगा।'] },
-        ],
-      },
-    },
-  },
 ];

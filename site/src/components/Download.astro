@@ -1,0 +1,103 @@
+---
+// Android download: the promoted build from /downloads/android/latest.json
+// (scripts/promote-release.sh), read in the browser so a new build needs no
+// website deploy. docs/features/app-distribution.md.
+import Layout from '../layouts/Layout.astro';
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const c = {
+  en: {
+    title: 'Download Lens for Android',
+    description: 'Download the Lens camera app for Android 7 and newer. Shoot endlessly; your phone never fills up.',
+    h1: 'Download Lens for Android',
+    lead: 'Android 7.0 or newer. Google Play is coming; until then, install it from here.',
+    button: 'Download Lens',
+    older: 'Older or budget phone and the app won’t install? Get the 32-bit version',
+    stepsTitle: 'How to install',
+    steps: [
+      'Tap Download Lens and open the file when it finishes.',
+      'If Android asks, allow your browser to “Install unknown apps”, then go back and tap Install.',
+      'Google Play Protect may say the app is unrecognised because Lens isn’t on Google Play yet. Tap “More details” → “Install anyway”.',
+    ],
+    updatesTitle: 'Updates',
+    updates: 'Lens updates itself in the background. When a bigger update needs a new download, the app shows “New Lens version · Download”.',
+    replaceTitle: 'Had a test version before?',
+    replace: 'If installing says “App not installed”, uninstall the old Lens first, then install this one. Photos already in your Lens cloud stay safe; sign in again to see them.',
+    iphone: 'iPhone: an iPhone version is built and will follow the Android launch.',
+    i18n: { version: 'Version {build} · {size}', checksum: 'SHA-256: {sha}', unavailable: 'The download isn’t available right now. Please try again in a few minutes.' },
+  },
+  hi: {
+    title: 'Android के लिए Lens डाउनलोड करें',
+    description: 'Android 7 और नए फ़ोन के लिए Lens कैमरा ऐप डाउनलोड करें। जितनी चाहें फ़ोटो लें; फ़ोन कभी नहीं भरेगा।',
+    h1: 'Android के लिए Lens डाउनलोड करें',
+    lead: 'Android 7.0 या नया। Google Play जल्द आ रहा है; तब तक यहाँ से इंस्टॉल करें।',
+    button: 'Lens डाउनलोड करें',
+    older: 'पुराना या बजट फ़ोन है और ऐप इंस्टॉल नहीं हो रहा? 32-बिट वर्शन लें',
+    stepsTitle: 'इंस्टॉल कैसे करें',
+    steps: [
+      'Lens डाउनलोड करें दबाएँ और डाउनलोड पूरा होने पर फ़ाइल खोलें।',
+      'अगर Android पूछे, तो अपने ब्राउज़र को “Install unknown apps” की अनुमति दें, फिर वापस जाकर Install दबाएँ।',
+      'Google Play Protect कह सकता है कि ऐप पहचाना नहीं गया, क्योंकि Lens अभी Google Play पर नहीं है। “More details” → “Install anyway” दबाएँ।',
+    ],
+    updatesTitle: 'अपडेट',
+    updates: 'Lens बैकग्राउंड में ख़ुद अपडेट होता है। जब किसी बड़े अपडेट के लिए नया डाउनलोड चाहिए, ऐप “New Lens version · Download” दिखाता है।',
+    replaceTitle: 'पहले टेस्ट वर्शन इस्तेमाल किया था?',
+    replace: 'अगर इंस्टॉल करते समय “App not installed” आए, तो पहले पुराना Lens अनइंस्टॉल करें, फिर यह इंस्टॉल करें। Lens क्लाउड में मौजूद फ़ोटो सुरक्षित रहती हैं; उन्हें देखने के लिए फिर से साइन इन करें।',
+    iphone: 'iPhone: iPhone वर्शन बना हुआ है और Android लॉन्च के बाद आएगा।',
+    i18n: { version: 'वर्शन {build} · {size}', checksum: 'SHA-256: {sha}', unavailable: 'डाउनलोड अभी उपलब्ध नहीं है। कुछ मिनट बाद फिर कोशिश करें।' },
+  },
+}[lang];
+---
+
+<Layout lang={lang} path="download" title={c.title} description={c.description}>
+  <section class="block">
+    <div class="container" id="download" data-i18n={JSON.stringify(c.i18n)}>
+      <h1>{c.h1}</h1>
+      <p class="lead">{c.lead}</p>
+      <div class="card download-card">
+        <a class="btn btn-primary download-btn" id="apk-64" href="#" aria-disabled="true">{c.button}</a>
+        <p class="note" id="apk-version" role="status" aria-live="polite"></p>
+        <p class="note"><a id="apk-32" href="#" hidden>{c.older}</a></p>
+        <p class="note checksum" id="apk-sha"></p>
+      </div>
+      <h2>{c.stepsTitle}</h2>
+      <ol class="steps">
+        {c.steps.map((step) => <li>{step}</li>)}
+      </ol>
+      <h2>{c.updatesTitle}</h2>
+      <p>{c.updates}</p>
+      <h2>{c.replaceTitle}</h2>
+      <p>{c.replace}</p>
+      <p class="note">{c.iphone}</p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .download-card {
+    display: grid;
+    gap: 0.5rem;
+    max-width: 32rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .download-btn[aria-disabled='true'] {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .checksum {
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    word-break: break-all;
+  }
+  .steps li {
+    margin: 0.4rem 0;
+  }
+</style>
+
+<script>
+  import '../scripts/download';
+</script>
