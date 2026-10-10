@@ -42,7 +42,6 @@ dependencies {
   implementation "androidx.media3:media3-common:${media3_version}"
   // Live looks on playback: setVideoLook reaches expo-video's ExoPlayer.
   implementation "androidx.media3:media3-exoplayer:${media3_version}"
-  compileOnly project(':expo-video')
 
   // Portrait: person segmentation, model bundled in the app (no Play services needed).
   implementation "com.google.mlkit:segmentation-selfie:16.0.0-beta6"

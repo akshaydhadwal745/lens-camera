@@ -14,7 +14,15 @@ import androidx.media3.exoplayer.ExoPlayer
  */
 @OptIn(UnstableApi::class)
 object VideoLook {
-  fun apply(context: Context, player: ExoPlayer, recipe: EditRecipe?) {
+  /** expo-video's VideoPlayer exposes `val player: ExoPlayer` (read without a compile-time dependency). */
+  fun exoPlayerOf(sharedObject: Any): ExoPlayer? =
+    runCatching { sharedObject.javaClass.getMethod("getPlayer").invoke(sharedObject) as? ExoPlayer }.getOrNull()
+
+  fun apply(context: Context, player: ExoPlayer?, recipe: EditRecipe?) {
+    if (player == null) {
+      Log.w("LensImaging", "setVideoLook: not an expo-video player")
+      return
+    }
     val colour = recipe?.colourOnly()
     try {
       player.setVideoEffects(if (colour != null) listOf(VideoExport.RecipeEffect(context.applicationContext, colour)) else emptyList())
