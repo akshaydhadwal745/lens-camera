@@ -65,7 +65,8 @@ object VideoExport {
     }
   }
 
-  private class RecipeEffect(private val appContext: Context, private val recipe: EditRecipe) : GlEffect {
+  /** Our look/adjustment shader as a Media3 effect (export, and live playback in [VideoLook]). */
+  internal class RecipeEffect(private val appContext: Context, private val recipe: EditRecipe) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram = Program(appContext, recipe, useHdr)
   }
 

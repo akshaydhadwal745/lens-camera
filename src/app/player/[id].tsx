@@ -9,6 +9,9 @@ import { Text } from '@/components/ui/Text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LensImaging } from '../../../modules/lens-camera';
+
+import { isNeutral } from '@/lib/edits';
 import { formatDate, formatDuration } from '@/lib/format';
 import { font, glass, palette } from '@/lib/theme';
 import { providerInfo } from '@/lib/storage/providers';
@@ -70,6 +73,15 @@ export default function PlayerScreen() {
     setUp(preloaded);
     return () => preloaded.release(); // it's ours now
   }, [preloaded]);
+
+  // The look chosen when recording (or in the editor) is a recipe, not baked
+  // into the file: play it live with the same GPU shader the thumbnail used.
+  const edit = item?.edit && !isNeutral(item.edit) ? item.edit : null;
+  const editKey = edit ? JSON.stringify(edit) : '';
+  useEffect(() => {
+    if (!edit || !LensImaging?.setVideoLook) return; // no look: leave the player alone
+    LensImaging.setVideoLook(player, edit).catch(() => {});
+  }, [player, editKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
   const { status } = useEvent(player, 'statusChange', { status: player.status });

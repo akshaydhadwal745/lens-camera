@@ -57,8 +57,10 @@ Open a photo or video → **Edit**.
 ## Video limits (current)
 
 Video edits support looks and adjustments (not crop or portrait). The look shows
-on the video's thumbnail/preview and in shared/saved exports; **in-app playback
-shows the original** for now. Video looks are edited on the device that recorded the video.
+on the video's thumbnail/preview, in shared/saved exports, and **in in-app
+playback on Android (dev-43+)**: the player runs the same GPU shader live on each
+frame (`LensImaging.setVideoLook` → ExoPlayer `setVideoEffects`), so the file is
+never re-encoded. Older APKs and iPhone still play the original. Video looks are edited on the device that recorded the video.
 
 ## Recipe format
 

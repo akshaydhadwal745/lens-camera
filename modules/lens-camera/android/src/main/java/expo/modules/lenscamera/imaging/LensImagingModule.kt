@@ -1,6 +1,7 @@
 package expo.modules.lenscamera.imaging
 
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -47,6 +48,10 @@ class LensImagingModule : Module() {
         )
       }
     }
+
+    AsyncFunction("setVideoLook") { player: expo.modules.video.player.VideoPlayer, recipe: Map<String, Any?>? ->
+      VideoLook.apply(context, player.player, EditRecipe.from(recipe))
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("hasDepth") { uri: String ->
       runCatching { Portrait.hasMask(ImagingEngine.fileOf(uri)) }.getOrDefault(false)

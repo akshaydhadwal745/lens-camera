@@ -185,6 +185,12 @@ type ImagingModule = {
   renderImage(uri: string, recipe: object | null, options: { maxPixel?: number; format?: 'heic' | 'jpeg'; quality?: number }): Promise<RenderResult>;
   exportVideo(uri: string, recipe: object | null): Promise<{ uri: string }>;
   hasDepth(uri: string): Promise<boolean>;
+  /**
+   * Plays a video with its look (colour part of the edit), live on the GPU:
+   * the same shader as exportVideo, on expo-video's player. Android only;
+   * missing in APKs before dev-43.
+   */
+  setVideoLook?(player: object, recipe: object | null): Promise<void>;
 };
 
 const imaging = Platform.OS === 'web' ? null : requireOptionalNativeModule<ImagingModule>('LensImaging');
