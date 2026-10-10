@@ -48,7 +48,7 @@ jobs:
       - name: Promote
         env:
           GH_TOKEN: ${{ github.token }}
-          AWS_PROFILE: ''
+          PROMOTE_AWS_PROFILE: ''
           WEB_BUCKET: ${{ vars.WEB_BUCKET }}
           DISTRIBUTION_ID: ${{ vars.CF_DISTRIBUTION_ID }}
           BUILD: ${{ inputs.build }}

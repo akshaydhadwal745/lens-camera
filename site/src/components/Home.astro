@@ -151,7 +151,9 @@ const appSchema = {
 
 <Layout lang={lang} path="" title={copy.title} description={copy.description} bareTitle jsonLd={[appSchema]}>
   <section class="kn-hero">
-    <video class="kn-bg" src="/media/hero.mp4" poster="/media/hero-poster.webp" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
+    <!-- The still loads first (it's what the page is judged on); the loop starts after load. -->
+    <img class="kn-bg" src="/media/hero-poster.webp" alt="" width="1280" height="674" fetchpriority="high" decoding="async" />
+    <video class="kn-bg" data-src="/media/hero.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
     <div class="kn-shade"></div>
     <div class="kn-hero-copy">
       <p class="kn-kicker">{copy.kicker}</p>
@@ -203,7 +205,7 @@ const appSchema = {
   <section class="kn-wide kn-video">
     <div class="kn-phone">
       <div class="kn-phone-screen">
-        <video src="/media/video.mp4" poster="/media/video-poster.webp" autoplay muted loop playsinline preload="none" aria-hidden="true"></video>
+        <video data-src="/media/video.mp4" poster="/media/video-poster.webp" muted loop playsinline preload="none" aria-hidden="true"></video>
         <span class="kn-rec">● 4K 60</span>
       </div>
     </div>
@@ -267,7 +269,7 @@ const appSchema = {
   </section>
 
   <section class="kn-finale">
-    <video class="kn-bg" src="/media/finale.mp4" poster="/media/finale-poster.webp" autoplay muted loop playsinline preload="none" aria-hidden="true"></video>
+    <video class="kn-bg" data-src="/media/finale.mp4" poster="/media/finale-poster.webp" muted loop playsinline preload="none" aria-hidden="true"></video>
     <div class="kn-shade kn-shade-strong"></div>
     <div class="kn-finale-copy">
       <h2 class="kn-display">{copy.finale}</h2>
@@ -286,23 +288,26 @@ const appSchema = {
 </Layout>
 
 <script>
-  // Background loops are decoration: respect "reduce motion", and only play
-  // videos while they're on screen (saves data and battery on phones).
+  // Background loops are decoration: they load only after the page has
+  // finished loading, play only while on screen (saves data and battery), and
+  // never with "reduce motion" (the stills stay).
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const videos = document.querySelectorAll<HTMLVideoElement>('.kn-hero video, .kn-video video, .kn-finale video');
-  if (reduce) {
-    videos.forEach((v) => {
-      v.removeAttribute('autoplay');
-      v.pause();
-    });
-  } else if ('IntersectionObserver' in window) {
+  const videos = document.querySelectorAll<HTMLVideoElement>('video[data-src]');
+  const start = () => {
+    if (reduce || !('IntersectionObserver' in window)) return;
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         const v = e.target as HTMLVideoElement;
-        if (e.isIntersecting) v.play().catch(() => {});
-        else v.pause();
+        if (e.isIntersecting) {
+          if (!v.src) v.src = v.dataset.src ?? '';
+          v.play().catch(() => {});
+        } else {
+          v.pause();
+        }
       }
     });
     videos.forEach((v) => io.observe(v));
-  }
+  };
+  if (document.readyState === 'complete') start();
+  else window.addEventListener('load', start, { once: true });
 </script>

@@ -9,12 +9,12 @@
 # Usage: scripts/promote-release.sh 41
 # Runs in CI: .github/workflows/promote.yml (Actions → "Promote release" → Run),
 # with the website deploy role. Locally it needs an AWS profile that can write
-# the website bucket (AWS_PROFILE; set it to "" to use environment credentials).
+# the website bucket (PROMOTE_AWS_PROFILE, default "lens"; "" = environment credentials).
 set -euo pipefail
 
 N=${1:?usage: promote-release.sh <build number>}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PROFILE=${AWS_PROFILE-lens}
+PROFILE=${PROMOTE_AWS_PROFILE-lens}
 OUTPUTS="$ROOT/infra/outputs.json"
 output() { python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(list(d.values())[0][sys.argv[2]])' "$OUTPUTS" "$1"; }
 BUCKET=${WEB_BUCKET:-$(output WebBucket)}
