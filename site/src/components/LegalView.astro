@@ -13,14 +13,22 @@ const { lang, path, doc } = Astro.props;
 ---
 
 <Layout lang={lang} path={path} title={doc.title} description={doc.description}>
-  <article class="narrow prose block">
+  <section class="pg-hero lg-hero">
     <Breadcrumbs lang={lang} trail={[[doc.h1, path]]} />
+    <p class="kn-kicker">{lang === 'en' ? 'Legal' : 'क़ानूनी'}</p>
     <h1>{doc.h1}</h1>
     <p class="muted">{lang === 'en' ? 'Last updated' : 'आख़िरी अपडेट'}: {LEGAL.updated[lang]}</p>
-    <p>{doc.intro}</p>
+    <nav aria-label={lang === 'en' ? 'On this page' : 'इस पेज पर'}>
+      <ul class="lg-toc">
+        {doc.blocks.map((b, i) => <li><a href={`#s${i + 1}`}>{b.h2.replace(/^\d+\.\s*/, '')}</a></li>)}
+      </ul>
+    </nav>
+  </section>
+  <article class="narrow prose lg-body">
+    <p class="kn-lead">{doc.intro}</p>
     {
-      doc.blocks.map((b) => (
-        <section>
+      doc.blocks.map((b, i) => (
+        <section id={`s${i + 1}`}>
           <h2>{b.h2}</h2>
           {b.table && (
             <div class="table-wrap">

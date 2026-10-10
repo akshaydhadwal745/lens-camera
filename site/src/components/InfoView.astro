@@ -20,40 +20,46 @@ const t = ui[lang];
 ---
 
 <Layout lang={lang} path={path} title={copy.title} description={copy.description}>
-  <section class="hero">
-    <div class="narrow">
-      <Breadcrumbs lang={lang} trail={[[name, path]]} />
-      <h1>{copy.h1}</h1>
-      <p class="lead">{copy.lead}</p>
-    </div>
+  <section class="pg-hero">
+    <Breadcrumbs lang={lang} trail={[[name, path]]} />
+    <p class="kn-kicker">{name}</p>
+    <h1>{copy.h1}</h1>
+    <p class="kn-lead">{copy.lead}</p>
   </section>
-  <article class="narrow prose">
+  <div class="pg-rows">
     {
       copy.sections.map((s) => (
-        <section>
+        <section class="pg-row">
           <h2>{s.h2}</h2>
-          {s.body.map((p) => <p>{p}</p>)}
-          {s.bullets && (
-            <ul class="checks">
-              {s.bullets.map((b) => <li>{b}</li>)}
-            </ul>
-          )}
+          <div>
+            {s.body.map((p) => <p>{p}</p>)}
+            {s.bullets && (
+              <ul class="checks">
+                {s.bullets.map((b) => <li>{b}</li>)}
+              </ul>
+            )}
+          </div>
         </section>
       ))
     }
     {
       links.length > 0 && (
-        <p>
-          {links.map(([label, p], i) => (
-            <>
-              {i > 0 && ' · '}
-              <a href={href(lang, p)}>{label}</a>
-            </>
+        <nav class="pg-links" aria-label={name}>
+          {links.map(([label, p]) => (
+            <a href={href(lang, p)}>{label} ›</a>
           ))}
-        </p>
+        </nav>
       )
     }
-    {faq && <Faq title={t.faqTitle} items={faq} />}
-  </article>
+  </div>
+  {
+    faq && (
+      <section class="block">
+        <div class="narrow">
+          <Faq title={t.faqTitle} items={faq} />
+        </div>
+      </section>
+    )
+  }
   <Cta lang={lang} />
 </Layout>

@@ -2,7 +2,7 @@
 // Contact form: messages are stored and emailed to the team (no public
 // mailbox or postal address for now). Topic can be preset with ?topic=…
 import Layout from '../layouts/Layout.astro';
-import type { Lang } from '../i18n/ui';
+import { href, type Lang } from '../i18n/ui';
 
 interface Props {
   lang: Lang;
@@ -13,7 +13,14 @@ const c = {
     title: 'Contact us',
     description: 'Contact the Lens by InstaGrow team: help with the app, privacy and grievances, account deletion, the affiliate program or business enquiries.',
     h1: 'Contact us',
-    lead: 'Tell us how we can help. We reply by email, usually within two working days.',
+    kicker: 'Contact',
+    big: 'Get in touch.',
+    lead: 'Tell us how we can help. A person reads every message, and we reply by email, usually within two working days.',
+    side: [
+      ['Quick answers', 'Most questions are already answered in the Help centre.', 'Open Help', 'help'],
+      ['Camera problem?', 'In the app, open Settings → Camera info → Run self-test and attach a screenshot. It shows exactly what your phone supports.', '', ''],
+      ['Delete your account', 'The fastest way is in the app: Settings → Delete account. This page explains what is removed.', 'What gets deleted', 'delete-account'],
+    ],
     name: 'Your name',
     email: 'Your email (we reply here)',
     topic: 'Topic',
@@ -36,7 +43,14 @@ const c = {
     title: 'संपर्क करें',
     description: 'Lens by InstaGrow टीम से संपर्क करें: ऐप में मदद, प्राइवेसी और शिकायत, अकाउंट डिलीट करना, एफ़िलिएट प्रोग्राम या बिज़नेस पूछताछ।',
     h1: 'संपर्क करें',
-    lead: 'बताएँ हम कैसे मदद कर सकते हैं। हम ईमेल से जवाब देते हैं, आमतौर पर दो कामकाजी दिनों में।',
+    kicker: 'संपर्क',
+    big: 'हमसे बात करें।',
+    lead: 'बताएँ हम कैसे मदद कर सकते हैं। हर संदेश एक इंसान पढ़ता है, और हम ईमेल से जवाब देते हैं, आमतौर पर दो कामकाजी दिनों में।',
+    side: [
+      ['तुरंत जवाब', 'ज़्यादातर सवालों के जवाब मदद केंद्र में पहले से हैं।', 'मदद खोलें', 'help'],
+      ['कैमरा में दिक़्क़त?', 'ऐप में Settings → Camera info → Run self-test खोलें और स्क्रीनशॉट भेजें। इससे पता चलता है कि आपका फ़ोन ठीक-ठीक क्या सपोर्ट करता है।', '', ''],
+      ['अपना अकाउंट डिलीट करें', 'सबसे तेज़ तरीका ऐप में है: Settings → Delete account। यह पेज बताता है कि क्या हटाया जाता है।', 'क्या डिलीट होता है', 'delete-account'],
+    ],
     name: 'आपका नाम',
     email: 'आपका ईमेल (जवाब यहीं आएगा)',
     topic: 'विषय',
@@ -59,11 +73,25 @@ const c = {
 ---
 
 <Layout lang={lang} path="contact" title={c.title} description={c.description}>
-  <section class="block">
-    <div class="container narrow" id="contact" data-i18n={JSON.stringify(c.i18n)} data-lang={lang}>
-      <h1>{c.h1}</h1>
-      <p class="lead">{c.lead}</p>
-      <form id="contact-form" class="card contact-form" novalidate>
+  <section class="ct-wrap">
+    <div class="ct-grid" id="contact" data-i18n={JSON.stringify(c.i18n)} data-lang={lang}>
+      <div class="ct-intro">
+        <p class="kn-kicker">{c.kicker}</p>
+        <h1 class="ct-title"><span class="sr-only">{c.h1}: </span>{c.big}</h1>
+        <p class="kn-lead">{c.lead}</p>
+        <div class="ct-side">
+          {
+            c.side.map(([h, p, label, link]) => (
+              <div>
+                <h2>{h}</h2>
+                <p>{p}</p>
+                {link && <a href={href(lang, link)}>{label} ›</a>}
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <form id="contact-form" class="contact-form ct-form" novalidate>
         <div class="field">
           <label for="c-name">{c.name}</label>
           <input id="c-name" name="name" autocomplete="name" maxlength="100" required />
