@@ -227,6 +227,19 @@ jobs:
       # Standalone app with the JS bundled in, signed with the template's debug
       # key (fine for sideloading). One CPU type per job: 64-bit phones, and
       # 32-bit phones (Android Go / older budget phones), built in parallel.
+      # Lens's own release key (GitHub secrets; backed up offline, see
+      # docs/features/app-distribution.md). plugins/with-release-signing.js reads it.
+      - name: Release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "ANDROID_KEYSTORE_BASE64 secret missing"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/lens-release.jks"
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          echo "LENS_KEYSTORE=$RUNNER_TEMP/lens-release.jks" >> "$GITHUB_ENV"
+          echo "LENS_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Build APK
         working-directory: android
         # The template's 2 GB heap / 512 MB metaspace ran out in lintVital once
@@ -250,6 +263,15 @@ jobs:
           echo "config: $RUNTIME  apk: $EMBEDDED"
           test "$RUNTIME" = "$EMBEDDED"
           echo "$RUNTIME" > runtime-${{ matrix.abi }}.txt
+
+      # The APK must carry Lens's release certificate, never the public debug key.
+      - name: Signing certificate
+        run: |
+          APK=android/app/build/outputs/apk/release/app-${{ matrix.abi }}-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          GOT=$("$APKSIGNER" verify --print-certs "$APK" | grep -m1 'SHA-256 digest' | awk '{print $NF}')
+          echo "certificate SHA-256: $GOT"
+          test "$GOT" = "bdd57ba599935d960364566e1bcbe99b920f52563172c1495dd801b39d28093b"
 
       - name: Collect APK
         run: |
@@ -323,6 +345,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -337,6 +360,7 @@ jobs:
           ls -lh dist
           test -f dist/Lens.apk || { echo "64-bit APK missing: nothing to publish"; exit 1; }
           RUNTIME=$(cat dist/runtime-arm64-v8a.txt)
+          echo "$RUNTIME" > runtime.txt
           rm dist/runtime-*.txt
           TAG="dev-${{ github.run_number }}"
           gh release create "$TAG" dist/* \
@@ -348,6 +372,48 @@ jobs:
           - Older/budget Android phones that say \"App not installed\" with Lens.apk: use **Lens-32bit.apk**.
           - iPhone/iPad: Lens-dev.ipa (added when the iOS build finishes) installs with SideStore and loads JS from Metro." \
             --prerelease
+
+      # Also on our own download host (CloudFront, the website domain):
+      # downloads/android/builds/<N>/. Public only after
+      # scripts/promote-release.sh <N> (docs/features/app-distribution.md).
+      - name: AWS credentials (OIDC)
+        env:
+          ROLE: ${{ vars.WEB_DEPLOY_ROLE_ARN }}
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          CREDS=$(aws sts assume-role-with-web-identity --role-arn "$ROLE" --role-session-name "gh-release-$GITHUB_RUN_ID" \
+            --web-identity-token "$TOKEN" --duration-seconds 3600 --query Credentials --output json)
+          for k in AccessKeyId:AWS_ACCESS_KEY_ID SecretAccessKey:AWS_SECRET_ACCESS_KEY SessionToken:AWS_SESSION_TOKEN; do
+            v=$(echo "$CREDS" | jq -r ".${k%%:*}")
+            echo "::add-mask::$v"
+            echo "${k##*:}=$v" >> "$GITHUB_ENV"
+          done
+          echo "AWS_REGION=ap-south-1" >> "$GITHUB_ENV"
+
+      - name: Upload to download host
+        env:
+          WEB_BUCKET: ${{ vars.WEB_BUCKET }}
+          WEB_ORIGIN: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+        run: |
+          N=${{ github.run_number }}
+          PREFIX="downloads/android/builds/$N"
+          FILES='{}'
+          for f in Lens.apk Lens-32bit.apk; do
+            [ -f "dist/$f" ] || continue
+            aws s3 cp "dist/$f" "s3://$WEB_BUCKET/$PREFIX/$f" --only-show-errors \
+              --content-type application/vnd.android.package-archive --cache-control "public, max-age=31536000, immutable"
+            ABI=$([ "$f" = Lens.apk ] && echo arm64-v8a || echo armeabi-v7a)
+            FILES=$(echo "$FILES" | jq --arg abi "$ABI" --arg url "$WEB_ORIGIN/$PREFIX/$f" \
+              --argjson size "$(stat -c%s "dist/$f")" --arg sha "$(sha256sum "dist/$f" | cut -d' ' -f1)" \
+              '. + {($abi): {url: $url, size: $size, sha256: $sha}}')
+          done
+          jq -n --argjson build "$N" --arg commit "${GITHUB_SHA::7}" --arg runtime "$(cat runtime.txt)" \
+            --arg at "$(date -u +%FT%TZ)" --argjson files "$FILES" \
+            '{build: $build, commit: $commit, runtime: $runtime, publishedAt: $at, files: $files}' > release.json
+          cat release.json
+          aws s3 cp release.json "s3://$WEB_BUCKET/$PREFIX/release.json" --only-show-errors \
+            --content-type application/json --cache-control "public, max-age=60"
 
   ios-release:
     needs: [ios, release]
