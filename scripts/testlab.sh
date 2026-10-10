@@ -18,6 +18,7 @@ G=${GCLOUD:-$HOME/.local/google-cloud-sdk/bin/gcloud}
 PHONES=("$@")
 [ ${#PHONES[@]} -gt 0 ] || PHONES=(a14xm/34 OP573DL1/34 akita/34 dubai/34 F01L/27)
 WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
 OUT=${OUT:-$(pwd)/testlab-dev-$N}
 mkdir -p "$OUT"
 
@@ -27,17 +28,21 @@ run_matrix() { # apk-name devices...
   local args=()
   for d in "$@"; do args+=(--device "model=${d%/*},version=${d#*/}"); done
   "$G" firebase test android run --project "$PROJECT" --type game-loop --scenario-numbers 1 \
-    --app "$WORK/$apk" "${args[@]}" --timeout 600s --async --format=json 2>"$WORK/run.log" | python3 -c 'import sys,json;print(json.load(sys.stdin)["testMatrixId"])' \
+    --app "$WORK/$apk" "${args[@]}" --timeout 600s --async --format=json 2>"$WORK/run.log" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d if isinstance(d,str) else d["testMatrixId"])' \
     || { cat "$WORK/run.log"; exit 1; }
 }
 
+MATRICES=()
+if [ -n "${MATRIX:-}" ]; then
+  MATRICES=("$MATRIX") # follow an already-started run
+else
 P64=(); P32=()
 for p in "${PHONES[@]}"; do
   if [[ $p == *:32 ]]; then P32+=("${p%:32}"); else P64+=("$p"); fi
 done
-MATRICES=()
 [ ${#P64[@]} -gt 0 ] && MATRICES+=("$(run_matrix Lens.apk "${P64[@]}")")
 [ ${#P32[@]} -gt 0 ] && MATRICES+=("$(run_matrix Lens-32bit.apk "${P32[@]}")")
+fi
 echo "Started: ${MATRICES[*]} (results → $OUT)"
 
 TOKEN=$("$G" auth print-access-token)
