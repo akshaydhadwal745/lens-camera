@@ -20,6 +20,7 @@ pass/fail per step. Runs:
 | Landscape / other landscape / back to portrait | preview re-binds for the forced screen rotation (`targetRotation` 1/3, then 0), photo still full size |
 | Flash photo (phones with a flash) | photo with flash forced on saves, full size |
 | Every other back lens (0.6×, 2×…) | photo full size for that lens |
+| Selfie flash photo | front photo with flash on (screen flash on phones without a front flash) completes, full size |
 | Front camera photo, front landscape | as above (mirroring + preview path recorded) |
 | Night | merged photo saved (4 frames), full size |
 | Portrait | photo saved; no mask = warn (needs a person in view; test-rack phones see none) |

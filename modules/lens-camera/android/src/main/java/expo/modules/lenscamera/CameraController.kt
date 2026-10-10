@@ -575,6 +575,8 @@ class CameraController(private val context: Context) {
       },
       "nightExtension" to nightExtension,
       "flash" to f.hasFlash,
+      // Front cameras without a flash: the screen lights the face instead.
+      "screenFlash" to (f.facingFront && !f.hasFlash),
       "torch" to f.hasFlash,
       "modes" to listOf("photo", "video", "night", "portrait"),
       "tier" to profile?.tierOf(f),
@@ -623,12 +625,25 @@ class CameraController(private val context: Context) {
     runCatching { cam.cameraControl.startFocusAndMetering(action) }
   }
 
-  fun takePhoto(flash: String, done: (Result<Map<String, Any?>>) -> Unit) {
+  /**
+   * [screenFlash]: front cameras without a flash light the subject with the
+   * screen instead (white screen at full brightness, like the phone's own
+   * camera). "on" always, "auto" only in low light.
+   */
+  fun takePhoto(flash: String, screenFlash: ImageCapture.ScreenFlash? = null, done: (Result<Map<String, Any?>>) -> Unit) {
     val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
-    capture.flashMode = when (flash) {
-      "on" -> ImageCapture.FLASH_MODE_ON
-      "auto" -> ImageCapture.FLASH_MODE_AUTO
-      else -> ImageCapture.FLASH_MODE_OFF
+    val f = facts
+    val useScreen = screenFlash != null && f != null && f.facingFront && !f.hasFlash &&
+      (flash == "on" || (flash == "auto" && isDark()))
+    if (useScreen) {
+      capture.screenFlash = screenFlash
+      capture.flashMode = ImageCapture.FLASH_MODE_SCREEN
+    } else {
+      capture.flashMode = when (flash) {
+        "on" -> ImageCapture.FLASH_MODE_ON
+        "auto" -> ImageCapture.FLASH_MODE_AUTO
+        else -> ImageCapture.FLASH_MODE_OFF
+      }
     }
     val raw = photoFormat == ImageCapture.OUTPUT_FORMAT_RAW
     val file = File(outputDir(), "lens-${UUID.randomUUID()}.${if (raw) "dng" else "jpg"}")
@@ -650,12 +665,19 @@ class CameraController(private val context: Context) {
     )
   }
 
+  /** Low light, from what auto exposure is doing right now (same idea as the app's Night badge). */
+  private fun isDark(): Boolean {
+    val iso = lastIso ?: return false
+    val exposureNs = lastExposureNs ?: 0L
+    return iso >= 800 || (exposureNs >= 50_000_000L && iso >= 400)
+  }
+
   /**
    * Night: with the maker's Night mode, one capture (the phone merges frames
    * itself). Otherwise a burst of [frames] shots merged by [NightMerge].
    */
   fun takeNightPhoto(frames: Int, hot: Boolean, done: (Result<Map<String, Any?>>) -> Unit) {
-    if (nightExtension) return takePhoto("off", done)
+    if (nightExtension) return takePhoto("off", null, done)
     val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
     capture.flashMode = ImageCapture.FLASH_MODE_OFF
     // A hot phone does less work: fewer frames.

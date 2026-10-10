@@ -504,7 +504,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         ) : (
           <>
             {s.mode === 'photo' || s.mode === 'portrait' ? (
-              caps?.flash !== false && (
+              (caps?.flash !== false || caps?.screenFlash) && (
                 <TopButton
                   icon={s.flash === 'off' ? 'flash-off' : s.flash === 'auto' ? 'flash-outline' : 'flash'}
                   label={s.flash.toUpperCase()}

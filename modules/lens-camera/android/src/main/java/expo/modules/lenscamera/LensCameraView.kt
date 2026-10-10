@@ -8,7 +8,9 @@ import android.os.Handler
 import android.os.Looper
 import android.view.OrientationEventListener
 import android.view.Surface
+import androidx.camera.core.ImageCapture
 import androidx.camera.view.PreviewView
+import androidx.camera.view.ScreenFlashView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import expo.modules.kotlin.AppContext
@@ -168,11 +170,28 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     controller.setPreviewSurface(plain.surfaceProvider)
   }
 
+  // White full-screen layer + full brightness for front-camera "flash" (CameraX's
+  // own ScreenFlashView, added over the whole window, invisible until used).
+  private var screenFlashView: ScreenFlashView? = null
+
+  private fun screenFlash(): ImageCapture.ScreenFlash? {
+    screenFlashView?.let { return it.screenFlash }
+    val activity = appContext.currentActivity ?: return null
+    val root = activity.findViewById<android.view.ViewGroup>(android.R.id.content) ?: return null
+    val view = ScreenFlashView(activity)
+    root.addView(view, android.view.ViewGroup.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    view.setScreenFlashWindow(activity.window)
+    screenFlashView = view
+    return view.screenFlash
+  }
+
   fun destroy() {
     running = false
     handler.removeCallbacks(statsTick)
     orientationListener.disable()
     displayManager.unregisterDisplayListener(displayListener)
+    screenFlashView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+    screenFlashView = null
     controller.release()
     glPreview?.release()
     glPreview = null
@@ -200,7 +219,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   // ---------- Commands ----------
 
   fun takePhoto(flash: String, promise: Promise) {
-    controller.takePhoto(flash) { result ->
+    controller.takePhoto(flash, screenFlash()) { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }
   }

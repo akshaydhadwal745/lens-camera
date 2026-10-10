@@ -58,6 +58,8 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
     if (l.id !== 'wide') steps.push({ id: `lens-${l.id}`, label: `${l.factor}× lens photo`, props: { ...DEFAULT_PROPS, lens: l.id }, action: 'photo' });
   }
   steps.push({ id: 'front-photo', label: 'Front camera photo', props: { ...DEFAULT_PROPS, facing: 'front' }, action: 'photo' });
+  // Front "flash": the screen lights up white (or a real front flash where the phone has one).
+  steps.push({ id: 'front-flash', label: 'Selfie flash photo', props: { ...DEFAULT_PROPS, facing: 'front' }, action: 'photo', flash: 'on' });
   steps.push({
     id: 'front-landscape',
     label: 'Front camera landscape',

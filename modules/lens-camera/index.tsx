@@ -32,6 +32,8 @@ export type Capabilities = {
   /** Max frames for a Night burst (0 = not supported). */
   nightFrames: number;
   flash: boolean;
+  /** Android: front camera without a flash lights the face with the screen instead. */
+  screenFlash?: boolean;
   torch: boolean;
   /** Modes this camera supports (Android reports it; iOS supports all). */
   modes?: CameraMode[];

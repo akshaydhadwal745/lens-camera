@@ -32,3 +32,12 @@ RAW, Ultra HDR toggle, 4K/HD, LOG, HDR video, fps, timer, looks while shooting,
 monitoring (histogram, peaking, zebra, false colour, level, grid, crop guides),
 presets, and the Night mode button. The user's pro settings are saved
 separately and come back when Pro is switched on again.
+
+## Selfie flash (front camera)
+
+Front cameras without a flash use the **screen** as the flash: CameraX's
+`ScreenFlashView` (added over the whole window by `LensCameraView`) turns the
+screen white at full brightness during the shot (`ImageCapture.FLASH_MODE_SCREEN`).
+The flash button shows on the front camera too (`screenFlash` capability).
+ON = always; AUTO = only in low light (native `isDark()`: ISO ≥ 800, or ≥ 1/20 s
+at ISO ≥ 400); OFF = never. Phones with a real front flash use it as usual.
