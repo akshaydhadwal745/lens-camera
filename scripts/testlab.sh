@@ -28,8 +28,9 @@ run_matrix() { # apk-name devices...
   local args=()
   for d in "$@"; do args+=(--device "model=${d%/*},version=${d#*/}"); done
   "$G" firebase test android run --project "$PROJECT" --type game-loop --scenario-numbers 1 \
-    --app "$WORK/$apk" "${args[@]}" --timeout 600s --async --format=json 2>"$WORK/run.log" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d if isinstance(d,str) else d["testMatrixId"])' \
-    || { cat "$WORK/run.log"; exit 1; }
+    --app "$WORK/$apk" "${args[@]}" --timeout 600s --async >/dev/null 2>"$WORK/run.log" || { cat "$WORK/run.log"; exit 1; }
+  # gcloud's stdout format varies (id or console link); its log always names the matrix.
+  grep -o 'matrix-[a-z0-9]*' "$WORK/run.log" | head -1
 }
 
 MATRICES=()
