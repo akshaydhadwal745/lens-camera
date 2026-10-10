@@ -36,7 +36,9 @@ import { font, palette, type as typeStyle } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const isWeb = Platform.OS === 'web';
-const formatGB = (bytes: number) => (bytes >= 1e9 ? `${Math.round(bytes / 1e9)} GB` : formatBytes(bytes));
+// Same units as everywhere else (1 GB = 1024³ bytes; quotas are set that way, so 100 GB shows as 100).
+const GB = 1024 ** 3;
+const formatGB = (bytes: number) => (bytes >= GB ? `${Math.round(bytes / GB)} GB` : formatBytes(bytes));
 
 function Section({ title, children, footer }: { title: string; children: ReactNode; footer?: string }) {
   return (
