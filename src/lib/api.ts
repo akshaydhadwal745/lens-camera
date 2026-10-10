@@ -256,6 +256,9 @@ export const api = {
     markPaid: (affiliateId: string, month: string, reference: string) =>
       request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),
   },
+  /** Anonymous camera diagnostics (src/lib/diagnostics.ts). */
+  diagnostics: (report: { device: Record<string, unknown>; build: unknown; events: unknown[] }) =>
+    request<{ ok: boolean }>('POST', '/diagnostics', report),
   // Camera quality R&D (docs/research/camera-quality.md).
   lab: {
     /** Anonymous camera capability report (no photos, not linked to the account). */

@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconButton } from '@/components/IconButton';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
+import { reportBasicPhoto } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/format';
 import { capture as saveCapture, finishLiveUpload, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
 import { displayUri, newId } from '@/lib/types';
@@ -142,6 +143,7 @@ export function BasicCamera() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (photo?.uri) {
         saveCapture({ kind: 'photo', sourceUri: photo.uri, width: photo.width, height: photo.height });
+        reportBasicPhoto(photo.width, photo.height);
       }
     } catch (error) {
       Alert.alert('Could not take photo', String(error));

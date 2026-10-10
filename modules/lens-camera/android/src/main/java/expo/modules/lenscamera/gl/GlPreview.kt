@@ -41,6 +41,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   var onHistogram: ((DoubleArray, Double, Double) -> Unit)? = null
   /** GL couldn't start on this phone; the owner falls back to a plain preview. */
   var onFailed: ((String) -> Unit)? = null
+  /** How the camera hands frames to the preview (diagnostics: which rotation path ran). */
+  var onTransform: ((Map<String, Any?>) -> Unit)? = null
   /** First frame drawn after a new camera stream (hides the black gap on switches). */
   var onFirstFrame: (() -> Unit)? = null
 
@@ -148,6 +150,14 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         hasCameraTransform = info.hasCameraTransform()
         isMirroring = info.isMirroring
         Log.i(TAG, "transform rotation ${info.rotationDegrees} target ${info.targetRotation} cameraTransform ${info.hasCameraTransform()} mirroring ${info.isMirroring}")
+        val details = mapOf<String, Any?>(
+          "rotationDegrees" to info.rotationDegrees,
+          "targetRotation" to info.targetRotation,
+          "cameraTransform" to info.hasCameraTransform(),
+          "mirroring" to info.isMirroring,
+          "buffer" to "${request.resolution.width}x${request.resolution.height}",
+        )
+        mainHandler.post { onTransform?.invoke(details) }
       }
       request.provideSurface(surface, glExecutor) {
         // CameraX is done with this surface (camera switched or stopped).

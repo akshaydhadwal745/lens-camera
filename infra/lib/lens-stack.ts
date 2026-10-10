@@ -75,6 +75,8 @@ export class LensStack extends Stack {
         { noncurrentVersionExpiration: Duration.days(30), expiredObjectDeleteMarker: true },
         // Streaming copies (HLS) are re-made on demand: keep them 90 days.
         { prefix: 'h/', expiration: Duration.days(90) },
+        // Anonymous camera diagnostics: kept one year (privacy policy says so).
+        { prefix: 'diag/', expiration: Duration.days(365) },
       ],
       // Deleted items whose 30-day Trash ended are tagged lens-archive=1 and
       // sink to the Deep Archive Access tier (~$0.002/GB-month) after 180 days

@@ -36,6 +36,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onStats by EventDispatcher<Map<String, Any?>>()
   private val onAnalysis by EventDispatcher<Map<String, Any?>>()
   private val onError by EventDispatcher<Map<String, Any?>>()
+  private val onDiagnostics by EventDispatcher<Map<String, Any?>>()
 
   var config = CameraConfig()
   var analysis = AnalysisOptions()
@@ -95,7 +96,11 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       gl.onHistogram = { bins, low, high ->
         onAnalysis(mapOf("histogram" to bins.toList(), "clipLow" to low, "clipHigh" to high))
       }
-      gl.onFailed = { usePlainPreview() }
+      gl.onFailed = { message ->
+        onDiagnostics(mapOf("kind" to "glFallback", "message" to message))
+        usePlainPreview()
+      }
+      gl.onTransform = { details -> onDiagnostics(mapOf("kind" to "preview") + details) }
     }
     controller.onReady = { caps -> onReady(caps + mapOf("liveLooks" to (glPreview != null))) }
     controller.onError = { message, fatal -> onError(mapOf("message" to message, "fatal" to fatal)) }

@@ -23,6 +23,7 @@ import { Choice, Sheet, Toggle } from './Sheet';
 import { NamePrompt } from './NamePrompt';
 import { ValueDial } from './ValueDial';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
+import { reportCameraError, reportCameraReady, reportPreview } from '@/lib/diagnostics';
 import { compact, EditRecipe, LOOKS } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
 import {
@@ -425,12 +426,18 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             }}
             onReady={(e) => {
               setCaps(e.nativeEvent);
+              reportCameraReady(e.nativeEvent);
               // A mode this phone can't do (e.g. from a preset): back to Photo.
               if (e.nativeEvent.modes && !e.nativeEvent.modes.includes(s.mode)) update({ mode: 'photo' });
             }}
             onStats={(e) => setStats(e.nativeEvent)}
             onAnalysis={(e) => setAnalysis(e.nativeEvent)}
-            onError={(e) => (e.nativeEvent.fatal && onUnavailable ? onUnavailable(e.nativeEvent.message) : Alert.alert('Camera', e.nativeEvent.message))}
+            onError={(e) => {
+              reportCameraError(e.nativeEvent.fatal ? 'fallbackBasic' : 'cameraError', e.nativeEvent.message);
+              if (e.nativeEvent.fatal && onUnavailable) onUnavailable(e.nativeEvent.message);
+              else Alert.alert('Camera', e.nativeEvent.message);
+            }}
+            onDiagnostics={(e) => reportPreview(e.nativeEvent, s.position)}
           />
 
           <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />

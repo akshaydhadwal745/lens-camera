@@ -14,7 +14,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '9 October 2026', hi: '9 अक्टूबर 2026' },
+  updated: { en: '10 October 2026', hi: '10 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -51,9 +51,10 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['Clicks on invite and affiliate links: time, browser type and a one-way hash of the IP address', 'Fraud checks and the inviter’s statistics (counts only, never who clicked)', 'Raw clicks 30 days; daily counts for the life of the link'],
             ['Affiliates only: name, channels, PAN and UPI ID (encrypted), commissions and payouts', 'To run the program, pay you and meet tax law (TDS, Form 16A)', '8 years after the financial year (Indian tax and accounting law)'],
             ['A record of reward, commission and payout changes', 'An unchangeable audit trail, so rewards and payments can be checked', '8 years'],
+            ['Anonymous camera diagnostics (Android): phone model and Android version, app build, how the camera started (photo and preview size, camera features used, errors). No photos, no location, not linked to your account', 'To find and fix camera problems on phone models we cannot test ourselves', '1 year'],
           ],
         },
-        p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics or crash-reporting in the app today. If we add analytics, we will update this policy first.'],
+        p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics or crash-reporting in the app today. The only usage data Lens sends is its own anonymous camera diagnostics (in the table above). If we add analytics, we will update this policy first.'],
       },
       {
         h2: '2. Your own storage (Google Drive, OneDrive, Dropbox, Box, S3, WebDAV)',
@@ -146,9 +147,10 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['इनवाइट और एफ़िलिएट लिंक पर क्लिक: समय, ब्राउज़र का प्रकार और IP एड्रेस का वन-वे हैश', 'धोखाधड़ी की जाँच और इनवाइट करने वाले के आँकड़े (सिर्फ़ गिनती, कभी नहीं कि किसने क्लिक किया)', 'क्लिक 30 दिन; रोज़ की गिनती लिंक रहने तक'],
             ['सिर्फ़ एफ़िलिएट: नाम, चैनल, PAN और UPI ID (एन्क्रिप्टेड), कमीशन और भुगतान', 'प्रोग्राम चलाने, आपको भुगतान करने और टैक्स क़ानून (TDS, Form 16A) के पालन के लिए', 'वित्त वर्ष के 8 साल बाद तक (भारतीय टैक्स और अकाउंटिंग क़ानून)'],
             ['इनाम, कमीशन और भुगतान में हर बदलाव का रिकॉर्ड', 'न बदला जा सकने वाला ऑडिट रिकॉर्ड, ताकि इनाम और भुगतान जाँचे जा सकें', '8 साल'],
+            ['गुमनाम कैमरा डायग्नोस्टिक्स (Android): फ़ोन मॉडल और Android वर्शन, ऐप बिल्ड, कैमरा कैसे शुरू हुआ (फ़ोटो और प्रीव्यू साइज़, इस्तेमाल हुए कैमरा फ़ीचर, एरर)। कोई फ़ोटो नहीं, कोई लोकेशन नहीं, आपके अकाउंट से जुड़ा नहीं', 'उन फ़ोन मॉडल पर कैमरा की समस्याएँ ढूँढने और ठीक करने के लिए जिन्हें हम ख़ुद टेस्ट नहीं कर सकते', '1 साल'],
           ],
         },
-        p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और आज ऐप में किसी थर्ड-पार्टी एनालिटिक्स या क्रैश रिपोर्टिंग का इस्तेमाल नहीं करते। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
+        p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और आज ऐप में किसी थर्ड-पार्टी एनालिटिक्स या क्रैश रिपोर्टिंग का इस्तेमाल नहीं करते। Lens सिर्फ़ अपने गुमनाम कैमरा डायग्नोस्टिक्स भेजता है (ऊपर टेबल में)। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
       },
       {
         h2: '2. आपका अपना स्टोरेज (Google Drive, OneDrive, Dropbox, Box, S3, WebDAV)',

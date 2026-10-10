@@ -107,3 +107,32 @@ export async function createSet(identity: Identity, req: Req): Promise<Res> {
   }
   return json(200, { setId, urls });
 }
+
+const MAX_DIAGNOSTICS_BYTES = 32 * 1024;
+
+/**
+ * POST /diagnostics { device, build, events } — anonymous camera diagnostics
+ * (how the camera started on this phone; no photos, no account link).
+ * Stored as `diag/<day>/<maker_model>/<time>-<random>.json`.
+ */
+export async function saveDiagnostics(identity: Identity, req: Req): Promise<Res> {
+  await rateLimit(`diag#${identity.id}`, 60);
+  const { device, build, events } = req.body ?? {};
+  if (!device || typeof device !== 'object' || !Array.isArray(events) || events.length === 0 || events.length > 20) {
+    throw new HttpError(400, 'device and 1–20 events required');
+  }
+  const body = JSON.stringify({ device, build, events, receivedAt: new Date().toISOString() });
+  if (body.length > MAX_DIAGNOSTICS_BYTES) throw new HttpError(413, 'too large');
+  const d = device as { manufacturer?: unknown; model?: unknown };
+  const model = `${String(d.manufacturer ?? 'unknown')}_${String(d.model ?? 'unknown')}`.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80);
+  const now = new Date();
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: env.bucket,
+      Key: `diag/${now.toISOString().slice(0, 10)}/${model}/${now.getTime()}-${randomId(4)}.json`,
+      Body: body,
+      ContentType: 'application/json',
+    }),
+  );
+  return json(200, { ok: true });
+}

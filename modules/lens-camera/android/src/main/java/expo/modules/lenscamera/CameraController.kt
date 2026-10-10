@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.hardware.camera2.CameraCaptureSession
+import android.graphics.ImageFormat
+import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
@@ -138,6 +140,8 @@ class CameraController(private val context: Context) {
   private var displayRotation = android.view.Surface.ROTATION_0
   /** What actually got bound after fallbacks (e.g. HDR dropped). */
   private var bound = BoundVideo()
+  /** 0 = bound with everything asked for; higher = a fallback was needed (diagnostics). */
+  private var bindAttempt = 0
 
   private data class BoundVideo(
     val hdr: Boolean = false,
@@ -279,12 +283,13 @@ class CameraController(private val context: Context) {
       nightExtension -> ext!!.getExtensionEnabledCameraSelector(baseSelector, ExtensionMode.NIGHT)
       else -> baseSelector
     }
-    for (attempt in attempts) {
+    for ((attemptIndex, attempt) in attempts.withIndex()) {
       try {
         p.unbindAll()
         val group = buildUseCases(cam, attempt)
         camera = p.bindToLifecycle(o, selector, group)
         bound = attempt
+        bindAttempt = attemptIndex
         Log.i(TAG, "bound $attempt photo ${imageCapture?.resolutionInfo?.resolution} preview ${this.preview?.resolutionInfo?.resolution}")
         applyLive()
         onReady?.invoke(capabilities())
@@ -527,6 +532,13 @@ class CameraController(private val context: Context) {
       "extension" to boundExtension,
       // What the photo use case really got (e.g. "4032x3024"): catches silent downsizing.
       "photoSize" to imageCapture?.resolutionInfo?.resolution?.let { "${it.width}x${it.height}" },
+      // Diagnostics: the largest JPEG this camera can give, what the preview got,
+      // the hardware level and whether binding needed a fallback.
+      "maxPhotoSize" to f.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        ?.getOutputSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }?.let { "${it.width}x${it.height}" },
+      "previewSize" to preview?.resolutionInfo?.resolution?.let { "${it.width}x${it.height}" },
+      "level" to DeviceProfile.levelName(f.hardwareLevel),
+      "bindAttempt" to bindAttempt,
       "photoFormat" to when (photoFormat) {
         ImageCapture.OUTPUT_FORMAT_RAW -> "raw"
         ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR -> "ultraHdr"

@@ -43,7 +43,20 @@ export type Capabilities = {
   extension?: LabExtension;
   /** Android: format the photo use case was bound with. */
   photoFormat?: 'jpeg' | 'ultraHdr' | 'raw';
+  /** Android diagnostics: photo size bound vs the largest the camera offers, e.g. "4032x3024". */
+  photoSize?: string | null;
+  maxPhotoSize?: string | null;
+  previewSize?: string | null;
+  /** Camera2 hardware level (LEGACY / LIMITED / FULL / LEVEL_3 / EXTERNAL). */
+  level?: string;
+  /** 0 = bound with everything asked for; higher = a fallback combination was needed. */
+  bindAttempt?: number;
 };
+
+/** Android diagnostics from the native view: preview path, or OpenGL falling back. */
+export type CameraDiagnostics =
+  | { kind: 'preview'; rotationDegrees: number; targetRotation: number; cameraTransform: boolean; mirroring: boolean; buffer: string }
+  | { kind: 'glFallback'; message: string };
 
 export type LabExtension = 'none' | 'auto' | 'hdr' | 'night' | 'bokeh' | 'faceRetouch';
 
@@ -116,6 +129,8 @@ export type LensCameraProps = ViewProps & {
   onAnalysis?: (e: NativeSyntheticEvent<AnalysisResult>) => void;
   /** `fatal`: the camera couldn't start at all (the app falls back to the basic camera). */
   onError?: (e: NativeSyntheticEvent<{ message: string; fatal?: boolean }>) => void;
+  /** Android: how the camera started (anonymous diagnostics). */
+  onDiagnostics?: (e: NativeSyntheticEvent<CameraDiagnostics>) => void;
 };
 
 export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };
