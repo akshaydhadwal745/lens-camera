@@ -126,6 +126,16 @@ and reported (`photoSize` in capabilities and Lab metadata).
 - Test Lab phones sit in dark racks (ISO 7000+): screenshots can't judge the
   preview visually; the self-test checks rotation via the camera's data.
 
+## Finding 3 (2026-10-10): self-test on Test Lab (dev-36)
+
+- Android 14 (Pixel 8a, emulator): **no display-listener call for a 180° turn**
+  → preview kept the old rotation until the next change. Fix dev-37: re-check
+  every 250 ms (stats tick).
+- Pixel 8a 12 of 16 MP explained: CameraX ran with no fps target
+  (`targetFpsRange=[0, 0]`), listed 4624×3472 first, but the guaranteed stream
+  combination with a preview tops out at 4032×3024. Device limit; warn only.
+- Pixel 8a Night uses Google's own Night extension (5 MP output).
+
 ## Built (2026-10-10, dev-33)
 
 - **Capability report** (`deviceReport`, Camera info screen): now also lists the

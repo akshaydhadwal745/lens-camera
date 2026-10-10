@@ -83,6 +83,11 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val statsTick = object : Runnable {
     override fun run() {
       controller.stats()?.let { onStats(it) }
+      // Also keep the viewfinder's rotation current. Android 14 (Pixel 8a, the
+      // emulator) doesn't call the display listener for a direct 180° turn
+      // (landscape-left <-> landscape-right), which left the preview upside
+      // down; the self-test caught it. No-op when nothing changed.
+      display?.let { controller.setDisplayRotation(it.rotation) }
       handler.postDelayed(this, 250)
     }
   }

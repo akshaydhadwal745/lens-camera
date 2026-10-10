@@ -25,6 +25,9 @@ import {
 import { capture as saveCapture, getState } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
+const MARK = { pass: '✓', warn: '!', fail: '✗', skip: '–' } as const;
+const MARK_COLOR = { pass: '#7d7', warn: '#fc6', fail: '#f87', skip: '#999' } as const;
+
 const ANALYSIS = { peaking: false, zebra: false, zebraLevel: 0.95, falseColor: false, histogram: false };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -156,8 +159,12 @@ export default function SelfTestScreen() {
 
         if (file.exists) file.delete();
         if (bytes <= 0) return { ...base, status: 'fail', ms: Date.now() - t0, message: 'empty photo file', details };
-        if (step.id === 'portrait' && !photo.depth) return { ...base, status: 'fail', ms: Date.now() - t0, message: 'no portrait mask', details };
-        return { ...base, status: check.ok ? 'pass' : 'fail', ms: Date.now() - t0, message: check.message, details };
+        if (check.status === 'fail') return { ...base, status: 'fail', ms: Date.now() - t0, message: check.message, details };
+        // The mask needs a person in view; a test-rack phone sees none.
+        if (step.id === 'portrait' && !photo.depth) {
+          return { ...base, status: 'warn', ms: Date.now() - t0, message: 'no person found in view, so no portrait mask (point it at someone to check)', details };
+        }
+        return { ...base, status: check.status, ms: Date.now() - t0, message: check.message, details };
       } catch (e) {
         return { ...base, status: 'fail', ms: Date.now() - t0, message: errorMessage(e) };
       }
@@ -264,7 +271,8 @@ export default function SelfTestScreen() {
         <Text style={styles.muted}>{buildLabel()}</Text>
         {report ? (
           <Text style={[styles.summary, { color: report.failed ? '#f87' : '#7d7' }]}>
-            {report.passed} passed · {report.failed} failed · {report.skipped} skipped · {(report.totalMs / 1000).toFixed(0)} s
+            {report.passed} passed · {report.warnings} warnings · {report.failed} failed · {report.skipped} skipped ·{' '}
+            {(report.totalMs / 1000).toFixed(0)} s
           </Text>
         ) : null}
         {!launch ? (
@@ -276,14 +284,12 @@ export default function SelfTestScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {steps.map((s) => (
           <View key={s.id} style={styles.row}>
-            <Text style={[styles.mark, { color: s.status === 'pass' ? '#7d7' : s.status === 'fail' ? '#f87' : '#999' }]}>
-              {s.status === 'pass' ? '✓' : s.status === 'fail' ? '✗' : '–'}
-            </Text>
+            <Text style={[styles.mark, { color: MARK_COLOR[s.status] }]}>{MARK[s.status]}</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.stepTitle}>
                 {s.label} <Text style={styles.muted}>{(s.ms / 1000).toFixed(1)} s</Text>
               </Text>
-              {s.message ? <Text style={styles.stepMessage}>{s.message}</Text> : null}
+              {s.message ? <Text style={[styles.stepMessage, s.status === 'warn' && { color: '#fc6' }]}>{s.message}</Text> : null}
               {s.details?.saved ? (
                 <Text style={styles.muted}>
                   {String(s.details.saved)} of {String(s.details.max ?? '?')}

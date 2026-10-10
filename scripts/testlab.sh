@@ -81,9 +81,9 @@ for f in sorted(Path(sys.argv[1]).rglob("*.json")):
     if "steps" not in r:
         continue
     found = True
-    print(f"\n{f.relative_to(sys.argv[1]).parts[0]}: {r['passed']} passed, {r['failed']} failed, {r['skipped']} skipped ({r['totalMs'] / 1000:.0f} s)")
+    print(f"\n{f.relative_to(sys.argv[1]).parts[0]}: {r['passed']} passed, {r.get('warnings', 0)} warnings, {r['failed']} failed, {r['skipped']} skipped ({r['totalMs'] / 1000:.0f} s)")
     for s in r["steps"]:
-        mark = {"pass": "✓", "fail": "✗", "skip": "–"}[s["status"]]
+        mark = {"pass": "✓", "warn": "!", "fail": "✗", "skip": "–"}[s["status"]]
         d = s.get("details") or {}
         size = f" {d.get('saved')} of {d.get('max')}" if d.get("saved") else ""
         print(f"  {mark} {s['label']}{size}{' — ' + s['message'] if s.get('message') else ''}")
