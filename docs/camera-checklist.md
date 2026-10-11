@@ -81,7 +81,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 | # | Feature | Status | Evidence / limits |
 |---|---|---|---|
 | 2.1 | Focus + exposure lock (hold) and exposure slider | 🔨 | Built (dev-50): tap = focus+expose (5 s auto-cancel) + sun slider; drag up/down = exposure compensation in Normal and PRO (150 dp/EV, clamped to the camera's range, haptic at 0), reset on a new tap / mode / camera; long-press = lock (no auto-cancel + Camera2 `CONTROL_AE_LOCK` after metering settles), badge says what the camera could hold (AE/AF, AE: fixed-focus, AF: no AE lock), tap unlocks. Emulator: tap box + sun ✓, drag → +0.4 EV for 66 dp ✓ (dev-48 native + new JS). To validate: lock on dev-50 (emulator + S8), exposure visibly changes, lock holds when pointing at a bright window, fixed-focus front camera shows "AE LOCK" |
-| 2.2 | Volume-button shutter | ⬜ | |
+| 2.2 | Volume-button shutter | 🔨 | Built: volume up/down + camera key (and Bluetooth selfie remotes, which send volume up) act as the shutter (photo / start-stop video / cancel timer) while the main camera is on screen and active; repeats ignored; key consumed only then (volume normal elsewhere). Window.Callback wrapped by delegation while attached, restored on detach (`HardwareShutter.kt`). To validate: emulator `adb shell input keyevent KEYCODE_VOLUME_DOWN` (photo taken, volume unchanged), gallery screen volume still works; S8 buttons + a selfie remote if available |
 | 2.3 | Timer (3/10 s) | 🟡 | Now in Normal (dev-46) |
 | 2.4 | Grid in Normal + smart level (shows when nearly straight) | ⬜ | Grid/level exist in PRO (🟡) |
 | 2.5 | Mirror selfie setting | ⬜ | |

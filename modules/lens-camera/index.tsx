@@ -141,6 +141,10 @@ export type LensCameraProps = ViewProps & {
   onDiagnostics?: (e: NativeSyntheticEvent<CameraDiagnostics>) => void;
   /** Android: frames are being recorded now (`delayMs` after record was pressed). Show REC from here. */
   onRecordingStarted?: (e: NativeSyntheticEvent<{ delayMs: number }>) => void;
+  /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
+  hardwareShutter?: boolean;
+  /** Android: a volume/camera key was pressed (with `hardwareShutter`). */
+  onHardwareShutter?: () => void;
 };
 
 export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };

@@ -43,6 +43,10 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onError by EventDispatcher<Map<String, Any?>>()
   private val onDiagnostics by EventDispatcher<Map<String, Any?>>()
   private val onRecordingStarted by EventDispatcher<Map<String, Any?>>()
+  private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
+  /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
+  var hardwareShutter = false
+  private val keys = HardwareShutter { onHardwareShutter(emptyMap()) }
 
   var config = CameraConfig()
   var analysis = AnalysisOptions()
@@ -141,6 +145,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    updateHardwareShutter()
     displayManager.registerDisplayListener(displayListener, handler)
     display?.let { controller.setDisplayRotation(it.rotation) }
     updateRunning()
@@ -148,6 +153,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   override fun onDetachedFromWindow() {
     super.onDetachedFromWindow()
+    keys.detach()
     displayManager.unregisterDisplayListener(displayListener)
     updateRunning()
   }
@@ -160,8 +166,15 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
     updatePreviewModes()
     display?.let { controller.setDisplayRotation(it.rotation) }
+    updateHardwareShutter()
     if (running) controller.update(config)
     updateRunning()
+  }
+
+  /** Volume keys shoot only while this camera is on screen, active, and asked to. */
+  private fun updateHardwareShutter() {
+    val activity = appContext.currentActivity
+    if (hardwareShutter && active && isAttachedToWindow && activity != null) keys.attach(activity) else keys.detach()
   }
 
   /** What the viewfinder previews of the photo-to-be: Portrait blur, Night brightening. */

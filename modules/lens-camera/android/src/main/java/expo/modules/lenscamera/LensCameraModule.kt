@@ -52,7 +52,7 @@ class LensCameraModule : Module() {
     }
 
     View(LensCameraView::class) {
-      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted")
+      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter")
 
       OnViewDidUpdateProps { view: LensCameraView -> view.applyProps() }
       OnViewDestroys { view: LensCameraView -> view.destroy() }
@@ -71,6 +71,7 @@ class LensCameraModule : Module() {
       Prop("portraitAperture") { view: LensCameraView, value: Double -> view.portraitAperture = value }
       Prop("nightPreview") { view: LensCameraView, value: Boolean -> view.nightPreview = value }
       Prop("portraitStyle") { view: LensCameraView, value: String -> view.portraitStyle = value }
+      Prop("hardwareShutter") { view: LensCameraView, value: Boolean -> view.hardwareShutter = value }
       Prop("torch") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(torch = value) }
       Prop("zoom") { view: LensCameraView, value: Double -> view.config = view.config.copy(zoom = value) }
       Prop("exposureMode") { view: LensCameraView, value: String -> view.config = view.config.copy(exposureMode = value) }

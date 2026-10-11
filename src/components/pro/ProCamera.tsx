@@ -120,6 +120,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [focus, setFocus] = useState<{ x: number; y: number; n: number; ev: number; visible: boolean } | null>(null);
   const tapEv = focus?.ev ?? 0;
   const focusMark = focus?.visible ? focus : null;
+  useEffect(() => console.log('LENSDBG ev', tapEv, 'visible', !!focus?.visible), [tapEv, focus?.visible]); // TEMP
   // Long-press lock: what this camera could hold ("AE/AF", "AE" or "AF"), or null.
   const [lockLabel, setLockLabel] = useState<string | null>(null);
   // A new camera or mode starts unlocked at normal brightness (the camera re-binds).
@@ -560,6 +561,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             }}
             onDiagnostics={(e) => reportPreview(e.nativeEvent, s.position)}
             onRecordingStarted={() => setRecLive(true)}
+            hardwareShutter
+            onHardwareShutter={() => {
+              // Same as tapping the shutter (incl. cancelling a running timer); not while a sheet is open.
+              if (sheet === 'none' && !busy) onShutter();
+            }}
           />
 
           <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />

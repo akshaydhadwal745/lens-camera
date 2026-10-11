@@ -37,6 +37,13 @@ first guess; the Quality Lab / self-test data will tune them.
 - **Long-press**: lock. The badge says what this camera could hold: `AE/AF LOCK`,
   `AE LOCK` (fixed-focus cameras) or `AF LOCK` (cameras without AE lock). Tap anywhere to unlock.
 
+### Volume buttons
+
+Volume up/down (and the camera key, and Bluetooth selfie remotes) work like the
+shutter while the camera is on screen: photo, start/stop video, or cancel a
+running timer. Holding the button takes one shot. On other screens the buttons
+change the volume as usual (`HardwareShutter.kt`).
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,
