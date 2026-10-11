@@ -21,7 +21,7 @@ manifest merge) → fixed in e3ab356; dev-58/59 cancelled (superseded). dev-60
 (fcbd32c: 4.3–4.5, 5.3, 6.2, 7.2, 7.3 + the fix) verify-release 4/4. dev-61
 (6f58ce6: + 7.4 auto-straighten, 9.1 aspect ratios) verify-release 4/4. dev-62
 (9.2 motion photos), dev-63 (9.3 QR), dev-64 (motion fixes), dev-65 (9.4 scan, 9.5 hyperlapse) 4/4.
-dev-66 (187c683: 9.6 astro + motion auto-off) = **test-day build**.
+dev-66 (187c683: 9.6 astro + motion auto-off) verify-release 4/4 = **test-day build** (runtime n-09b93dc58996f20ab0e5).
 
 **Next:** test day 2026-10-12 — Test Lab physical tiers (budget/mid/flagship,
 Android 8–16, 32-bit next day) + Galaxy S8 walk-through of every 🟡 item, in
@@ -217,4 +217,5 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-11 | dev-64 | 9.2 motion photo | Emulator | step-down works (960×1280 → 720×960 → 480×640 → 352×480); emulator encoder stays ~0.4 fps at every size (per-frame cost of its GPU→encoder path, not resolution) → only real phones can judge the clip; added: auto-off + notice when even the smallest size is too slow |
 | 2026-10-11 | dev-65 | 9.4 scan | Emulator | SCAN in the mode strip ✓; this emulator image's Play services can't fetch the scanner module → clear "Could not scan … not available" dialog ✓ (real phones with the Play Store download it on first use) |
 | 2026-10-11 | dev-65 | 9.5 hyperlapse | Emulator | fake gyro movement → REC shows `0:33 → 0:03 · HYPERLAPSE` ✓; clip 720×1280, 40 frames, valid ✓ (frame rate limited by the emulator's draw speed; the 8× rate needs a phone) |
+| 2026-10-12 | dev-66 | release | CI | verify-release 66 4/4 — test-day build |
 | 2026-10-11 | dev-46 | UI | Emulator 360 dp | Normal/PRO layout, modes, styles, "No person found", Night draws; live blur with a person not testable (virtual camera can't be aimed headless) |
