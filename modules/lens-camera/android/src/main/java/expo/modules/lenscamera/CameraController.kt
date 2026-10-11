@@ -40,6 +40,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.HighSpeedVideoSessionConfig
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
@@ -95,7 +96,9 @@ data class CameraConfig(
   /** Quality Lab only: "quality" (default) or "latency" photo capture. */
   val captureMode: String = "quality",
 ) {
-  val isVideo get() = mode == "video"
+  /** Video and slow motion record with VideoCapture. */
+  val isVideo get() = mode == "video" || mode == "slowmo"
+  val isSlowMo get() = mode == "slowmo"
   val isNight get() = mode == "night"
   val isTimeLapse get() = mode == "timelapse"
 
@@ -157,6 +160,11 @@ class CameraController(private val context: Context) {
   private var bound = BoundVideo()
   /** 0 = bound with everything asked for; higher = a fallback was needed (diagnostics). */
   private var bindAttempt = 0
+  /** Slow motion as bound: speed factor (4 = 120 fps, 8 = 240 fps, 2 = 60 fps re-timed), and whether CameraX's high-speed session already slowed it. */
+  private var slowFactor = 1
+  private var slowHighSpeed = false
+  /** Per camera id: what slow motion it can do (0 = none). */
+  private val slowCapability = mutableMapOf<String, Int>()
 
   private data class BoundVideo(
     val hdr: Boolean = false,
@@ -307,13 +315,19 @@ class CameraController(private val context: Context) {
       nightExtension -> ext!!.getExtensionEnabledCameraSelector(baseSelector, ExtensionMode.NIGHT)
       else -> baseSelector
     }
-    for ((attemptIndex, attempt) in attempts.withIndex()) {
+    slowFactor = 1
+    slowHighSpeed = false
+    if (config.isSlowMo && bindHighSpeed(p, o, cam, selector)) return
+    val tries = if (config.isSlowMo) listOf(BoundVideo(false, 60, false), BoundVideo(false, 30, false)) else attempts
+    for ((attemptIndex, attempt) in tries.withIndex()) {
       try {
         p.unbindAll()
         val group = buildUseCases(cam, attempt)
         camera = p.bindToLifecycle(o, selector, group)
         bound = attempt
         bindAttempt = attemptIndex
+        // Slow motion without high-speed video: 60 fps, re-timed to half speed after recording.
+        if (config.isSlowMo) slowFactor = if (attempt.fps == 60 && videoFrameRate(cam, 60) != null) 2 else 1
         Log.i(TAG, "bound $attempt photo ${imageCapture?.resolutionInfo?.resolution} preview ${this.preview?.resolutionInfo?.resolution}")
         applyLive()
         onReady?.invoke(capabilities())
@@ -324,6 +338,54 @@ class CameraController(private val context: Context) {
       }
     }
     onError?.invoke("Camera could not start: ${lastError?.message}", true)
+  }
+
+  /**
+   * Real slow motion where the phone maker exposes high-speed video to apps
+   * (CameraX HighSpeedVideoSessionConfig): 120/240 fps, saved as a 30 fps file
+   * that already plays slowed. Preview + video only (no photos in this mode).
+   */
+  private fun bindHighSpeed(p: ProcessCameraProvider, o: LifecycleOwner, cam: CameraFacts, selector: CameraSelector): Boolean {
+    return try {
+      val caps = Recorder.getHighSpeedVideoCapabilities(cam.info) ?: return false
+      val qualities = caps.getSupportedQualities(DynamicRange.SDR)
+      val quality = listOf(Quality.FHD, Quality.HD).firstOrNull { it in qualities } ?: qualities.firstOrNull() ?: return false
+      val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(quality)).build()
+      val video = VideoCapture.Builder(recorder).setTargetRotation(targetRotation).build()
+      val preview = Preview.Builder().setTargetRotation(displayRotation).build()
+      previewSurface?.let { preview.surfaceProvider = it }
+      // Prefer 240 fps (8×), else the fastest offered; fixed ranges only.
+      val ranges = cam.info.getSupportedFrameRateRanges(HighSpeedVideoSessionConfig(video, preview))
+        .filter { it.lower == it.upper && it.upper >= 120 }
+      val range = ranges.firstOrNull { it.upper == 240 } ?: ranges.maxByOrNull { it.upper } ?: return false
+      p.unbindAll()
+      camera = p.bindToLifecycle(o, selector, HighSpeedVideoSessionConfig(video, preview, range, true))
+      this.preview = preview
+      videoCapture = video
+      imageCapture = null
+      slowFactor = range.upper / 30
+      slowHighSpeed = true
+      Log.i(TAG, "bound high-speed slow motion $quality at ${range.upper} fps")
+      applyLive()
+      onReady?.invoke(capabilities())
+      true
+    } catch (e: Exception) {
+      Log.w(TAG, "high-speed slow motion unavailable, using 60 fps", e)
+      false
+    }
+  }
+
+  /** What slow motion this camera can do: 8/4 (high-speed), 2 (60 fps re-timed) or 0. Cached per camera. */
+  private fun slowMotionFactor(cam: CameraFacts): Int = slowCapability.getOrPut(cam.id) {
+    val high = runCatching {
+      val caps = Recorder.getHighSpeedVideoCapabilities(cam.info) ?: return@runCatching 0
+      val q = caps.getSupportedQualities(DynamicRange.SDR).firstOrNull() ?: return@runCatching 0
+      val video = VideoCapture.withOutput(Recorder.Builder().setQualitySelector(QualitySelector.from(q)).build())
+      val best = cam.info.getSupportedFrameRateRanges(HighSpeedVideoSessionConfig(video, Preview.Builder().build()))
+        .filter { it.lower == it.upper }.maxOfOrNull { it.upper } ?: 0
+      if (best >= 240) 8 else if (best >= 120) 4 else 0
+    }.getOrDefault(0)
+    if (high > 0) high else if (videoFrameRate(cam, 60) != null) 2 else 0
   }
 
   private fun buildUseCases(cam: CameraFacts, video: BoundVideo): UseCaseGroup {
@@ -610,7 +672,10 @@ class CameraController(private val context: Context) {
       // Front cameras without a flash: the screen lights the face instead.
       "screenFlash" to (f.facingFront && !f.hasFlash),
       "torch" to f.hasFlash,
-      "modes" to listOf("photo", "video", "night", "portrait"),
+      "modes" to listOf("photo", "video", "night", "portrait") + if (slowMotionFactor(f) >= 2) listOf("slowmo") else emptyList(),
+      // Slow-motion speed this camera gives (8×/4× high-speed, 2× from 60 fps), and what is bound now.
+      "slowMotionFactor" to slowMotionFactor(f),
+      "slowMotionBound" to if (config.isSlowMo) slowFactor else 0,
       "tier" to profile?.tierOf(f),
       "sensorReadout" to f.readSensorSettings,
     )
@@ -839,9 +904,11 @@ class CameraController(private val context: Context) {
     val pending = capture.output.prepareRecording(context, output.build())
     // Before the mic starts (it opens 0.1–0.7 s later), so the beep isn't in the recording.
     sounds.recordStart()
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+    // Slow motion is silent (slowed sound is a drone), like the stock cameras.
+    if (!config.isSlowMo && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
       pending.withAudioEnabled()
     }
+    val retime = if (config.isSlowMo && !slowHighSpeed && slowFactor > 1) slowFactor else 1
     // Start delay (checklist 1.11): from the press until the encoder's first data.
     val requestedAt = SystemClock.elapsedRealtime()
     var startDelayMs: Long? = null
@@ -855,8 +922,23 @@ class CameraController(private val context: Context) {
         recording = null
         sounds.recordStop() // after the file is closed, so it isn't recorded
         val ok = !event.hasError() || event.error in OK_FINALIZE
-        if (ok && file.exists() && file.length() > 0) {
-          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to event.recordingStats.recordedDurationNanos / 1e9, "startDelayMs" to startDelayMs)))
+        if (ok && file.exists() && file.length() > 0 && retime > 1) {
+          // 60 fps → half speed: re-time off the main thread (copy, no re-encode).
+          io.execute {
+            val slow = File(file.parentFile, file.nameWithoutExtension + "-slow.mp4")
+            val result = runCatching { SlowMotion.retime(file, slow, retime) }
+            main.execute {
+              result.fold({ duration ->
+                file.delete()
+                done(Result.success(mapOf("uri" to "file://${slow.absolutePath}", "duration" to duration, "startDelayMs" to startDelayMs, "slowFactor" to retime)))
+              }, { e ->
+                slow.delete()
+                done(Result.failure(CameraException("Slow motion failed: ${e.message}")))
+              })
+            }
+          }
+        } else if (ok && file.exists() && file.length() > 0) {
+          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to event.recordingStats.recordedDurationNanos / 1e9, "startDelayMs" to startDelayMs, "slowFactor" to if (config.isSlowMo) slowFactor else 1)))
         } else {
           done(Result.failure(CameraException(event.cause?.message ?: "Recording failed (code ${event.error})")))
         }

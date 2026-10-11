@@ -142,13 +142,29 @@ export default function SelfTestScreen() {
           const v = await done;
           const size = new File(v.uri).size ?? 0;
           new File(v.uri).delete();
-          const ok = v.duration >= 2 && size > 0;
+          // Slow motion: the clip plays `slowFactor` times longer than it was recorded.
+          const factor = step.props.mode === 'slowmo' ? (v.slowFactor ?? 1) : 1;
+          const ok = v.duration >= 2 * factor && size > 0 && (step.props.mode !== 'slowmo' || factor >= 2);
           const delay = v.startDelayMs ?? null;
           const late = delay !== null && delay > MAX_VIDEO_START_MS;
-          const details = { duration: v.duration, bytes: size, startDelayMs: delay, ...previewDetails };
+          const details = { duration: v.duration, bytes: size, startDelayMs: delay, slowFactor: factor, ...previewDetails };
           const lateNote = late ? `recording started ${delay} ms after record was pressed` : undefined;
           if (!ok) return { ...base, status: 'fail', ms: Date.now() - t0, message: [`video ${v.duration}s, ${size} bytes`, lateNote].filter(Boolean).join('; '), details };
           return { ...base, status: late ? 'warn' : 'pass', ms: Date.now() - t0, message: lateNote, details };
+        }
+
+        if (step.action === 'timelapse') {
+          if (!cam.startTimeLapse || !cam.stopTimeLapse) return { ...base, status: 'skip', ms: Date.now() - t0, message: 'time-lapse not available' };
+          const done = cam.startTimeLapse();
+          await wait(6000);
+          await cam.stopTimeLapse();
+          const clip = await done;
+          const size = new File(clip.uri).size ?? 0;
+          new File(clip.uri).delete();
+          // 6 s at one frame per 0.5 s ≈ 12 frames; fewer than 6 means the encoder fell behind.
+          const details = { frames: clip.frames, clipSeconds: clip.duration, bytes: size, ...previewDetails };
+          if (clip.frames < 6 || size <= 0) return { ...base, status: 'fail', ms: Date.now() - t0, message: `only ${clip.frames} frames, ${size} bytes`, details };
+          return { ...base, status: 'pass', ms: Date.now() - t0, message: `${clip.frames} frames`, details };
         }
 
         if (step.action === 'burst') {

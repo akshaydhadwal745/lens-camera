@@ -11,7 +11,7 @@ export type Orientation = 'portrait' | 'landscape' | 'reverseLandscape';
 export type SelfTestProps = {
   facing: 'back' | 'front';
   lens: Lens;
-  mode: 'photo' | 'video' | 'night' | 'portrait';
+  mode: 'photo' | 'video' | 'night' | 'portrait' | 'slowmo' | 'timelapse';
   raw: boolean;
   hdrPhoto: boolean;
   extension: LabExtension;
@@ -24,7 +24,7 @@ export type SelfTestStep = {
   label: string;
   props: SelfTestProps;
   orientation?: Orientation;
-  action: 'photo' | 'night' | 'video' | 'upload' | 'burst';
+  action: 'photo' | 'night' | 'video' | 'upload' | 'burst' | 'timelapse';
   /** Photo with the flash forced on (phones with a flash). */
   flash?: 'on';
   /**
@@ -72,6 +72,9 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   if (modes.includes('night')) steps.push({ id: 'night', label: 'Night photo', props: { ...DEFAULT_PROPS, mode: 'night' }, action: 'night' });
   if (modes.includes('portrait')) steps.push({ id: 'portrait', label: 'Portrait photo', props: { ...DEFAULT_PROPS, mode: 'portrait' }, action: 'photo' });
   if (modes.includes('video')) steps.push({ id: 'video', label: 'Video (3 s)', props: { ...DEFAULT_PROPS, mode: 'video' }, action: 'video' });
+  // Slow motion (3 s real → about 3 × factor s of clip) and time-lapse (6 s → frames written), where offered.
+  if (back.modes?.includes('slowmo')) steps.push({ id: 'slowmo', label: 'Slow motion (3 s)', props: { ...DEFAULT_PROPS, mode: 'slowmo' }, action: 'video' });
+  if (back.modes?.includes('timelapse')) steps.push({ id: 'timelapse', label: 'Time-lapse (6 s)', props: { ...DEFAULT_PROPS, mode: 'timelapse' }, action: 'timelapse' });
   // Burst speed: 5 photos back to back (checklist 1.1; smart burst needs this per phone).
   steps.push({ id: 'burst', label: 'Burst speed (5 shots)', props: DEFAULT_PROPS, action: 'burst' });
   if (back.raw) steps.push({ id: 'raw', label: 'RAW photo', props: { ...DEFAULT_PROPS, raw: true }, action: 'photo' });

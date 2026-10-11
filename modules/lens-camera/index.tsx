@@ -4,13 +4,16 @@ import { NativeSyntheticEvent, Platform, ViewProps } from 'react-native';
 
 export type Lens = 'ultraWide' | 'wide' | 'telephoto';
 /** 'timelapse': Android, only where the camera reports it (GPU viewfinder frames into a video encoder). */
-export type CameraMode = 'photo' | 'video' | 'night' | 'portrait' | 'timelapse';
+export type CameraMode = 'photo' | 'video' | 'night' | 'portrait' | 'timelapse' | 'slowmo';
 export type Stabilization = 'off' | 'standard' | 'cinematic' | 'extended';
 
 export type Capabilities = {
   position: 'front' | 'back';
   lens: Lens;
   mode: CameraMode;
+  /** Android: slow-motion speed this camera can give (8/4 high-speed, 2 from 60 fps, 0 none) and what is bound now. */
+  slowMotionFactor?: number;
+  slowMotionBound?: number;
   lenses: { id: Lens; factor: number }[];
   minISO: number;
   maxISO: number;
@@ -155,7 +158,14 @@ export type LensCameraProps = ViewProps & {
 };
 
 export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };
-export type VideoResult = { uri: string; duration: number; /** Android: ms from start until the first recorded data. */ startDelayMs?: number | null };
+export type VideoResult = {
+  uri: string;
+  duration: number;
+  /** Android: ms from start until the first recorded data. */
+  startDelayMs?: number | null;
+  /** Android, slow motion: how many times slower the clip plays (2, 4 or 8). */
+  slowFactor?: number;
+};
 
 export type LensCameraHandle = {
   takePhoto(options: { raw: boolean; flash: 'off' | 'on' | 'auto' }): Promise<PhotoResult>;

@@ -59,6 +59,14 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Slow motion
+
+**SLO-MO** mode, only on phones that can do it, at the best speed each phone
+offers: 240 fps (8× slower) or 120 fps (4×) where the phone maker lets apps use
+high-speed video; otherwise 60 fps played at half speed (2×; the recording is
+re-timed after you stop, without re-encoding, so nothing is lost). Slow-motion
+clips have no sound. The REC pill shows the speed, e.g. `4× SLOW`.
+
 ### Time-lapse
 
 **TIME-LAPSE** mode (phones whose GPU can feed the video encoder; the mode is

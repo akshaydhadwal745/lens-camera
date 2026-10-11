@@ -258,7 +258,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const autoNight = nightCandidate && !nightOff;
   // Whether the top-left glass pill has anything in it (else it's hidden).
   // (Photo modes always have the timer; video has the torch when the camera does.)
-  const hasTools = stored.pro || nightCandidate || (s.mode !== 'video' && s.mode !== 'timelapse') || (s.mode === 'video' && caps?.torch !== false);
+  // Video-like modes record with the shutter (start/stop): video, slow motion, time-lapse.
+  const recordMode = s.mode === 'video' || s.mode === 'slowmo' || s.mode === 'timelapse';
+  const hasTools = stored.pro || nightCandidate || !recordMode || ((s.mode === 'video' || s.mode === 'slowmo') && caps?.torch !== false);
 
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
@@ -374,7 +376,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   };
 
   const onShutter = () => {
-    if (s.mode === 'video') return toggleRecording();
+    if (s.mode === 'video' || s.mode === 'slowmo') return toggleRecording();
     if (s.mode === 'timelapse') return toggleTimeLapse();
     if (countdown !== null) {
       if (countdownTimer.current) clearInterval(countdownTimer.current);
@@ -547,8 +549,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Android reports which modes the phone supports; iOS supports all four.
   // Simple mode: no Night button (low light is handled automatically).
   // Time-lapse only where the camera reports it; the others default to available.
-  const modes = (['timelapse', 'night', 'video', 'photo', 'portrait'] as const).filter(
-    (m) => (m === 'timelapse' ? !!caps?.modes?.includes(m) : !caps?.modes || caps.modes.includes(m)) && (stored.pro || m !== 'night'),
+  // Time-lapse and slow motion only where the camera reports them; the others default to available.
+  const modes = (['timelapse', 'slowmo', 'night', 'video', 'photo', 'portrait'] as const).filter(
+    (m) => (m === 'timelapse' || m === 'slowmo' ? !!caps?.modes?.includes(m) : !caps?.modes || caps.modes.includes(m)) && (stored.pro || m !== 'night'),
   );
 
   return (
@@ -575,7 +578,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
             shutterSound={s.shutterSound}
-            torch={s.mode === 'video' && s.torch}
+            torch={(s.mode === 'video' || s.mode === 'slowmo') && s.torch}
             zoom={s.zoom}
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
             iso={s.iso}
@@ -681,7 +684,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   ? `${formatDuration(elapsed)} · PAUSED`
                   : s.mode === 'timelapse'
                     ? `${formatDuration(elapsed)} → ${formatDuration(Math.round(timeLapseClipSeconds(elapsed)))}`
-                    : formatDuration(elapsed)}
+                    : s.mode === 'slowmo' && caps?.slowMotionBound
+                      ? `${formatDuration(elapsed)} · ${caps.slowMotionBound}× SLOW`
+                      : formatDuration(elapsed)}
             </Text>
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
@@ -725,7 +730,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
                 />
               )}
-              {s.mode !== 'video' && s.mode !== 'timelapse' && (
+              {!recordMode && (
                 <TopButton
                   icon="timer-outline"
                   label={s.timer ? `${s.timer}s` : 'OFF'}
@@ -927,9 +932,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onPress={onShutter}
             disabled={busy || !caps}
             style={({ pressed }) => [styles.shutter, (autoNight || s.mode === 'night') && styles.shutterNight, pressed && { transform: [{ scale: 0.94 }] }]}
-            accessibilityLabel={s.mode === 'video' || s.mode === 'timelapse' ? (recording ? 'Stop recording' : 'Record') : 'Take photo'}
+            accessibilityLabel={recordMode ? (recording ? 'Stop recording' : 'Record') : 'Take photo'}
           >
-            <View style={[styles.shutterInner, (s.mode === 'video' || s.mode === 'timelapse') && styles.shutterVideo, recording && styles.shutterRec]} />
+            <View style={[styles.shutterInner, recordMode && styles.shutterVideo, recording && styles.shutterRec]} />
           </Pressable>
 
           {recording && Platform.OS === 'android' && s.mode === 'video' ? (
@@ -1102,7 +1107,7 @@ function ModeStrip<M extends string>({ modes, mode, disabled, onSelect }: { mode
               setItems((prev) => (prev[m]?.x === x && prev[m]?.w === w ? prev : { ...prev, [m]: { x, w } }));
             }}
           >
-            <Text style={[styles.modeText, mode === m && styles.modeOn]}>{m === 'timelapse' ? 'TIME-LAPSE' : m.toUpperCase()}</Text>
+            <Text style={[styles.modeText, mode === m && styles.modeOn]}>{m === 'timelapse' ? 'TIME-LAPSE' : m === 'slowmo' ? 'SLO-MO' : m.toUpperCase()}</Text>
           </Pressable>
         ))}
       </Animated.View>
