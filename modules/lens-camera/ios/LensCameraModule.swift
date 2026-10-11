@@ -63,6 +63,7 @@ public class LensCameraModule: Module {
       Prop("nightPreview") { (_: LensCameraView, _: Bool) in }
       Prop("portraitStyle") { (_: LensCameraView, _: String) in }
       Prop("mirrorFront") { (_: LensCameraView, _: Bool) in }
+      Prop("saveLocation") { (_: LensCameraView, _: Bool) in }
       Prop("hardwareShutter") { (_: LensCameraView, _: Bool) in }
       Prop("torch") { (view: LensCameraView, value: Bool) in
         view.config.torch = value

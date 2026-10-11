@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Href, router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -62,11 +62,26 @@ function Row({ label, value, icon }: { label: string; value: string; icon?: keyo
 }
 
 /** An on/off option (with an icon, so it lines up with the LinkRows in the same card). */
-function SwitchRow({ icon, label, value, onChange }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: boolean; onChange: (v: boolean) => void }) {
+function SwitchRow({
+  icon,
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  hint?: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, hint ? { paddingVertical: 10 } : null]}>
       <Ionicons name={icon} size={18} color={palette.muted} />
-      <Text style={[styles.rowLabel, { flex: 1 }]}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {hint ? <Text style={styles.switchHint}>{hint}</Text> : null}
+      </View>
       <Switch value={value} onValueChange={onChange} trackColor={{ true: palette.link, false: palette.surface3 }} thumbColor="#fff" />
     </View>
   );
@@ -307,6 +322,25 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [normalGrid, setNormalGrid] = useState(() => loadSettings().normalGrid);
   const [mirrorSelfies, setMirrorSelfies] = useState(() => loadSettings().mirrorSelfies);
+  const [saveLocation, setSaveLocation] = useState(() => loadSettings().saveLocation);
+  /** Opt-in location: ask for permission when switched on; stay off if refused. */
+  const onSaveLocation = async (on: boolean) => {
+    if (on) {
+      const result = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+      ]).catch(() => null);
+      const granted =
+        result?.[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === 'granted' ||
+        result?.[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] === 'granted';
+      if (!granted) {
+        notify('Location is off', 'Lens needs location permission to save where you took photos. You can allow it in Android settings.');
+        return;
+      }
+    }
+    setSaveLocation(on);
+    setCameraOption('saveLocation', on);
+  };
   const identity = useStore((s) => s.identity);
   const usage = useStore((s) => s.usage);
   const online = useStore((s) => s.online);
@@ -491,6 +525,14 @@ export default function SettingsScreen() {
                   }}
                 />
                 <View style={styles.divider} />
+                <SwitchRow
+                  icon="location-outline"
+                  label="Save location"
+                  hint="Adds where you took each photo and video. Photos you share keep it."
+                  value={saveLocation}
+                  onChange={(v) => void onSaveLocation(v)}
+                />
+                <View style={styles.divider} />
                 <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
               </Section>
             )}
@@ -602,6 +644,7 @@ const styles = StyleSheet.create({
   footer: { color: palette.dim, fontSize: 12, marginTop: 8, marginHorizontal: 4, lineHeight: 17 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 52 },
   rowLabel: { color: palette.text, fontSize: 16 },
+  switchHint: { color: palette.muted, fontSize: 12, marginTop: 2, lineHeight: 16 },
   rowValue: { color: palette.muted, fontSize: 14, flexShrink: 1, textAlign: 'right' },
   rowButton: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 52 },
   rowButtonText: { color: palette.link, fontSize: 16 },

@@ -61,6 +61,8 @@ export type ProSettings = {
   normalGrid: boolean;
   /** Front camera: save as previewed (mirrored), like the stock camera. Settings → Camera. */
   mirrorSelfies: boolean;
+  /** Opt-in (off by default): save where photos/videos were taken. Settings → Camera. */
+  saveLocation: boolean;
 };
 
 export const DEFAULT_SETTINGS: ProSettings = {
@@ -107,6 +109,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   guide: 'off',
   normalGrid: false,
   mirrorSelfies: true,
+  saveLocation: false,
 };
 
 /**
@@ -228,7 +231,7 @@ export function loadSettings(): ProSettings {
 }
 
 /** Settings → Camera (outside the camera screen): change one Normal-camera option in the saved settings. */
-export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies'>(key: K, value: ProSettings[K]) {
+export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies' | 'saveLocation'>(key: K, value: ProSettings[K]) {
   saveSettings({ ...loadSettings(), [key]: value });
 }
 

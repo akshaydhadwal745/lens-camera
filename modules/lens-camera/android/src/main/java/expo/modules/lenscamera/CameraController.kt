@@ -82,6 +82,8 @@ data class CameraConfig(
   val hdrPhoto: Boolean = true,
   /** Front camera: save photos and videos as previewed (mirrored). Photos get a lossless EXIF flip. */
   val mirrorFront: Boolean = true,
+  /** Opt-in: save where photos/videos were taken (needs location permission; see [LocationTracker]). */
+  val saveLocation: Boolean = false,
   /**
    * Quality Lab only (docs/research/camera-quality.md): bind one of the phone
    * maker's extension modes ("auto", "hdr", "night", "bokeh", "faceRetouch")
@@ -144,6 +146,7 @@ class CameraController(private val context: Context) {
   private var recording: Recording? = null
   private var config = CameraConfig()
   private var running = false
+  private val location = LocationTracker(context)
   private var targetRotation = android.view.Surface.ROTATION_0
   private var displayRotation = android.view.Surface.ROTATION_0
   /** What actually got bound after fallbacks (e.g. HDR dropped). */
@@ -190,6 +193,7 @@ class CameraController(private val context: Context) {
     this.owner = owner
     config = initial
     running = true
+    location.setActive(initial.saveLocation)
     val future = ProcessCameraProvider.getInstance(context)
     future.addListener({
       if (!running) return@addListener
@@ -215,6 +219,7 @@ class CameraController(private val context: Context) {
 
   fun stop() {
     running = false
+    location.setActive(false)
     recording?.stop()
     recording = null
     provider?.unbindAll()
@@ -230,6 +235,7 @@ class CameraController(private val context: Context) {
   fun update(next: CameraConfig) {
     val old = config
     config = next
+    if (running) location.setActive(next.saveLocation)
     if (!running || provider == null) return
     if (next.needsRebind(old) && recording == null) bind() else applyLive()
   }
@@ -812,7 +818,9 @@ class CameraController(private val context: Context) {
     // <cache>/Camera: the same place upload-while-recording watches for the growing file.
     val dir = File(context.cacheDir, "Camera").apply { mkdirs() }
     val file = File(dir, "${UUID.randomUUID()}.mp4")
-    val pending = capture.output.prepareRecording(context, FileOutputOptions.Builder(file).build())
+    val output = FileOutputOptions.Builder(file)
+    if (config.saveLocation) location.current()?.let { output.setLocation(it) }
+    val pending = capture.output.prepareRecording(context, output.build())
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
       pending.withAudioEnabled()
     }
@@ -849,6 +857,7 @@ class CameraController(private val context: Context) {
   private fun outputOptions(file: File): ImageCapture.OutputFileOptions {
     val metadata = ImageCapture.Metadata()
     metadata.isReversedHorizontal = facts?.facingFront == true && config.mirrorFront
+    if (config.saveLocation) location.current()?.let { metadata.location = it }
     return ImageCapture.OutputFileOptions.Builder(file).setMetadata(metadata).build()
   }
 

@@ -129,6 +129,8 @@ export type LensCameraProps = ViewProps & {
   hdrPhoto?: boolean;
   /** Android: front-camera photos/videos saved as previewed (mirrored). Default true. */
   mirrorFront?: boolean;
+  /** Android: save where photos/videos were taken (opt-in; needs location permission). */
+  saveLocation?: boolean;
   /** Android, Quality Lab only: bind a phone-maker extension mode in Photo mode. */
   extension?: LabExtension;
   /** Android, Quality Lab only: photo capture tuned for quality (default) or speed. */

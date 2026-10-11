@@ -51,6 +51,14 @@ videos are saved the way the preview showed them. Photos get a lossless EXIF
 flip (the pixels stay as the sensor took them); video is mirrored in the camera
 pipeline. Off saves true-to-life (text reads correctly).
 
+### Save location (opt-in)
+
+Settings → Camera → **Save location** (off by default). Switching it on asks for
+location permission. While the camera is on screen, Lens keeps a recent position
+from Android's own location service (GPS + network; no Google Play services
+needed) and writes it into each photo (EXIF GPS) and video. A position older than
+10 minutes is never used. Photos you share keep their location.
+
 ### Volume buttons
 
 Volume up/down (and the camera key, and Bluetooth selfie remotes) work like the

@@ -264,6 +264,16 @@ object NightMerge {
         ExifInterface.TAG_FOCAL_LENGTH,
         ExifInterface.TAG_EXPOSURE_TIME,
         ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
+        // Opt-in location (Settings → Camera → Save location) must survive the merge.
+        ExifInterface.TAG_GPS_LATITUDE,
+        ExifInterface.TAG_GPS_LATITUDE_REF,
+        ExifInterface.TAG_GPS_LONGITUDE,
+        ExifInterface.TAG_GPS_LONGITUDE_REF,
+        ExifInterface.TAG_GPS_ALTITUDE,
+        ExifInterface.TAG_GPS_ALTITUDE_REF,
+        ExifInterface.TAG_GPS_TIMESTAMP,
+        ExifInterface.TAG_GPS_DATESTAMP,
+        ExifInterface.TAG_GPS_PROCESSING_METHOD,
       )) src.getAttribute(tag)?.let { dst.setAttribute(tag, it) }
       dst.saveAttributes()
     }
