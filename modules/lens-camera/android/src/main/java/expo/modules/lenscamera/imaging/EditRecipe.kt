@@ -22,6 +22,8 @@ data class EditRecipe(
   val crop: Crop? = null,
   /** Portrait blur as an f-number (1.4 strong … 16 none), or null. */
   val aperture: Double? = null,
+  /** Portrait style: natural (null), studio, mono or stage. Only with a subject mask. */
+  val portraitStyle: String? = null,
 ) {
   data class Crop(
     val x: Double? = null,
@@ -36,7 +38,7 @@ data class EditRecipe(
   )
 
   /** Looks and colour only: what applies to videos. */
-  fun colourOnly() = copy(crop = null, aperture = null)
+  fun colourOnly() = copy(crop = null, aperture = null, portraitStyle = null)
 
   companion object {
     fun from(map: Map<String, Any?>?): EditRecipe? {
@@ -74,6 +76,7 @@ data class EditRecipe(
         grain = num(adjust["grain"]) ?: 0.0,
         crop = crop,
         aperture = num(portrait?.get("aperture")),
+        portraitStyle = (portrait?.get("style") as? String)?.takeIf { it != "natural" },
       )
     }
 

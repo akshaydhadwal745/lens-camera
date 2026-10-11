@@ -119,6 +119,8 @@ class CameraController(private val context: Context) {
   private var extensions: ExtensionsManager? = null
   /** True while bound with the maker's Night mode. */
   private var nightExtension = false
+  /** The phone maker's Night mode is bound (its preview is already processed). */
+  val usesNightExtension get() = nightExtension
   /** The maker's extension mode bound right now ("none" if none). */
   private var boundExtension = "none"
   private var profile: DeviceProfile? = null

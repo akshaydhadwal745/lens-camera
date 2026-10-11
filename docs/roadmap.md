@@ -1,5 +1,7 @@
 # Roadmap
 
+**Camera work order and status: [camera-checklist.md](camera-checklist.md)** (one feature at a time, validated before the next). The lists below are older product items.
+
 ## Next
 
 1. **Device testing** of the pro camera, looks, Night/Portrait, editor (needs the

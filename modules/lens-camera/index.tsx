@@ -106,6 +106,12 @@ export type LensCameraProps = ViewProps & {
   /** Live look in the viewfinder (null = none). */
   look: string | null;
   lookIntensity: number;
+  /** Android: Portrait blur strength (f-number) for the live background blur in the viewfinder. */
+  portraitAperture?: number;
+  /** Android: a Night photo is coming (Night mode or auto Night): show the viewfinder brightened and averaged like the photo. */
+  nightPreview?: boolean;
+  /** Android: Portrait style previewed live (natural, studio, mono, stage). */
+  portraitStyle?: string;
   torch: boolean;
   zoom: number;
   exposureMode: 'auto' | 'manual';

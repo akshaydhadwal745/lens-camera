@@ -105,6 +105,7 @@ class EditRenderer {
     // Portrait: f/1.4 = strongest blur … f/16 = none (same mapping as iOS).
     val blur = r.aperture?.let { ((1 - (it - 1.4) / 14.6) * 22).coerceIn(0.0, 22.0) } ?: 0.0
     GLES20.glUniform1f(u("uBlur"), if (inputs.mask != 0) blur.toFloat() else 0f)
+    GLES20.glUniform1f(u("uStyle"), if (inputs.mask != 0) PortraitStyle.code(r.portraitStyle) else 0f)
     GLES20.glUniform1f(u("uAspect"), inputs.outputWidth.toFloat() / inputs.outputHeight)
     GlUtil.drawQuad(p)
   }
@@ -169,10 +170,12 @@ class EditRenderer {
       uniform vec3 uFx;
       uniform float uLutMix;
       uniform float uBlur;
+      uniform float uStyle;
       uniform float uAspect;
       uniform float uHasBase;
       ${GlUtil.LUT_GLSL}
       float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+      ${PortraitStyle.GLSL}
       vec3 vibrance(vec3 c, float amount) {
         float mx = max(c.r, max(c.g, c.b));
         float mn = min(c.r, min(c.g, c.b));
@@ -224,6 +227,7 @@ class EditRenderer {
         c = vibrance(clamp(c, 0.0, 1.0), uCSV.z);
         if (uLutMix > 0.0) c = mix(c, lookup(uLut, c), uLutMix);
         c += detail * uFx.x * 1.2;
+        if (uStyle > 0.5) c = portraitStyle(c, smoothstep(0.3, 0.7, texture2D(uMask, vSrc).r), uStyle);
         if (uFx.y > 0.0) {
           vec2 d = (vOut - 0.5) * vec2(uAspect, 1.0) / max(uAspect, 1.0) * 2.0;
           c *= 1.0 - uFx.y * 1.0 * smoothstep(0.45, 1.35, length(d));

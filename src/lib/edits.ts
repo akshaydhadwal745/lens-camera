@@ -33,8 +33,17 @@ export type EditRecipe = {
   auto?: boolean;
   adjust?: Adjustments;
   crop?: Crop;
-  portrait?: { aperture?: number };
+  portrait?: { aperture?: number; style?: PortraitStyle };
 };
+
+/** Portrait styles: a few, chosen for natural results (docs/research/portrait.md). Natural = blur only. */
+export type PortraitStyle = 'natural' | 'studio' | 'mono' | 'stage';
+export const PORTRAIT_STYLES: { id: PortraitStyle; name: string; description: string }[] = [
+  { id: 'natural', name: 'Natural', description: 'Soft background blur' },
+  { id: 'studio', name: 'Studio', description: 'Darker, quieter background: you stand out' },
+  { id: 'mono', name: 'Mono', description: 'Classic black and white portrait' },
+  { id: 'stage', name: 'Stage', description: 'Background fades to black, like a spotlight' },
+];
 
 export const LOOKS: { id: string; name: string; description: string }[] = [
   { id: 'natural', name: 'Natural+', description: 'True-to-life colour with a gentle lift' },
@@ -118,7 +127,10 @@ export function compact(recipe: EditRecipe): EditRecipe | null {
     if ((recipe.intensity ?? 1) < 1) out.intensity = Math.round((recipe.intensity ?? 1) * 100) / 100;
   }
   if (recipe.auto) out.auto = true;
-  if (recipe.portrait?.aperture) out.portrait = { aperture: recipe.portrait.aperture };
+  if (recipe.portrait?.aperture) {
+    const style = recipe.portrait.style;
+    out.portrait = { aperture: recipe.portrait.aperture, ...(style && style !== 'natural' ? { style } : {}) };
+  }
   const adjust: Adjustments = {};
   for (const [k, v] of Object.entries(recipe.adjust ?? {})) {
     if (typeof v === 'number' && Math.abs(v) > 1e-3) adjust[k as keyof Adjustments] = Math.round(v * 100) / 100;

@@ -52,8 +52,11 @@ const isWeb = Platform.OS === 'web';
 const GAP = 4;
 const TARGET_TILE = 130;
 /** Film-strip edge on the left of the roll. */
-const PERF = 18;
-const SIDE = 16;
+const PERF = 20;
+/** Same 20 px gutter as the header, so titles, banners, day markers and tiles share one left edge. */
+const SIDE = 20;
+const DAY_ROW = 34;
+const PERF_PITCH = 22;
 const MAX_CONTENT_WIDTH = 1400;
 
 type Tab = 'mine' | 'shared';
@@ -101,13 +104,24 @@ function buildRows(items: GalleryItem[], columns: number, numbered: boolean): Ro
   return rows;
 }
 
-/** Sprocket holes down the edge of the roll. */
-function Perfs({ height }: { height: number }) {
-  const count = Math.max(1, Math.round(height / 22));
+/** "1.0 GB of 5.0 GB" → "1/5 GB", "800 MB of 5.0 GB" → "800 MB/5 GB": fits next to the chips on a 360 px phone. */
+function compactUsage(detail: string): string {
+  const m = /^(.+) of (.+)$/.exec(detail);
+  if (!m) return detail;
+  const [used, total] = [m[1], m[2]].map((v) => v.replace(/\.0 /, ' '));
+  const unit = / GB$/;
+  return unit.test(used) && unit.test(total) ? `${used.replace(unit, '')}/${total}` : `${used}/${total}`;
+}
+
+/** Sprocket holes down the edge of the roll, on one even pitch for the whole roll (`top` = the row's offset in it). */
+function Perfs({ height, top }: { height: number; top: number }) {
+  const first = (PERF_PITCH - (top % PERF_PITCH)) % PERF_PITCH;
+  const holes: number[] = [];
+  for (let y = first; y + 10 <= height; y += PERF_PITCH) holes.push(y);
   return (
     <View style={[styles.perfs, { height }]} pointerEvents="none">
-      {Array.from({ length: count }, (_, k) => (
-        <View key={k} style={styles.perf} />
+      {holes.map((y) => (
+        <View key={y} style={[styles.perf, { top: y }]} />
       ))}
     </View>
   );
@@ -177,6 +191,14 @@ export default function GalleryScreen() {
   const columns = Math.max(3, Math.floor(gridWidth / TARGET_TILE));
   const tileSize = Math.floor((gridWidth - GAP * (columns - 1)) / columns);
   const rows = useMemo(() => buildRows(items, columns, tab === 'mine'), [items, columns, tab]);
+  const rowTops = useMemo(() => {
+    const tops: number[] = [];
+    for (let k = 0, y = 0; k < rows.length; k++) {
+      tops.push(y);
+      y += rows[k].type === 'day' ? DAY_ROW : tileSize + GAP;
+    }
+    return tops;
+  }, [rows, tileSize]);
 
   const exitSelect = () => {
     setSelecting(false);
@@ -421,7 +443,7 @@ export default function GalleryScreen() {
           )}
         </View>
         <Text style={[typeStyle.monoLabel, styles.statusLine]}>
-          {tab === 'mine' ? `${groupDigits(mine.length)} FRAMES · NEVER ENDS` : 'SHARED WITH YOU'}
+          {tab === 'mine' ? `${groupDigits(mine.length)} ${mine.length === 1 ? 'FRAME' : 'FRAMES'} · NEVER ENDS` : 'SHARED WITH YOU'}
           {rollStatus ? ' · ' : ''}
           {rollStatus ? <Text style={[typeStyle.monoLabel, { color: rollStatus.color }]}>{rollStatus.text}</Text> : null}
         </Text>
@@ -460,7 +482,7 @@ export default function GalleryScreen() {
                   color={indicator.level === 'ok' ? palette.muted : indicator.level === 'low' ? palette.accent : palette.danger}
                 />
                 <Text style={styles.storageChipText} numberOfLines={1}>
-                  {indicator.detail}
+                  {compactUsage(indicator.detail)}
                 </Text>
               </Pressable>
             )}
@@ -501,15 +523,16 @@ export default function GalleryScreen() {
           key={`${tab}-${columns}`}
           data={rows}
           keyExtractor={(row) => row.key}
-          renderItem={({ item: row }) =>
+          renderItem={({ item: row, index }) =>
             row.type === 'day' ? (
               <View style={styles.dayRow}>
-                <Perfs height={34} />
+                <Perfs height={DAY_ROW} top={rowTops[index] ?? 0} />
                 <Text style={[styles.dayText, row.today && { color: palette.accent }]}>{row.label}</Text>
               </View>
             ) : (
               <View style={[styles.tileRow, { height: tileSize + GAP }]}>
-                <Perfs height={tileSize + GAP} />
+                <Perfs height={tileSize + GAP} top={rowTops[index] ?? 0} />
+                <View style={styles.tiles}>
                 {row.tiles.map(({ item, frame }) => (
                   <MediaTile
                     key={`${item.ownerId ?? 'me'}-${item.id}`}
@@ -524,6 +547,7 @@ export default function GalleryScreen() {
                     onPressIn={onPressIn}
                   />
                 ))}
+                </View>
               </View>
             )
           }
@@ -595,11 +619,12 @@ const styles = StyleSheet.create({
   storageChip: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 5, height: 32, flexShrink: 1, paddingLeft: 6 },
   storageChipText: { color: palette.muted, fontSize: 11, fontFamily: font.mono, flexShrink: 1 },
 
-  dayRow: { flexDirection: 'row', alignItems: 'center', height: 34, paddingRight: SIDE },
+  dayRow: { flexDirection: 'row', alignItems: 'center', height: DAY_ROW, paddingRight: SIDE },
   dayText: { color: palette.muted, fontSize: 11, fontFamily: font.monoMedium, letterSpacing: 1.3 },
-  tileRow: { flexDirection: 'row', gap: GAP, paddingRight: SIDE },
-  perfs: { width: PERF, marginRight: 0, alignItems: 'center', justifyContent: 'space-evenly' },
-  perf: { width: 7, height: 10, borderRadius: 2, backgroundColor: palette.surface },
+  tileRow: { flexDirection: 'row', paddingRight: SIDE },
+  tiles: { flexDirection: 'row', gap: GAP },
+  perfs: { width: PERF },
+  perf: { position: 'absolute', left: 7, width: 7, height: 10, borderRadius: 2, backgroundColor: palette.surface },
 
   importButton: {
     flexDirection: 'row',

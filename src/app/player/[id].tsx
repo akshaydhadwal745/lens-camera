@@ -241,7 +241,11 @@ export default function PlayerScreen() {
               <Text style={styles.title} numberOfLines={1}>{formatDate(item.createdAt)}</Text>
               {stream.preparing && <Text style={styles.sub} numberOfLines={1}>Preparing smooth playback for next time…</Text>}
             </View>
-            {quality && <Text style={styles.quality}>{quality}</Text>}
+            {quality && (
+              <View style={styles.qualityPill}>
+                <Text style={styles.quality}>{quality}</Text>
+              </View>
+            )}
           </View>
 
           {!loading && hasSource && (
@@ -338,17 +342,9 @@ const styles = StyleSheet.create({
   infoPill: { ...glass, flexShrink: 1, minHeight: 48, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 24, justifyContent: 'center' },
   title: { color: palette.text, fontSize: 14, fontWeight: '600' },
   sub: { color: '#C8C8CC', fontSize: 11, marginTop: 1 },
-  quality: {
-    marginLeft: 'auto',
-    color: '#000',
-    backgroundColor: palette.text,
-    fontSize: 11,
-    fontFamily: font.monoSemibold,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
+  // Same glass and height as the back button and date pill beside it.
+  qualityPill: { ...glass, marginLeft: 'auto', height: 48, paddingHorizontal: 14, borderRadius: 24, justifyContent: 'center' },
+  quality: { color: palette.text, fontSize: 12, fontFamily: font.monoSemibold },
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 36 },
   round: {
     ...glass,

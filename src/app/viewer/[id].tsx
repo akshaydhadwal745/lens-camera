@@ -355,6 +355,14 @@ export default function ViewerScreen() {
 
           <View style={[styles.bottomBar, { bottom: insets.bottom + 16 }]}>
             <Action icon="share-outline" label="Share" disabled={busy} onPress={() => run(() => shareMedia(current))} />
+            {!shared && (
+              <Action
+                icon="paper-plane-outline"
+                label="Send to friends"
+                disabled={current.sync !== 'synced'}
+                onPress={() => router.push({ pathname: '/share', params: { ids: current.id } })}
+              />
+            )}
             {!shared && isImagingAvailable && (
               <Pressable
                 onPress={() => router.push({ pathname: '/edit/[id]', params: { id: current.id } })}
@@ -365,14 +373,6 @@ export default function ViewerScreen() {
                 <Ionicons name="color-wand-outline" size={18} color="#000" />
                 <Text style={styles.editText}>Edit</Text>
               </Pressable>
-            )}
-            {!shared && (
-              <Action
-                icon="paper-plane-outline"
-                label="Send to friends"
-                disabled={current.sync !== 'synced'}
-                onPress={() => router.push({ pathname: '/share', params: { ids: current.id } })}
-              />
             )}
             <Action
               icon="download-outline"
@@ -446,9 +446,10 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    // Edit sits in the middle with two actions on each side, evenly spaced.
+    justifyContent: 'space-between',
     paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     borderRadius: 32,
   },
   action: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },

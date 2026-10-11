@@ -68,6 +68,9 @@ class LensCameraModule : Module() {
       Prop("stabilization") { view: LensCameraView, value: String -> view.config = view.config.copy(stabilization = value) }
       Prop("look") { view: LensCameraView, value: String? -> view.look = value }
       Prop("lookIntensity") { view: LensCameraView, value: Double -> view.lookIntensity = value }
+      Prop("portraitAperture") { view: LensCameraView, value: Double -> view.portraitAperture = value }
+      Prop("nightPreview") { view: LensCameraView, value: Boolean -> view.nightPreview = value }
+      Prop("portraitStyle") { view: LensCameraView, value: String -> view.portraitStyle = value }
       Prop("torch") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(torch = value) }
       Prop("zoom") { view: LensCameraView, value: Double -> view.config = view.config.copy(zoom = value) }
       Prop("exposureMode") { view: LensCameraView, value: String -> view.config = view.config.copy(exposureMode = value) }

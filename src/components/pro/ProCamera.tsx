@@ -25,7 +25,7 @@ import { NamePrompt } from './NamePrompt';
 import { ValueDial } from './ValueDial';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { reportCameraError, reportCameraReady, reportPreview } from '@/lib/diagnostics';
-import { compact, EditRecipe, LOOKS } from '@/lib/edits';
+import { compact, EditRecipe, LOOKS, PORTRAIT_STYLES } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
 import {
   AUTO_NIGHT_FRAMES,
@@ -58,11 +58,21 @@ function haptic(style = Haptics.ImpactFeedbackStyle.Medium) {
   Haptics.impactAsync(style).catch(() => {});
 }
 
-function TopButton({ icon, label, active, onPress }: { icon?: IconName; label?: string; active?: boolean; onPress: () => void }) {
+// Every top button has two lines (icon or value on top, caption below) so they line up in the pill.
+function TopButton({ icon, label, caption, active, onPress }: { icon?: IconName; label?: string; caption?: string; active?: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={6} style={styles.topButton} accessibilityRole="button" accessibilityLabel={label ?? icon}>
-      {icon ? <Ionicons name={icon} size={18} color={active ? palette.accent : palette.text} /> : null}
-      {label ? <Text style={[styles.topLabel, active && styles.topLabelOn]}>{label}</Text> : null}
+    <Pressable onPress={onPress} hitSlop={6} style={styles.topButton} accessibilityRole="button" accessibilityLabel={[label, caption].filter(Boolean).join(' ') || icon}>
+      {icon ? (
+        <>
+          <Ionicons name={icon} size={18} color={active ? palette.accent : palette.text} />
+          {label ? <Text style={[styles.topLabel, active && styles.topLabelOn]}>{label}</Text> : null}
+        </>
+      ) : (
+        <>
+          <Text style={[styles.topValue, active && styles.topLabelOn]}>{label}</Text>
+          <Text style={[styles.topLabel, active && styles.topLabelOn]}>{caption ?? (active ? 'ON' : 'OFF')}</Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -71,6 +81,10 @@ function TopButton({ icon, label, active, onPress }: { icon?: IconName; label?: 
 export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string) => void } = {}) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  // Landscape: the tray docks on the right as a fixed-width panel and the overlays keep clear of it.
+  const landscape = width > height;
+  const trayWidth = 340;
+  const clearTray = landscape ? trayWidth + insets.right + 24 : 0;
   const isFocused = useIsFocused();
   const cameraRef = useRef<LensCameraHandle>(null);
 
@@ -99,6 +113,14 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [focusMark, setFocusMark] = useState<{ x: number; y: number; key: number } | null>(null);
   const [previewSize, setPreviewSize] = useState({ width, height });
   const [processing, setProcessing] = useState<string | null>(null);
+  // A short message over the viewfinder (e.g. Portrait found nobody), gone after a few seconds.
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = (text: string) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setNotice(text);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3000);
+  };
   const [lookDial, setLookDial] = useState(false);
   const [naming, setNaming] = useState(false);
 
@@ -195,7 +217,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       recipe.look = s.look;
       if (s.lookIntensity < 1) recipe.intensity = s.lookIntensity;
     }
-    if (kind === 'photo' && depth && s.mode === 'portrait') recipe.portrait = { aperture: s.portraitAperture };
+    if (kind === 'photo' && depth && s.mode === 'portrait') recipe.portrait = { aperture: s.portraitAperture, style: s.portraitStyle };
     return compact(recipe) ?? undefined;
   };
 
@@ -203,10 +225,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const nightCandidate = !stored.pro && s.mode === 'photo' && lowLight && s.flash === 'off' && (!caps?.modes || caps.modes.includes('night'));
   const autoNight = nightCandidate && !nightOff;
   // Whether the top-left glass pill has anything in it (else it's hidden).
-  const hasTools =
-    stored.pro ||
-    nightCandidate ||
-    (s.mode === 'photo' || s.mode === 'portrait' ? caps?.flash !== false || !!caps?.screenFlash : s.mode !== 'night' && caps?.torch !== false);
+  // (Photo modes always have the timer; video has the torch when the camera does.)
+  const hasTools = stored.pro || nightCandidate || s.mode !== 'video' || caps?.torch !== false;
 
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
@@ -223,6 +243,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
       }
       const recipe = captureRecipe(photo.depth);
+      // Portrait only blurs around a person; say so instead of a silent plain photo.
+      if (s.mode === 'portrait' && !photo.depth && !photo.raw) showNotice('No person found · saved as a normal photo');
       if (recipe && s.bakeLooks && LensImaging && !photo.raw) {
         // "Bake": write the look into the file itself (no removable edit).
         setProcessing('Applying look…');
@@ -426,6 +448,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             stabilization={s.stabilization}
             look={s.look}
             lookIntensity={s.lookIntensity}
+            portraitAperture={s.portraitAperture}
+            nightPreview={s.mode === 'night' || autoNight}
+            portraitStyle={s.portraitStyle}
             torch={s.mode === 'video' && s.torch}
             zoom={s.zoom}
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
@@ -470,7 +495,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />
 
           {s.level && (
-            <View style={[StyleSheet.absoluteFill, styles.center]} pointerEvents="none">
+            <View style={[StyleSheet.absoluteFill, styles.center, { paddingRight: clearTray }]} pointerEvents="none">
               <LevelIndicator />
             </View>
           )}
@@ -499,7 +524,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       </GestureDetector>
 
       {/* ---------- Top HUD ---------- */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 10, paddingLeft: insets.left + 16, right: clearTray }]}>
         {recording ? (
           <View style={styles.rec}>
             <View style={styles.recDot} />
@@ -532,7 +557,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 <TopButton label="HDR" active={s.hdrPhoto} onPress={() => update({ hdrPhoto: !s.hdrPhoto })} />
               )}
               {stored.pro && s.mode === 'video' && (
-                <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
+                <TopButton label={s.videoResolution === '4k' ? '4K' : 'HD'} caption="RES" active onPress={() => update({ videoResolution: s.videoResolution === '4k' ? '1080p' : '4k' })} />
               )}
               {stored.pro && s.mode === 'video' && caps?.appleLog && <TopButton label="LOG" active={s.appleLog} onPress={() => update({ appleLog: !s.appleLog })} />}
               {stored.pro && s.mode === 'video' && caps?.hdrVideo && !s.appleLog && (
@@ -541,11 +566,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               {stored.pro && s.mode === 'video' && (
                 <TopButton
                   label={`${s.fps}`}
+                  caption="FPS"
                   active={s.fps !== 30}
                   onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
                 />
               )}
-              {stored.pro && s.mode !== 'video' && (
+              {s.mode !== 'video' && (
                 <TopButton
                   icon="timer-outline"
                   label={s.timer ? `${s.timer}s` : 'OFF'}
@@ -592,18 +618,24 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       </View>
 
       {s.histogram && (
-        <View style={[styles.histogramWrap, { top: insets.top + 72 }]}>
+        <View style={[styles.histogramWrap, landscape ? { left: insets.left + 16, bottom: insets.bottom + 12 } : { right: 12, top: insets.top + 72 }]}>
           <Histogram data={analysis} />
         </View>
       )}
 
-      <View style={[styles.zoomBadge, { top: insets.top + 72 }]} pointerEvents="none">
+      {notice && (
+        <View style={[styles.notice, { top: insets.top + 118 }, landscape && { right: clearTray }]} pointerEvents="none">
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      )}
+
+      <View style={[styles.zoomBadge, { top: insets.top + 72, left: insets.left + 16 }]} pointerEvents="none">
         <Text style={styles.zoomText}>{(lensFactor * s.zoom).toFixed(1)}×</Text>
         {stats?.adjusting ? <ActivityIndicator size="small" color={palette.accent} style={{ marginLeft: 6 }} /> : null}
       </View>
 
       {/* ---------- Bottom controls ---------- */}
-      <View style={[styles.bottom, { bottom: insets.bottom + 12 }]}>
+      <View style={[styles.bottom, { bottom: insets.bottom + 12 }, landscape ? { right: insets.right + 12, width: trayWidth } : { left: 12, right: 12 }]}>
         {stored.pro && param && dialScale && (
           <ValueDial
             title={paramTitle[param]}
@@ -639,7 +671,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           </View>
         )}
 
-        {stored.pro && lookDial && s.look && (
+        {lookDial && s.look && (
           <ValueDial
             title="LOOK"
             values={INTENSITY}
@@ -652,7 +684,27 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onAuto={() => update({ lookIntensity: 1 })}
           />
         )}
-        {stored.pro && (
+        {s.mode === 'portrait' && (
+          // Portrait styles replace the looks row here (Normal and PRO): a few, shown live.
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looksRow}>
+            {PORTRAIT_STYLES.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => {
+                  haptic(Haptics.ImpactFeedbackStyle.Light);
+                  update({ portraitStyle: p.id });
+                }}
+                style={[styles.lookChip, s.portraitStyle === p.id && styles.lookChipOn]}
+                accessibilityLabel={`${p.name}: ${p.description}`}
+                accessibilityState={{ selected: s.portraitStyle === p.id }}
+              >
+                <Text style={[styles.lookChipText, s.portraitStyle === p.id && styles.lookChipTextOn]}>{p.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+        {/* Looks: a creative choice, so in Normal and PRO alike (PRO only adds manual controls). */}
+        {s.mode !== 'portrait' && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looksRow}>
             <Pressable onPress={() => { update({ look: null }); setLookDial(false); }} style={[styles.lookChip, !s.look && styles.lookChipOn]}>
               <Text style={[styles.lookChipText, !s.look && styles.lookChipTextOn]}>No look</Text>
@@ -694,13 +746,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           </View>
         )}
 
-        <View style={styles.modes}>
-          {modes.map((m) => (
-            <Pressable key={m} onPress={() => switchMode(m)} disabled={recording || busy} hitSlop={8}>
-              <Text style={[styles.modeText, s.mode === m && styles.modeOn]}>{m.toUpperCase()}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <ModeStrip modes={modes} mode={s.mode} disabled={recording || busy} onSelect={switchMode} />
 
         <View style={styles.captureRow}>
           <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
@@ -834,8 +880,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               style={styles.presetRow}
             >
               <Ionicons name={p.id.startsWith('builtin-') ? 'sparkles-outline' : 'bookmark'} size={18} color="#FACC15" />
-              <Text style={styles.presetName}>{p.name}</Text>
-              <Text style={styles.presetHint}>{describePreset(p)}</Text>
+              <View style={styles.presetText}>
+                <Text style={styles.presetName}>{p.name}</Text>
+                {describePreset(p) ? <Text style={styles.presetHint}>{describePreset(p)}</Text> : null}
+              </View>
             </Pressable>
           ))}
           <Pressable onPress={() => setNaming(true)} style={[styles.presetRow, { marginTop: 4 }]}>
@@ -853,6 +901,45 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           onCancel={() => setNaming(false)}
         />
       )}
+    </View>
+  );
+}
+
+// The selected mode always sits centred over the shutter, like the stock camera;
+// the strip slides when the mode changes (labels have different widths).
+function ModeStrip<M extends string>({ modes, mode, disabled, onSelect }: { modes: readonly M[]; mode: M; disabled: boolean; onSelect: (m: M) => void }) {
+  const [width, setWidth] = useState(0);
+  const [items, setItems] = useState<Partial<Record<string, { x: number; w: number }>>>({});
+  const [shift] = useState(() => new Animated.Value(0));
+  const placed = useRef(false);
+  const item = items[mode];
+  useEffect(() => {
+    if (!width || !item) return;
+    const to = width / 2 - (item.x + item.w / 2);
+    // JS driver on purpose: a native-driven translate isn't seen by Pressable's
+    // hit check, so after the first slide taps on the modes did nothing.
+    if (placed.current) Animated.spring(shift, { toValue: to, useNativeDriver: false, speed: 18, bounciness: 4 }).start();
+    else shift.setValue(to);
+    placed.current = true;
+  }, [width, item, shift]);
+  return (
+    <View style={styles.modes} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <Animated.View style={[styles.modeRow, { opacity: width && item ? 1 : 0, transform: [{ translateX: shift }] }]}>
+        {modes.map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => onSelect(m)}
+            disabled={disabled}
+            hitSlop={8}
+            onLayout={(e) => {
+              const { x, width: w } = e.nativeEvent.layout;
+              setItems((prev) => (prev[m]?.x === x && prev[m]?.w === w ? prev : { ...prev, [m]: { x, w } }));
+            }}
+          >
+            <Text style={[styles.modeText, mode === m && styles.modeOn]}>{m.toUpperCase()}</Text>
+          </Pressable>
+        ))}
+      </Animated.View>
     </View>
   );
 }
@@ -890,6 +977,7 @@ const styles = StyleSheet.create({
   glassPill: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 2, padding: 4, borderRadius: 24, flexShrink: 1 },
   topButton: { alignItems: 'center', minWidth: 40, minHeight: 40, justifyContent: 'center', paddingHorizontal: 2 },
   topLabel: { color: palette.text, fontSize: 9, fontFamily: font.monoMedium, marginTop: 1, letterSpacing: 0.6 },
+  topValue: { color: palette.text, fontSize: 13, lineHeight: 18, fontFamily: font.monoSemibold },
   topLabelOn: { color: palette.accent },
   nightButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 14, borderRadius: 20, backgroundColor: palette.accent },
   nightButtonOff: { backgroundColor: 'rgba(255,255,255,0.1)' },
@@ -901,7 +989,9 @@ const styles = StyleSheet.create({
   recText: { color: palette.text, fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
   badge: { color: '#000', backgroundColor: palette.accent, fontSize: 10, fontFamily: font.monoSemibold, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
 
-  histogramWrap: { position: 'absolute', right: 12 },
+  histogramWrap: { position: 'absolute' },
+  notice: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  noticeText: { ...glass, color: palette.text, fontSize: 13, fontFamily: font.medium, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, overflow: 'hidden' },
   zoomBadge: {
     position: 'absolute',
     left: 16,
@@ -925,7 +1015,7 @@ const styles = StyleSheet.create({
   countdown: { color: palette.text, fontSize: 120, fontFamily: font.mono },
 
   // The glass tray: everything you touch to shoot lives in one floating card.
-  bottom: { position: 'absolute', left: 12, right: 12, ...glass, backgroundColor: 'rgba(18,18,20,0.62)', borderColor: 'rgba(255,255,255,0.12)', borderRadius: radius.bar, paddingTop: 12, paddingBottom: 16, overflow: 'hidden' },
+  bottom: { position: 'absolute', ...glass, backgroundColor: 'rgba(18,18,20,0.62)', borderColor: 'rgba(255,255,255,0.12)', borderRadius: radius.bar, paddingTop: 12, paddingBottom: 16, overflow: 'hidden' },
   params: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 6, paddingVertical: 4 },
   param: { alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 10, minWidth: 56 },
   paramActive: { backgroundColor: 'rgba(250,204,21,0.15)' },
@@ -939,7 +1029,8 @@ const styles = StyleSheet.create({
   lensText: { color: '#C8C8CC', fontSize: 12, fontFamily: font.semibold },
   lensTextOn: { color: palette.text, fontFamily: font.bold, fontSize: 13 },
 
-  modes: { flexDirection: 'row', justifyContent: 'center', gap: 26, marginTop: 14 },
+  modes: { marginTop: 14, overflow: 'hidden' },
+  modeRow: { flexDirection: 'row', alignSelf: 'flex-start', gap: 26 },
   modeText: { color: palette.muted, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8 },
   modeOn: { color: palette.accent },
 
@@ -969,8 +1060,9 @@ const styles = StyleSheet.create({
   shutterRec: { width: 28, height: 28, borderRadius: 6 },
   flip: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
 
-  presetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, minHeight: 50 },
+  presetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 8, minHeight: 56 },
+  presetText: { flex: 1 },
   presetName: { color: palette.text, fontSize: 15, fontFamily: font.semibold },
-  presetHint: { color: palette.muted, fontSize: 12, fontFamily: font.mono, flex: 1, textAlign: 'right' },
+  presetHint: { color: palette.muted, fontSize: 12, fontFamily: font.mono, marginTop: 2 },
   presetFoot: { color: palette.dim, fontSize: 12, fontFamily: font.regular, paddingHorizontal: 18, paddingTop: 6 },
 });

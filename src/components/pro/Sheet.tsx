@@ -1,11 +1,20 @@
-import { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ReactNode, useEffect } from 'react';
+import { BackHandler, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Bottom sheet over the camera. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  // Android Back closes the sheet, not the app.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onClose]);
   return (
     <View style={StyleSheet.absoluteFill}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
@@ -16,7 +25,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
             <Text style={styles.done}>Done</Text>
           </Pressable>
         </View>
-        <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 8 }}>
+        <ScrollView style={{ maxHeight: Math.min(420, height - insets.top - 120) }} contentContainerStyle={{ paddingBottom: 8 }}>
           {children}
         </ScrollView>
       </View>
@@ -27,7 +36,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 export function Toggle({ label, value, onChange, hint }: { label: string; value: boolean; onChange: (v: boolean) => void; hint?: string }) {
   return (
     <Pressable style={styles.row} onPress={() => onChange(!value)} accessibilityRole="switch" accessibilityState={{ checked: value }}>
-      <View style={{ flex: 1 }}>
+      <View style={styles.rowText}>
         <Text style={styles.label}>{label}</Text>
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
@@ -78,7 +87,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
   done: { color: '#2997FF', fontSize: 16, fontWeight: '600' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, minHeight: 50 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 8, minHeight: 56 },
+  rowText: { flex: 1, marginRight: 16 },
   label: { color: '#fff', fontSize: 15 },
   hint: { color: '#86868B', fontSize: 12, marginTop: 2 },
   switch: { width: 46, height: 28, borderRadius: 14, backgroundColor: '#3A3A3C', padding: 3 },

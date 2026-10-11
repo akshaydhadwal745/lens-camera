@@ -190,7 +190,7 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
-  header: { height: 52, paddingHorizontal: 16, justifyContent: 'center' },
+  header: { height: 52, paddingHorizontal: 24, justifyContent: 'center' }, // same left edge as the body
   headerButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   done: { color: colors.link, fontSize: 17, fontWeight: '600' },
   body: { paddingHorizontal: 24, paddingTop: 24, gap: 14, maxWidth: 480, width: '100%', alignSelf: 'center', alignItems: 'stretch' },

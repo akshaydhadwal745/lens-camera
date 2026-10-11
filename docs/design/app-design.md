@@ -5,9 +5,9 @@ mixes four of the proposed app directions (design canvas, 2026-10-10):
 
 | Screen | Direction | What it looks like |
 | --- | --- | --- |
-| Camera (pro + basic) | **B · Keynote Glass** | Full-bleed viewfinder. Floating glass pills at the top (flash/tools + yellow **Night**, and **PRO**). One glass tray at the bottom: lens chips (.6 / 1× / 2), modes, an 80 px shutter (yellow ring when Night is on), library thumb, flip. |
+| Camera (pro + basic) | **B · Keynote Glass** | Full-bleed viewfinder. Floating glass pills at the top (flash, timer + yellow **Night**, and **PRO**). One glass tray at the bottom: the looks row (or portrait styles in Portrait), lens chips (.6 / 1× / 2), a mode strip (the selected mode always sits centred over the shutter and the strip slides on change, like the stock camera), an 80 px shutter (yellow ring when Night is on), library thumb, flip. |
 | Library (mine, videos, shared) | **D · Endless Roll** | "The roll" large title; mono status line `2 412 FRAMES · NEVER ENDS · ALL SAFE` (or `N UPLOADING` / `N FAILED` / `N WAITING · OFFLINE`); All · Videos · Shared chips + storage chip; a film-strip edge; mono day markers (`TODAY · 10 OCT · 42 FRAMES`, today in yellow); tiles with mono frame numbers `#2412`; white **Keep shooting** pill back to the camera. |
-| Photo viewer + video player | **B · Keynote Glass** | Full-bleed media. Glass back button, glass info pill (date + `12 MP · 3.1 MB`, or the upload state), green **✓ Safe** pill (tap: where it lives). Bottom glass bar: Share, big white **Edit**, Send to friends, Save, Delete. The player uses the same glass top + a glass control card with mono times. |
+| Photo viewer + video player | **B · Keynote Glass** | Full-bleed media. Glass back button, glass info pill (date + `12 MP · 3.1 MB`, or the upload state), green **✓ Safe** pill (tap: where it lives). Bottom glass bar: Share, Send to friends, big white **Edit** in the centre, Save, Delete (evenly spaced). The player's quality badge (`720p`) is a glass pill the same height as the back button. The player uses the same glass top + a glass control card with mono times. |
 | Settings + sub-screens | **A · Keynote Pure** | Large title + blue Done. Account card: initials avatar, name/email, `38 GB of 100 GB`, Recent (blue) / Saver (light blue) bar, "Get +10 GB". Grouped rounded cards with white labels, grey values, chevrons. |
 | Editor, sign-in, share, link, intro | shared rules | Same tokens, fonts and button styles. |
 
@@ -23,6 +23,16 @@ mixes four of the proposed app directions (design canvas, 2026-10-10):
 - **Shapes** — tiles 4 px (film frames), cards 20, sheets 28, glass tray 34, buttons are full pills.
 - **Glass** only where controls float over a photo or the viewfinder (`glass` in theme.ts: dark 62–66 % + hairline white border). Everywhere else uses solid surfaces. There's no blur yet (expo-blur is native; add it with the next APK).
 - **Buttons** — on screens: blue pill, white text. Over media: white pill, black text (Edit, Keep shooting). Selected chips: white with black text.
+
+## Alignment rules (checked at 360 dp, the Galaxy S8 width, 2026-10-11)
+
+- **One left edge per screen.** The library uses a 20 px gutter for the title, chips, banners, day markers and tiles; the film-strip column is exactly 20 px, with sprocket holes on one even 22 px pitch down the whole roll (not per row). Sign-in's header uses the body's 24 px edge.
+- **One left edge per card.** Inside a settings card either every row has an icon or none does. Action rows in icon-less cards (Free up space now, Retry N failed, Log out) are plain coloured text; Camera info has its own "Camera" card. Browser rows under Computers get a laptop icon to match "Link a computer".
+- **Two-line top buttons on the camera.** Icon or value on top, mono caption below (`4K`/`RES`, `30`/`FPS`, `HDR`/`ON`), so the pill reads as one row.
+- **Text never runs under a control.** Sheet rows keep 16 px between the text and the toggle; preset details sit under the name, not squeezed to the right.
+- **Nothing gets pushed off a 360 px screen.** The editor header keeps `Auto` labelled but Copy/Reset as icons; dial titles get 92 px (fits `STRAIGHTEN`); the storage chip shortens to `1/5 GB`.
+- **Landscape camera.** The tray docks on the right as a 340 px panel; the top pills, level and focus stay in the viewfinder area to its left; the histogram moves to the bottom-left; sheets cap their height to the screen.
+- **Android Back** closes a camera sheet instead of leaving the app.
 
 ## How it's applied
 

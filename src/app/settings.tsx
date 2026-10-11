@@ -50,10 +50,11 @@ function Section({ title, children, footer }: { title: string; children: ReactNo
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, icon }: { label: string; value: string; icon?: keyof typeof Ionicons.glyphMap }) {
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
+      {icon ? <Ionicons name={icon} size={18} color={palette.muted} /> : null}
+      <Text style={[styles.rowLabel, icon && { flex: 1 }]}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
@@ -185,14 +186,13 @@ function AccountSection() {
         <>
           <View style={styles.divider} />
           <Pressable style={styles.rowButton} onPress={logOutOthers} disabled={busy}>
-            <Ionicons name="exit-outline" size={18} color={palette.link} />
             <Text style={styles.rowButtonText}>Log out other devices</Text>
           </Pressable>
         </>
       )}
       <View style={styles.divider} />
       <Pressable style={styles.rowButton} onPress={logOutHere} disabled={busy}>
-        {busy ? <ActivityIndicator color={colors.danger} /> : <Ionicons name="log-out-outline" size={18} color={colors.danger} />}
+        {busy ? <ActivityIndicator color={colors.danger} /> : null}
         <Text style={[styles.rowButtonText, { color: colors.danger }]}>Log out</Text>
       </Pressable>
     </Section>
@@ -275,7 +275,7 @@ function ComputersSection() {
       {browsers?.map((b) => (
         <View key={b.id}>
           <View style={styles.divider} />
-          <Row label={b.browser} value={`since ${timeAgo(b.createdAt)}`} />
+          <Row icon="laptop-outline" label={b.browser} value={`since ${timeAgo(b.createdAt)}`} />
         </View>
       ))}
       {!!browsers?.length && (
@@ -413,11 +413,11 @@ export default function SettingsScreen() {
               title="On this device"
               footer="Every shot uploads to the cloud right away. The full-size original stays on the phone for the time you choose, and sooner if the phone runs low on space (oldest first). Nothing is removed until it's safely in the cloud, and previews always stay so your gallery works offline."
             >
-              <Row label="Originals here" value={`${local.count} items · ${formatBytes(local.bytes)}`} />
+              <Row label="Originals here" value={`${local.count} ${local.count === 1 ? 'item' : 'items'} · ${formatBytes(local.bytes)}`} />
               {local.offloaded > 0 && (
                 <>
                   <View style={styles.divider} />
-                  <Row label="Preview only (in the cloud)" value={`${local.offloaded} items`} />
+                  <Row label="Preview only (in the cloud)" value={`${local.offloaded} ${local.offloaded === 1 ? 'item' : 'items'}`} />
                 </>
               )}
               {freeBytes !== null && (
@@ -455,19 +455,19 @@ export default function SettingsScreen() {
                 ))}
               </View>
               <View style={styles.divider} />
+              {/* No icon: every row in this card starts on the same left edge. */}
               <Pressable style={styles.rowButton} onPress={onFreeUp} disabled={!local.freeableCount}>
-                <Ionicons name="trash-bin-outline" size={18} color={local.freeableCount ? palette.link : '#636366'} />
                 <Text style={[styles.rowButtonText, !local.freeableCount && { color: '#636366' }]}>
                   Free up space now{local.freeableCount ? ` (${formatBytes(local.freeable)})` : ''}
                 </Text>
               </Pressable>
-              {Platform.OS === 'android' && isProCameraAvailable && (
-                <>
-                  <View style={styles.divider} />
-                  <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
-                </>
-              )}
             </Section>
+
+            {Platform.OS === 'android' && isProCameraAvailable && (
+              <Section title="Camera">
+                <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
+              </Section>
+            )}
 
             <Section
               title="Uploads"
@@ -516,7 +516,6 @@ export default function SettingsScreen() {
                 <>
                   <View style={styles.divider} />
                   <Pressable style={styles.rowButton} onPress={retryFailed}>
-                    <Ionicons name="refresh" size={18} color={colors.danger} />
                     <Text style={[styles.rowButtonText, { color: colors.danger }]}>Retry {failed} failed</Text>
                   </Pressable>
                 </>

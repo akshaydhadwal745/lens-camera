@@ -1,5 +1,6 @@
 // Pro camera settings, value scales and presets.
 import type { CameraMode, Capabilities, Lens, Stabilization } from '../../modules/lens-camera';
+import type { PortraitStyle } from './edits';
 import { loadDoc, saveDoc } from './local-store';
 
 export type Grid = 'off' | 'thirds' | 'cross';
@@ -36,6 +37,7 @@ export type ProSettings = {
   bakeLooks: boolean;
   nightFrames: number;
   portraitAperture: number;
+  portraitStyle: PortraitStyle;
 
   exposureMode: 'auto' | 'manual';
   iso: number;
@@ -79,6 +81,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   bakeLooks: false,
   nightFrames: 6,
   portraitAperture: 2.8,
+  portraitStyle: 'natural',
 
   exposureMode: 'auto',
   iso: 100,
@@ -102,8 +105,10 @@ export const DEFAULT_SETTINGS: ProSettings = {
 
 /**
  * What the camera actually uses. Pro on: the user's settings. Pro off (the
- * default): everything technical is automatic. The saved pro settings are kept
- * untouched, so switching Pro back on restores them.
+ * default, "Normal"): everything technical is automatic, while the creative
+ * choices (look, portrait style, timer) stay the user's: they're what people
+ * come to the camera for. The saved pro settings are kept untouched, so
+ * switching Pro back on restores them.
  */
 export function effectiveSettings(s: ProSettings): ProSettings {
   if (s.pro) return s;
@@ -116,9 +121,6 @@ export function effectiveSettings(s: ProSettings): ProSettings {
     appleLog: false,
     hdrVideo: false,
     fps: 30,
-    timer: 0,
-    look: null,
-    lookIntensity: 1,
     bakeLooks: false,
     exposureMode: 'auto',
     ev: 0,

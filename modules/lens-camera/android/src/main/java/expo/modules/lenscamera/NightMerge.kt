@@ -238,7 +238,12 @@ object NightMerge {
   internal fun shadowLift(luma: IntArray): Double {
     if (luma.isEmpty()) return 1.0
     val sorted = luma.sortedArray()
-    val median = max(1, sorted[sorted.size / 2]) / 255.0
+    return liftForMedian(sorted[sorted.size / 2])
+  }
+
+  /** The lift for a median brightness (0–255). Also used by the night viewfinder, so it matches the photo. */
+  fun liftForMedian(median255: Int): Double {
+    val median = max(1, median255) / 255.0
     if (median >= 0.35) return 1.0
     // Bring the median toward ~0.35, never more than gamma 0.6.
     return (kotlin.math.ln(0.35) / kotlin.math.ln(median)).coerceIn(0.6, 1.0)

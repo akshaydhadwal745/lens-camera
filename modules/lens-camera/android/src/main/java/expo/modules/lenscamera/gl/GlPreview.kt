@@ -33,6 +33,15 @@ import kotlin.math.max
  * 96×72 copy is read back for the histogram. No extra camera stream is needed
  * for any of it, and the photo/video files are never touched (looks stay a
  * removable edit).
+ *
+ * Portrait: the frame is also drawn at ¼ size every frame (the blurred
+ * background is read from that, so the blur costs a few texture reads), and a
+ * ~320 px copy goes to [LivePortrait] a few times a second for the person mask.
+ *
+ * Night (Lens's own merge): the viewfinder shows what the photo will look like:
+ * the same shadow lift as [expo.modules.lenscamera.NightMerge] (measured on the
+ * 96×72 copy), and frames averaged over time (less grain, like the burst
+ * average) except where something moved.
  */
 class GlPreview(private val context: Context) : Preview.SurfaceProvider, SurfaceHolder.Callback {
   val view = SurfaceView(context)
@@ -81,11 +90,46 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var firstFrame = true
   private var failed = false
 
+  // Portrait in the viewfinder (GL thread, except the LivePortrait callback).
+  private var copyProgram = 0
+  private var blurFbo = 0
+  private var blurTexture = 0
+  private var blurW = 0
+  private var blurH = 0
+  private var segFbo = 0
+  private var segTexture = 0
+  private var segW = 0
+  private var segH = 0
+  private var segPixels: ByteBuffer? = null
+  private var maskTexture = 0
+  private var hasSubject = false
+  private var lastSeg = 0L
+  private var portraitWasOn = false
+  // Night preview: running average of frames (ping-pong) and the live shadow lift.
+  private var accumProgram = 0
+  private val accumTex = IntArray(2)
+  private val accumFbo = IntArray(2)
+  private var accumW = 0
+  private var accumH = 0
+  private var accumIndex = 0
+  private var accumValid = false
+  private var nightLift = 1f
+  private var nightLiftTarget = 1f
+  private val livePortrait = LivePortrait().also { live ->
+    live.onMask = { mask, w, h, subject -> gl.post { uploadMask(mask, w, h, subject) } }
+  }
+
   // Set from the main thread, read on the GL thread.
   @Volatile var look: String? = null
   @Volatile var lookIntensity = 1.0
   @Volatile var analysis = AnalysisOptions()
   @Volatile var paused = false
+  /** Portrait background blur as a fraction of the frame's long side (0 = off). See [LivePortrait.blurFraction]. */
+  @Volatile var portraitBlur = 0f
+  /** Portrait style (see [expo.modules.lenscamera.imaging.PortraitStyle]): 0 natural … 3 stage. */
+  @Volatile var portraitStyle = 0f
+  /** Night photo coming (Night mode or auto Night with Lens's own merge): preview it brightened and averaged. */
+  @Volatile var nightPreview = false
 
   init {
     view.holder.addCallback(this)
@@ -100,6 +144,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       core.makeCurrent(pbuffer)
       program = GlUtil.program(VERTEX, FRAGMENT)
       analysisProgram = GlUtil.program(VERTEX, ANALYSIS_FRAGMENT)
+      copyProgram = GlUtil.program(VERTEX, COPY_FRAGMENT)
+      accumProgram = GlUtil.program(VERTEX, ACCUM_FRAGMENT)
       val (tex, fbo) = GlUtil.framebuffer(AW, AH)
       analysisTexture = tex
       analysisFbo = fbo
@@ -136,6 +182,11 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
       GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
       bufferSize = request.resolution
+      // New camera stream (switched camera/mode): don't blend in the old camera's
+      // night frames or use its person mask.
+      accumValid = false
+      hasSubject = false
+      livePortrait.reset()
       val st = SurfaceTexture(oesTexture).apply {
         setDefaultBufferSize(request.resolution.width, request.resolution.height)
         setOnFrameAvailableListener({ draw() }, gl)
@@ -232,10 +283,32 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
       val now = SystemClock.uptimeMillis()
       val a = analysis
-      if (a.histogram && onHistogram != null && now - lastAnalysis >= 250) {
+      val night = nightPreview
+      if (((a.histogram && onHistogram != null) || night) && now - lastAnalysis >= 250) {
         lastAnalysis = now
-        runAnalysis()
+        runAnalysis(a.histogram && onHistogram != null, night)
       }
+      val accumulated = if (night) accumulate() else {
+        accumValid = false
+        nightLift = 1f
+        nightLiftTarget = 1f
+        0
+      }
+      if (night) nightLift += (nightLiftTarget - nightLift) * 0.15f
+      val blur = portraitBlur
+      val portrait = blur > 0f
+      if (portrait) {
+        ensurePortraitTargets()
+        renderCopy(blurFbo, blurW, blurH)
+        if (!livePortrait.busy && now - lastSeg >= SEG_INTERVAL_MS) {
+          lastSeg = now
+          submitForSegmentation()
+        }
+      } else if (portraitWasOn) {
+        hasSubject = false
+        livePortrait.reset()
+      }
+      portraitWasOn = portrait
 
       GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
       GLES20.glViewport(0, 0, viewWidth, viewHeight)
@@ -245,6 +318,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uCam"), 0)
       GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uTexMatrix"), 1, false, stMatrix, 0)
       GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uUvMatrix"), 1, false, uvMatrix, 0)
+      // Night: read the averaged frame instead of the raw camera frame, and lift it like the photo.
+      GLES20.glActiveTexture(GLES20.GL_TEXTURE4)
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, accumulated)
+      GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uAccum"), 4)
+      GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uUseAccum"), if (accumulated != 0) 1f else 0f)
+      GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uLift"), if (night) nightLift else 1f)
 
       val lutMix = bindLut()
       GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uLut"), 1)
@@ -254,6 +333,18 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uFalseColor"), if (a.falseColor) 1f else 0f)
       // Peaking compares neighbours ~1/360 of the frame apart (like iOS's 360 px analysis).
       GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uStep"), 1f / 360f, 1f / 360f)
+      val blurOn = portrait && hasSubject && maskTexture != 0 && blurTexture != 0
+      GLES20.glActiveTexture(GLES20.GL_TEXTURE2)
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, blurTexture)
+      GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uBlurTex"), 2)
+      GLES20.glActiveTexture(GLES20.GL_TEXTURE3)
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
+      GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uMask"), 3)
+      GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uPortrait"), if (blurOn) 1f else 0f)
+      GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uStyle"), if (blurOn) portraitStyle else 0f)
+      // Radius in view uv: same fraction of the long side as the saved photo's blur.
+      val radiusPx = blur * max(viewWidth, viewHeight)
+      GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uBlurRadius"), radiusPx / viewWidth, radiusPx / viewHeight)
       GlUtil.drawQuad(program)
       core.setPresentationTime(window, st.timestamp)
       core.swap(window)
@@ -347,7 +438,140 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     return Math.floorMod((Math.round(angle / 90.0) * 90).toInt(), 360)
   }
 
-  private fun runAnalysis() {
+  // ---------- Night ----------
+
+  /**
+   * Averages the new camera frame into the running night frame (view size,
+   * ping-pong). Returns the texture to show, or 0 if it couldn't be made.
+   */
+  private fun accumulate(): Int {
+    val w = max(1, viewWidth)
+    val h = max(1, viewHeight)
+    try {
+      if (w != accumW || h != accumH || accumFbo[0] == 0) {
+        for (i in 0..1) deleteTarget(accumTex[i], accumFbo[i])
+        for (i in 0..1) {
+          val (tex, fbo) = GlUtil.framebuffer(w, h)
+          accumTex[i] = tex
+          accumFbo[i] = fbo
+        }
+        accumW = w
+        accumH = h
+        accumValid = false
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "night preview buffers failed", e)
+      return 0
+    }
+    val prev = accumIndex
+    val next = 1 - accumIndex
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, accumFbo[next])
+    GLES20.glViewport(0, 0, w, h)
+    GLES20.glUseProgram(accumProgram)
+    GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+    GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
+    GLES20.glUniform1i(GLES20.glGetUniformLocation(accumProgram, "uCam"), 0)
+    GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, accumTex[prev])
+    GLES20.glUniform1i(GLES20.glGetUniformLocation(accumProgram, "uPrev"), 1)
+    GLES20.glUniform1f(GLES20.glGetUniformLocation(accumProgram, "uHasPrev"), if (accumValid) 1f else 0f)
+    GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(accumProgram, "uTexMatrix"), 1, false, stMatrix, 0)
+    GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(accumProgram, "uUvMatrix"), 1, false, uvMatrix, 0)
+    GlUtil.drawQuad(accumProgram)
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+    accumIndex = next
+    accumValid = true
+    return accumTex[next]
+  }
+
+  // ---------- Portrait ----------
+
+  /** ¼-size blur source and the ~320 px segmentation copy, sized to the view (same aspect). */
+  private fun ensurePortraitTargets() {
+    val bw = max(1, viewWidth / 4)
+    val bh = max(1, viewHeight / 4)
+    if (bw != blurW || bh != blurH || blurFbo == 0) {
+      deleteTarget(blurTexture, blurFbo)
+      val (tex, fbo) = GlUtil.framebuffer(bw, bh)
+      blurTexture = tex
+      blurFbo = fbo
+      blurW = bw
+      blurH = bh
+    }
+    val long = SEG_LONG_SIDE.toFloat()
+    val sw = if (viewWidth >= viewHeight) SEG_LONG_SIDE else max(1, (long * viewWidth / viewHeight).toInt())
+    val sh = if (viewWidth >= viewHeight) max(1, (long * viewHeight / viewWidth).toInt()) else SEG_LONG_SIDE
+    if (sw != segW || sh != segH || segFbo == 0) {
+      deleteTarget(segTexture, segFbo)
+      val (tex, fbo) = GlUtil.framebuffer(sw, sh)
+      segTexture = tex
+      segFbo = fbo
+      segW = sw
+      segH = sh
+      segPixels = ByteBuffer.allocateDirect(sw * sh * 4).order(ByteOrder.nativeOrder())
+      // A mask from the old size/orientation would land in the wrong place.
+      hasSubject = false
+      livePortrait.reset()
+    }
+  }
+
+  private fun deleteTarget(texture: Int, fbo: Int) {
+    if (texture != 0) GLES20.glDeleteTextures(1, intArrayOf(texture), 0)
+    if (fbo != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(fbo), 0)
+  }
+
+  /** The visible frame (no look, no overlays), as shown on screen, into [fbo]. */
+  private fun renderCopy(fbo: Int, width: Int, height: Int) {
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo)
+    GLES20.glViewport(0, 0, width, height)
+    GLES20.glUseProgram(copyProgram)
+    GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+    GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
+    GLES20.glUniform1i(GLES20.glGetUniformLocation(copyProgram, "uCam"), 0)
+    GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uTexMatrix"), 1, false, stMatrix, 0)
+    GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uUvMatrix"), 1, false, uvMatrix, 0)
+    // Average 4 nearby camera pixels per output pixel: a smoother small copy.
+    GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), 1f / 720f, 1f / 720f)
+    GlUtil.drawQuad(copyProgram)
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+  }
+
+  private fun submitForSegmentation() {
+    val buffer = segPixels ?: return
+    renderCopy(segFbo, segW, segH)
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, segFbo)
+    buffer.position(0)
+    GLES20.glReadPixels(0, 0, segW, segH, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer)
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+    val bytes = ByteArray(segW * segH * 4)
+    buffer.position(0)
+    buffer.get(bytes)
+    livePortrait.submit(bytes, segW, segH)
+  }
+
+  /** GL thread: a new mask from [LivePortrait] (top row first, 1 byte per pixel). */
+  private fun uploadMask(mask: ByteBuffer, width: Int, height: Int, subject: Boolean) {
+    val core = egl ?: return
+    if (portraitBlur <= 0f) return
+    core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+    if (maskTexture == 0) {
+      val t = IntArray(1)
+      GLES20.glGenTextures(1, t, 0)
+      maskTexture = t[0]
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
+      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+    }
+    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
+    GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
+    GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE, width, height, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, mask)
+    GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 4)
+    hasSubject = subject
+  }
+
+  private fun runAnalysis(sendHistogram: Boolean, night: Boolean) {
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, analysisFbo)
     GLES20.glViewport(0, 0, AW, AH)
     GLES20.glUseProgram(analysisProgram)
@@ -362,14 +586,27 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
 
     val bins = IntArray(64)
+    val counts = IntArray(256)
     var low = 0
     var high = 0
     for (i in 0 until AW * AH) {
       val l = analysisPixels.get(i * 4).toInt() and 0xFF // luma is written to red
       bins[l shr 2]++
+      counts[l]++
       if (l <= 4) low++
       if (l >= 251) high++
     }
+    if (night) {
+      // Same lift as the night photo (NightMerge.shadowLift on the median brightness).
+      var seen = 0
+      var median = 0
+      while (median < 255 && seen + counts[median] <= AW * AH / 2) {
+        seen += counts[median]
+        median++
+      }
+      nightLiftTarget = expo.modules.lenscamera.NightMerge.liftForMedian(median).toFloat()
+    }
+    if (!sendHistogram) return
     val peak = max(1, bins.maxOrNull() ?: 1).toDouble()
     val histogram = DoubleArray(64) { Math.round(bins[it] / peak * 1000) / 1000.0 }
     val total = (AW * AH).toDouble()
@@ -389,7 +626,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   }
 
   fun release() {
+    livePortrait.close()
     gl.post {
+      deleteTarget(blurTexture, blurFbo)
+      deleteTarget(segTexture, segFbo)
+      for (i in 0..1) deleteTarget(accumTex[i], accumFbo[i])
+      if (maskTexture != 0) GLES20.glDeleteTextures(1, intArrayOf(maskTexture), 0)
       releaseInput()
       egl?.let { core ->
         if (window != EGL14.EGL_NO_SURFACE) core.releaseSurface(window)
@@ -405,6 +647,9 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     private const val TAG = "LensPreview"
     private const val AW = 96
     private const val AH = 72
+    /** Live Portrait: the person mask is refreshed this often (~6 a second), on a ~320 px copy. */
+    private const val SEG_INTERVAL_MS = 160L
+    private const val SEG_LONG_SIDE = 320
 
     private const val VERTEX = """
       attribute vec2 aPos;
@@ -412,8 +657,10 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       uniform mat4 uTexMatrix;
       uniform mat4 uUvMatrix;
       varying vec2 vTex;
+      varying vec2 vView;
       void main() {
         gl_Position = vec4(aPos, 0.0, 1.0);
+        vView = aUv;
         vec4 buf = uUvMatrix * vec4(aUv, 0.0, 1.0);
         vTex = (uTexMatrix * vec4(buf.xy, 0.0, 1.0)).xy;
       }
@@ -429,8 +676,17 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       precision mediump float;
       #endif
       varying vec2 vTex;
+      varying vec2 vView;
       uniform samplerExternalOES uCam;
       uniform sampler2D uLut;
+      uniform sampler2D uBlurTex;
+      uniform sampler2D uMask;
+      uniform float uPortrait;
+      uniform vec2 uBlurRadius;
+      uniform sampler2D uAccum;
+      uniform float uUseAccum;
+      uniform float uLift;
+      uniform float uStyle;
       uniform float uLutMix;
       uniform float uZebra;
       uniform float uPeaking;
@@ -438,11 +694,35 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       uniform vec2 uStep;
       ${GlUtil.LUT_GLSL}
       float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+      ${expo.modules.lenscamera.imaging.PortraitStyle.GLSL}
+      // Portrait: the background comes from the ¼-size copy (already soft),
+      // spread over a disc, the same reach as the saved photo's blur.
+      vec3 portrait(vec3 sharp) {
+        // Mask rows are top-first; view uv is bottom-up.
+        float subject = smoothstep(0.3, 0.7, texture2D(uMask, vec2(vView.x, 1.0 - vView.y)).r);
+        if (subject > 0.995) return sharp;
+        vec3 acc = texture2D(uBlurTex, vView).rgb;
+        for (int i = 0; i < 8; i++) {
+          float a = float(i) * 0.7854;
+          vec2 d = vec2(cos(a), sin(a)) * uBlurRadius;
+          acc += texture2D(uBlurTex, vView + d).rgb + texture2D(uBlurTex, vView + d * 0.5).rgb;
+        }
+        return mix(acc / 17.0, sharp, subject);
+      }
+      // The frame at an offset (in camera-buffer uv): the night average when it's on.
+      vec3 cam(vec2 d) {
+        if (uUseAccum > 0.5) return texture2D(uAccum, vView + d).rgb;
+        return texture2D(uCam, vTex + d).rgb;
+      }
       void main() {
-        vec3 c = texture2D(uCam, vTex).rgb;
+        vec3 c = cam(vec2(0.0));
+        if (uLift < 0.999) c = pow(c, vec3(uLift));
+        if (uPortrait > 0.5) c = portrait(c);
         float l = luma(c);
         vec3 o = c;
         if (uLutMix > 0.0) o = mix(c, lookup(uLut, c), uLutMix);
+        // Same order as the photo: look first, then the portrait style.
+        if (uStyle > 0.5) o = portraitStyle(o, smoothstep(0.3, 0.7, texture2D(uMask, vec2(vView.x, 1.0 - vView.y)).r), uStyle);
         if (uFalseColor > 0.5) {
           // IRE zones (same as iOS): purple crushed, blue deep shadow, green
           // middle grey, pink skin, yellow near clip, red clipped; rest grey.
@@ -460,11 +740,57 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
           o = mix(o, vec3(1.0), 0.9);
         }
         if (uPeaking > 0.5 && l < 0.98) {
-          float gx = abs(luma(texture2D(uCam, vTex + vec2(uStep.x, 0.0)).rgb) - luma(texture2D(uCam, vTex - vec2(uStep.x, 0.0)).rgb));
-          float gy = abs(luma(texture2D(uCam, vTex + vec2(0.0, uStep.y)).rgb) - luma(texture2D(uCam, vTex - vec2(0.0, uStep.y)).rgb));
+          float gx = abs(luma(cam(vec2(uStep.x, 0.0))) - luma(cam(vec2(-uStep.x, 0.0))));
+          float gy = abs(luma(cam(vec2(0.0, uStep.y))) - luma(cam(vec2(0.0, -uStep.y))));
           if (gx + gy > 0.19) o = vec3(1.0, 0.12, 0.35);
         }
         gl_FragColor = vec4(o, 1.0);
+      }
+    """
+
+    /** The visible frame as is (4-tap average), for the Portrait blur source and the person mask. */
+    private const val COPY_FRAGMENT = """
+      #extension GL_OES_EGL_image_external : require
+      #ifdef GL_FRAGMENT_PRECISION_HIGH
+      precision highp float;
+      #else
+      precision mediump float;
+      #endif
+      varying vec2 vTex;
+      uniform samplerExternalOES uCam;
+      uniform vec2 uStep;
+      void main() {
+        vec3 c = texture2D(uCam, vTex + vec2(uStep.x, uStep.y)).rgb + texture2D(uCam, vTex + vec2(-uStep.x, uStep.y)).rgb
+          + texture2D(uCam, vTex + vec2(uStep.x, -uStep.y)).rgb + texture2D(uCam, vTex + vec2(-uStep.x, -uStep.y)).rgb;
+        gl_FragColor = vec4(c * 0.25, 1.0);
+      }
+    """
+
+    /**
+     * Night preview: blend the new frame into the running average (like the
+     * burst average: less grain), but follow the new frame where it differs a
+     * lot (something moved), so there's no ghosting.
+     */
+    private const val ACCUM_FRAGMENT = """
+      #extension GL_OES_EGL_image_external : require
+      #ifdef GL_FRAGMENT_PRECISION_HIGH
+      precision highp float;
+      #else
+      precision mediump float;
+      #endif
+      varying vec2 vTex;
+      varying vec2 vView;
+      uniform samplerExternalOES uCam;
+      uniform sampler2D uPrev;
+      uniform float uHasPrev;
+      void main() {
+        vec3 cur = texture2D(uCam, vTex).rgb;
+        if (uHasPrev < 0.5) { gl_FragColor = vec4(cur, 1.0); return; }
+        vec3 prev = texture2D(uPrev, vView).rgb;
+        float diff = abs(dot(cur - prev, vec3(0.2126, 0.7152, 0.0722)));
+        // ~4 frames of averaging when still; the new frame when it changed.
+        float w = mix(0.25, 1.0, smoothstep(0.03, 0.10, diff));
+        gl_FragColor = vec4(mix(prev, cur, w), 1.0);
       }
     """
 

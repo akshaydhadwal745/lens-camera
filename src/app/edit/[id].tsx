@@ -10,7 +10,7 @@ import { isImagingAvailable, LensEditView, LensImaging } from '../../../modules/
 import { ValueDial } from '@/components/pro/ValueDial';
 import { posterUri } from '@/lib/derivatives';
 import { cachedOriginal } from '@/lib/edit-remote';
-import { ADJUSTMENTS, Adjustments, centeredCrop, compact, CROP_ASPECTS, EditRecipe, isNeutral, LOOKS } from '@/lib/edits';
+import { ADJUSTMENTS, Adjustments, centeredCrop, compact, CROP_ASPECTS, EditRecipe, isNeutral, LOOKS, PORTRAIT_STYLES } from '@/lib/edits';
 import { asFileUri } from '@/lib/content-file';
 import { uriFor } from '@/lib/local-store';
 import { extensionFor } from '@/lib/storage/useOriginal';
@@ -154,14 +154,20 @@ export default function EditScreen() {
               notify('Edit copied', 'Select photos in the gallery and tap "Paste edit".');
             }}
             disabled={!nativeRecipe}
-            style={[styles.pill, !nativeRecipe && { opacity: 0.4 }]}
+            style={[styles.iconPill, !nativeRecipe && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Copy edit"
           >
-            <Ionicons name="copy-outline" size={14} color="#fff" />
-            <Text style={styles.pillText}>Copy</Text>
+            <Ionicons name="copy-outline" size={16} color="#fff" />
           </Pressable>
-          <Pressable onPress={() => setRecipe({})} disabled={isNeutral(recipe)} style={[styles.pill, isNeutral(recipe) && { opacity: 0.4 }]}>
-            <Ionicons name="refresh" size={14} color="#fff" />
-            <Text style={styles.pillText}>Reset</Text>
+          <Pressable
+            onPress={() => setRecipe({})}
+            disabled={isNeutral(recipe)}
+            style={[styles.iconPill, isNeutral(recipe) && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Reset edit"
+          >
+            <Ionicons name="refresh" size={16} color="#fff" />
           </Pressable>
         </View>
         <Pressable onPress={save} disabled={saving || !source} hitSlop={10} style={styles.headerButton}>
@@ -289,17 +295,36 @@ export default function EditScreen() {
         )}
 
         {tab === 'portrait' && (
-          <ValueDial
-            title="BLUR (f-stop)"
-            values={APERTURES}
-            index={nearestIndex(APERTURES, recipe.portrait?.aperture ?? 2.8)}
-            label={(v) => `f/${v}`}
-            onIndex={(i) => update({ portrait: { aperture: APERTURES[i] } })}
-            auto={!recipe.portrait?.aperture}
-            autoLabel="Off"
-            autoText="OFF"
-            onAuto={() => update({ portrait: undefined })}
-          />
+          <>
+            <ValueDial
+              title="BLUR (f-stop)"
+              values={APERTURES}
+              index={nearestIndex(APERTURES, recipe.portrait?.aperture ?? 2.8)}
+              label={(v) => `f/${v}`}
+              onIndex={(i) => update({ portrait: { ...recipe.portrait, aperture: APERTURES[i] } })}
+              auto={!recipe.portrait?.aperture}
+              autoLabel="Off"
+              autoText="OFF"
+              onAuto={() => update({ portrait: undefined })}
+            />
+            {/* Styles need the portrait effect on (they work around the person mask). */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {PORTRAIT_STYLES.map((p) => {
+                const on = !!recipe.portrait?.aperture && (recipe.portrait.style ?? 'natural') === p.id;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => update({ portrait: { aperture: recipe.portrait?.aperture ?? 2.8, style: p.id } })}
+                    style={[styles.chip, on && styles.chipOn]}
+                    accessibilityLabel={`${p.name}: ${p.description}`}
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{p.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
         )}
 
         <View style={styles.tabs}>
@@ -324,7 +349,9 @@ const styles = StyleSheet.create({
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
   headerText: { color: colors.link, fontSize: 17 },
   bold: { fontWeight: '700', textAlign: 'right' },
-  headerCenter: { flexDirection: 'row', gap: 8 },
+  // Auto keeps its label; Copy and Reset are icons so Done never gets pushed off a 360 px screen.
+  headerCenter: { flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  iconPill: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2C2C2E' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#2C2C2E' },
   pillOn: { backgroundColor: colors.accent },
   pillText: { color: '#fff', fontSize: 13, fontWeight: '600' },

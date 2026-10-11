@@ -68,7 +68,7 @@ export function ValueDial({ title, values, index, label, onIndex, auto, onAuto, 
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
         <Text style={[styles.value, auto && styles.valueAuto]}>{auto ? (autoLabel ?? 'AUTO') : label(values[index])}</Text>
         <Pressable onPress={onAuto} style={[styles.auto, auto && styles.autoOn]} hitSlop={8} accessibilityLabel={`${title} ${autoText.toLowerCase()}`}>
           <Text style={[styles.autoText, auto && styles.autoTextOn]}>{autoText}</Text>
@@ -87,10 +87,11 @@ export function ValueDial({ title, values, index, label, onIndex, auto, onAuto, 
 const styles = StyleSheet.create({
   root: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: '#A1A1A6', fontSize: 11, fontFamily: font.monoMedium, letterSpacing: 1, width: 70 },
+  // Title and button are the same width so the value stays centred; 92 fits "STRAIGHTEN" on one line.
+  title: { color: '#A1A1A6', fontSize: 11, fontFamily: font.monoMedium, letterSpacing: 1, width: 92 },
   value: { color: '#FACC15', fontSize: 18, fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'] },
   valueAuto: { color: '#fff' },
-  auto: { width: 70, alignItems: 'flex-end' },
+  auto: { width: 92, alignItems: 'flex-end' },
   autoOn: {},
   autoText: { color: '#86868B', fontSize: 11, fontFamily: font.monoSemibold, letterSpacing: 1, borderWidth: 1, borderColor: '#636366', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   autoTextOn: { color: '#000', backgroundColor: '#FACC15', borderColor: '#FACC15', overflow: 'hidden' },

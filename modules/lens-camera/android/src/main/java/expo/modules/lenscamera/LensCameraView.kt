@@ -18,6 +18,8 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import expo.modules.lenscamera.gl.GlPreview
+import expo.modules.lenscamera.gl.LivePortrait
+import expo.modules.lenscamera.imaging.PortraitStyle
 
 /** Monitoring overlays requested by JS (zebra, peaking, false colour, histogram). */
 data class AnalysisOptions(
@@ -45,6 +47,12 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   var active = true
   var look: String? = null
   var lookIntensity = 1.0
+  /** Portrait blur strength (f-number) for the live viewfinder blur. */
+  var portraitAperture = 2.8
+  /** A Lens Night photo is coming (Night mode or auto Night): preview it like the photo. */
+  var nightPreview = false
+  /** Portrait style id (natural, studio, mono, stage), previewed live. */
+  var portraitStyle = "natural"
 
   private val controller = CameraController(context)
   /** GPU viewfinder with live looks and monitoring overlays. */
@@ -109,7 +117,10 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       }
       gl.onTransform = { details -> onDiagnostics(mapOf("kind" to "preview") + details) }
     }
-    controller.onReady = { caps -> onReady(caps + mapOf("liveLooks" to (glPreview != null))) }
+    controller.onReady = { caps ->
+      updatePreviewModes() // the Night extension is only known once the camera is bound
+      onReady(caps + mapOf("liveLooks" to (glPreview != null)))
+    }
     controller.onError = { message, fatal -> onError(mapOf("message" to message, "fatal" to fatal)) }
   }
 
@@ -144,9 +155,19 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       gl.lookIntensity = lookIntensity
       gl.analysis = analysis
     }
+    updatePreviewModes()
     display?.let { controller.setDisplayRotation(it.rotation) }
     if (running) controller.update(config)
     updateRunning()
+  }
+
+  /** What the viewfinder previews of the photo-to-be: Portrait blur, Night brightening. */
+  private fun updatePreviewModes() {
+    val gl = glPreview ?: return
+    gl.portraitBlur = if (config.mode == "portrait") LivePortrait.blurFraction(portraitAperture) else 0f
+    gl.portraitStyle = PortraitStyle.code(portraitStyle)
+    // The maker's Night mode has its own preview; only Lens's own merge is previewed here.
+    gl.nightPreview = nightPreview && !(config.isNight && controller.usesNightExtension)
   }
 
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

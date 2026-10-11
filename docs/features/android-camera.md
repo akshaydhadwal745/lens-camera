@@ -69,6 +69,11 @@ broke landscape and the front camera.
   that moved (no ghosts), and gently lifts dark scenes. Noise drops by about
   √N (8 shots ≈ 3× less noise). A hot phone takes at most 3 shots.
 - Hold still until "Hold still…" disappears.
+- **The viewfinder previews the night photo** (Lens's own merge only; the maker's
+  Night mode keeps its own preview): the same shadow lift as the photo
+  (`NightMerge.liftForMedian`, measured 4×/s on the 96×72 copy) and frames
+  averaged over time (≈4 frames when still, the live frame where something
+  moved, so no ghosting). On in Night mode and when auto Night is about to be used.
 
 ## Portrait (Android)
 
@@ -77,8 +82,23 @@ app** (about 5 MB), so it works without Google Play services and offline. The ma
 is saved **inside the photo's JPEG** (an extra APP9 "LENSMASK" segment; the
 photo's pixels and EXIF are untouched), so it travels to the cloud and other
 phones. The blur is an edit: change it or turn it off in the editor
-(f/1.4 strong … f/16 none). If nobody is in the frame, the photo is normal.
+(f/1.4 strong … f/16 none). If nobody is in the frame, the photo is normal and
+the camera says "No person found · saved as a normal photo".
 Works with the front and back cameras. People only; pets and objects aren't detected.
+
+**Live in the viewfinder** (`gl/LivePortrait.kt` + `GlPreview`): about 6 times a
+second a ~320 px copy of the preview goes to the same model in its video mode;
+the background is blurred from a ¼-size copy of the frame (a few texture reads,
+no extra camera stream), at the same strength as the saved photo. No person =
+no blur, like the photo. Research and next steps: [research/portrait.md](../research/portrait.md).
+
+**Styles** (chips in the tray in Portrait mode, simple and PRO; also in the
+editor's Portrait tab): **Natural** (blur only, default), **Studio** (background
+darker and less colourful), **Mono** (black and white, background a step
+deeper), **Stage** (background fades to near black). Stored in the recipe as
+`portrait.style`, so it's a removable edit like the blur. One GLSL definition
+(`imaging/PortraitStyle.kt`) is used by both the photo renderer and the live
+viewfinder, so they match. Android only for now (iPhone shows Natural).
 
 ## Looks and editor (Android)
 

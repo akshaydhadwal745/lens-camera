@@ -1,19 +1,22 @@
-# Simple camera (default) + Pro
+# Normal camera (default) + Pro
 
-Lens decides the technical things itself; the screen shows only what everyone
-needs. Product principle: an intelligent camera, not a feature-heavy one
-(advanced controls only when genuinely needed).
+Organised around what people want to do (user, 2026-10-11): **Normal is the
+creative camera** (looks, portrait styles, timer), and Lens handles the
+technical side itself. **PRO only adds manual controls**; it never holds the
+creative features. Product principle: intelligent, simple, powerful by default.
 
-## Simple (default, `pro: false`)
+## Normal (default, `pro: false`)
 
-- Top: flash (photo/portrait) or torch (video), and **PRO**.
+- Top: flash (photo/portrait) or torch (video), **timer**, and **PRO**.
 - Viewfinder, zoom badge, **automatic Night badge** in low light.
-- Lens chips (0.6× / 1× / 2×…), modes **VIDEO · PHOTO · PORTRAIT**, gallery,
+- Tray: **looks** row (tap = live look, tap the selected one again = strength
+  dial) in Photo/Video, or the **portrait styles** row (Natural · Studio · Mono ·
+  Stage) in Portrait; lens chips; modes **VIDEO · PHOTO · PORTRAIT**; gallery,
   shutter, flip.
-- Everything else is automatic (`effectiveSettings` in `src/lib/pro-camera.ts`):
-  exposure, white balance, focus, Ultra HDR where the phone has it, 30 fps video,
-  no RAW / LOG / HDR video / timer / looks while shooting / monitors / grid.
-  Looks are applied after the shot in the editor.
+- Automatic (`effectiveSettings` in `src/lib/pro-camera.ts`): exposure, white
+  balance, focus, Night (auto), Ultra HDR where the phone has it, 30 fps video;
+  no RAW / LOG / HDR video / monitors / grid. The creative choices (look,
+  portrait style, timer) are the user's in both Normal and PRO.
 
 ### Automatic Night
 
@@ -25,13 +28,13 @@ AUTO or ON wins over automatic Night (no badge then): an explicit flash choice
 is respected. Thresholds are a
 first guess; the Quality Lab / self-test data will tune them.
 
-## Pro (`pro: true`, the PRO button)
+## Pro (`pro: true`, the PRO button): manual controls only
 
-Today's full controls, unchanged: manual ISO / shutter / WB / focus dials, EV,
-RAW, Ultra HDR toggle, 4K/HD, LOG, HDR video, fps, timer, looks while shooting,
-monitoring (histogram, peaking, zebra, false colour, level, grid, crop guides),
-presets, and the Night mode button. The user's pro settings are saved
-separately and come back when Pro is switched on again.
+Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,
+RAW, Ultra HDR toggle, 4K/HD, LOG, HDR video, fps, the Night mode button with a
+frame count, monitoring (histogram, peaking, zebra, false colour, level, grid,
+crop guides), and presets. The user's pro settings are saved separately and
+come back when PRO is switched on again.
 
 ## Selfie flash (front camera)
 

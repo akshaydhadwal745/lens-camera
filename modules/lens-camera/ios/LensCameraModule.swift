@@ -58,6 +58,10 @@ public class LensCameraModule: Module {
       Prop("lookIntensity") { (view: LensCameraView, value: Double) in
         view.lookIntensity = value
       }
+      // Android only (live Portrait blur and Night preview in the viewfinder); iOS ignores them.
+      Prop("portraitAperture") { (_: LensCameraView, _: Double) in }
+      Prop("nightPreview") { (_: LensCameraView, _: Bool) in }
+      Prop("portraitStyle") { (_: LensCameraView, _: String) in }
       Prop("torch") { (view: LensCameraView, value: Bool) in
         view.config.torch = value
       }
