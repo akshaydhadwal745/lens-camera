@@ -42,6 +42,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onAnalysis by EventDispatcher<Map<String, Any?>>()
   private val onError by EventDispatcher<Map<String, Any?>>()
   private val onDiagnostics by EventDispatcher<Map<String, Any?>>()
+  private val onRecordingStarted by EventDispatcher<Map<String, Any?>>()
 
   var config = CameraConfig()
   var analysis = AnalysisOptions()
@@ -123,6 +124,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       onReady(caps + mapOf("liveLooks" to (glPreview != null)))
     }
     controller.onError = { message, fatal -> onError(mapOf("message" to message, "fatal" to fatal)) }
+    controller.onRecordingStarted = { delayMs -> onRecordingStarted(mapOf("delayMs" to delayMs)) }
   }
 
   /** React Native sizes this view but never measures its native children: do it here. */

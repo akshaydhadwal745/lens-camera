@@ -110,6 +110,8 @@ class CameraException(message: String) : Exception(message)
 class CameraController(private val context: Context) {
   var onReady: ((Map<String, Any?>) -> Unit)? = null
   var onError: ((String, Boolean) -> Unit)? = null
+  /** The first video data was recorded ([Long] = ms since record was pressed). The REC timer starts here. */
+  var onRecordingStarted: ((Long) -> Unit)? = null
 
   private val main = ContextCompat.getMainExecutor(context)
   private val io = Executors.newSingleThreadExecutor()
@@ -777,7 +779,9 @@ class CameraController(private val context: Context) {
     var startDelayMs: Long? = null
     recording = pending.start(main) { event ->
       if (startDelayMs == null && event.recordingStats.recordedDurationNanos > 0) {
-        startDelayMs = SystemClock.elapsedRealtime() - requestedAt
+        val delay = SystemClock.elapsedRealtime() - requestedAt
+        startDelayMs = delay
+        onRecordingStarted?.invoke(delay)
       }
       if (event is VideoRecordEvent.Finalize) {
         recording = null

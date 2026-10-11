@@ -139,6 +139,8 @@ export type LensCameraProps = ViewProps & {
   onError?: (e: NativeSyntheticEvent<{ message: string; fatal?: boolean }>) => void;
   /** Android: how the camera started (anonymous diagnostics). */
   onDiagnostics?: (e: NativeSyntheticEvent<CameraDiagnostics>) => void;
+  /** Android: frames are being recorded now (`delayMs` after record was pressed). Show REC from here. */
+  onRecordingStarted?: (e: NativeSyntheticEvent<{ delayMs: number }>) => void;
 };
 
 export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };

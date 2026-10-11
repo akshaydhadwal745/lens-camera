@@ -80,6 +80,23 @@ video and stabilization (PRO), upload while recording.
   a 5-minute time-lapse), file sizes vs upload budget.
 - Fallbacks verified on the lowest tier (Android 8 / 32-bit).
 
+## Video start delay (checklist 1.11), measured 2026-10-11
+
+From the dev-46 Test Lab logs (CameraX Recorder: press → audio ENABLED → Muxer.start = first keyframe):
+
+| Phone | Mic ready | First video frame | Total |
+|---|---|---|---|
+| Pixel 8a | 120 ms | +201 ms | 0.32 s |
+| Galaxy A14 5G | 156 ms | +295 ms | 0.45 s |
+| Galaxy S22 Ultra | 205 ms | +258 ms | 0.46 s |
+| F01L (Android 8.1) | 146 ms | +876 ms | 1.02 s |
+| OPPO A79 | 707 ms | +836 ms | 1.54 s |
+
+Both parts start only when recording starts; CameraX has no pre-start API.
+Built: honest REC (timer from the first recorded frame). Research option for
+later: Lens-owned encoder with a rolling pre-roll buffer, so the saved clip can
+begin before the press (same buffer as Motion Photos).
+
 ## Measured results
 
 (Filled in after step 0.)

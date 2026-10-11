@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useIsFocused } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,6 +109,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   /** Id of the upload running while recording (null: uploads after you stop). */
   const [liveId, setLiveId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  // Recording asked for, but frames aren't being saved yet (mic + encoder starting:
+  // 0.3–1.5 s depending on the phone). REC and the timer only show once it's real.
+  const [recLive, setRecLive] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [focusMark, setFocusMark] = useState<{ x: number; y: number; key: number } | null>(null);
   const [previewSize, setPreviewSize] = useState({ width, height });
@@ -139,11 +142,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   }, [stored]);
 
   useEffect(() => {
-    if (!recording) return;
+    if (!recording || !recLive) return;
     setElapsed(0);
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(id);
-  }, [recording]);
+  }, [recording, recLive]);
 
   const update = useCallback((patch: Partial<ProSettings>) => setS((prev) => ({ ...prev, ...patch })), []);
 
@@ -269,6 +272,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       return;
     }
     setRecording(true);
+    // Android tells us when frames really flow (onRecordingStarted); elsewhere assume now.
+    setRecLive(Platform.OS !== 'android');
     const recipe = captureRecipe(false, 'video');
     const baking = !!recipe && s.bakeLooks && !!LensImaging;
     // Upload while recording (Android, Wi-Fi by default). Not when baking a look:
@@ -297,7 +302,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         live?.cancel();
         Alert.alert('Recording failed', error instanceof Error ? error.message : String(error));
       })
-      .finally(() => setRecording(false));
+      .finally(() => {
+        setRecording(false);
+        setRecLive(false);
+      });
   };
 
   const onShutter = () => {
@@ -490,6 +498,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               else Alert.alert('Camera', e.nativeEvent.message);
             }}
             onDiagnostics={(e) => reportPreview(e.nativeEvent, s.position)}
+            onRecordingStarted={() => setRecLive(true)}
           />
 
           <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />
@@ -527,8 +536,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       <View style={[styles.topBar, { paddingTop: insets.top + 10, paddingLeft: insets.left + 16, right: clearTray }]}>
         {recording ? (
           <View style={styles.rec}>
-            <View style={styles.recDot} />
-            <Text style={styles.recText}>{formatDuration(elapsed)}</Text>
+            <View style={[styles.recDot, !recLive && styles.recDotStarting]} />
+            <Text style={styles.recText}>{recLive ? formatDuration(elapsed) : 'Starting…'}</Text>
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
             <LiveUploadPill liveId={liveId} />
@@ -986,6 +995,7 @@ const styles = StyleSheet.create({
   proText: { color: palette.text, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8 },
   rec: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 22 },
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.rec },
+  recDotStarting: { backgroundColor: palette.muted },
   recText: { color: palette.text, fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
   badge: { color: '#000', backgroundColor: palette.accent, fontSize: 10, fontFamily: font.monoSemibold, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
 
