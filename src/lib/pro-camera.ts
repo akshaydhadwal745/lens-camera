@@ -57,6 +57,10 @@ export type ProSettings = {
   level: boolean;
   grid: Grid;
   guide: Guide;
+  /** Normal camera: rule-of-thirds grid (Settings → Camera; off by default). PRO has its own grid choice. */
+  normalGrid: boolean;
+  /** Front camera: save as previewed (mirrored), like the stock camera. Settings → Camera. */
+  mirrorSelfies: boolean;
 };
 
 export const DEFAULT_SETTINGS: ProSettings = {
@@ -101,6 +105,8 @@ export const DEFAULT_SETTINGS: ProSettings = {
   level: true,
   grid: 'thirds',
   guide: 'off',
+  normalGrid: false,
+  mirrorSelfies: true,
 };
 
 /**
@@ -131,7 +137,7 @@ export function effectiveSettings(s: ProSettings): ProSettings {
     zebra: false,
     falseColor: false,
     level: false,
-    grid: 'off',
+    grid: s.normalGrid ? 'thirds' : 'off',
     guide: 'off',
   };
 }
@@ -219,6 +225,11 @@ export const BUILT_IN_PRESETS: Preset[] = [
 
 export function loadSettings(): ProSettings {
   return { ...DEFAULT_SETTINGS, ...loadDoc<Partial<ProSettings>>('pro-camera', {}) };
+}
+
+/** Settings → Camera (outside the camera screen): change one Normal-camera option in the saved settings. */
+export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies'>(key: K, value: ProSettings[K]) {
+  saveSettings({ ...loadSettings(), [key]: value });
 }
 
 export function saveSettings(settings: ProSettings) {

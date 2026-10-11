@@ -37,6 +37,20 @@ first guess; the Quality Lab / self-test data will tune them.
 - **Long-press**: lock. The badge says what this camera could hold: `AE/AF LOCK`,
   `AE LOCK` (fixed-focus cameras) or `AF LOCK` (cameras without AE lock). Tap anywhere to unlock.
 
+### Grid and level
+
+- **Grid**: Settings → Camera → Grid (rule of thirds; off by default). PRO has its own grid/guides.
+- **Smart level** (Normal): the level line appears only while the phone is within 8°
+  of straight, turns yellow when level, and fades 1.5 s later. Tilt on purpose and it
+  stays out of the way. PRO keeps the always-on level (toggle in MONITOR).
+
+### Mirror selfies
+
+Settings → Camera → **Mirror selfies** (on by default): front-camera photos and
+videos are saved the way the preview showed them. Photos get a lossless EXIF
+flip (the pixels stay as the sensor took them); video is mirrored in the camera
+pipeline. Off saves true-to-life (text reads correctly).
+
 ### Volume buttons
 
 Volume up/down (and the camera key, and Bluetooth selfie remotes) work like the

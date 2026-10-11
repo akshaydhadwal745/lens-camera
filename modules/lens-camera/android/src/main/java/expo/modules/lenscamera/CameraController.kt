@@ -26,6 +26,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.DynamicRange
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
+import androidx.camera.core.MirrorMode
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.MeteringPoint
 import androidx.camera.core.Preview
@@ -79,6 +80,8 @@ data class CameraConfig(
   val raw: Boolean = false,
   /** Photo mode: Ultra HDR JPEG (Android 14+, where supported). */
   val hdrPhoto: Boolean = true,
+  /** Front camera: save photos and videos as previewed (mirrored). Photos get a lossless EXIF flip. */
+  val mirrorFront: Boolean = true,
   /**
    * Quality Lab only (docs/research/camera-quality.md): bind one of the phone
    * maker's extension modes ("auto", "hdr", "night", "bokeh", "faceRetouch")
@@ -95,7 +98,8 @@ data class CameraConfig(
     position != old.position || lens != old.lens || isVideo != old.isVideo || isNight != old.isNight ||
       mode != old.mode || raw != old.raw || hdrPhoto != old.hdrPhoto ||
       extension != old.extension || captureMode != old.captureMode ||
-      (isVideo && (videoResolution != old.videoResolution || hdrVideo != old.hdrVideo || fps != old.fps || stabilization != old.stabilization))
+      (isVideo && (videoResolution != old.videoResolution || hdrVideo != old.hdrVideo || fps != old.fps || stabilization != old.stabilization ||
+        (position == "front" && mirrorFront != old.mirrorFront)))
 }
 
 class CameraException(message: String) : Exception(message)
@@ -353,6 +357,8 @@ class CameraController(private val context: Context) {
         .setQualitySelector(QualitySelector.from(wanted, FallbackStrategy.lowerQualityOrHigherThan(wanted)))
         .build()
       val builder = VideoCapture.Builder(recorder).setDynamicRange(range).setTargetRotation(targetRotation)
+        // Front camera video as previewed (mirrored in the camera pipeline, no extra cost) or true-to-life.
+        .setMirrorMode(if (config.mirrorFront) MirrorMode.MIRROR_MODE_ON_FRONT_ONLY else MirrorMode.MIRROR_MODE_OFF)
       if (video.fps != 30) videoFrameRate(cam, video.fps)?.let { builder.setTargetFrameRate(it) }
       if (video.stabilized && caps.isStabilizationSupported) builder.setVideoStabilizationEnabled(true)
       videoCapture = builder.build().also { group.addUseCase(it) }
@@ -688,7 +694,7 @@ class CameraController(private val context: Context) {
     val raw = photoFormat == ImageCapture.OUTPUT_FORMAT_RAW
     val file = File(outputDir(), "lens-${UUID.randomUUID()}.${if (raw) "dng" else "jpg"}")
     capture.takePicture(
-      ImageCapture.OutputFileOptions.Builder(file).build(),
+      outputOptions(file),
       io,
       object : ImageCapture.OnImageSavedCallback {
         override fun onImageSaved(output: ImageCapture.OutputFileResults) {
@@ -727,7 +733,7 @@ class CameraController(private val context: Context) {
     fun next() {
       val file = File(dir, "${shots.size}.jpg")
       capture.takePicture(
-        ImageCapture.OutputFileOptions.Builder(file).build(),
+        outputOptions(file),
         io,
         object : ImageCapture.OnImageSavedCallback {
           override fun onImageSaved(output: ImageCapture.OutputFileResults) {
@@ -838,6 +844,13 @@ class CameraController(private val context: Context) {
   }
 
   // ---------- Helpers ----------
+
+  /** Where a photo goes; front-camera photos are flipped (EXIF only, no re-encode) when saving as previewed. */
+  private fun outputOptions(file: File): ImageCapture.OutputFileOptions {
+    val metadata = ImageCapture.Metadata()
+    metadata.isReversedHorizontal = facts?.facingFront == true && config.mirrorFront
+    return ImageCapture.OutputFileOptions.Builder(file).setMetadata(metadata).build()
+  }
 
   private fun outputDir() = File(context.cacheDir, "LensCamera").apply { mkdirs() }
 

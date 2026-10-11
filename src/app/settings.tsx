@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Href, router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,6 +32,7 @@ import {
   unlinkBrowser,
   useStore,
 } from '@/lib/store';
+import { loadSettings, setCameraOption } from '@/lib/pro-camera';
 import { font, palette, type as typeStyle } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
@@ -56,6 +57,17 @@ function Row({ label, value, icon }: { label: string; value: string; icon?: keyo
       {icon ? <Ionicons name={icon} size={18} color={palette.muted} /> : null}
       <Text style={[styles.rowLabel, icon && { flex: 1 }]}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
+}
+
+/** An on/off option (with an icon, so it lines up with the LinkRows in the same card). */
+function SwitchRow({ icon, label, value, onChange }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <View style={styles.row}>
+      <Ionicons name={icon} size={18} color={palette.muted} />
+      <Text style={[styles.rowLabel, { flex: 1 }]}>{label}</Text>
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: palette.link, false: palette.surface3 }} thumbColor="#fff" />
     </View>
   );
 }
@@ -293,6 +305,8 @@ function ComputersSection() {
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const [normalGrid, setNormalGrid] = useState(() => loadSettings().normalGrid);
+  const [mirrorSelfies, setMirrorSelfies] = useState(() => loadSettings().mirrorSelfies);
   const identity = useStore((s) => s.identity);
   const usage = useStore((s) => s.usage);
   const online = useStore((s) => s.online);
@@ -465,6 +479,18 @@ export default function SettingsScreen() {
 
             {Platform.OS === 'android' && isProCameraAvailable && (
               <Section title="Camera">
+                <SwitchRow icon="grid-outline" label="Grid" value={normalGrid} onChange={(v) => { setNormalGrid(v); setCameraOption('normalGrid', v); }} />
+                <View style={styles.divider} />
+                <SwitchRow
+                  icon="person-circle-outline"
+                  label="Mirror selfies"
+                  value={mirrorSelfies}
+                  onChange={(v) => {
+                    setMirrorSelfies(v);
+                    setCameraOption('mirrorSelfies', v);
+                  }}
+                />
+                <View style={styles.divider} />
                 <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
               </Section>
             )}

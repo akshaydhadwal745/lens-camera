@@ -26,17 +26,28 @@ export const Histogram = memo(function Histogram({ data }: { data: AnalysisResul
   );
 });
 
-/** Horizon level from the accelerometer (portrait orientation). */
-export function LevelIndicator() {
+/**
+ * Horizon level from the accelerometer (portrait orientation). `smart` (Normal
+ * camera): only while you're trying to hold it straight (within 8° of level),
+ * yellow when level, then it fades after 1.5 s; hidden at a deliberate tilt.
+ */
+export function LevelIndicator({ smart = false }: { smart?: boolean } = {}) {
   const [roll, setRoll] = useState(0);
   const [flat, setFlat] = useState(false);
+  const [levelSince, setLevelSince] = useState<number | null>(null);
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
     Accelerometer.setUpdateInterval(60);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       // When the phone lies flat, roll is meaningless.
       setFlat(Math.abs(z) > 0.85);
-      setRoll((Math.atan2(x, -y) * 180) / Math.PI);
+      const r = (Math.atan2(x, -y) * 180) / Math.PI;
+      setRoll(r);
+      const isLevel = Math.abs(r - Math.round(r / 90) * 90) < 1;
+      const t = Date.now();
+      setNow(t);
+      setLevelSince((since) => (isLevel ? (since ?? t) : null));
     });
     return () => sub.remove();
   }, []);
@@ -46,6 +57,7 @@ export function LevelIndicator() {
   const nearest = Math.round(roll / 90) * 90;
   const offset = roll - nearest;
   const level = Math.abs(offset) < 1;
+  if (smart && (Math.abs(offset) > 8 || (levelSince !== null && now - levelSince > 1500))) return null;
   return (
     <View style={styles.levelWrap} pointerEvents="none">
       <View style={[styles.levelSide, level && styles.levelOn]} />

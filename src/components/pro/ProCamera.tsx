@@ -94,6 +94,17 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // `stored`: what the user chose (saved). `s`: what the camera uses — with Pro
   // off, everything technical is automatic (effectiveSettings).
   const [stored, setS] = useState<ProSettings>(loadSettings);
+  // Settings → Camera changes options while this screen stays mounted: take them when coming back.
+  const [wasFocused, setWasFocused] = useState(isFocused);
+  if (isFocused !== wasFocused) {
+    setWasFocused(isFocused);
+    if (isFocused) {
+      const saved = loadSettings();
+      if (saved.normalGrid !== stored.normalGrid || saved.mirrorSelfies !== stored.mirrorSelfies) {
+        setS((prev) => ({ ...prev, normalGrid: saved.normalGrid, mirrorSelfies: saved.mirrorSelfies }));
+      }
+    }
+  }
   const s = useMemo(() => effectiveSettings(stored), [stored]);
   // Simple mode: low light switches photos to a multi-frame Night shot by itself.
   const [lowLight, setLowLight] = useState(false);
@@ -120,7 +131,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [focus, setFocus] = useState<{ x: number; y: number; n: number; ev: number; visible: boolean } | null>(null);
   const tapEv = focus?.ev ?? 0;
   const focusMark = focus?.visible ? focus : null;
-  useEffect(() => console.log('LENSDBG ev', tapEv, 'visible', !!focus?.visible), [tapEv, focus?.visible]); // TEMP
   // Long-press lock: what this camera could hold ("AE/AF", "AE" or "AF"), or null.
   const [lockLabel, setLockLabel] = useState<string | null>(null);
   // A new camera or mode starts unlocked at normal brightness (the camera re-binds).
@@ -521,6 +531,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             portraitAperture={s.portraitAperture}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
+            mirrorFront={s.mirrorSelfies}
             torch={s.mode === 'video' && s.torch}
             zoom={s.zoom}
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
@@ -570,9 +581,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
           <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />
 
-          {s.level && (
+          {/* PRO: the level toggle. Normal: a smart level that shows only when nearly straight. */}
+          {(s.level || !stored.pro) && (
             <View style={[StyleSheet.absoluteFill, styles.center, { paddingRight: clearTray }]} pointerEvents="none">
-              <LevelIndicator />
+              <LevelIndicator smart={!stored.pro} />
             </View>
           )}
 

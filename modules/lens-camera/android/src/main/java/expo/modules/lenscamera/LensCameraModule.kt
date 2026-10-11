@@ -85,6 +85,7 @@ class LensCameraModule : Module() {
       Prop("lensPosition") { view: LensCameraView, value: Double -> view.config = view.config.copy(lensPosition = value) }
       Prop("raw") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(raw = value) }
       Prop("hdrPhoto") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(hdrPhoto = value) }
+      Prop("mirrorFront") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(mirrorFront = value) }
       Prop("extension") { view: LensCameraView, value: String -> view.config = view.config.copy(extension = value) }
       Prop("captureMode") { view: LensCameraView, value: String -> view.config = view.config.copy(captureMode = value) }
       Prop("analysis") { view: LensCameraView, value: AnalysisProps ->
