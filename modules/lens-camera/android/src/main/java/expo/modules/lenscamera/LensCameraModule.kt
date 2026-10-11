@@ -132,6 +132,14 @@ class LensCameraModule : Module() {
         view.focus(x, y, lock = true)
       }.runOnQueue(Queues.MAIN)
 
+      AsyncFunction("startTimeLapse") { view: LensCameraView, promise: Promise ->
+        view.startTimeLapse(promise)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("stopTimeLapse") { view: LensCameraView ->
+        view.stopTimeLapse()
+      }.runOnQueue(Queues.MAIN)
+
       AsyncFunction("pauseRecording") { view: LensCameraView ->
         view.pauseRecording()
       }.runOnQueue(Queues.MAIN)

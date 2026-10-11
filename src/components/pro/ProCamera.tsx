@@ -258,7 +258,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const autoNight = nightCandidate && !nightOff;
   // Whether the top-left glass pill has anything in it (else it's hidden).
   // (Photo modes always have the timer; video has the torch when the camera does.)
-  const hasTools = stored.pro || nightCandidate || s.mode !== 'video' || caps?.torch !== false;
+  const hasTools = stored.pro || nightCandidate || (s.mode !== 'video' && s.mode !== 'timelapse') || (s.mode === 'video' && caps?.torch !== false);
 
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
@@ -339,6 +339,31 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       });
   };
 
+  /** Time-lapse: start/stop; the clip saves like a video (look as a removable edit). */
+  const toggleTimeLapse = () => {
+    const cam = cameraRef.current;
+    if (!cam?.startTimeLapse || !cam.stopTimeLapse) return;
+    haptic();
+    if (recording) {
+      void cam.stopTimeLapse();
+      return;
+    }
+    setRecording(true);
+    setElapsed(0);
+    setRecLive(true);
+    const recipe = captureRecipe(false, 'video');
+    cam
+      .startTimeLapse()
+      .then((clip) => {
+        capture({ kind: 'video', sourceUri: clip.uri, duration: clip.duration, edit: recipe });
+      })
+      .catch((error) => Alert.alert('Time-lapse', error instanceof Error ? error.message : String(error)))
+      .finally(() => {
+        setRecording(false);
+        setRecLive(false);
+      });
+  };
+
   const togglePause = () => {
     const cam = cameraRef.current;
     if (!cam?.pauseRecording || !cam.resumeRecording) return;
@@ -350,6 +375,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   const onShutter = () => {
     if (s.mode === 'video') return toggleRecording();
+    if (s.mode === 'timelapse') return toggleTimeLapse();
     if (countdown !== null) {
       if (countdownTimer.current) clearInterval(countdownTimer.current);
       countdownTimer.current = null;
@@ -520,8 +546,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const manualExposureAvailable = caps?.manualExposure !== false;
   // Android reports which modes the phone supports; iOS supports all four.
   // Simple mode: no Night button (low light is handled automatically).
-  const modes = (['night', 'video', 'photo', 'portrait'] as const).filter(
-    (m) => (!caps?.modes || caps.modes.includes(m)) && (stored.pro || m !== 'night'),
+  // Time-lapse only where the camera reports it; the others default to available.
+  const modes = (['timelapse', 'night', 'video', 'photo', 'portrait'] as const).filter(
+    (m) => (m === 'timelapse' ? !!caps?.modes?.includes(m) : !caps?.modes || caps.modes.includes(m)) && (stored.pro || m !== 'night'),
   );
 
   return (
@@ -647,7 +674,15 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         {recording ? (
           <View style={styles.rec}>
             <View style={[styles.recDot, !recLive && styles.recDotStarting, paused && styles.recDotPaused]} />
-            <Text style={styles.recText}>{!recLive ? 'Starting…' : paused ? `${formatDuration(elapsed)} · PAUSED` : formatDuration(elapsed)}</Text>
+            <Text style={styles.recText}>
+              {!recLive
+                ? 'Starting…'
+                : paused
+                  ? `${formatDuration(elapsed)} · PAUSED`
+                  : s.mode === 'timelapse'
+                    ? `${formatDuration(elapsed)} → ${formatDuration(Math.round(timeLapseClipSeconds(elapsed)))}`
+                    : formatDuration(elapsed)}
+            </Text>
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
             <LiveUploadPill liveId={liveId} />
@@ -664,7 +699,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                     onPress={() => update({ flash: s.flash === 'off' ? 'auto' : s.flash === 'auto' ? 'on' : 'off' })}
                   />
                 )
-              ) : s.mode === 'night' ? null : (
+              ) : s.mode === 'night' || s.mode === 'timelapse' ? null : (
                 caps?.torch !== false && (
                   <TopButton icon={s.torch ? 'flashlight' : 'flashlight-outline'} label="TORCH" active={s.torch} onPress={() => update({ torch: !s.torch })} />
                 )
@@ -690,7 +725,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
                 />
               )}
-              {s.mode !== 'video' && (
+              {s.mode !== 'video' && s.mode !== 'timelapse' && (
                 <TopButton
                   icon="timer-outline"
                   label={s.timer ? `${s.timer}s` : 'OFF'}
@@ -892,12 +927,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onPress={onShutter}
             disabled={busy || !caps}
             style={({ pressed }) => [styles.shutter, (autoNight || s.mode === 'night') && styles.shutterNight, pressed && { transform: [{ scale: 0.94 }] }]}
-            accessibilityLabel={s.mode === 'video' ? (recording ? 'Stop recording' : 'Record') : 'Take photo'}
+            accessibilityLabel={s.mode === 'video' || s.mode === 'timelapse' ? (recording ? 'Stop recording' : 'Record') : 'Take photo'}
           >
-            <View style={[styles.shutterInner, s.mode === 'video' && styles.shutterVideo, recording && styles.shutterRec]} />
+            <View style={[styles.shutterInner, (s.mode === 'video' || s.mode === 'timelapse') && styles.shutterVideo, recording && styles.shutterRec]} />
           </Pressable>
 
-          {recording && Platform.OS === 'android' ? (
+          {recording && Platform.OS === 'android' && s.mode === 'video' ? (
             // While recording, the flip spot pauses/resumes (flipping can't happen mid-recording).
             <Pressable
               onPress={togglePause}
@@ -1067,12 +1102,31 @@ function ModeStrip<M extends string>({ modes, mode, disabled, onSelect }: { mode
               setItems((prev) => (prev[m]?.x === x && prev[m]?.w === w ? prev : { ...prev, [m]: { x, w } }));
             }}
           >
-            <Text style={[styles.modeText, mode === m && styles.modeOn]}>{m.toUpperCase()}</Text>
+            <Text style={[styles.modeText, mode === m && styles.modeOn]}>{m === 'timelapse' ? 'TIME-LAPSE' : m.toUpperCase()}</Text>
           </Pressable>
         ))}
       </Animated.View>
     </View>
   );
+}
+
+/** Clip length a time-lapse of `seconds` makes (same schedule as TimeLapseEncoder.intervalMs; 30 fps). */
+function timeLapseClipSeconds(seconds: number): number {
+  const stages: [number, number][] = [
+    [60, 0.5],
+    [300, 1],
+    [1200, 2],
+    [Infinity, 4],
+  ];
+  let frames = 0;
+  let from = 0;
+  for (const [until, interval] of stages) {
+    const span = Math.max(0, Math.min(seconds, until) - from);
+    frames += span / interval;
+    from = until;
+    if (seconds <= until) break;
+  }
+  return frames / 30;
 }
 
 /** Exposure compensation within what this camera allows. */

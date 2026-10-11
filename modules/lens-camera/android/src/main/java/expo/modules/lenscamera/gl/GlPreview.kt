@@ -115,6 +115,20 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var accumValid = false
   private var nightLift = 1f
   private var nightLiftTarget = 1f
+  // Time-lapse (GL thread): encoder fed with viewfinder frames at growing intervals.
+  @Volatile private var recordable = false
+  /** This phone's GPU can feed a video encoder (time-lapse). Known once GL has started. */
+  val canTimeLapse get() = recordable && !failed
+  private var timeLapse: TimeLapseEncoder? = null
+  private var timeLapseSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+  private var timeLapseStart = 0L
+  private var timeLapseLast = 0L
+  private var timeLapseDone: ((Result<Map<String, Any?>>) -> Unit)? = null
+  private var timeLapseFile: java.io.File? = null
+  private val timeLapseUv = FloatArray(16)
+  // Deflicker: frame brightness vs its running average (from the 96×72 analysis).
+  private var meanLuma = -1f
+  private var smoothLuma = -1f
   private val livePortrait = LivePortrait().also { live ->
     live.onMask = { mask, w, h, subject -> gl.post { uploadMask(mask, w, h, subject) } }
   }
@@ -141,7 +155,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
   private fun setUpGl() {
     try {
-      val core = EglCore()
+      // Recordable, so time-lapse can draw into a video encoder's surface; plain config if a phone refuses.
+      val core = runCatching { EglCore(recordable = true) }.getOrNull()?.also { recordable = true } ?: EglCore()
       egl = core
       pbuffer = core.pbuffer()
       core.makeCurrent(pbuffer)
@@ -287,7 +302,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       val now = SystemClock.uptimeMillis()
       val a = analysis
       val night = nightPreview
-      if (((a.histogram && onHistogram != null) || night) && now - lastAnalysis >= 250) {
+      val lapse = timeLapse != null
+      if (((a.histogram && onHistogram != null) || night || lapse) && now - lastAnalysis >= 250) {
         lastAnalysis = now
         runAnalysis(a.histogram && onHistogram != null, night)
       }
@@ -352,6 +368,10 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       core.setPresentationTime(window, st.timestamp)
       core.swap(window)
       framesDrawn++
+      if (lapse && now - timeLapseLast >= TimeLapseEncoder.intervalMs(now - timeLapseStart)) {
+        timeLapseLast = now
+        drawTimeLapseFrame(core)
+      }
       if (firstFrame) {
         firstFrame = false
         Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees target $targetRotation cameraTransform $hasCameraTransform (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")
@@ -399,7 +419,18 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
    * Earlier versions combined rotationDegrees with the angle read back out of
    * stMatrix; that depended on the phone and on sign guesses (dev-23…30).
    */
+  /** Viewfinder: uv matrix for the view, plus the tap-to-focus mapping. */
   private fun computeUvMatrix() {
+    computeUvMatrix(viewWidth, viewHeight, uvMatrix)
+    // Tap-to-focus uses exactly what the shader samples: the texture
+    // coordinate, which is the buffer position (origin top-left).
+    val m = FloatArray(16)
+    Matrix.multiplyMM(m, 0, stMatrix, 0, uvMatrix, 0)
+    focusMatrix = m
+  }
+
+  /** The same mapping for any target size (aspect-fill crop), e.g. the 16:9 time-lapse frame. */
+  private fun computeUvMatrix(targetW: Int, targetH: Int, out: FloatArray) {
     val degrees = if (hasCameraTransform) {
       Math.floorMod(-surfaceDegrees(targetRotation), 360)
     } else {
@@ -409,20 +440,15 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     val rotated = rotationDegrees % 180 != 0
     val bw = (if (rotated) bufferSize.height else bufferSize.width).toFloat()
     val bh = (if (rotated) bufferSize.width else bufferSize.height).toFloat()
-    val scale = max(viewWidth / bw, viewHeight / bh)
-    val fx = viewWidth / (bw * scale)
-    val fy = viewHeight / (bh * scale)
-    Matrix.setIdentityM(uvMatrix, 0)
-    Matrix.translateM(uvMatrix, 0, 0.5f, 0.5f, 0f)
-    Matrix.rotateM(uvMatrix, 0, degrees.toFloat(), 0f, 0f, 1f)
-    if (mirror) Matrix.scaleM(uvMatrix, 0, -1f, 1f, 1f)
-    Matrix.scaleM(uvMatrix, 0, fx, fy, 1f)
-    Matrix.translateM(uvMatrix, 0, -0.5f, -0.5f, 0f)
-    // Tap-to-focus uses exactly what the shader samples: the texture
-    // coordinate, which is the buffer position (origin top-left).
-    val m = FloatArray(16)
-    Matrix.multiplyMM(m, 0, stMatrix, 0, uvMatrix, 0)
-    focusMatrix = m
+    val scale = max(targetW / bw, targetH / bh)
+    val fx = targetW / (bw * scale)
+    val fy = targetH / (bh * scale)
+    Matrix.setIdentityM(out, 0)
+    Matrix.translateM(out, 0, 0.5f, 0.5f, 0f)
+    Matrix.rotateM(out, 0, degrees.toFloat(), 0f, 0f, 1f)
+    if (mirror) Matrix.scaleM(out, 0, -1f, 1f, 1f)
+    Matrix.scaleM(out, 0, fx, fy, 1f)
+    Matrix.translateM(out, 0, -0.5f, -0.5f, 0f)
   }
 
   private fun surfaceDegrees(rotation: Int) = when (rotation) {
@@ -440,6 +466,102 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private fun stMatrixRotation(): Int {
     val angle = Math.toDegrees(kotlin.math.atan2(-stMatrix[1].toDouble(), stMatrix[0].toDouble()))
     return Math.floorMod((Math.round(angle / 90.0) * 90).toInt(), 360)
+  }
+
+  // ---------- Time-lapse ----------
+
+  /**
+   * Start a time-lapse into [file]: 16:9 in the screen's orientation (what the
+   * viewfinder shows, cropped to 16:9), up to 1920 px on the long side.
+   * [done] gets { uri, duration, frames } when [stopTimeLapse] finishes it.
+   */
+  fun startTimeLapse(file: java.io.File, done: (Result<Map<String, Any?>>) -> Unit) {
+    gl.post {
+      val core = egl
+      if (core == null || failed || !recordable) {
+        done(Result.failure(IllegalStateException("Time-lapse isn't available on this phone (no recordable GPU surface).")))
+        return@post
+      }
+      if (timeLapse != null) {
+        done(Result.failure(IllegalStateException("Already recording a time-lapse.")))
+        return@post
+      }
+      try {
+        val landscape = viewWidth >= viewHeight
+        // Long side: the camera buffer's long side, at most 1920 (never upscale), even numbers.
+        val long = minOf(1920, max(bufferSize.width, bufferSize.height)).let { it - it % 2 }
+        val short = (long * 9 / 16).let { it - it % 2 }
+        val (w, h) = if (landscape) long to short else short to long
+        val encoder = TimeLapseEncoder(w, h, file)
+        timeLapseSurface = core.windowSurface(encoder.inputSurface)
+        timeLapse = encoder
+        timeLapseDone = done
+        timeLapseFile = file
+        timeLapseStart = SystemClock.uptimeMillis()
+        timeLapseLast = 0L
+        smoothLuma = -1f
+        Log.i(TAG, "time-lapse ${w}x$h")
+      } catch (e: Exception) {
+        Log.w(TAG, "time-lapse start failed", e)
+        done(Result.failure(e))
+      }
+    }
+  }
+
+  fun stopTimeLapse() {
+    gl.post {
+      val encoder = timeLapse ?: return@post
+      timeLapse = null
+      val done = timeLapseDone
+      timeLapseDone = null
+      egl?.let { core ->
+        core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+        if (timeLapseSurface != EGL14.EGL_NO_SURFACE) core.releaseSurface(timeLapseSurface)
+      }
+      timeLapseSurface = EGL14.EGL_NO_SURFACE
+      val frames = encoder.frames
+      val duration = encoder.finish()
+      val file = timeLapseFile
+      timeLapseFile = null
+      if (duration > 0 && file != null) {
+        done?.invoke(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to duration, "frames" to frames)))
+      } else {
+        done?.invoke(Result.failure(IllegalStateException("The time-lapse was too short (no frames).")))
+      }
+    }
+  }
+
+  /** One frame into the encoder: the camera frame, upright, 16:9, brightness evened out (deflicker). */
+  private fun drawTimeLapseFrame(core: EglCore) {
+    val encoder = timeLapse ?: return
+    try {
+      core.makeCurrent(timeLapseSurface)
+      computeUvMatrix(encoder.width, encoder.height, timeLapseUv)
+      GLES20.glViewport(0, 0, encoder.width, encoder.height)
+      GLES20.glUseProgram(copyProgram)
+      GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+      GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
+      GLES20.glUniform1i(GLES20.glGetUniformLocation(copyProgram, "uCam"), 0)
+      GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uTexMatrix"), 1, false, stMatrix, 0)
+      GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uUvMatrix"), 1, false, timeLapseUv, 0)
+      // No neighbour averaging for the video (full sharpness).
+      GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), 0f, 0f)
+      // Deflicker: pull this frame's brightness toward the running average (±15 % at most).
+      val mean = meanLuma
+      val gain = if (mean > 1f) {
+        smoothLuma = if (smoothLuma < 0f) mean else smoothLuma * 0.85f + mean * 0.15f
+        (smoothLuma / mean).coerceIn(0.87f, 1.15f)
+      } else 1f
+      GLES20.glUniform1f(GLES20.glGetUniformLocation(copyProgram, "uGain"), gain)
+      GlUtil.drawQuad(copyProgram)
+      core.setPresentationTime(timeLapseSurface, encoder.nextPresentationNs())
+      core.swap(timeLapseSurface)
+      encoder.frameDrawn()
+    } catch (e: Exception) {
+      Log.w(TAG, "time-lapse frame failed", e)
+    } finally {
+      core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+    }
   }
 
   // ---------- Night ----------
@@ -536,6 +658,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uUvMatrix"), 1, false, uvMatrix, 0)
     // Average 4 nearby camera pixels per output pixel: a smoother small copy.
     GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), 1f / 720f, 1f / 720f)
+    GLES20.glUniform1f(GLES20.glGetUniformLocation(copyProgram, "uGain"), 1f)
     GlUtil.drawQuad(copyProgram)
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
   }
@@ -593,13 +716,16 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     val counts = IntArray(256)
     var low = 0
     var high = 0
+    var sum = 0L
     for (i in 0 until AW * AH) {
       val l = analysisPixels.get(i * 4).toInt() and 0xFF // luma is written to red
+      sum += l
       bins[l shr 2]++
       counts[l]++
       if (l <= 4) low++
       if (l >= 251) high++
     }
+    meanLuma = sum.toFloat() / (AW * AH)
     if (night) {
       // Same lift as the night photo (NightMerge.shadowLift on the median brightness).
       var seen = 0
@@ -632,6 +758,10 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   fun release() {
     livePortrait.close()
     gl.post {
+      timeLapse?.cancel()
+      timeLapse = null
+      timeLapseDone?.invoke(Result.failure(IllegalStateException("Camera closed")))
+      timeLapseDone = null
       deleteTarget(blurTexture, blurFbo)
       deleteTarget(segTexture, segFbo)
       for (i in 0..1) deleteTarget(accumTex[i], accumFbo[i])
@@ -763,10 +893,11 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       varying vec2 vTex;
       uniform samplerExternalOES uCam;
       uniform vec2 uStep;
+      uniform float uGain;
       void main() {
         vec3 c = texture2D(uCam, vTex + vec2(uStep.x, uStep.y)).rgb + texture2D(uCam, vTex + vec2(-uStep.x, uStep.y)).rgb
           + texture2D(uCam, vTex + vec2(uStep.x, -uStep.y)).rgb + texture2D(uCam, vTex + vec2(-uStep.x, -uStep.y)).rgb;
-        gl_FragColor = vec4(c * 0.25, 1.0);
+        gl_FragColor = vec4(clamp(c * 0.25 * uGain, 0.0, 1.0), 1.0);
       }
     """
 

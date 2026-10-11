@@ -3,7 +3,8 @@ import { ComponentType, forwardRef, Ref } from 'react';
 import { NativeSyntheticEvent, Platform, ViewProps } from 'react-native';
 
 export type Lens = 'ultraWide' | 'wide' | 'telephoto';
-export type CameraMode = 'photo' | 'video' | 'night' | 'portrait';
+/** 'timelapse': Android, only where the camera reports it (GPU viewfinder frames into a video encoder). */
+export type CameraMode = 'photo' | 'video' | 'night' | 'portrait' | 'timelapse';
 export type Stabilization = 'off' | 'standard' | 'cinematic' | 'extended';
 
 export type Capabilities = {
@@ -171,6 +172,9 @@ export type LensCameraHandle = {
   stopRecording(): Promise<void>;
   /** Android: pause/resume the current recording (one file; paused time isn't recorded). */
   pauseRecording?(): Promise<boolean>;
+  /** Android, mode 'timelapse': resolves with the clip when stopTimeLapse() finishes it. */
+  startTimeLapse?(): Promise<{ uri: string; duration: number; frames: number }>;
+  stopTimeLapse?(): Promise<void>;
   resumeRecording?(): Promise<boolean>;
   focusAt(x: number, y: number): Promise<void>;
   /** Android: long-press lock at x/y (fractions of the view); resolves what this camera could lock. */

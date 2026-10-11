@@ -125,7 +125,10 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
     controller.onReady = { caps ->
       updatePreviewModes() // the Night extension is only known once the camera is bound
-      onReady(caps + mapOf("liveLooks" to (glPreview != null)))
+      // Time-lapse is made from GPU viewfinder frames: offered only where that works.
+      @Suppress("UNCHECKED_CAST")
+      val modes = (caps["modes"] as? List<String>).orEmpty() + if (glPreview?.canTimeLapse == true) listOf("timelapse") else emptyList()
+      onReady(caps + mapOf("liveLooks" to (glPreview != null), "modes" to modes))
     }
     controller.onError = { message, fatal -> onError(mapOf("message" to message, "fatal" to fatal)) }
     controller.onRecordingStarted = { delayMs -> onRecordingStarted(mapOf("delayMs" to delayMs)) }
@@ -298,6 +301,24 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   fun stopRecording() = controller.stopRecording()
+
+  /**
+   * Time-lapse (mode "timelapse"): frames from the viewfinder into a 30 fps MP4,
+   * further apart the longer it runs. Resolves when [stopTimeLapse] finishes the file.
+   */
+  fun startTimeLapse(promise: Promise) {
+    val gl = glPreview ?: return promise.reject("ERR_TIMELAPSE", "Time-lapse needs the GPU viewfinder, which isn't available on this phone.", null)
+    // <cache>/Camera like videos (the app moves captures into its own store).
+    val dir = java.io.File(context.cacheDir, "Camera").apply { mkdirs() }
+    val file = java.io.File(dir, "timelapse-${java.util.UUID.randomUUID()}.mp4")
+    gl.startTimeLapse(file) { result ->
+      result.fold({ promise.resolve(it) }, { promise.reject("ERR_TIMELAPSE", it.message, it) })
+    }
+  }
+
+  fun stopTimeLapse() {
+    glPreview?.stopTimeLapse()
+  }
 
   fun pauseRecording() = controller.pauseRecording()
 

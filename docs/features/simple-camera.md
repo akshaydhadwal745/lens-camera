@@ -59,6 +59,16 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Time-lapse
+
+**TIME-LAPSE** mode (phones whose GPU can feed the video encoder; the mode is
+hidden elsewhere). Press to start and stop; Lens decides the speed itself: a
+frame every 0.5 s for the first minute (15×), then 1 s (30×) up to 5 minutes,
+2 s (60×) up to 20 minutes, then 4 s (120×), so 10 minutes make about a
+17-second clip. Brightness changes between frames are smoothed (no flicker),
+the clip is 16:9 in the way you hold the phone, 30 fps, without sound. The REC
+pill shows real time → clip length.
+
 ### Pause while recording
 
 While a video records, the flip button turns into **pause**. Paused time isn't

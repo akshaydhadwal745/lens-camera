@@ -97,6 +97,7 @@ data class CameraConfig(
 ) {
   val isVideo get() = mode == "video"
   val isNight get() = mode == "night"
+  val isTimeLapse get() = mode == "timelapse"
 
   fun needsRebind(old: CameraConfig) =
     position != old.position || lens != old.lens || isVideo != old.isVideo || isNight != old.isNight ||
@@ -326,7 +327,8 @@ class CameraController(private val context: Context) {
   }
 
   private fun buildUseCases(cam: CameraFacts, video: BoundVideo): UseCaseGroup {
-    val ratio = if (config.isVideo) AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY else AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
+    // Video and time-lapse are 16:9 (time-lapse is made from these preview frames).
+    val ratio = if (config.isVideo || config.isTimeLapse) AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY else AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
     val previewBuilder = Preview.Builder()
       .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(ratio).build())
     // Night (our own merge): let auto exposure use slower frames for more light.
