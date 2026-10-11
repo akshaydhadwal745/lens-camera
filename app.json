@@ -100,7 +100,8 @@
       "expo-background-task",
       "./plugins/with-abi-splits.js",
       "./plugins/with-test-loop.js",
-      "./plugins/with-release-signing.js"
+      "./plugins/with-release-signing.js",
+      "./plugins/with-mlkit-models"
     ],
     "experiments": {
       "typedRoutes": true,
