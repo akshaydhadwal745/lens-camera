@@ -100,6 +100,17 @@ export type AnalysisSettings = {
   histogram: boolean;
 };
 
+/** A QR code seen in the viewfinder. */
+export type ScannedCode = {
+  kind: 'url' | 'wifi' | 'phone' | 'email' | 'text';
+  value: string;
+  url?: string;
+  ssid?: string | null;
+  password?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
+
 export type LensCameraProps = ViewProps & {
   active: boolean;
   /** Which camera. (Not `position`: on Android that name collides with the layout style.) */
@@ -122,6 +133,8 @@ export type LensCameraProps = ViewProps & {
   sceneSuggest?: boolean;
   /** Android: where the camera picture is drawn in the view (fractions [x, y, w, h]); black around it. Default: whole view. */
   frame?: [number, number, number, number];
+  /** Android, Photo mode: look for QR codes in the viewfinder (onCode). */
+  scanCodes?: boolean;
   /** Android, Photo mode: photos carry the ~3 s around the shot (Google Motion Photo format). */
   motionPhoto?: boolean;
   /** Android: a Night photo is coming (Night mode or auto Night): show the viewfinder brightened and averaged like the photo. */
@@ -169,6 +182,8 @@ export type LensCameraProps = ViewProps & {
   onRecordingAudio?: (e: NativeSyntheticEvent<{ state: 'ok' | 'silenced' | 'error'; external: boolean }>) => void;
   /** Android: a look that suits the scene (or null), from on-phone scene labels. */
   onSceneLook?: (e: NativeSyntheticEvent<{ look: string | null }>) => void;
+  /** Android: a QR code came into view (or left it: null). */
+  onCode?: (e: NativeSyntheticEvent<{ code: ScannedCode | null }>) => void;
   /** Android: a burst shot was saved (`count` so far). */
   onBurstShot?: (e: NativeSyntheticEvent<{ count: number }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */

@@ -324,6 +324,7 @@ export default function SettingsScreen() {
   const [mirrorSelfies, setMirrorSelfies] = useState(() => loadSettings().mirrorSelfies);
   const [saveLocation, setSaveLocation] = useState(() => loadSettings().saveLocation);
   const [shutterSound, setShutterSound] = useState(() => loadSettings().shutterSound);
+  const [scanCodes, setScanCodes] = useState(() => loadSettings().scanCodes);
   /** Opt-in location: ask for permission when switched on; stay off if refused. */
   const onSaveLocation = async (on: boolean) => {
     if (on) {
@@ -544,6 +545,21 @@ export default function SettingsScreen() {
                     setCameraOption('shutterSound', v);
                   }}
                 />
+                {Platform.OS === 'android' && (
+                  <>
+                    <View style={styles.divider} />
+                    <SwitchRow
+                      icon="qr-code-outline"
+                      label="Scan QR codes"
+                      hint="Point the camera at a code: a link appears to open it."
+                      value={scanCodes}
+                      onChange={(v) => {
+                        setScanCodes(v);
+                        setCameraOption('scanCodes', v);
+                      }}
+                    />
+                  </>
+                )}
                 <View style={styles.divider} />
                 <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
               </Section>

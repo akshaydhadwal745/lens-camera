@@ -52,7 +52,7 @@ class LensCameraModule : Module() {
     }
 
     View(LensCameraView::class) {
-      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot")
+      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot", "onCode")
 
       OnViewDidUpdateProps { view: LensCameraView -> view.applyProps() }
       OnViewDestroys { view: LensCameraView -> view.destroy() }
@@ -71,6 +71,7 @@ class LensCameraModule : Module() {
       Prop("portraitAperture") { view: LensCameraView, value: Double -> view.portraitAperture = value }
       Prop("portraitAuto") { view: LensCameraView, value: Boolean -> view.portraitAuto = value }
       Prop("sceneSuggest") { view: LensCameraView, value: Boolean -> view.sceneSuggest = value }
+      Prop("scanCodes") { view: LensCameraView, value: Boolean -> view.scanCodes = value }
       Prop("motionPhoto") { view: LensCameraView, value: Boolean -> view.motionPhoto = value }
       Prop("frame") { view: LensCameraView, value: List<Double>? -> view.frame = value }
       Prop("nightPreview") { view: LensCameraView, value: Boolean -> view.nightPreview = value }

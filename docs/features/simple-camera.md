@@ -179,6 +179,18 @@ Limits: no sound; ~+1.5 MB per photo (counts toward storage/upload, hence off by
 default); not with RAW, Night, Portrait, burst or "bake looks"; the cloud copy
 keeps the clip but only the phone that took it shows ▶ MOTION for now.
 
+## QR codes (checklist 9.3)
+
+Photo mode (Normal and PRO, Android) looks for QR codes a couple of times a
+second (ML Kit barcode scanning, the bundled library expo-camera already ships,
+on a sharp ~640 px copy of the viewfinder: `gl/QrScanner.kt`). A code shows
+after two reads in a row and goes after three misses (no flicker at the edge).
+One glass chip near the bottom of the frame says what a tap does:
+**host · Open** (web links only, `http(s)`), **Wi-Fi name · Copy password**,
+**number · Call**, **address · Email**, anything else **· Copy**. Other link
+schemes (intent:, javascript:, app links) are never opened, only copied.
+Settings → Camera → **Scan QR codes** (on by default).
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,

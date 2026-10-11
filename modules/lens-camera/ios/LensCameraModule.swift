@@ -70,6 +70,7 @@ public class LensCameraModule: Module {
       Prop("sceneSuggest") { (_: LensCameraView, _: Bool) in }
       Prop("frame") { (_: LensCameraView, _: [Double]?) in }
       Prop("motionPhoto") { (_: LensCameraView, _: Bool) in }
+      Prop("scanCodes") { (_: LensCameraView, _: Bool) in }
       Prop("hardwareShutter") { (_: LensCameraView, _: Bool) in }
       Prop("torch") { (view: LensCameraView, value: Bool) in
         view.config.torch = value

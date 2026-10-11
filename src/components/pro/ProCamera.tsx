@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useIsFocused } from 'expo-router';
@@ -19,6 +20,7 @@ import {
   LensCameraView,
   LensImaging,
   PhotoResult,
+  ScannedCode,
 } from '../../../modules/lens-camera';
 import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
@@ -136,7 +138,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     if (isFocused) {
       const saved = loadSettings();
       // Options set in Settings → Camera while this screen stayed mounted.
-      const keys = ['normalGrid', 'mirrorSelfies', 'saveLocation', 'shutterSound'] as const;
+      const keys = ['normalGrid', 'mirrorSelfies', 'saveLocation', 'shutterSound', 'scanCodes'] as const;
       if (keys.some((k) => saved[k] !== stored[k])) {
         setS((prev) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, saved[k]])) }));
       }
@@ -179,6 +181,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [burstCount, setBurstCount] = useState<number | null>(null);
   // Smart look suggestion for the scene (Normal camera, no look chosen).
   const [sceneLook, setSceneLook] = useState<string | null>(null);
+  // QR code in view (checklist 9.3): one chip, tap to act.
+  const [code, setCode] = useState<ScannedCode | null>(null);
   const [recAudio, setRecAudio] = useState<{ state: 'ok' | 'silenced' | 'error'; external: boolean } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   // Tap point + tap-to-expose in one state, so gestures update it functionally and
@@ -703,6 +707,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 ? [frameRect.x / previewSize.width, frameRect.y / previewSize.height, frameRect.w / previewSize.width, frameRect.h / previewSize.height]
                 : undefined
             }
+            scanCodes={s.scanCodes && s.mode === 'photo'}
+            onCode={(e) => setCode(e.nativeEvent.code)}
             motionPhoto={s.mode === 'photo' && s.motionPhoto && !!caps?.motionPhoto && !s.raw}
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
@@ -934,6 +940,25 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       {s.histogram && (
         <View style={[styles.histogramWrap, landscape ? { left: insets.left + 16, bottom: insets.bottom + 12 } : { right: 12, top: insets.top + 72 }]}>
           <Histogram data={analysis} />
+        </View>
+      )}
+
+      {code && s.mode === 'photo' && !recording && (
+        <View
+          style={[styles.notice, { top: Math.max(insets.top + 160, frameRect.y + frameRect.h - 64) }, landscape && { right: clearTray }]}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            onPress={() => void actOnCode(code, showNotice)}
+            style={styles.codeChip}
+            accessibilityRole="button"
+            accessibilityLabel={codeLabel(code)}
+          >
+            <Ionicons name={code.kind === 'url' ? 'link' : code.kind === 'wifi' ? 'wifi' : code.kind === 'phone' ? 'call' : code.kind === 'email' ? 'mail' : 'qr-code'} size={16} color={palette.accent} />
+            <Text style={styles.codeText} numberOfLines={1}>
+              {codeLabel(code)}
+            </Text>
+          </Pressable>
         </View>
       )}
 
@@ -1297,6 +1322,37 @@ function ModeStrip<M extends string>({ modes, mode, disabled, onSelect }: { mode
 }
 
 /** Clip length a time-lapse of `seconds` makes (same schedule as TimeLapseEncoder.intervalMs; 30 fps). */
+/** What the QR chip says: where it leads and what a tap does. */
+export function codeLabel(code: ScannedCode): string {
+  switch (code.kind) {
+    case 'url': {
+      const host = /^https?:\/\/([^/?#]+)/i.exec(code.url ?? code.value)?.[1];
+      return host ? `${host.replace(/^www\./, '')} · Open` : `${code.value.slice(0, 40)} · Copy`;
+    }
+    case 'wifi':
+      return `Wi-Fi ${code.ssid ?? ''}${code.password ? ' · Copy password' : ''}`.trim();
+    case 'phone':
+      return `${code.phone ?? code.value} · Call`;
+    case 'email':
+      return `${code.email ?? code.value} · Email`;
+    default:
+      return `${code.value.length > 40 ? `${code.value.slice(0, 40)}…` : code.value} · Copy`;
+  }
+}
+
+/** A tap on the QR chip: open web links, call, email; copy anything else (never opens other schemes). */
+async function actOnCode(code: ScannedCode, say: (message: string) => void) {
+  haptic(Haptics.ImpactFeedbackStyle.Light);
+  const url = code.url ?? code.value;
+  if (code.kind === 'url' && /^https?:\/\//i.test(url)) return Linking.openURL(url);
+  if (code.kind === 'phone' && code.phone) return Linking.openURL(`tel:${code.phone}`);
+  if (code.kind === 'email' && code.email) return Linking.openURL(`mailto:${code.email}`);
+  const text = code.kind === 'wifi' ? (code.password ?? '') : code.value;
+  if (!text) return;
+  await Clipboard.setStringAsync(text);
+  say(code.kind === 'wifi' ? 'Wi-Fi password copied' : 'Copied');
+}
+
 function timeLapseClipSeconds(seconds: number): number {
   const stages: [number, number][] = [
     [60, 0.5],
@@ -1374,6 +1430,8 @@ const styles = StyleSheet.create({
 
   histogramWrap: { position: 'absolute' },
   notice: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  codeChip: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: 300, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, overflow: 'hidden' },
+  codeText: { color: palette.text, fontSize: 14, fontFamily: font.medium, flexShrink: 1 },
   noticeText: { ...glass, color: palette.text, fontSize: 13, fontFamily: font.medium, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, overflow: 'hidden' },
   zoomBadge: {
     position: 'absolute',

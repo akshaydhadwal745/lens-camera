@@ -52,6 +52,8 @@ dependencies {
   implementation "com.google.android.gms:play-services-mlkit-image-labeling:16.0.8"
   // Smart burst: eyes open / smiles when picking the best shot (Play services; sharpness-only without it).
   implementation "com.google.android.gms:play-services-mlkit-face-detection:17.1.0"
+  // QR codes in the camera (checklist 9.3): the same bundled scanner expo-camera already ships (no extra size).
+  implementation "com.google.mlkit:barcode-scanning:17.3.0"
 
   testImplementation "junit:junit:4.13.2"
 }

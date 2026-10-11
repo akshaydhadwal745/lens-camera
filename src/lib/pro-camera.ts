@@ -73,6 +73,8 @@ export type ProSettings = {
   saveLocation: boolean;
   /** Camera sounds (on by default; the phone's silent mode mutes them unless the law requires one). */
   shutterSound: boolean;
+  /** Photo mode: show a chip for QR codes in view (Android). */
+  scanCodes: boolean;
 };
 
 export const DEFAULT_SETTINGS: ProSettings = {
@@ -123,6 +125,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   mirrorSelfies: true,
   saveLocation: false,
   shutterSound: true,
+  scanCodes: true,
 };
 
 /**
@@ -244,7 +247,7 @@ export function loadSettings(): ProSettings {
 }
 
 /** Settings → Camera (outside the camera screen): change one Normal-camera option in the saved settings. */
-export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies' | 'saveLocation' | 'shutterSound'>(key: K, value: ProSettings[K]) {
+export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies' | 'saveLocation' | 'shutterSound' | 'scanCodes'>(key: K, value: ProSettings[K]) {
   saveSettings({ ...loadSettings(), [key]: value });
 }
 

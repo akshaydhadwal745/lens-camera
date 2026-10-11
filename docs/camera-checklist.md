@@ -12,8 +12,8 @@ Updated: 2026-10-11 (night).
 | | Count | Items |
 |---|---|---|
 | ✅ Validated | 6 | 0.1, 1.3, 3.2, 4.1, 5.2, 6.3 |
-| 🟡 Built, waiting for real-phone tests | 40 | 1.1, 1.2, 1.4–1.8, 1.10–1.12 · 2.1–2.7 · 3.1, 3.3–3.8 · 4.2–4.5 · 5.1, 5.3 · 6.1, 6.2 · 7.2–7.4 · 8.1–8.3 · 9.1, 9.2 |
-| 🔨 In progress | 0 | next: section 9 (document scan, QR, hyperlapse, astro) |
+| 🟡 Built, waiting for real-phone tests | 41 | 1.1, 1.2, 1.4–1.8, 1.10–1.12 · 2.1–2.7 · 3.1, 3.3–3.8 · 4.2–4.5 · 5.1, 5.3 · 6.1, 6.2 · 7.2–7.4 · 8.1–8.3 · 9.1–9.3 |
+| 🔨 In progress | 0 | next: section 9 (document scan, hyperlapse, astro) |
 | ⬜ Pending | 3 | 1.9 (needs Quality Lab sets), 7.1 (needs test-day data), 4.6 (deferred) |
 
 **Builds:** dev-53…56 green (verify-release 4/4). dev-57 failed (ML Kit
@@ -169,8 +169,9 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 |---|---|---|---|
 | 9.1 | Aspect ratios 4:3 / 16:9 / 1:1, WYSIWYG viewfinder (Android) | 🟡 | Built: the GL viewfinder draws the camera only inside the kept frame (black around it; photo 4:3 under the top controls, video 16:9 centred); grid/guide sit in the frame; 16:9/1:1 photos keep the full 4:3 file plus a removable centred crop. tsc clean, Kotlin compiles; emulator + S8 check pending |
 | 9.2 | Motion photos (3 s around the shot, Google Motion Photo format) | 🟡 | Built: viewfinder ring-buffer encoder (1.5 s before + 1.5 s after), XMP + appended MP4 (Ultra HDR gain map kept), MOTION toggle (off by default), ▶ MOTION in the viewer. Unit tests 3/3 (format, Ultra HDR merge, plain photo). Phone check pending (Google Photos must play it) |
+| 9.3 | QR codes in the camera | 🟡 | Built: ML Kit (bundled, already in the APK) on a 640 px viewfinder copy every 400 ms, stable chip (2 reads in / 3 misses out), open https / call / email / copy; other schemes never opened (unit test). Settings switch, on by default. Phone check pending |
 
-Still later: document scanning; QR in camera; hyperlapse;
+Still later: document scanning; hyperlapse;
 astro mode; iPhone parity for Android-first features.
 
 ### ⛔ Not doing (for now)

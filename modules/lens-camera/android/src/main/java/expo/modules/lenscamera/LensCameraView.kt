@@ -46,6 +46,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onRecordingStarted by EventDispatcher<Map<String, Any?>>()
   private val onRecordingAudio by EventDispatcher<Map<String, Any?>>()
   private val onSceneLook by EventDispatcher<Map<String, Any?>>()
+  private val onCode by EventDispatcher<Map<String, Any?>>()
   private val onBurstShot by EventDispatcher<Map<String, Any?>>()
   private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
   /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
@@ -65,6 +66,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   var sceneSuggest = false
   /** Camera frame inside the view (fractions x, y, w, h): what the photo/video keeps. */
   var frame: List<Double>? = null
+  /** Look for QR codes (Normal camera, Photo mode) and report them (onCode). */
+  var scanCodes = false
   /** Motion photos: photos in Photo mode carry the 3 s around the shot (checklist 9.2). */
   var motionPhoto = false
   /** A Lens Night photo is coming (Night mode or auto Night): preview it like the photo. */
@@ -135,6 +138,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       }
       gl.onTransform = { details -> onDiagnostics(mapOf("kind" to "preview") + details) }
       gl.onSceneLook = { look -> onSceneLook(mapOf("look" to look)) }
+      gl.onCode = { code -> onCode(mapOf("code" to code)) }
     }
     controller.onReady = { caps ->
       updatePreviewModes() // the Night extension is only known once the camera is bound
@@ -202,6 +206,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     frame?.takeIf { it.size == 4 && it[2] > 0 && it[3] > 0 }?.let { f -> gl.frame = floatArrayOf(f[0].toFloat(), f[1].toFloat(), f[2].toFloat(), f[3].toFloat()) }
       ?: run { gl.frame = floatArrayOf(0f, 0f, 1f, 1f) }
     gl.motionPhoto = motionPhoto && config.mode == "photo"
+    gl.scanCodes = scanCodes && config.mode == "photo"
     gl.sceneSuggest = sceneSuggest && (config.mode == "photo" || config.mode == "video")
     gl.portraitStyle = PortraitStyle.code(portraitStyle)
     // The maker's Night mode has its own preview; only Lens's own merge is previewed here.

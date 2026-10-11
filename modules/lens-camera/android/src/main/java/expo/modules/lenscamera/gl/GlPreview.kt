@@ -55,6 +55,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   var onTransform: ((Map<String, Any?>) -> Unit)? = null
   /** Smart look suggestion changed (a look id, or null). */
   var onSceneLook: ((String?) -> Unit)? = null
+  /** A QR code came into view (its details) or left it (null), on the main thread. */
+  var onCode: ((Map<String, Any?>?) -> Unit)? = null
   /** First frame drawn after a new camera stream (hides the black gap on switches). */
   var onFirstFrame: (() -> Unit)? = null
 
@@ -156,6 +158,17 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   }
   private var lastScene = 0L
   private var sceneWasOn = false
+  // QR codes in the camera (checklist 9.3): a sharper ~640 px copy, a couple of times a second.
+  private val qr = QrScanner().also { q ->
+    q.onCode = { code -> mainHandler.post { onCode?.invoke(code) } }
+  }
+  private var lastQr = 0L
+  private var qrWasOn = false
+  private var qrTexture = 0
+  private var qrFbo = 0
+  private var qrW = 0
+  private var qrH = 0
+  private var qrPixels: ByteBuffer? = null
   private val livePortrait = LivePortrait().also { live ->
     live.onMask = { mask, w, h, subject -> gl.post { uploadMask(mask, w, h, subject) } }
   }
@@ -175,6 +188,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   @Volatile var nightPreview = false
   /** Suggest a look for the scene (Normal camera, no look chosen, not Portrait/time-lapse). */
   @Volatile var sceneSuggest = false
+  /** Look for QR codes in the viewfinder. */
+  @Volatile var scanCodes = false
   /** Frames shown so far (preview frame rate: self-test, checklist 1.1). */
   @Volatile var framesDrawn = 0L
     private set
@@ -368,6 +383,13 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         scene.reset()
       }
       sceneWasOn = suggest
+      if (scanCodes && !qr.busy && now - lastQr >= QR_INTERVAL_MS) {
+        lastQr = now
+        readQrCopy()?.let { qr.submit(it, qrW, qrH) }
+      } else if (!scanCodes && qrWasOn) {
+        qr.reset()
+      }
+      qrWasOn = scanCodes
 
       GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
       // Black around the frame, the camera picture only inside it.
@@ -840,7 +862,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   }
 
   /** The visible frame (no look, no overlays), as shown on screen, into [fbo]. */
-  private fun renderCopy(fbo: Int, width: Int, height: Int) {
+  private fun renderCopy(fbo: Int, width: Int, height: Int, step: Float = 1f / 720f) {
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo)
     GLES20.glViewport(0, 0, width, height)
     GLES20.glUseProgram(copyProgram)
@@ -850,10 +872,35 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uTexMatrix"), 1, false, stMatrix, 0)
     GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uUvMatrix"), 1, false, uvMatrix, 0)
     // Average 4 nearby camera pixels per output pixel: a smoother small copy.
-    GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), 1f / 720f, 1f / 720f)
+    GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), step, step)
     GLES20.glUniform1f(GLES20.glGetUniformLocation(copyProgram, "uGain"), 1f)
     GlUtil.drawQuad(copyProgram)
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+  }
+
+  /** A sharp ~640 px copy of the visible frame for QR codes (RGBA, bottom row first). */
+  private fun readQrCopy(): ByteArray? {
+    val sw = if (frameW >= frameH) QR_LONG_SIDE else max(1, QR_LONG_SIDE * frameW / frameH)
+    val sh = if (frameW >= frameH) max(1, QR_LONG_SIDE * frameH / frameW) else QR_LONG_SIDE
+    if (sw != qrW || sh != qrH || qrFbo == 0) {
+      deleteTarget(qrTexture, qrFbo)
+      val (tex, fbo) = GlUtil.framebuffer(sw, sh)
+      qrTexture = tex
+      qrFbo = fbo
+      qrW = sw
+      qrH = sh
+      qrPixels = ByteBuffer.allocateDirect(sw * sh * 4).order(ByteOrder.nativeOrder())
+    }
+    val buffer = qrPixels ?: return null
+    renderCopy(qrFbo, qrW, qrH, step = 0f)
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, qrFbo)
+    buffer.position(0)
+    GLES20.glReadPixels(0, 0, qrW, qrH, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer)
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+    val bytes = ByteArray(qrW * qrH * 4)
+    buffer.position(0)
+    buffer.get(bytes)
+    return bytes
   }
 
   private fun submitForSegmentation() {
@@ -960,6 +1007,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   fun release() {
     livePortrait.close()
     scene.close()
+    qr.close()
     gl.post {
       timeLapse?.cancel()
       timeLapse = null
@@ -968,6 +1016,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       stopMotion(egl)
       deleteTarget(blurTexture, blurFbo)
       deleteTarget(segTexture, segFbo)
+      deleteTarget(qrTexture, qrFbo)
       for (i in 0..1) deleteTarget(accumTex[i], accumFbo[i])
       if (maskTexture != 0) GLES20.glDeleteTextures(1, intArrayOf(maskTexture), 0)
       releaseInput()
@@ -990,6 +1039,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     private const val SEG_LONG_SIDE = 320
     /** Smart look suggestion: one scene label every 1.5 s (cheap; stops when a look is chosen). */
     private const val SCENE_INTERVAL_MS = 1500L
+    private const val QR_INTERVAL_MS = 400L
+    private const val QR_LONG_SIDE = 640
 
     private const val VERTEX = """
       attribute vec2 aPos;
