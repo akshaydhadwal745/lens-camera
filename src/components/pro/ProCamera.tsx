@@ -366,6 +366,19 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       });
   };
 
+  /** Photo while recording: full resolution where supported, else the video frame. */
+  const takeVideoPhoto = () => {
+    const cam = cameraRef.current;
+    if (!cam?.takeVideoPhoto) return;
+    haptic(Haptics.ImpactFeedbackStyle.Light);
+    flash.setValue(1);
+    Animated.timing(flash, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+    cam
+      .takeVideoPhoto()
+      .then((photo) => capture({ kind: 'photo', sourceUri: photo.uri, width: photo.width, height: photo.height, edit: captureRecipe(false) }))
+      .catch((error) => Alert.alert('Could not take photo', error instanceof Error ? error.message : String(error)));
+  };
+
   const togglePause = () => {
     const cam = cameraRef.current;
     if (!cam?.pauseRecording || !cam.resumeRecording) return;
@@ -911,25 +924,32 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         <ModeStrip modes={modes} mode={s.mode} disabled={recording || busy} onSelect={switchMode} />
 
         <View style={styles.captureRow}>
-          <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
-            {latest ? (
-              displayUri(latest) ? (
-                <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
+          {recording && s.mode === 'video' && Platform.OS === 'android' ? (
+            // While recording, the gallery spot takes photos (full resolution where the phone allows).
+            <Pressable onPress={takeVideoPhoto} disabled={!recLive} style={[styles.thumb, styles.videoPhoto, !recLive && { opacity: 0.3 }]} accessibilityLabel="Take a photo while recording">
+              <View style={styles.videoPhotoDot} />
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
+              {latest ? (
+                displayUri(latest) ? (
+                  <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
+                ) : (
+                  <View style={[styles.thumbImage, styles.center, { backgroundColor: palette.surface2 }]}>
+                    <Ionicons name="videocam" size={22} color="#fff" />
+                  </View>
+                )
               ) : (
-                <View style={[styles.thumbImage, styles.center, { backgroundColor: palette.surface2 }]}>
-                  <Ionicons name="videocam" size={22} color="#fff" />
+                <Ionicons name="images-outline" size={24} color="#fff" />
+              )}
+              {pending > 0 && (
+                <View style={styles.pending}>
+                  <Ionicons name="cloud-upload" size={10} color="#fff" />
+                  <Text style={styles.pendingText}>{pending}</Text>
                 </View>
-              )
-            ) : (
-              <Ionicons name="images-outline" size={24} color="#fff" />
-            )}
-            {pending > 0 && (
-              <View style={styles.pending}>
-                <Ionicons name="cloud-upload" size={10} color="#fff" />
-                <Text style={styles.pendingText}>{pending}</Text>
-              </View>
-            )}
-          </Pressable>
+              )}
+            </Pressable>
+          )}
 
           <Pressable
             onPress={onShutter}
@@ -1257,6 +1277,8 @@ const styles = StyleSheet.create({
 
   captureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, marginTop: 16 },
   thumb: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+  videoPhoto: { borderRadius: 24, borderWidth: 2, borderColor: palette.text },
+  videoPhotoDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: palette.text },
   thumbImage: { width: '100%', height: '100%', borderRadius: 14 },
   pending: {
     position: 'absolute',

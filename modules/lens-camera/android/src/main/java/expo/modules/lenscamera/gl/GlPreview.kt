@@ -564,6 +564,80 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     }
   }
 
+  // ---------- Photo from the video frame ----------
+
+  /**
+   * Photo while recording on phones that can't run a photo stream next to the
+   * video (checklist 3.7): the current camera frame (as the video sees it: 16:9,
+   * upright, up to the stream's resolution), saved as a JPEG. Never upscaled.
+   */
+  fun snapshot(file: java.io.File, done: (Result<Map<String, Any?>>) -> Unit) {
+    gl.post {
+      val core = egl
+      if (core == null || failed || oesTexture == 0) {
+        done(Result.failure(IllegalStateException("No camera frame yet.")))
+        return@post
+      }
+      var fbo = 0
+      var tex = 0
+      try {
+        core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+        val landscape = viewWidth >= viewHeight
+        val long = max(bufferSize.width, bufferSize.height).let { it - it % 2 }
+        val short = (long * 9 / 16).let { it - it % 2 }
+        val (w, h) = if (landscape) long to short else short to long
+        val target = GlUtil.framebuffer(w, h)
+        tex = target.first
+        fbo = target.second
+        val uv = FloatArray(16)
+        computeUvMatrix(w, h, uv)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo)
+        GLES20.glViewport(0, 0, w, h)
+        GLES20.glUseProgram(copyProgram)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(copyProgram, "uCam"), 0)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uTexMatrix"), 1, false, stMatrix, 0)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uUvMatrix"), 1, false, uv, 0)
+        GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), 0f, 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(copyProgram, "uGain"), 1f)
+        GlUtil.drawQuad(copyProgram)
+        val pixels = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder())
+        GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        // Off the GL thread: flip (GL rows are bottom-up) and encode.
+        Thread {
+          try {
+            pixels.position(0)
+            val raw = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            raw.copyPixelsFromBuffer(pixels)
+            val flip = android.graphics.Matrix().apply { postScale(1f, -1f) }
+            val upright = android.graphics.Bitmap.createBitmap(raw, 0, 0, w, h, flip, false)
+            raw.recycle()
+            file.outputStream().use { upright.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+            upright.recycle()
+            runCatching {
+              val exif = androidx.exifinterface.media.ExifInterface(file)
+              val now = java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+              exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_DATETIME_ORIGINAL, now)
+              exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_DATETIME, now)
+              exif.saveAttributes()
+            }
+            done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to false, "fromVideo" to true)))
+          } catch (e: Exception) {
+            done(Result.failure(e))
+          }
+        }.start()
+      } catch (e: Exception) {
+        Log.w(TAG, "snapshot failed", e)
+        done(Result.failure(e))
+      } finally {
+        if (fbo != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(fbo), 0)
+        if (tex != 0) GLES20.glDeleteTextures(1, intArrayOf(tex), 0)
+      }
+    }
+  }
+
   // ---------- Night ----------
 
   /**

@@ -137,7 +137,21 @@ export default function SelfTestScreen() {
 
         if (step.action === 'video') {
           const done = cam.startRecording();
-          await wait(3000);
+          // Photo while recording (video step only): which way this phone does it, and how big.
+          let videoPhoto: string | null = null;
+          if (step.id === 'video' && cam.takeVideoPhoto) {
+            await wait(1500);
+            try {
+              const p = await cam.takeVideoPhoto();
+              videoPhoto = `${p.width}x${p.height} ${p.fromVideo ? 'video frame' : 'photo stream'}`;
+              new File(p.uri).delete();
+            } catch (e) {
+              videoPhoto = `failed: ${errorMessage(e)}`;
+            }
+            await wait(1500);
+          } else {
+            await wait(3000);
+          }
           await cam.stopRecording();
           const v = await done;
           const size = new File(v.uri).size ?? 0;
@@ -147,7 +161,7 @@ export default function SelfTestScreen() {
           const ok = v.duration >= 2 * factor && size > 0 && (step.props.mode !== 'slowmo' || factor >= 2);
           const delay = v.startDelayMs ?? null;
           const late = delay !== null && delay > MAX_VIDEO_START_MS;
-          const details = { duration: v.duration, bytes: size, startDelayMs: delay, slowFactor: factor, ...previewDetails };
+          const details = { duration: v.duration, bytes: size, startDelayMs: delay, slowFactor: factor, videoPhoto, ...previewDetails };
           const lateNote = late ? `recording started ${delay} ms after record was pressed` : undefined;
           if (!ok) return { ...base, status: 'fail', ms: Date.now() - t0, message: [`video ${v.duration}s, ${size} bytes`, lateNote].filter(Boolean).join('; '), details };
           return { ...base, status: late ? 'warn' : 'pass', ms: Date.now() - t0, message: lateNote, details };

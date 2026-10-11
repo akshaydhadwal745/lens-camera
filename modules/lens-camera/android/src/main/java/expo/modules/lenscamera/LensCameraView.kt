@@ -264,6 +264,18 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
 
+  /**
+   * Photo while recording (checklist 3.7): full resolution where the phone runs a
+   * photo stream next to the video, else the current video frame (no upscaling).
+   */
+  fun takeVideoPhoto(promise: Promise) {
+    val reply = { result: Result<Map<String, Any?>> -> result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) }) }
+    if (controller.hasVideoStill) return controller.takePhoto("off", null) { r -> reply(r.map { it + ("fromVideo" to false) }) }
+    val gl = glPreview ?: return promise.reject("ERR_CAPTURE", "Photos while recording need the GPU viewfinder.", null)
+    val dir = java.io.File(context.cacheDir, "LensCamera").apply { mkdirs() }
+    gl.snapshot(java.io.File(dir, "frame-${java.util.UUID.randomUUID()}.jpg")) { r -> post { reply(r) } }
+  }
+
   fun takeNightPhoto(frames: Int, promise: Promise) {
     controller.takeNightPhoto(frames, isHot()) { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })

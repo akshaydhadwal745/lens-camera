@@ -59,6 +59,13 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Photo while recording
+
+While a video records, the gallery button becomes a white photo button. Phones
+that can run a photo stream next to the video give full-resolution photos;
+others save the current video frame (up to the video's resolution, never
+upscaled).
+
 ### Low-light video (automatic)
 
 In the Normal camera, video in a dark place gets brighter by itself: the frame

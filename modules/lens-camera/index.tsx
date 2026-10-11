@@ -186,6 +186,8 @@ export type LensCameraHandle = {
   stopRecording(): Promise<void>;
   /** Android: pause/resume the current recording (one file; paused time isn't recorded). */
   pauseRecording?(): Promise<boolean>;
+  /** Android, while recording: a photo (full resolution where supported, else the video frame: `fromVideo`). */
+  takeVideoPhoto?(): Promise<PhotoResult & { fromVideo?: boolean }>;
   /** Android, mode 'timelapse': resolves with the clip when stopTimeLapse() finishes it. */
   startTimeLapse?(): Promise<{ uri: string; duration: number; frames: number }>;
   stopTimeLapse?(): Promise<void>;

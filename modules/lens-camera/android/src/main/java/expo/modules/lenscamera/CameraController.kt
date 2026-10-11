@@ -28,6 +28,7 @@ import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.LowLightBoostState
 import androidx.camera.core.MirrorMode
+import androidx.camera.core.SessionConfig
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.MeteringPoint
 import androidx.camera.core.Preview
@@ -180,6 +181,8 @@ class CameraController(private val context: Context) {
     val stabilized: Boolean = false,
     /** Photo fallback: plain JPEG if the phone refuses Ultra HDR / RAW. */
     val plainPhoto: Boolean = false,
+    /** Video: last resort without the full-resolution photo stream (photos then come from video frames). */
+    val noStill: Boolean = false,
   )
 
   // Latest per-frame metadata from the camera, for the HUD and manual WB anchoring.
@@ -302,6 +305,7 @@ class CameraController(private val context: Context) {
         BoundVideo(false, config.fps, config.stabilization != "off"),
         BoundVideo(false, 30, config.stabilization != "off"),
         BoundVideo(false, 30, false),
+        BoundVideo(false, 30, false, noStill = true),
       ).distinct()
     } else {
       listOf(BoundVideo(), BoundVideo(plainPhoto = true))
@@ -447,8 +451,29 @@ class CameraController(private val context: Context) {
         .setMirrorMode(if (config.mirrorFront) MirrorMode.MIRROR_MODE_ON_FRONT_ONLY else MirrorMode.MIRROR_MODE_OFF)
       if (video.fps != 30) videoFrameRate(cam, video.fps)?.let { builder.setTargetFrameRate(it) }
       if (video.stabilized && caps.isStabilizationSupported) builder.setVideoStabilizationEnabled(true)
-      videoCapture = builder.build().also { group.addUseCase(it) }
+      val videoUse = builder.build().also { group.addUseCase(it) }
+      videoCapture = videoUse
       imageCapture = null
+      // Photo while recording (checklist 3.7): a full-resolution JPEG stream next to the video,
+      // only where the phone says preview + video + photo work together; else frames from the video.
+      if (!config.isSlowMo && !video.noStill) {
+        val still = ImageCapture.Builder()
+          .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+          .setJpegQuality(95)
+          .setResolutionSelector(
+            ResolutionSelector.Builder()
+              .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+              .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+              .build(),
+          )
+          .setTargetRotation(targetRotation)
+          .build()
+        val ok = runCatching { cam.info.isSessionConfigSupported(SessionConfig(listOf(preview, videoUse, still))) }.getOrDefault(false)
+        if (ok) {
+          photoFormat = ImageCapture.OUTPUT_FORMAT_JPEG
+          imageCapture = still.also { group.addUseCase(it) }
+        }
+      }
     } else {
       photoFormat = if (video.plainPhoto) ImageCapture.OUTPUT_FORMAT_JPEG else choosePhotoFormat(cam)
       imageCapture = ImageCapture.Builder()
@@ -979,6 +1004,9 @@ class CameraController(private val context: Context) {
   }
 
   /** Pause/resume the current recording (one file; paused time isn't in it). False if not recording. */
+  /** Video mode with a full-resolution photo stream bound next to the video (photo while recording). */
+  val hasVideoStill get() = config.isVideo && imageCapture != null
+
   fun pauseRecording(): Boolean = recording?.let { it.pause(); true } ?: false
 
   fun resumeRecording(): Boolean = recording?.let { it.resume(); true } ?: false
