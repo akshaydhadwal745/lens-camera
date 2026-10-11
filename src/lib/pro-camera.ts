@@ -63,6 +63,8 @@ export type ProSettings = {
   mirrorSelfies: boolean;
   /** Opt-in (off by default): save where photos/videos were taken. Settings → Camera. */
   saveLocation: boolean;
+  /** Camera sounds (on by default; the phone's silent mode mutes them unless the law requires one). */
+  shutterSound: boolean;
 };
 
 export const DEFAULT_SETTINGS: ProSettings = {
@@ -110,6 +112,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   normalGrid: false,
   mirrorSelfies: true,
   saveLocation: false,
+  shutterSound: true,
 };
 
 /**
@@ -231,7 +234,7 @@ export function loadSettings(): ProSettings {
 }
 
 /** Settings → Camera (outside the camera screen): change one Normal-camera option in the saved settings. */
-export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies' | 'saveLocation'>(key: K, value: ProSettings[K]) {
+export function setCameraOption<K extends 'normalGrid' | 'mirrorSelfies' | 'saveLocation' | 'shutterSound'>(key: K, value: ProSettings[K]) {
   saveSettings({ ...loadSettings(), [key]: value });
 }
 

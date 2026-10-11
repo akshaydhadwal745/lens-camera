@@ -59,6 +59,14 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Shutter sound
+
+Settings → Camera → **Shutter sound** (on by default): the phone's own camera
+click when a photo really starts, and the record start/stop sounds (start plays
+before the mic opens, stop after the file is closed, so neither is in the video).
+Silent or vibrate mode keeps it quiet, except in countries where the law requires
+a shutter sound (Android 13+ reports this and Lens always plays it there).
+
 ### Volume buttons
 
 Volume up/down (and the camera key, and Bluetooth selfie remotes) work like the

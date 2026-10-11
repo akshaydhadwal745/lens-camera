@@ -323,6 +323,7 @@ export default function SettingsScreen() {
   const [normalGrid, setNormalGrid] = useState(() => loadSettings().normalGrid);
   const [mirrorSelfies, setMirrorSelfies] = useState(() => loadSettings().mirrorSelfies);
   const [saveLocation, setSaveLocation] = useState(() => loadSettings().saveLocation);
+  const [shutterSound, setShutterSound] = useState(() => loadSettings().shutterSound);
   /** Opt-in location: ask for permission when switched on; stay off if refused. */
   const onSaveLocation = async (on: boolean) => {
     if (on) {
@@ -531,6 +532,17 @@ export default function SettingsScreen() {
                   hint="Adds where you took each photo and video. Photos you share keep it."
                   value={saveLocation}
                   onChange={(v) => void onSaveLocation(v)}
+                />
+                <View style={styles.divider} />
+                <SwitchRow
+                  icon="volume-medium-outline"
+                  label="Shutter sound"
+                  hint="Quiet when your phone is on silent or vibrate (where the law allows)."
+                  value={shutterSound}
+                  onChange={(v) => {
+                    setShutterSound(v);
+                    setCameraOption('shutterSound', v);
+                  }}
                 />
                 <View style={styles.divider} />
                 <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />

@@ -131,6 +131,8 @@ export type LensCameraProps = ViewProps & {
   mirrorFront?: boolean;
   /** Android: save where photos/videos were taken (opt-in; needs location permission). */
   saveLocation?: boolean;
+  /** Android: camera sounds (on by default; silent/vibrate mutes them except where the law requires a shutter sound). */
+  shutterSound?: boolean;
   /** Android, Quality Lab only: bind a phone-maker extension mode in Photo mode. */
   extension?: LabExtension;
   /** Android, Quality Lab only: photo capture tuned for quality (default) or speed. */

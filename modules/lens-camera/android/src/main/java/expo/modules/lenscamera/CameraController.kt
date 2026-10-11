@@ -84,6 +84,8 @@ data class CameraConfig(
   val mirrorFront: Boolean = true,
   /** Opt-in: save where photos/videos were taken (needs location permission; see [LocationTracker]). */
   val saveLocation: Boolean = false,
+  /** Camera sounds (shutter, record start/stop); see [ShutterSound] for when they still play/stay silent. */
+  val shutterSound: Boolean = true,
   /**
    * Quality Lab only (docs/research/camera-quality.md): bind one of the phone
    * maker's extension modes ("auto", "hdr", "night", "bokeh", "faceRetouch")
@@ -147,6 +149,7 @@ class CameraController(private val context: Context) {
   private var config = CameraConfig()
   private var running = false
   private val location = LocationTracker(context)
+  private val sounds = ShutterSound(context)
   private var targetRotation = android.view.Surface.ROTATION_0
   private var displayRotation = android.view.Surface.ROTATION_0
   /** What actually got bound after fallbacks (e.g. HDR dropped). */
@@ -194,6 +197,7 @@ class CameraController(private val context: Context) {
     config = initial
     running = true
     location.setActive(initial.saveLocation)
+    sounds.enabled = initial.shutterSound
     val future = ProcessCameraProvider.getInstance(context)
     future.addListener({
       if (!running) return@addListener
@@ -229,6 +233,7 @@ class CameraController(private val context: Context) {
 
   fun release() {
     stop()
+    sounds.release()
     io.shutdown()
   }
 
@@ -236,6 +241,7 @@ class CameraController(private val context: Context) {
     val old = config
     config = next
     if (running) location.setActive(next.saveLocation)
+    sounds.enabled = next.shutterSound
     if (!running || provider == null) return
     if (next.needsRebind(old) && recording == null) bind() else applyLive()
   }
@@ -703,6 +709,9 @@ class CameraController(private val context: Context) {
       outputOptions(file),
       io,
       object : ImageCapture.OnImageSavedCallback {
+        // The click when the photo really starts, not on the press.
+        override fun onCaptureStarted() = sounds.shutter()
+
         override fun onImageSaved(output: ImageCapture.OutputFileResults) {
           val (w, h) = uprightSize(file)
           // Portrait: find the person and keep the mask inside the photo.
@@ -742,6 +751,11 @@ class CameraController(private val context: Context) {
         outputOptions(file),
         io,
         object : ImageCapture.OnImageSavedCallback {
+          // One click for the whole Night burst (first frame).
+          override fun onCaptureStarted() {
+            if (shots.isEmpty()) sounds.shutter()
+          }
+
           override fun onImageSaved(output: ImageCapture.OutputFileResults) {
             shots += file
             // Next shot from the main thread, like the first.
@@ -821,6 +835,8 @@ class CameraController(private val context: Context) {
     val output = FileOutputOptions.Builder(file)
     if (config.saveLocation) location.current()?.let { output.setLocation(it) }
     val pending = capture.output.prepareRecording(context, output.build())
+    // Before the mic starts (it opens 0.1–0.7 s later), so the beep isn't in the recording.
+    sounds.recordStart()
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
       pending.withAudioEnabled()
     }
@@ -835,6 +851,7 @@ class CameraController(private val context: Context) {
       }
       if (event is VideoRecordEvent.Finalize) {
         recording = null
+        sounds.recordStop() // after the file is closed, so it isn't recorded
         val ok = !event.hasError() || event.error in OK_FINALIZE
         if (ok && file.exists() && file.length() > 0) {
           done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to event.recordingStats.recordedDurationNanos / 1e9, "startDelayMs" to startDelayMs)))

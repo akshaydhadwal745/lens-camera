@@ -100,8 +100,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     setWasFocused(isFocused);
     if (isFocused) {
       const saved = loadSettings();
-      if (saved.normalGrid !== stored.normalGrid || saved.mirrorSelfies !== stored.mirrorSelfies || saved.saveLocation !== stored.saveLocation) {
-        setS((prev) => ({ ...prev, normalGrid: saved.normalGrid, mirrorSelfies: saved.mirrorSelfies, saveLocation: saved.saveLocation }));
+      // Options set in Settings → Camera while this screen stayed mounted.
+      const keys = ['normalGrid', 'mirrorSelfies', 'saveLocation', 'shutterSound'] as const;
+      if (keys.some((k) => saved[k] !== stored[k])) {
+        setS((prev) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, saved[k]])) }));
       }
     }
   }
@@ -533,6 +535,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             portraitStyle={s.portraitStyle}
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
+            shutterSound={s.shutterSound}
             torch={s.mode === 'video' && s.torch}
             zoom={s.zoom}
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
