@@ -44,6 +44,12 @@ then picks the best shot (sharpest, eyes open, smiling) and shows only that one 
 your roll, marked `⧉ 12`. Open it and swipe to see the others; tap `⧉ MAKE PICK` on
 another shot to show that one instead. All shots are kept and backed up.
 
+### Straight horizons (automatic)
+
+If a photo is taken slightly tilted (1–4°, by accident), the Normal camera
+straightens it ("Horizon straightened 2°"). It's an edit: the original is kept
+and you can undo it in the editor. Bigger tilts are left alone.
+
 ### Faces first (automatic)
 
 In the Normal camera, phones whose camera can detect faces expose and focus for

@@ -7,6 +7,7 @@ import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } fro
 import { ActivityIndicator, Alert, Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Accelerometer } from 'expo-sensors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -128,6 +129,18 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Paused mid-recording (one file; paused time isn't recorded).
   const [paused, setPaused] = useState(false);
   // Recording sound: problem ('silenced' / 'error') or an external mic in use; null = fine/unknown.
+  // Auto-straighten (checklist 7.4): the phone's small tilt from level at the moment of the shot.
+  const [tilt] = useState(() => ({ offset: 0, flat: true }));
+  useEffect(() => {
+    if (stored.pro) return;
+    Accelerometer.setUpdateInterval(100);
+    const sub = Accelerometer.addListener(({ x, y, z }) => {
+      const roll = (Math.atan2(x, -y) * 180) / Math.PI;
+      tilt.offset = roll - Math.round(roll / 90) * 90; // + = phone turned clockwise
+      tilt.flat = Math.abs(z) > 0.85;
+    });
+    return () => sub.remove();
+  }, [stored.pro, tilt]);
   // Smart burst: shots so far while the shutter is held (null = no burst).
   const [burstCount, setBurstCount] = useState<number | null>(null);
   // Smart look suggestion for the scene (Normal camera, no look chosen).
@@ -255,6 +268,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       recipe.look = s.look;
       if (s.lookIntensity < 1) recipe.intensity = s.lookIntensity;
     }
+    // Normal camera: an accidental 1–4° tilt is straightened (a removable edit; bigger tilts are on purpose).
+    if (kind === 'photo' && !stored.pro && !tilt.flat && Math.abs(tilt.offset) >= 1 && Math.abs(tilt.offset) <= 4) {
+      const mirrored = s.position === 'front' && s.mirrorSelfies;
+      recipe.crop = { straighten: Math.round((mirrored ? -tilt.offset : tilt.offset) * 10) / 10 };
+    }
     if (kind === 'photo' && depth && s.mode === 'portrait') {
       // Normal camera: the blur strength Lens chose from the subject's size; PRO: the user's f-number.
       const aperture = !stored.pro && autoAperture ? Math.round(autoAperture * 10) / 10 : s.portraitAperture;
@@ -287,6 +305,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
       }
       const recipe = captureRecipe(photo.depth, 'photo', photo.autoAperture);
+      if (recipe?.crop?.straighten) showNotice(`Horizon straightened ${Math.abs(recipe.crop.straighten).toFixed(1)}°`);
       // Portrait only blurs around a person; say so instead of a silent plain photo.
       if (s.mode === 'portrait' && !photo.depth && !photo.raw) showNotice('No person or subject found · saved as a normal photo');
       // Pets/objects: the photo is blurred around the subject even though the viewfinder (people only) wasn't.
