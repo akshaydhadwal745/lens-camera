@@ -41,6 +41,7 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
+import androidx.camera.video.AudioStats
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.HighSpeedVideoSessionConfig
 import androidx.camera.video.Quality
@@ -132,6 +133,8 @@ class CameraController(private val context: Context) {
   var onError: ((String, Boolean) -> Unit)? = null
   /** The first video data was recorded ([Long] = ms since record was pressed). The REC timer starts here. */
   var onRecordingStarted: ((Long) -> Unit)? = null
+  /** Recording sound changed: "ok", "silenced" (mic blocked: privacy toggle / another app) or "error"; plus an external mic in use. */
+  var onRecordingAudio: ((String, Boolean) -> Unit)? = null
 
   private val main = ContextCompat.getMainExecutor(context)
   private val io = Executors.newSingleThreadExecutor()
@@ -956,14 +959,28 @@ class CameraController(private val context: Context) {
     // Before the mic starts (it opens 0.1–0.7 s later), so the beep isn't in the recording.
     sounds.recordStart()
     // Slow motion is silent (slowed sound is a drone), like the stock cameras.
-    if (!config.isSlowMo && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-      pending.withAudioEnabled()
-    }
+    val withAudio = !config.isSlowMo && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    if (withAudio) pending.withAudioEnabled()
     val retime = if (config.isSlowMo && !slowHighSpeed && slowFactor > 1) slowFactor else 1
     // Start delay (checklist 1.11): from the press until the encoder's first data.
     val requestedAt = SystemClock.elapsedRealtime()
     var startDelayMs: Long? = null
+    // Sound health (checklist 3.8): tell the app when the mic gets blocked or fails, so a
+    // silent video never goes unnoticed. External = a wired/USB mic is plugged in.
+    val externalMic = withAudio && hasExternalMic()
+    var lastAudio: String? = null
     recording = pending.start(main) { event ->
+      if (withAudio) {
+        val audio = when (event.recordingStats.audioStats.audioState) {
+          AudioStats.AUDIO_STATE_SOURCE_SILENCED -> "silenced"
+          AudioStats.AUDIO_STATE_ENCODER_ERROR, AudioStats.AUDIO_STATE_SOURCE_ERROR -> "error"
+          else -> "ok"
+        }
+        if (audio != lastAudio) {
+          lastAudio = audio
+          onRecordingAudio?.invoke(audio, externalMic)
+        }
+      }
       if (startDelayMs == null && event.recordingStats.recordedDurationNanos > 0) {
         val delay = SystemClock.elapsedRealtime() - requestedAt
         startDelayMs = delay
@@ -1012,6 +1029,15 @@ class CameraController(private val context: Context) {
   fun resumeRecording(): Boolean = recording?.let { it.resume(); true } ?: false
 
   // ---------- Helpers ----------
+
+  /** A wired or USB microphone is connected (Android records from it automatically). */
+  private fun hasExternalMic(): Boolean {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return false
+    return audio.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS).any {
+      it.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE ||
+        it.type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET
+    }
+  }
 
   /** Where a photo goes; front-camera photos are flipped (EXIF only, no re-encode) when saving as previewed. */
   private fun outputOptions(file: File): ImageCapture.OutputFileOptions {

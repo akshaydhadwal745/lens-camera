@@ -155,6 +155,8 @@ export type LensCameraProps = ViewProps & {
   onDiagnostics?: (e: NativeSyntheticEvent<CameraDiagnostics>) => void;
   /** Android: frames are being recorded now (`delayMs` after record was pressed). Show REC from here. */
   onRecordingStarted?: (e: NativeSyntheticEvent<{ delayMs: number }>) => void;
+  /** Android: recording sound: 'ok', 'silenced' (mic blocked) or 'error'; `external`: a wired/USB mic. */
+  onRecordingAudio?: (e: NativeSyntheticEvent<{ state: 'ok' | 'silenced' | 'error'; external: boolean }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
   hardwareShutter?: boolean;
   /** Android: a volume/camera key was pressed (with `hardwareShutter`). */

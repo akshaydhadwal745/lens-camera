@@ -59,6 +59,15 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Sound while recording
+
+Lens records with the microphone setting phone makers tune for their own
+camera (their wind and noise handling). If the mic gets blocked while you
+record (the privacy toggle, or another app using it) or fails, the REC pill
+shows **NO SOUND** right away. A wired or USB mic is used automatically
+(`EXT MIC`); Bluetooth headsets aren't used, because their call-quality mic is
+worse than the phone's own.
+
 ### Photo while recording
 
 While a video records, the gallery button becomes a white photo button. Phones

@@ -43,6 +43,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onError by EventDispatcher<Map<String, Any?>>()
   private val onDiagnostics by EventDispatcher<Map<String, Any?>>()
   private val onRecordingStarted by EventDispatcher<Map<String, Any?>>()
+  private val onRecordingAudio by EventDispatcher<Map<String, Any?>>()
   private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
   /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
   var hardwareShutter = false
@@ -132,6 +133,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
     controller.onError = { message, fatal -> onError(mapOf("message" to message, "fatal" to fatal)) }
     controller.onRecordingStarted = { delayMs -> onRecordingStarted(mapOf("delayMs" to delayMs)) }
+    controller.onRecordingAudio = { state, external -> onRecordingAudio(mapOf("state" to state, "external" to external)) }
   }
 
   /** React Native sizes this view but never measures its native children: do it here. */

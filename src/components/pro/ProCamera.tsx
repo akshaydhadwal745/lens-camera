@@ -127,6 +127,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [recLive, setRecLive] = useState(false);
   // Paused mid-recording (one file; paused time isn't recorded).
   const [paused, setPaused] = useState(false);
+  // Recording sound: problem ('silenced' / 'error') or an external mic in use; null = fine/unknown.
+  const [recAudio, setRecAudio] = useState<{ state: 'ok' | 'silenced' | 'error'; external: boolean } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   // Tap point + tap-to-expose in one state, so gestures update it functionally and
   // never need to be rebuilt mid-drag (a rebuilt gesture cancels the active drag).
@@ -338,6 +340,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         setRecording(false);
         setRecLive(false);
         setPaused(false);
+        setRecAudio(null);
       });
   };
 
@@ -631,6 +634,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               else Alert.alert('Camera', e.nativeEvent.message);
             }}
             onDiagnostics={(e) => reportPreview(e.nativeEvent, s.position)}
+            onRecordingAudio={(e) => setRecAudio(e.nativeEvent)}
             onRecordingStarted={() => {
               setElapsed(0);
               setRecLive(true);
@@ -703,7 +707,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                       : stats?.lowLightBoost
                         ? `${formatDuration(elapsed)} · LOW LIGHT`
                         : formatDuration(elapsed)}
+              {recAudio?.external && recAudio.state === 'ok' ? ' · EXT MIC' : ''}
             </Text>
+            {recAudio && recAudio.state !== 'ok' && (
+              // The mic is blocked (privacy toggle / another app) or failed: say so now, not after.
+              <Text style={styles.recWarn}>NO SOUND</Text>
+            )}
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
             <LiveUploadPill liveId={liveId} />
@@ -1209,6 +1218,7 @@ const styles = StyleSheet.create({
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.rec },
   recDotStarting: { backgroundColor: palette.muted },
   recDotPaused: { backgroundColor: palette.accent },
+  recWarn: { color: '#000', backgroundColor: palette.accent, fontSize: 11, fontFamily: font.monoSemibold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
   recText: { color: palette.text, fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
   badge: { color: '#000', backgroundColor: palette.accent, fontSize: 10, fontFamily: font.monoSemibold, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
 
