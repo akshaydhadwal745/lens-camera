@@ -19,7 +19,8 @@ Updated: 2026-10-11 (night).
 **Builds:** dev-53…56 green (verify-release 4/4). dev-57 failed (ML Kit
 manifest merge) → fixed in e3ab356; dev-58/59 cancelled (superseded). dev-60
 (fcbd32c: 4.3–4.5, 5.3, 6.2, 7.2, 7.3 + the fix) verify-release 4/4. dev-61
-(6f58ce6: + 7.4 auto-straighten, 9.1 aspect ratios) building = test-day build.
+(6f58ce6: + 7.4 auto-straighten, 9.1 aspect ratios) verify-release 4/4. dev-62
+(8c3d14e: + 9.2 motion photos) building; 9.3 QR queued after it.
 
 **Next:** test day 2026-10-12 — Test Lab physical tiers (budget/mid/flagship,
 Android 8–16, 32-bit next day) + Galaxy S8 walk-through of every 🟡 item, in
@@ -205,4 +206,5 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-11 | dev-53 | 2.6 location | Emulator | photo EXIF GPS 39°14'14.1"N 123°9'0.1"W = the device's live GPS fix (39.237255, −123.150032) exactly ✓ |
 | 2026-10-11 | dev-53 | 3.3 pause | Emulator | 8 s rec + 8 s paused + 8 s rec → 16.8 s clip ✓; REC pill `0:16 · PAUSED` yellow, resume button in the flip spot ✓ |
 | 2026-10-11 | dev-60 | release | CI | verify-release 60 4/4 (runtime n-fe78ec4a4fe4fc5b1441); ML Kit manifest fix confirmed (dev-57 failure gone) |
+| 2026-10-11 | dev-61 | release | CI | verify-release 61 4/4 (runtime n-a52777dea61dd0f02dad) |
 | 2026-10-11 | dev-46 | UI | Emulator 360 dp | Normal/PRO layout, modes, styles, "No person found", Night draws; live blur with a person not testable (virtual camera can't be aimed headless) |
