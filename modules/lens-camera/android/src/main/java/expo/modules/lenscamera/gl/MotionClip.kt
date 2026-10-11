@@ -33,6 +33,9 @@ class MotionClip(val width: Int, val height: Int) {
   /** Presentation time of the newest frame given to the encoder (µs, camera clock). */
   var lastFrameUs = -1L
     private set
+  private var firstFrameUs = -1L
+  private var lastSyncUs = -1L
+  private var encoded = 0
 
   init {
     val f = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
@@ -51,11 +54,27 @@ class MotionClip(val width: Int, val height: Int) {
 
   /** A frame stamped [ptsUs] was just swapped into [inputSurface]. */
   fun frameDrawn(ptsUs: Long) {
+    if (firstFrameUs < 0) firstFrameUs = ptsUs
     lastFrameUs = ptsUs
+    // Some encoders ignore the key-frame interval with surface input: ask for one every second.
+    if (lastSyncUs < 0 || ptsUs - lastSyncUs >= 1_000_000L) {
+      lastSyncUs = ptsUs
+      runCatching { codec.setParameters(android.os.Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) }) }
+    }
     drain()
     trim()
     serve()
   }
+
+  /**
+   * The encoder can't keep up (a slow or software encoder drops frames from its
+   * input surface): fewer than [MIN_FPS] + 4 frames a second came out after 3 s.
+   */
+  val tooSlow: Boolean
+    get() {
+      val seconds = (lastFrameUs - firstFrameUs) / 1e6
+      return seconds >= 3 && encoded / seconds < MIN_FPS + 4
+    }
 
   /** Clip around the newest frame (the shot's moment) into [file]; [done] gets (file, still time in the clip, µs). */
   fun capture(file: File, done: (Result<Pair<File, Long>>) -> Unit) {
@@ -85,6 +104,7 @@ class MotionClip(val width: Int, val height: Int) {
             buffer.limit(info.offset + info.size)
             val data = ByteArray(info.size).also { buffer.get(it) }
             samples.addLast(Sample(data, info.presentationTimeUs, info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0))
+            encoded++
           }
           codec.releaseOutputBuffer(index, false)
         }
@@ -97,11 +117,14 @@ class MotionClip(val width: Int, val height: Int) {
   private fun trim() {
     val oldestWanted = (requests.minOfOrNull { it.stillUs } ?: lastFrameUs) - BEFORE_US
     while (samples.size > 1) {
-      val nextKey = samples.drop(1).firstOrNull { it.key } ?: return
+      val nextKey = samples.drop(1).firstOrNull { it.key } ?: break
       if (nextKey.ptsUs <= oldestWanted) {
         while (samples.first() !== nextKey) samples.removeFirst()
-      } else return
+      } else break
     }
+    // Memory bound even if key frames never come: nothing older than MAX_KEEP_US.
+    while (samples.isNotEmpty() && lastFrameUs - samples.first().ptsUs > MAX_KEEP_US) samples.removeFirst()
+    while (samples.isNotEmpty() && !samples.first().key) samples.removeFirst()
   }
 
   private fun serve() {
@@ -119,6 +142,11 @@ class MotionClip(val width: Int, val height: Int) {
     val start = keys.lastOrNull { it.ptsUs <= r.stillUs - BEFORE_US } ?: keys.firstOrNull()
       ?: throw IllegalStateException("No key frame yet")
     val clip = samples.filter { it.ptsUs >= start.ptsUs && it.ptsUs <= r.stillUs + AFTER_US }
+    // Choppy (encoder too slow) or starting long before the shot: no motion rather than a bad one.
+    val spanS = (clip.last().ptsUs - clip.first().ptsUs) / 1e6
+    if (clip.size < 2 || spanS < 1.0 || clip.size / spanS < MIN_FPS || r.stillUs - start.ptsUs > BEFORE_US + 1_200_000L) {
+      throw IllegalStateException("Motion clip not good enough (${clip.size} frames in ${"%.1f".format(spanS)} s)")
+    }
     val muxer = MediaMuxer(r.file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     try {
       val track = muxer.addTrack(f)
@@ -140,5 +168,8 @@ class MotionClip(val width: Int, val height: Int) {
     private const val TAG = "LensMotion"
     const val BEFORE_US = 1_500_000L
     const val AFTER_US = 1_500_000L
+    private const val MAX_KEEP_US = 5_000_000L
+    /** Below this a clip looks like a slideshow: the photo is saved without motion. */
+    const val MIN_FPS = 8
   }
 }

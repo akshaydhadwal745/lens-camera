@@ -149,6 +149,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var motionSurface: EGLSurface = EGL14.EGL_NO_SURFACE
   private val motionUv = FloatArray(16)
   private var lastMotionNs = 0L
+  /** Long side of the motion clip; steps down when the encoder can't keep up (1280 → 960 → 640 → 480). */
+  private var motionLong = 1280
   // Deflicker: frame brightness vs its running average (from the 96×72 analysis).
   private var meanLuma = -1f
   private var smoothLuma = -1f
@@ -643,10 +645,16 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       return
     }
     val landscape = viewWidth >= viewHeight
-    val long = minOf(1280, max(bufferSize.width, bufferSize.height)).let { it - it % 16 }
+    val long = minOf(motionLong, max(bufferSize.width, bufferSize.height)).let { it - it % 16 }
     val short = (long * 3 / 4).let { it - it % 16 }
     val (w, h) = if (landscape) long to short else short to long
     var clip = motion
+    if (clip != null && clip.tooSlow && motionLong > 480) {
+      motionLong = when (motionLong) { 1280 -> 960; 960 -> 640; else -> 480 }
+      Log.i(TAG, "motion encoder too slow at ${clip.width}x${clip.height}: trying ${motionLong} px")
+      stopMotion(core)
+      return
+    }
     if (clip != null && (clip.width != w || clip.height != h)) {
       stopMotion(core)
       clip = null

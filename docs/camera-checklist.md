@@ -20,7 +20,7 @@ Updated: 2026-10-11 (night).
 manifest merge) → fixed in e3ab356; dev-58/59 cancelled (superseded). dev-60
 (fcbd32c: 4.3–4.5, 5.3, 6.2, 7.2, 7.3 + the fix) verify-release 4/4. dev-61
 (6f58ce6: + 7.4 auto-straighten, 9.1 aspect ratios) verify-release 4/4. dev-62
-(8c3d14e: + 9.2 motion photos) building; 9.3 QR queued after it.
+(9.2 motion photos) and dev-63 (9.3 QR) 4/4; dev-64 = motion photo fixes from the emulator test.
 
 **Next:** test day 2026-10-12 — Test Lab physical tiers (budget/mid/flagship,
 Android 8–16, 32-bit next day) + Galaxy S8 walk-through of every 🟡 item, in
@@ -207,4 +207,7 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-11 | dev-53 | 3.3 pause | Emulator | 8 s rec + 8 s paused + 8 s rec → 16.8 s clip ✓; REC pill `0:16 · PAUSED` yellow, resume button in the flip spot ✓ |
 | 2026-10-11 | dev-60 | release | CI | verify-release 60 4/4 (runtime n-fe78ec4a4fe4fc5b1441); ML Kit manifest fix confirmed (dev-57 failure gone) |
 | 2026-10-11 | dev-61 | release | CI | verify-release 61 4/4 (runtime n-a52777dea61dd0f02dad) |
+| 2026-10-11 | dev-61 | 9.1 aspect ratios | Emulator 360 dp | 4:3 frame under the top controls, 16:9 full-width centred, 1:1 square centred in the 4:3 area, time-lapse 16:9 ✓; a 1:1 photo opens square in the viewer (removable crop) ✓ |
+| 2026-10-11 | dev-62/63 | release | CI | verify-release 62 and 63 4/4 |
+| 2026-10-11 | dev-63 | 9.2 motion photo | Emulator | MOTION toggle shows; file format correct (XMP Item:Length = appended MP4, ffprobe reads it) ✓. **Bug:** emulator's software encoder delivered ~0.4 fps and only one key frame → 11-frame clip, still at 26 s, and the buffer never trimmed (memory would grow). Fixed (dev-64): key frame requested every second, 5 s memory cap, encoder too slow → smaller clip (1280→960→640→480), clip under 8 fps → photo saved without motion |
 | 2026-10-11 | dev-46 | UI | Emulator 360 dp | Normal/PRO layout, modes, styles, "No person found", Night draws; live blur with a person not testable (virtual camera can't be aimed headless) |
