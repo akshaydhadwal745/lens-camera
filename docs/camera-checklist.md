@@ -5,7 +5,25 @@ work on them. **Strictly one feature at a time**: a feature is finished and
 validated before the next one starts (user, 2026-10-11). Android first; every
 phone, from old budget to new flagship, through intelligent adaptation.
 
-Updated: 2026-10-11 (night). Now: everything built is 🟡 waiting for test day (2026-10-12); in progress 🔨: section 9 next items.
+Updated: 2026-10-11 (night).
+
+## Current status (2026-10-11 night)
+
+| | Count | Items |
+|---|---|---|
+| ✅ Validated | 6 | 0.1, 1.3, 3.2, 4.1, 5.2, 6.3 |
+| 🟡 Built, waiting for real-phone tests | 39 | 1.1, 1.2, 1.4–1.8, 1.10–1.12 · 2.1–2.7 · 3.1, 3.3–3.8 · 4.2–4.5 · 5.1, 5.3 · 6.1, 6.2 · 7.2–7.4 · 8.1–8.3 · 9.1 |
+| 🔨 In progress | 0 | next: section 9 (motion photos, document scan, QR, hyperlapse, astro) |
+| ⬜ Pending | 3 | 1.9 (needs Quality Lab sets), 7.1 (needs test-day data), 4.6 (deferred) |
+
+**Builds:** dev-53…56 green (verify-release 4/4). dev-57 failed (ML Kit
+manifest merge) → fixed in e3ab356; dev-58/59 cancelled (superseded). dev-60
+(fcbd32c: 4.3–4.5, 5.3, 6.2, 7.2, 7.3 + the fix) building. Queued for the next
+build after it: 7.4 auto-straighten, 9.1 aspect ratios.
+
+**Next:** test day 2026-10-12 — Test Lab physical tiers (budget/mid/flagship,
+Android 8–16, 32-bit next day) + Galaxy S8 walk-through of every 🟡 item, in
+checklist order. ✅ only with evidence; failures are fixed before moving on.
 
 ## Status legend
 
