@@ -114,6 +114,8 @@ export type LensCameraProps = ViewProps & {
   lookIntensity: number;
   /** Android: Portrait blur strength (f-number) for the live background blur in the viewfinder. */
   portraitAperture?: number;
+  /** Android, Normal camera: blur strength from how much of the frame the person fills. */
+  portraitAuto?: boolean;
   /** Android: a Night photo is coming (Night mode or auto Night): show the viewfinder brightened and averaged like the photo. */
   nightPreview?: boolean;
   /** Android: Portrait style previewed live (natural, studio, mono, stage). */
@@ -163,7 +165,16 @@ export type LensCameraProps = ViewProps & {
   onHardwareShutter?: () => void;
 };
 
-export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };
+export type PhotoResult = {
+  uri: string;
+  width: number;
+  height: number;
+  raw: boolean;
+  depth?: boolean;
+  frames?: number;
+  /** Android Portrait: f-number chosen from the subject's size (Normal camera uses it). */
+  autoAperture?: number | null;
+};
 export type VideoResult = {
   uri: string;
   duration: number;

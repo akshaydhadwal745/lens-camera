@@ -56,6 +56,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   var lookIntensity = 1.0
   /** Portrait blur strength (f-number) for the live viewfinder blur. */
   var portraitAperture = 2.8
+  /** Normal camera: blur strength chosen from the subject's size (PRO uses [portraitAperture]). */
+  var portraitAuto = false
   /** A Lens Night photo is coming (Night mode or auto Night): preview it like the photo. */
   var nightPreview = false
   /** Portrait style id (natural, studio, mono, stage), previewed live. */
@@ -186,6 +188,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private fun updatePreviewModes() {
     val gl = glPreview ?: return
     gl.portraitBlur = if (config.mode == "portrait") LivePortrait.blurFraction(portraitAperture) else 0f
+    gl.portraitAuto = portraitAuto
     gl.portraitStyle = PortraitStyle.code(portraitStyle)
     // The maker's Night mode has its own preview; only Lens's own merge is previewed here.
     gl.nightPreview = nightPreview && !(config.isNight && controller.usesNightExtension)

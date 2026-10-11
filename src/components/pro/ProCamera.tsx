@@ -245,13 +245,17 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // ---------- Capture ----------
 
   /** Look (+ portrait blur) attached to a new shot, as a non-destructive recipe. */
-  const captureRecipe = (depth?: boolean, kind: 'photo' | 'video' = 'photo'): EditRecipe | undefined => {
+  const captureRecipe = (depth?: boolean, kind: 'photo' | 'video' = 'photo', autoAperture?: number | null): EditRecipe | undefined => {
     const recipe: EditRecipe = {};
     if (s.look) {
       recipe.look = s.look;
       if (s.lookIntensity < 1) recipe.intensity = s.lookIntensity;
     }
-    if (kind === 'photo' && depth && s.mode === 'portrait') recipe.portrait = { aperture: s.portraitAperture, style: s.portraitStyle };
+    if (kind === 'photo' && depth && s.mode === 'portrait') {
+      // Normal camera: the blur strength Lens chose from the subject's size; PRO: the user's f-number.
+      const aperture = !stored.pro && autoAperture ? Math.round(autoAperture * 10) / 10 : s.portraitAperture;
+      recipe.portrait = { aperture, style: s.portraitStyle };
+    }
     return compact(recipe) ?? undefined;
   };
 
@@ -278,7 +282,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       } else {
         photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
       }
-      const recipe = captureRecipe(photo.depth);
+      const recipe = captureRecipe(photo.depth, 'photo', photo.autoAperture);
       // Portrait only blurs around a person; say so instead of a silent plain photo.
       if (s.mode === 'portrait' && !photo.depth && !photo.raw) showNotice('No person found · saved as a normal photo');
       if (recipe && s.bakeLooks && LensImaging && !photo.raw) {
@@ -589,6 +593,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             look={s.look}
             lookIntensity={s.lookIntensity}
             portraitAperture={s.portraitAperture}
+            portraitAuto={!stored.pro}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
             mirrorFront={s.mirrorSelfies}

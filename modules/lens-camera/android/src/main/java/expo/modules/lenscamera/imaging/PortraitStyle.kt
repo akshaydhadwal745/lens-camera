@@ -20,6 +20,24 @@ object PortraitStyle {
     return (0.024 * k).toFloat()
   }
 
+  /**
+   * Automatic blur strength (Normal camera, checklist 4.4): like a real lens, the
+   * closer the subject (the more of the frame the person fills) the shallower the
+   * depth of field. Coverage 0…1 → f-number: ≥ 55 % f/1.8, 30 % f/2.8, 12 % f/4,
+   * smaller f/5.6, linear in between.
+   */
+  fun autoAperture(coverage: Double): Double {
+    val points = listOf(0.05 to 5.6, 0.12 to 4.0, 0.30 to 2.8, 0.55 to 1.8)
+    if (coverage <= points.first().first) return points.first().second
+    if (coverage >= points.last().first) return points.last().second
+    for (k in 1 until points.size) {
+      val (c0, a0) = points[k - 1]
+      val (c1, a1) = points[k]
+      if (coverage <= c1) return a0 + (a1 - a0) * (coverage - c0) / (c1 - c0)
+    }
+    return 2.8
+  }
+
   /** Shader code for a style id (0 = natural, nothing extra). */
   fun code(id: String?): Float = when (id) {
     "studio" -> 1f

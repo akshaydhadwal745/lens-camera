@@ -37,4 +37,19 @@ class PortraitRefineTest {
     assertEquals(0f, PortraitStyle.blurFraction(null), 0f)
     assertTrue(PortraitStyle.blurFraction(2.8) in 0.021f..0.022f)
   }
+
+  @Test
+  fun autoApertureFollowsSubjectSize() {
+    assertEquals(1.8, PortraitStyle.autoAperture(0.7), 1e-9) // close-up
+    assertEquals(2.8, PortraitStyle.autoAperture(0.30), 1e-9)
+    assertEquals(4.0, PortraitStyle.autoAperture(0.12), 1e-9)
+    assertEquals(5.6, PortraitStyle.autoAperture(0.02), 1e-9) // far / full body
+    // Monotonic: a bigger subject never gets less blur.
+    var last = 99.0
+    for (k in 0..100) {
+      val a = PortraitStyle.autoAperture(k / 100.0)
+      assertTrue(a <= last + 1e-9)
+      last = a
+    }
+  }
 }

@@ -140,6 +140,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   @Volatile var paused = false
   /** Portrait background blur as a fraction of the frame's long side (0 = off). See [LivePortrait.blurFraction]. */
   @Volatile var portraitBlur = 0f
+  /** Normal camera: derive the blur from how much of the frame the person fills (overrides [portraitBlur] when > 0 people). */
+  @Volatile var portraitAuto = false
   /** Portrait style (see [expo.modules.lenscamera.imaging.PortraitStyle]): 0 natural … 3 stage. */
   @Volatile var portraitStyle = 0f
   /** Night photo coming (Night mode or auto Night with Lens's own merge): preview it brightened and averaged. */
@@ -362,7 +364,10 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uPortrait"), if (blurOn) 1f else 0f)
       GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "uStyle"), if (blurOn) portraitStyle else 0f)
       // Radius in view uv: same fraction of the long side as the saved photo's blur.
-      val radiusPx = blur * max(viewWidth, viewHeight)
+      val radiusFrac = if (portraitAuto && hasSubject) {
+        expo.modules.lenscamera.imaging.PortraitStyle.blurFraction(expo.modules.lenscamera.imaging.PortraitStyle.autoAperture(livePortrait.coverage))
+      } else blur
+      val radiusPx = radiusFrac * max(viewWidth, viewHeight)
       GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uBlurRadius"), radiusPx / viewWidth, radiusPx / viewHeight)
       GlUtil.drawQuad(program)
       core.setPresentationTime(window, st.timestamp)

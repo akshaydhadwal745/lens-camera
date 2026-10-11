@@ -69,6 +69,7 @@ class LensCameraModule : Module() {
       Prop("look") { view: LensCameraView, value: String? -> view.look = value }
       Prop("lookIntensity") { view: LensCameraView, value: Double -> view.lookIntensity = value }
       Prop("portraitAperture") { view: LensCameraView, value: Double -> view.portraitAperture = value }
+      Prop("portraitAuto") { view: LensCameraView, value: Boolean -> view.portraitAuto = value }
       Prop("nightPreview") { view: LensCameraView, value: Boolean -> view.nightPreview = value }
       Prop("portraitStyle") { view: LensCameraView, value: String -> view.portraitStyle = value }
       Prop("hardwareShutter") { view: LensCameraView, value: Boolean -> view.hardwareShutter = value }

@@ -54,6 +54,7 @@ import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.LifecycleOwner
 import expo.modules.lenscamera.imaging.Portrait
+import expo.modules.lenscamera.imaging.PortraitStyle
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -837,7 +838,7 @@ class CameraController(private val context: Context) {
           val (w, h) = uprightSize(file)
           // Portrait: find the person and keep the mask inside the photo.
           val depth = !raw && config.mode == "portrait" && Portrait.addMask(file)
-          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to raw, "depth" to depth)))
+          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to raw, "depth" to depth, "autoAperture" to if (depth) PortraitStyle.autoAperture(Portrait.lastCoverage) else null)))
         }
 
         override fun onError(exception: ImageCaptureException) {

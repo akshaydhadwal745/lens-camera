@@ -92,6 +92,11 @@ the background is blurred from a ¼-size copy of the frame (a few texture reads,
 no extra camera stream), at the same strength as the saved photo. No person =
 no blur, like the photo. Research and next steps: [research/portrait.md](../research/portrait.md).
 
+**Automatic blur strength** (Normal camera): like a real lens, a close-up gets a
+stronger background blur than a full-body shot. Lens picks the f-number from how
+much of the frame the person fills (≥ 55 % f/1.8 … small f/5.6), in the viewfinder
+and in the photo; it stays adjustable in the editor. PRO uses your own f-number.
+
 **Styles** (chips in the tray in Portrait mode, simple and PRO; also in the
 editor's Portrait tab): **Natural** (blur only, default), **Studio** (background
 darker and less colourful), **Mono** (black and white, background a step

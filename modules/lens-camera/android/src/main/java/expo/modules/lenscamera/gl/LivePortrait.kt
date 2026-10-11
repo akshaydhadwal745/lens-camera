@@ -23,6 +23,9 @@ import kotlin.math.roundToInt
 class LivePortrait {
   /** A new mask (on the segmentation thread). `subject`: a person was found. */
   var onMask: ((mask: ByteBuffer, width: Int, height: Int, subject: Boolean) -> Unit)? = null
+  /** Person coverage (0…1) of the latest mask, smoothed (automatic blur strength). */
+  @Volatile var coverage = 0.0
+    private set
 
   @Volatile var busy = false
     private set
@@ -102,6 +105,7 @@ class LivePortrait {
     }
     out.position(0)
     // Same rule as the photo (Portrait.addMask): almost nobody in frame = no effect.
+    coverage = coverage * 0.7 + subject.toDouble() / (mw * mh) * 0.3
     onMask?.invoke(out, mw, mh, subject >= mw * mh * 0.02)
   }
 

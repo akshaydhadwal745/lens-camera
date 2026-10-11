@@ -52,6 +52,10 @@ object Portrait {
    * Returns false when nobody was found (the photo is left as it was).
    * Runs on a background thread; takes ~100–300 ms.
    */
+  /** Coverage (0…1) of the person in the last [addMask] photo, for the automatic blur strength. */
+  @Volatile var lastCoverage = 0.0
+    private set
+
   fun addMask(photo: File): Boolean {
     try {
       val orientation = ExifInterface(photo).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
@@ -76,6 +80,7 @@ object Portrait {
         pixels[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
       }
       // Nobody (or almost nobody) in the frame: no portrait effect.
+      lastCoverage = subject.toDouble() / (mw * mh)
       if (subject < mw * mh * 0.02) return false
       var maskBitmap = refine(upright, Bitmap.createBitmap(pixels, mw, mh, Bitmap.Config.ARGB_8888))
       // …then store it in the photo's stored orientation (that's how the renderer samples it).
