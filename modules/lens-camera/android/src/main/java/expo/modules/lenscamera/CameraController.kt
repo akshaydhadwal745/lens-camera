@@ -432,7 +432,10 @@ class CameraController(private val context: Context) {
     }
     // Per-frame metadata (ISO, shutter, focus, white balance) for the HUD.
     Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(captureCallback)
-    if (config.isVideo && video.stabilized && config.stabilization != "standard" &&
+    // Time-lapse/hyperlapse: frames come from the preview, so stabilizing it steadies a hand-held one.
+    if (config.isTimeLapse && runCatching { Preview.getPreviewCapabilities(cam.info).isStabilizationSupported }.getOrDefault(false)) {
+      previewBuilder.setPreviewStabilizationEnabled(true)
+    } else if (config.isVideo && video.stabilized && config.stabilization != "standard" &&
       runCatching { Preview.getPreviewCapabilities(cam.info).isStabilizationSupported }.getOrDefault(false)
     ) {
       // Preview stabilization stabilizes the recording too (what you see is what you get).

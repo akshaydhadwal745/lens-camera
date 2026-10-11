@@ -159,6 +159,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   /** Id of the upload running while recording (null: uploads after you stop). */
   const [liveId, setLiveId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  // Hyperlapse (checklist 9.5): the time-lapse is being carried; seconds spent that way.
+  const [hyper, setHyper] = useState(false);
+  const [hyperSeconds, setHyperSeconds] = useState(0);
   // Recording asked for, but frames aren't being saved yet (mic + encoder starting:
   // 0.3–1.5 s depending on the phone). REC and the timer only show once it's real.
   const [recLive, setRecLive] = useState(false);
@@ -233,9 +236,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   useEffect(() => {
     if (!recording || !recLive || paused) return;
-    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    const id = setInterval(() => {
+      setElapsed((e) => e + 1);
+      if (hyper) setHyperSeconds((h) => h + 1);
+    }, 1000);
     return () => clearInterval(id);
-  }, [recording, recLive, paused]);
+  }, [recording, recLive, paused, hyper]);
 
   const update = useCallback((patch: Partial<ProSettings>) => setS((prev) => ({ ...prev, ...patch })), []);
 
@@ -435,6 +441,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     }
     setRecording(true);
     setElapsed(0);
+    setHyper(false);
+    setHyperSeconds(0);
     setRecLive(true);
     const recipe = captureRecipe(false, 'video');
     cam
@@ -722,6 +730,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             }
             scanCodes={s.scanCodes && s.mode === 'photo'}
             onCode={(e) => setCode(e.nativeEvent.code)}
+            onTimeLapse={(e) => setHyper(e.nativeEvent.hyperlapse)}
             motionPhoto={s.mode === 'photo' && s.motionPhoto && !!caps?.motionPhoto && !s.raw}
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
@@ -833,7 +842,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 : paused
                   ? `${formatDuration(elapsed)} · PAUSED`
                   : s.mode === 'timelapse'
-                    ? `${formatDuration(elapsed)} → ${formatDuration(Math.round(timeLapseClipSeconds(elapsed)))}`
+                    ? `${formatDuration(elapsed)} → ${formatDuration(Math.round(timeLapseClipSeconds(elapsed - hyperSeconds) + hyperSeconds / 0.267 / 30))}${hyper ? ' · HYPERLAPSE' : ''}`
                     : s.mode === 'slowmo' && caps?.slowMotionBound
                       ? `${formatDuration(elapsed)} · ${caps.slowMotionBound}× SLOW`
                       : stats?.lowLightBoost

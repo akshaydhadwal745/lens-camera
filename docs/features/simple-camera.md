@@ -201,6 +201,19 @@ its clean-up filters (shadows, stains, fingers), up to 20 pages. Each page comes
 back as a JPEG and goes into the roll as a photo (backed up like any photo).
 Cancel = nothing saved. Phones without Play services don't show SCAN.
 
+## Hyperlapse (checklist 9.5)
+
+No separate mode: **TIME-LAPSE** notices when the phone is being carried
+(`HandMotion.kt`: gyroscope turning speed averaged over ~2 s, accelerometer
+jitter on phones without one; moving above 0.15 rad/s, still again below 0.07).
+While carried, frames are taken every 267 ms (8×; 16× after 5 minutes) instead
+of the tripod schedule (15×→120×), so walking stays smooth instead of jumping;
+REC shows **· HYPERLAPSE** and the clip-length estimate follows. Time-lapse
+also turns on the phone's **preview stabilization** where CameraX reports it
+(the frames come from the preview, so this steadies the clip). No software
+stabilization yet (gyro-based crop smoothing is a later step if phone tests
+show shake on phones without preview stabilization).
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,

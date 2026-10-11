@@ -184,6 +184,8 @@ export type LensCameraProps = ViewProps & {
   onSceneLook?: (e: NativeSyntheticEvent<{ look: string | null }>) => void;
   /** Android: a QR code came into view (or left it: null). */
   onCode?: (e: NativeSyntheticEvent<{ code: ScannedCode | null }>) => void;
+  /** Android, during a time-lapse: the phone started/stopped being carried (hyperlapse: frames closer together). */
+  onTimeLapse?: (e: NativeSyntheticEvent<{ hyperlapse: boolean }>) => void;
   /** Android: a burst shot was saved (`count` so far). */
   onBurstShot?: (e: NativeSyntheticEvent<{ count: number }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
@@ -236,7 +238,7 @@ export type LensCameraHandle = {
   /** Android, while recording: a photo (full resolution where supported, else the video frame: `fromVideo`). */
   takeVideoPhoto?(): Promise<PhotoResult & { fromVideo?: boolean }>;
   /** Android, mode 'timelapse': resolves with the clip when stopTimeLapse() finishes it. */
-  startTimeLapse?(): Promise<{ uri: string; duration: number; frames: number }>;
+  startTimeLapse?(): Promise<{ uri: string; duration: number; frames: number; hyperlapse?: boolean }>;
   stopTimeLapse?(): Promise<void>;
   resumeRecording?(): Promise<boolean>;
   focusAt(x: number, y: number): Promise<void>;

@@ -142,6 +142,9 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var timeLapseDone: ((Result<Map<String, Any?>>) -> Unit)? = null
   private var timeLapseFile: java.io.File? = null
   private val timeLapseUv = FloatArray(16)
+  /** The phone is being carried: time-lapse frames come closer together (hyperlapse). */
+  @Volatile var hyperlapse = false
+  private var hyperFrames = 0
   // Motion photos (checklist 9.2): the last seconds of the viewfinder, encoded, while on.
   /** Keep a motion clip ready for photos (photo mode with Motion on). */
   @Volatile var motionPhoto = false
@@ -439,7 +442,9 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       core.setPresentationTime(window, st.timestamp)
       core.swap(window)
       framesDrawn++
-      if (lapse && now - timeLapseLast >= TimeLapseEncoder.intervalMs(now - timeLapseStart)) {
+      val lapseInterval = if (hyperlapse) TimeLapseEncoder.hyperIntervalMs(now - timeLapseStart) else TimeLapseEncoder.intervalMs(now - timeLapseStart)
+      if (lapse && now - timeLapseLast >= lapseInterval) {
+        if (hyperlapse) hyperFrames++
         timeLapseLast = now
         drawTimeLapseFrame(core)
       }
@@ -571,6 +576,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         timeLapseFile = file
         timeLapseStart = SystemClock.uptimeMillis()
         timeLapseLast = 0L
+        hyperFrames = 0
         smoothLuma = -1f
         Log.i(TAG, "time-lapse ${w}x$h")
       } catch (e: Exception) {
@@ -596,7 +602,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       val file = timeLapseFile
       timeLapseFile = null
       if (duration > 0 && file != null) {
-        done?.invoke(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to duration, "frames" to frames)))
+        done?.invoke(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to duration, "frames" to frames, "hyperlapse" to (hyperFrames * 2 > frames))))
       } else {
         done?.invoke(Result.failure(IllegalStateException("The time-lapse was too short (no frames).")))
       }

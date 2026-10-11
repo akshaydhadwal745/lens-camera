@@ -116,5 +116,11 @@ class TimeLapseEncoder(val width: Int, val height: Int, private val file: File) 
       elapsedMs < 20 * 60_000 -> 2_000 // up to 20 min: 60×
       else -> 4_000 // after that: 120×
     }
+
+    /**
+     * Hyperlapse (checklist 9.5, the phone is being carried): frames much closer
+     * together, or walking turns into jumps. 8× for the first 5 minutes, 16× after.
+     */
+    fun hyperIntervalMs(elapsedMs: Long): Long = if (elapsedMs < 5 * 60_000) 267 else 533
   }
 }

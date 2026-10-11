@@ -47,6 +47,14 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onRecordingAudio by EventDispatcher<Map<String, Any?>>()
   private val onSceneLook by EventDispatcher<Map<String, Any?>>()
   private val onCode by EventDispatcher<Map<String, Any?>>()
+  private val onTimeLapse by EventDispatcher<Map<String, Any?>>()
+  // Hyperlapse (checklist 9.5): carried or still, while a time-lapse runs.
+  private val handMotion = HandMotion(context).also { m ->
+    m.onChange = { moving ->
+      glPreview?.hyperlapse = moving
+      post { onTimeLapse(mapOf("hyperlapse" to moving)) }
+    }
+  }
   private val onBurstShot by EventDispatcher<Map<String, Any?>>()
   private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
   /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
@@ -251,6 +259,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   fun destroy() {
     running = false
+    handMotion.stop()
     handler.removeCallbacks(statsTick)
     orientationListener.disable()
     displayManager.unregisterDisplayListener(displayListener)
@@ -382,12 +391,16 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     // <cache>/Camera like videos (the app moves captures into its own store).
     val dir = java.io.File(context.cacheDir, "Camera").apply { mkdirs() }
     val file = java.io.File(dir, "timelapse-${java.util.UUID.randomUUID()}.mp4")
+    gl.hyperlapse = false
+    handMotion.start()
     gl.startTimeLapse(file) { result ->
+      handMotion.stop()
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_TIMELAPSE", it.message, it) })
     }
   }
 
   fun stopTimeLapse() {
+    handMotion.stop()
     glPreview?.stopTimeLapse()
   }
 
