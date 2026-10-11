@@ -73,3 +73,13 @@ never re-encoded. Older APKs and iPhone still play the original. Video looks are
 Missing fields are neutral. Processing order: auto → portrait blur → exposure →
 highlights/shadows → white balance → contrast/saturation → vibrance → look →
 sharpen → vignette → grain → rotate/flip/straighten/crop.
+
+
+## Trim videos (Android)
+
+In the video player, tap ✂ to trim: drag along the timeline and the nearer end
+moves (you see the frame there); Save keeps it. It is an edit like a look: the
+original stays whole, and you can change or remove the trim later. Playback starts
+and stops at the trim; Save/Share give a trimmed file (without a look, only the
+first moments are re-encoded, so it's quick and lossless elsewhere). The web
+player still plays the whole video.

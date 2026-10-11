@@ -11,13 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LensImaging } from '../../../modules/lens-camera';
 
-import { isNeutral } from '@/lib/edits';
+import { compact, isNeutral, withoutTrim } from '@/lib/edits';
 import { formatDate, formatDuration } from '@/lib/format';
 import { font, glass, palette } from '@/lib/theme';
 import { providerInfo } from '@/lib/storage/providers';
 import type { MediaSource } from '@/lib/storage/types';
 import { useOriginal } from '@/lib/storage/useOriginal';
-import { selectGallery, selectShared, useStore } from '@/lib/store';
+import { saveEdit, selectGallery, selectShared, useStore } from '@/lib/store';
 import { viewUri } from '@/lib/types';
 import { useStream } from '@/lib/useStream';
 import { takePreloaded } from '@/lib/video-prefetch';
@@ -76,7 +76,9 @@ export default function PlayerScreen() {
 
   // The look chosen when recording (or in the editor) is a recipe, not baked
   // into the file: play it live with the same GPU shader the thumbnail used.
-  const edit = item?.edit && !isNeutral(item.edit) ? item.edit : null;
+  // Looks/colour only: a trim alone needs no shader.
+  const colourOnly = withoutTrim(item?.edit);
+  const edit = colourOnly && !isNeutral(colourOnly) ? colourOnly : null;
   const editKey = edit ? JSON.stringify(edit) : '';
   useEffect(() => {
     if (!edit || !LensImaging?.setVideoLook) return; // no look: leave the player alone
@@ -102,6 +104,39 @@ export default function PlayerScreen() {
 
   const duration = player.duration || item?.duration || 0;
 
+  // ---------- Trim (checklist 6.2): a removable edit; the original stays whole ----------
+  const savedTrim = item?.edit?.trim;
+  const trimStart = savedTrim?.start ?? 0;
+  const trimEnd = savedTrim?.end ?? duration;
+  // Trim editor: the range being chosen (null = not editing).
+  const [trimming, setTrimming] = useState<{ start: number; end: number } | null>(null);
+  // Start at the trim start once the video is ready.
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  if (status === 'readyToPlay' && startedAt !== item?.id && item) {
+    setStartedAt(item.id);
+    if (trimStart > 0) seekTo(player, trimStart);
+  }
+  // Stop at the trim end (not while editing the trim), from the player's own time events.
+  const trimEndAt = savedTrim?.end;
+  useEffect(() => {
+    if (trimming || trimEndAt === undefined) return;
+    const sub = player.addListener('timeUpdate', ({ currentTime: t }) => {
+      if (t >= trimEndAt - 0.05 && player.playing) {
+        player.pause();
+        setEnded(true);
+      }
+    });
+    return () => sub.remove();
+  }, [player, trimEndAt, trimming]);
+  const saveTrim = async () => {
+    if (!item || !trimming) return;
+    const full = trimming.start <= 0.05 && trimming.end >= duration - 0.05;
+    const next = compact({ ...(item.edit ?? {}), trim: full ? undefined : { start: trimming.start, end: trimming.end >= duration - 0.05 ? undefined : trimming.end } });
+    setTrimming(null);
+    await saveEdit(item.id, next);
+    seekTo(player, full ? 0 : trimming.start);
+  };
+
   // ---------- Controls visibility ----------
   // Always shown while paused/ended/scrubbing; while playing they hide after 3 s
   // without a touch (`activity` restarts the countdown).
@@ -123,7 +158,7 @@ export default function PlayerScreen() {
   const [skipHint, setSkipHint] = useState<{ side: 'left' | 'right'; key: number } | null>(null);
   const togglePlay = () => {
     if (ended) {
-      seekTo(player, 0);
+      seekTo(player, trimming ? trimming.start : trimStart);
       setEnded(false);
       player.play();
     } else if (isPlaying) player.pause();
@@ -169,15 +204,30 @@ export default function PlayerScreen() {
     .runOnJS(true)
     .minDistance(0)
     .hitSlop({ top: 16, bottom: 16 })
-    .onBegin((e) => setScrubbing(fractionAt(e.x) * duration))
-    .onUpdate((e) => setScrubbing(fractionAt(e.x) * duration))
+    .onBegin((e) => (trimming ? moveTrimHandle(e.x) : setScrubbing(fractionAt(e.x) * duration)))
+    .onUpdate((e) => (trimming ? moveTrimHandle(e.x) : setScrubbing(fractionAt(e.x) * duration)))
     .onFinalize((e) => {
+      if (trimming) return;
       if (duration > 0) {
-        seekTo(player, fractionAt(e.x) * duration);
+        // Seeks stay inside the trimmed part.
+        const t = Math.min(trimEnd, Math.max(trimStart, fractionAt(e.x) * duration));
+        seekTo(player, t);
         setEnded(false);
       }
       setScrubbing(null);
     });
+  /** Trim editor: the nearer handle follows the finger (≥ 0.5 s apart) and the frame there is shown. */
+  const moveTrimHandle = (x: number) => {
+    if (!trimming || duration <= 0) return;
+    const t = fractionAt(x) * duration;
+    const startSide = Math.abs(t - trimming.start) <= Math.abs(t - trimming.end);
+    const next = startSide
+      ? { start: Math.max(0, Math.min(t, trimming.end - 0.5)), end: trimming.end }
+      : { start: trimming.start, end: Math.min(duration, Math.max(t, trimming.start + 0.5)) };
+    setTrimming(next);
+    player.pause();
+    seekTo(player, startSide ? next.start : next.end);
+  };
   const shownTime = scrubbing ?? currentTime;
   const progress = duration > 0 ? Math.min(1, shownTime / duration) : 0;
 
@@ -275,13 +325,35 @@ export default function PlayerScreen() {
                   accessibilityValue={{ min: 0, max: Math.round(duration), now: Math.round(shownTime) }}
                 >
                   <View style={styles.trackBg}>
-                    <View style={[styles.trackFill, { width: `${progress * 100}%` }]} />
+                    {!trimming && <View style={[styles.trackFill, { width: `${progress * 100}%` }]} />}
+                    {trimming && duration > 0 && (
+                      // Kept part in yellow; the cut-off ends stay dim.
+                      <View style={[styles.trimRange, { left: `${(trimming.start / duration) * 100}%`, width: `${((trimming.end - trimming.start) / duration) * 100}%` }]} />
+                    )}
                   </View>
-                  <View style={[styles.thumb, scrubbing != null && styles.thumbActive, { left: `${progress * 100}%` }]} />
+                  {trimming && duration > 0 ? (
+                    <>
+                      <View style={[styles.trimHandle, { left: `${(trimming.start / duration) * 100}%` }]} />
+                      <View style={[styles.trimHandle, { left: `${(trimming.end / duration) * 100}%` }]} />
+                    </>
+                  ) : (
+                    <View style={[styles.thumb, scrubbing != null && styles.thumbActive, { left: `${progress * 100}%` }]} />
+                  )}
                 </View>
               </GestureDetector>
               <Text style={styles.time}>{formatDuration(duration)}</Text>
             </View>
+            {trimming ? (
+              <View style={styles.toolRow}>
+                <Pressable onPress={() => setTrimming(null)} style={styles.tool} accessibilityLabel="Cancel trim">
+                  <Text style={styles.trimText}>Cancel</Text>
+                </Pressable>
+                <Text style={styles.trimInfo}>{formatDuration(trimming.end - trimming.start)}</Text>
+                <Pressable onPress={() => void saveTrim()} style={styles.tool} accessibilityLabel="Save trim">
+                  <Text style={[styles.trimText, { color: palette.accent }]}>Save</Text>
+                </Pressable>
+              </View>
+            ) : (
             <View style={styles.toolRow}>
               <Pressable
                 onPress={() => {
@@ -293,10 +365,24 @@ export default function PlayerScreen() {
               >
                 <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={22} color={palette.text} />
               </Pressable>
+              {from !== 'shared' && hasSource && (
+                <Pressable
+                  onPress={() => {
+                    setTrimming({ start: trimStart, end: savedTrim?.end ?? duration });
+                    player.pause();
+                    poke();
+                  }}
+                  style={styles.tool}
+                  accessibilityLabel="Trim"
+                >
+                  <Ionicons name="cut-outline" size={22} color={savedTrim ? palette.accent : palette.text} />
+                </Pressable>
+              )}
               <Pressable onPress={cycleSpeed} style={styles.tool} accessibilityLabel={`Speed ${playbackRate}x`}>
                 <Text style={styles.speed}>{playbackRate}×</Text>
               </Pressable>
             </View>
+            )}
           </View>
         </>
       )}
@@ -372,7 +458,11 @@ const styles = StyleSheet.create({
   trackFill: { height: '100%', backgroundColor: palette.text },
   thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, marginLeft: -7, backgroundColor: palette.text },
   thumbActive: { width: 20, height: 20, borderRadius: 10, marginLeft: -10 },
-  toolRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  toolRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  trimRange: { position: 'absolute', top: 0, bottom: 0, backgroundColor: palette.accent },
+  trimHandle: { position: 'absolute', width: 10, height: 24, borderRadius: 3, marginLeft: -5, backgroundColor: palette.accent },
+  trimText: { color: palette.text, fontSize: 15, fontFamily: font.semibold },
+  trimInfo: { color: palette.muted, fontSize: 13, fontFamily: font.mono },
   tool: { minWidth: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   speed: { color: palette.text, fontSize: 14, fontFamily: font.monoSemibold },
   skipHint: {

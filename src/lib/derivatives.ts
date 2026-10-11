@@ -6,7 +6,7 @@ import { ImageManipulator, ImageRef, SaveFormat } from 'expo-image-manipulator';
 import { createVideoPlayer } from 'expo-video';
 
 import { isImagingAvailable, LensImaging } from '../../modules/lens-camera';
-import { EditRecipe, isNeutral } from './edits';
+import { EditRecipe, isNeutral, withoutTrim } from './edits';
 import { captureFile, uriFor } from './local-store';
 import { LocalEntry } from './types';
 
@@ -79,7 +79,8 @@ export function makeDerivatives(entry: LocalEntry): Promise<Pick<LocalEntry, 'th
   if (existing) return existing;
   const job = (async () => {
     const stamp = Date.now().toString(36);
-    const edited = !isNeutral(entry.edit) && isImagingAvailable;
+    // A trim alone doesn't change any picture (poster/thumbnail stay the same).
+    const edited = !isNeutral(withoutTrim(entry.edit)) && isImagingAvailable;
     // RAW (DNG): decoded by the imaging engine, the general image loader can't on every phone.
     const raw = entry.kind === 'photo' && /\.dng$/i.test(entry.fileName) && isImagingAvailable;
     if ((edited || raw) && entry.kind === 'photo') return renderEdited(uriFor(entry), entry.edit ?? {}, entry, stamp);
@@ -89,7 +90,7 @@ export function makeDerivatives(entry: LocalEntry): Promise<Pick<LocalEntry, 'th
     if (edited) {
       // Video: render the look over the poster frame.
       const poster = await preview.saveAsync({ format: SaveFormat.JPEG, compress: 0.95 });
-      const { crop: _c, portrait: _p, ...videoRecipe } = entry.edit!;
+      const { crop: _c, portrait: _p, trim: _t, ...videoRecipe } = entry.edit!;
       return renderEdited(poster.uri, videoRecipe, entry, stamp);
     }
     const thumb = await render(preview as unknown as Source, THUMB_PX);

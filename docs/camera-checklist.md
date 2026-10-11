@@ -125,7 +125,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 | # | Feature | Status | Evidence / limits |
 |---|---|---|---|
 | 6.1 | Photo editor: auto, light/colour, crop/rotate/straighten, portrait, copy/paste | 🟡 | 1024 px tiles for big photos; not tested on big photos on a phone |
-| 6.2 | Video trim | ⬜ | Essential, missing |
+| 6.2 | Video trim | 🔨 | Built as a removable edit (recipe `trim: {start, end}`; the original stays whole, change or remove it any time): player ✂ tool (own videos) → the timeline's nearer handle follows the finger, frame preview, ≥ 0.5 s, Cancel / Save; playback starts at the trim start, stops at the end, seeks stay inside. Save/Share export through Media3 `ClippingConfiguration`; trim-only (no look) uses `experimentalSetTrimOptimizationEnabled` (re-encodes only up to the first key frame); a trim alone skips the look shader in playback and posters. Limitations: the web player plays the whole video; HLS streams aren't clipped (playback is). To validate: S8 trim + save to gallery (duration with ffprobe), share, playback stops at the end |
 | 6.3 | Non-destructive edits everywhere (original kept) | ✅ | By design; recipe stored separately |
 
 ### 7. Intelligent enhancements

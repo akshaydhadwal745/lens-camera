@@ -24,6 +24,9 @@ data class EditRecipe(
   val aperture: Double? = null,
   /** Portrait style: natural (null), studio, mono or stage. Only with a subject mask. */
   val portraitStyle: String? = null,
+  /** Video trim (seconds into the original), removable like any edit; null = from the start / to the end. */
+  val trimStart: Double? = null,
+  val trimEnd: Double? = null,
 ) {
   data class Crop(
     val x: Double? = null,
@@ -38,7 +41,10 @@ data class EditRecipe(
   )
 
   /** Looks and colour only: what applies to videos. */
-  fun colourOnly() = copy(crop = null, aperture = null, portraitStyle = null)
+  fun colourOnly() = copy(crop = null, aperture = null, portraitStyle = null, trimStart = null, trimEnd = null)
+
+  /** No look/colour change at all (a video export can then skip the shader and keep the encoded frames). */
+  val colourNeutral get() = colourOnly().copy(intensity = 1.0) == EditRecipe() && !(look != null && intensity > 0)
 
   companion object {
     fun from(map: Map<String, Any?>?): EditRecipe? {
@@ -77,6 +83,8 @@ data class EditRecipe(
         crop = crop,
         aperture = num(portrait?.get("aperture")),
         portraitStyle = (portrait?.get("style") as? String)?.takeIf { it != "natural" },
+        trimStart = num((map["trim"] as? Map<*, *>)?.get("start")),
+        trimEnd = num((map["trim"] as? Map<*, *>)?.get("end")),
       )
     }
 

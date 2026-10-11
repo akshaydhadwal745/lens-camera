@@ -36,10 +36,20 @@ object VideoExport {
   fun export(context: Context, uri: String, recipe: EditRecipe?, done: (Result<File>) -> Unit) {
     val input = ImagingEngine.fileOf(uri)
     val output = File(context.cacheDir, "lens-export-${UUID.randomUUID()}.mp4")
-    val colour = recipe?.colourOnly()
+    val colour = recipe?.colourOnly()?.takeIf { !recipe.colourNeutral }
     Handler(Looper.getMainLooper()).post {
       try {
-        val item = EditedMediaItem.Builder(MediaItem.fromUri(android.net.Uri.fromFile(input)))
+        // Trim (checklist 6.2): the original stays whole; the export is clipped.
+        val media = MediaItem.Builder().setUri(android.net.Uri.fromFile(input))
+        val start = recipe?.trimStart
+        val end = recipe?.trimEnd
+        if (start != null || end != null) {
+          val clip = MediaItem.ClippingConfiguration.Builder()
+          if (start != null && start > 0) clip.setStartPositionMs((start * 1000).toLong())
+          if (end != null) clip.setEndPositionMs((end * 1000).toLong())
+          media.setClippingConfiguration(clip.build())
+        }
+        val item = EditedMediaItem.Builder(media.build())
           .setEffects(Effects(emptyList(), if (colour != null) listOf(RecipeEffect(context.applicationContext, colour)) else emptyList()))
           .build()
         // Looks are defined for normal (SDR) video: HDR recordings are tone-mapped first.
@@ -47,6 +57,8 @@ object VideoExport {
           .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
           .build()
         val transformer = Transformer.Builder(context)
+          // Trim only (no look): keep the encoded frames, re-encode just up to the first key frame.
+          .experimentalSetTrimOptimizationEnabled(colour == null && (start != null || end != null))
           .addListener(object : Transformer.Listener {
             override fun onCompleted(composition: Composition, exportResult: ExportResult) {
               done(Result.success(output))

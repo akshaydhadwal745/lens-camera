@@ -34,7 +34,24 @@ export type EditRecipe = {
   adjust?: Adjustments;
   crop?: Crop;
   portrait?: { aperture?: number; style?: PortraitStyle };
+  /** Video trim, seconds into the original (removable; the original stays whole). */
+  trim?: Trim;
 };
+
+export type Trim = { start?: number; end?: number };
+
+/** A trim that actually cuts something (start after 0.05 s, or an end). */
+export function hasTrim(recipe?: EditRecipe | null): boolean {
+  const t = recipe?.trim;
+  return !!t && ((t.start ?? 0) > 0.05 || t.end !== undefined);
+}
+
+/** The recipe without the trim: what changes the picture (looks/colour/crop). */
+export function withoutTrim(recipe?: EditRecipe | null): EditRecipe | null {
+  if (!recipe) return null;
+  const { trim: _trim, ...rest } = recipe;
+  return rest;
+}
 
 /** Portrait styles: a few, chosen for natural results (docs/research/portrait.md). Natural = blur only. */
 export type PortraitStyle = 'natural' | 'studio' | 'mono' | 'stage';
@@ -110,6 +127,7 @@ export function isNeutral(recipe?: EditRecipe | null): boolean {
   if (recipe.look && (recipe.intensity ?? 1) > 0) return false;
   if (recipe.auto) return false;
   if (recipe.portrait?.aperture) return false;
+  if (hasTrim(recipe)) return false;
   if (recipe.adjust && Object.values(recipe.adjust).some((v) => typeof v === 'number' && Math.abs(v) > 1e-3)) return false;
   const c = recipe.crop;
   if (c && ((c.rotate ?? 0) % 4 !== 0 || c.flip || Math.abs(c.straighten ?? 0) > 0.01 || (c.w !== undefined && c.w < 1) || (c.h !== undefined && c.h < 1))) {
@@ -137,11 +155,16 @@ export function compact(recipe: EditRecipe): EditRecipe | null {
   }
   if (Object.keys(adjust).length) out.adjust = adjust;
   if (recipe.crop && !isNeutral({ crop: recipe.crop })) out.crop = recipe.crop;
+  if (hasTrim(recipe)) {
+    const start = recipe.trim!.start && recipe.trim!.start > 0.05 ? Math.round(recipe.trim!.start * 100) / 100 : undefined;
+    const end = recipe.trim!.end !== undefined ? Math.round(recipe.trim!.end * 100) / 100 : undefined;
+    out.trim = { ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}) };
+  }
   return out;
 }
 
 /** What "Paste edit" copies to other photos: everything except crop. */
 export function forPaste(recipe: EditRecipe): EditRecipe {
-  const { crop: _crop, portrait: _portrait, ...rest } = recipe;
+  const { crop: _crop, portrait: _portrait, trim: _trim, ...rest } = recipe;
   return rest;
 }
