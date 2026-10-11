@@ -142,7 +142,7 @@ export type LensCameraProps = ViewProps & {
 };
 
 export type PhotoResult = { uri: string; width: number; height: number; raw: boolean; depth?: boolean; frames?: number };
-export type VideoResult = { uri: string; duration: number };
+export type VideoResult = { uri: string; duration: number; /** Android: ms from start until the first recorded data. */ startDelayMs?: number | null };
 
 export type LensCameraHandle = {
   takePhoto(options: { raw: boolean; flash: 'off' | 'on' | 'auto' }): Promise<PhotoResult>;
@@ -150,6 +150,8 @@ export type LensCameraHandle = {
   takeNightPhoto(frames: number): Promise<PhotoResult>;
   /** Android, Quality Lab: `frames` shots kept as they are (no merge). */
   takeBurst?(frames: number): Promise<BurstResult>;
+  /** Android, self-test: viewfinder frames per second over `ms` (-1 without the GL preview). */
+  previewFps?(ms: number): Promise<number>;
   /** Android, Quality Lab: thermal status 0 (none) … 6, or -1 if unknown. */
   thermalStatus?(): Promise<number>;
   /** Resolves when recording stops. */

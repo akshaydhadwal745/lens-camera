@@ -24,11 +24,20 @@ pass/fail per step. Runs:
 | Front camera photo, front landscape | as above (mirroring + preview path recorded) |
 | Night | merged photo saved (4 frames), full size |
 | Portrait | photo saved; no mask = warn (needs a person in view; test-rack phones see none) |
-| Video (3 s) | file > 0 bytes, duration ≥ 2 s |
+| Video (3 s) | file > 0 bytes, duration ≥ 2 s; start delay (press → first recorded data) > 700 ms = warn (the first moment is lost; OPPO A79 ≈ 1.5 s) |
+| Burst speed (5 shots) | 5 photos back to back; reports photos/second (smart burst, checklist 7.3) |
 | RAW | DNG saved (phones with RAW) |
 | Plain JPEG | phones without Ultra HDR |
 | Maker AUTO / HDR / NIGHT | binds and saves (skipped where the phone lacks it) |
 | Upload (Test Lab only) | photo confirmed in the cloud through the real upload queue within 2 min |
+
+Back photo, Portrait (live blur on), Night (night preview on) and Video also record
+the **viewfinder frame rate** over 2 s (`previewFps`), so the cost of the live
+Portrait/Night previews is measured per phone. The Test Lab result file also
+carries the full camera report (`device`) including the **feature probes**
+(slow motion, 60 fps, photo while recording, maker time-lapse profiles,
+low-light boost, stabilization, zero shutter lag, video encoders; checklist 1.1).
+The anonymous diagnostics upload leaves the camera report out (≤ 32 KB limit).
 
 Photo orientation itself follows the motion sensor, which a phone in a test
 rack doesn't change, so the rotation steps check the preview path; Test Lab's

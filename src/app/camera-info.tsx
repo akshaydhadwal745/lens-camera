@@ -31,14 +31,63 @@ type Camera = {
   camera2Extensions?: string[] | null;
   noiseReductionModes?: string[];
   streams?: Record<string, { size: string; maxFps: number | null; stallMs: number } | null> | null;
+  /** Feature probes (checklist 1.1). A string value = the probe failed ("error: …"). */
+  features?: Features;
 };
+
+type Probe<T> = T | string | null | undefined;
+type Features = {
+  slowMotion?: Probe<Record<string, string[]>>;
+  slowMotionCamera2?: Probe<Record<string, string[]>>;
+  fps60?: Probe<Record<string, number>>;
+  videoWithPhoto?: Probe<Record<string, boolean>>;
+  timeLapseProfiles?: Probe<string[]>;
+  lowLightBoost?: Probe<boolean>;
+  videoStabilization?: Probe<boolean>;
+  previewStabilization?: Probe<boolean>;
+  zeroShutterLag?: Probe<boolean>;
+};
+type Encoder = { name: string; maxSize: string; '4k60': boolean; '1080p120': boolean; '720p240': boolean } | null;
 
 type Report = {
   device: { manufacturer: string; model: string; android: string; api: number; abis: string[]; ramGB: number; lowRam: boolean };
   tier: string;
   lenses: { id: string; factor: number; via: string }[];
   cameras: Camera[];
+  videoEncoders?: Probe<{ avc: Encoder; hevc: Encoder }>;
 };
+
+/** Plain-words lines for the feature probes. */
+function featureLines(f: Features | undefined): [string, string][] {
+  if (!f) return [];
+  const err = (v: unknown) => (typeof v === 'string' ? `couldn't check (${v.replace(/^error: /, '').slice(0, 60)})` : null);
+  const yesNo = (v: Probe<boolean>) => err(v) ?? (v ? 'yes' : 'no');
+  const fpsText = (v: Probe<Record<string, string[]>>) =>
+    err(v) ??
+    (v && typeof v === 'object' && Object.keys(v).length
+      ? Object.entries(v)
+          .map(([q, r]) => `${q} ${Array.from(new Set(r.map((x: string) => x.split('-')[1]))).join('/')} fps`)
+          .join(' · ')
+      : 'no');
+  return [
+    ['Slow motion', fpsText(f.slowMotion)],
+    ['Slow-mo (Camera2)', fpsText(f.slowMotionCamera2)],
+    ['Video frame rate', err(f.fps60) ?? (f.fps60 ? Object.entries(f.fps60).map(([q, n]) => `${q} up to ${n} fps`).join(' · ') : '?')],
+    ['Photo in video', err(f.videoWithPhoto) ?? (f.videoWithPhoto ? Object.entries(f.videoWithPhoto).map(([q, ok]) => `${q} ${ok ? 'yes' : 'no'}`).join(' · ') : '?')],
+    ['Maker time-lapse', err(f.timeLapseProfiles) ?? (Array.isArray(f.timeLapseProfiles) && f.timeLapseProfiles.length ? f.timeLapseProfiles.join(', ') : 'none')],
+    ['Low-light boost', yesNo(f.lowLightBoost)],
+    ['Stabilization', `video ${yesNo(f.videoStabilization)} · preview ${yesNo(f.previewStabilization)}`],
+    ['Zero shutter lag', yesNo(f.zeroShutterLag)],
+  ];
+}
+
+function encoderText(e: Report['videoEncoders']): string | null {
+  if (!e) return null;
+  if (typeof e === 'string') return `couldn't check (${e.slice(0, 60)})`;
+  const one = (label: string, x: Encoder) =>
+    x ? `${label} up to ${x.maxSize}${x['4k60'] ? ' · 4K60' : ''}${x['1080p120'] ? ' · 1080p120' : ''}${x['720p240'] ? ' · 720p240' : ''}` : `${label} none`;
+  return `${one('H.264', e.avc)}\n${one('HEVC', e.hevc)}`;
+}
 
 const TIER_TEXT: Record<string, string> = {
   pro: 'Pro: manual ISO, shutter, white balance and focus',
@@ -96,6 +145,12 @@ export default function CameraInfoScreen() {
                 <Text style={styles.value}>{report.lenses.map((l) => `${l.factor}× (${l.id})`).join(' · ')}</Text>
               </>
             )}
+            {encoderText(report.videoEncoders) ? (
+              <>
+                <Text style={[styles.label, { marginTop: 10 }]}>Video encoders</Text>
+                <Text style={styles.value}>{encoderText(report.videoEncoders)}</Text>
+              </>
+            ) : null}
           </View>
           {report.cameras.map((c) => (
             <View key={c.id} style={styles.card}>
@@ -119,6 +174,9 @@ export default function CameraInfoScreen() {
                     .filter(([, v]) => v)
                     .map(([k, v]) => <Line key={k} label={k.toUpperCase()} value={`${v!.size}${v!.maxFps ? ` · up to ${v!.maxFps} fps` : ''}`} />)
                 : null}
+              {featureLines(c.features).map(([label, value]) => (
+                <Line key={label} label={label} value={value} />
+              ))}
             </View>
           ))}
           <Pressable style={styles.lab} onPress={() => router.push('/selftest')}>

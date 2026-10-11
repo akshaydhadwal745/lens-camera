@@ -102,6 +102,10 @@ class LensCameraModule : Module() {
         view.takeBurst(frames, promise)
       }.runOnQueue(Queues.MAIN)
 
+      AsyncFunction("previewFps") { view: LensCameraView, ms: Int, promise: Promise ->
+        view.previewFps(ms.toLong().coerceIn(500, 5000)) { promise.resolve(it) }
+      }.runOnQueue(Queues.MAIN)
+
       AsyncFunction("thermalStatus") { view: LensCameraView ->
         view.thermalStatus()
       }.runOnQueue(Queues.MAIN)

@@ -128,11 +128,13 @@ export function reportBasicPhoto(width: number, height: number) {
 export async function sendSelfTest(report: SelfTestReport) {
   if (Platform.OS !== 'android') return;
   const steps = report.steps.map((s) => ({ ...s, message: s.message?.slice(0, 200) }));
+  // The full camera report stays out (the API takes ≤ 32 KB); it's in Test Lab's result file and Camera info.
+  const { device: _cameraReport, ...summary } = report;
   try {
     await api.diagnostics({
       device: device(),
       build: buildInfo(),
-      events: [{ kind: 'selftest', at: new Date().toISOString(), details: { ...report, steps } }],
+      events: [{ kind: 'selftest', at: new Date().toISOString(), details: { ...summary, steps } }],
     });
   } catch {
     // Offline: the result is still on screen (and in Test Lab's result file).

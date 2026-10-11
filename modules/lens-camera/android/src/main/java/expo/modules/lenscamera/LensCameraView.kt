@@ -20,6 +20,7 @@ import expo.modules.kotlin.views.ExpoView
 import expo.modules.lenscamera.gl.GlPreview
 import expo.modules.lenscamera.gl.LivePortrait
 import expo.modules.lenscamera.imaging.PortraitStyle
+import kotlin.math.roundToInt
 
 /** Monitoring overlays requested by JS (zebra, peaking, false colour, histogram). */
 data class AnalysisOptions(
@@ -255,6 +256,13 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     controller.takeBurst(frames) { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }
+  }
+
+  /** Viewfinder frames per second over [ms] (self-test: what live Portrait/Night cost), or -1 without the GL preview. */
+  fun previewFps(ms: Long, done: (Double) -> Unit) {
+    val gl = glPreview ?: return done(-1.0)
+    val start = gl.framesDrawn
+    handler.postDelayed({ done(((gl.framesDrawn - start) * 1000.0 / ms * 10).roundToInt() / 10.0) }, ms)
   }
 
   /** Thermal status (0 none … 6 shutdown; -1 before Android 10), for the Quality Lab. */

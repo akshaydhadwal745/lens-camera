@@ -130,6 +130,9 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   @Volatile var portraitStyle = 0f
   /** Night photo coming (Night mode or auto Night with Lens's own merge): preview it brightened and averaged. */
   @Volatile var nightPreview = false
+  /** Frames shown so far (preview frame rate: self-test, checklist 1.1). */
+  @Volatile var framesDrawn = 0L
+    private set
 
   init {
     view.holder.addCallback(this)
@@ -348,6 +351,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       GlUtil.drawQuad(program)
       core.setPresentationTime(window, st.timestamp)
       core.swap(window)
+      framesDrawn++
       if (firstFrame) {
         firstFrame = false
         Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees target $targetRotation cameraTransform $hasCameraTransform (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")

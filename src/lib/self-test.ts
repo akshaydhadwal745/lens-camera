@@ -24,7 +24,7 @@ export type SelfTestStep = {
   label: string;
   props: SelfTestProps;
   orientation?: Orientation;
-  action: 'photo' | 'night' | 'video' | 'upload';
+  action: 'photo' | 'night' | 'video' | 'upload' | 'burst';
   /** Photo with the flash forced on (phones with a flash). */
   flash?: 'on';
   /**
@@ -72,6 +72,8 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   if (modes.includes('night')) steps.push({ id: 'night', label: 'Night photo', props: { ...DEFAULT_PROPS, mode: 'night' }, action: 'night' });
   if (modes.includes('portrait')) steps.push({ id: 'portrait', label: 'Portrait photo', props: { ...DEFAULT_PROPS, mode: 'portrait' }, action: 'photo' });
   if (modes.includes('video')) steps.push({ id: 'video', label: 'Video (3 s)', props: { ...DEFAULT_PROPS, mode: 'video' }, action: 'video' });
+  // Burst speed: 5 photos back to back (checklist 1.1; smart burst needs this per phone).
+  steps.push({ id: 'burst', label: 'Burst speed (5 shots)', props: DEFAULT_PROPS, action: 'burst' });
   if (back.raw) steps.push({ id: 'raw', label: 'RAW photo', props: { ...DEFAULT_PROPS, raw: true }, action: 'photo' });
   if (!back.ultraHdr) steps.push({ id: 'plain-jpeg', label: 'Plain JPEG photo', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'photo' });
   for (const ext of ['auto', 'hdr', 'night'] as const) {
@@ -119,7 +121,15 @@ export type SelfTestReport = {
   failed: number;
   skipped: number;
   steps: StepOutcome[];
+  /** The phone's camera report incl. feature probes (Test Lab results, checklist 1.1). */
+  device?: Record<string, unknown> | null;
 };
+
+/** Steps whose viewfinder frame rate is measured (what live Portrait/Night cost vs plain photo). */
+export const FPS_STEPS = new Set(['back-photo', 'portrait', 'night', 'video']);
+
+/** Recording that starts later than this loses the first moment the user wanted (checklist 1.11). */
+export const MAX_VIDEO_START_MS = 700;
 
 export function summarize(startedAt: number, steps: StepOutcome[]): SelfTestReport {
   return {

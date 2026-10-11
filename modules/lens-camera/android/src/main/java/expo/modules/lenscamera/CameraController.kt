@@ -772,12 +772,18 @@ class CameraController(private val context: Context) {
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
       pending.withAudioEnabled()
     }
+    // Start delay (checklist 1.11): from the press until the encoder's first data.
+    val requestedAt = SystemClock.elapsedRealtime()
+    var startDelayMs: Long? = null
     recording = pending.start(main) { event ->
+      if (startDelayMs == null && event.recordingStats.recordedDurationNanos > 0) {
+        startDelayMs = SystemClock.elapsedRealtime() - requestedAt
+      }
       if (event is VideoRecordEvent.Finalize) {
         recording = null
         val ok = !event.hasError() || event.error in OK_FINALIZE
         if (ok && file.exists() && file.length() > 0) {
-          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to event.recordingStats.recordedDurationNanos / 1e9)))
+          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to event.recordingStats.recordedDurationNanos / 1e9, "startDelayMs" to startDelayMs)))
         } else {
           done(Result.failure(CameraException(event.cause?.message ?: "Recording failed (code ${event.error})")))
         }

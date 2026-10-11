@@ -16,6 +16,8 @@ import { sendSelfTest } from '@/lib/diagnostics';
 import {
   checkPhoto,
   DEFAULT_PROPS,
+  FPS_STEPS,
+  MAX_VIDEO_START_MS,
   planSelfTest,
   SelfTestProps,
   SelfTestReport,
@@ -127,7 +129,11 @@ export default function SelfTestScreen() {
           return { ...base, status: 'skip', ms: Date.now() - t0, message: `maker mode not available (bound ${caps.extension})` };
         }
         const preview = latestPreview.current;
-        const previewDetails = preview ? { cameraTransform: preview.cameraTransform, mirroring: preview.mirroring, targetRotation: preview.targetRotation } : {};
+        const fps = FPS_STEPS.has(step.id) && cam.previewFps ? await cam.previewFps(2000) : undefined;
+        const previewDetails = {
+          ...(preview ? { cameraTransform: preview.cameraTransform, mirroring: preview.mirroring, targetRotation: preview.targetRotation } : {}),
+          ...(fps !== undefined ? { previewFps: fps } : {}),
+        };
 
         if (step.action === 'video') {
           const done = cam.startRecording();
@@ -137,7 +143,27 @@ export default function SelfTestScreen() {
           const size = new File(v.uri).size ?? 0;
           new File(v.uri).delete();
           const ok = v.duration >= 2 && size > 0;
-          return { ...base, status: ok ? 'pass' : 'fail', ms: Date.now() - t0, message: ok ? undefined : `video ${v.duration}s, ${size} bytes`, details: { duration: v.duration, bytes: size, ...previewDetails } };
+          const delay = v.startDelayMs ?? null;
+          const late = delay !== null && delay > MAX_VIDEO_START_MS;
+          const details = { duration: v.duration, bytes: size, startDelayMs: delay, ...previewDetails };
+          const lateNote = late ? `recording started ${delay} ms after record was pressed` : undefined;
+          if (!ok) return { ...base, status: 'fail', ms: Date.now() - t0, message: [`video ${v.duration}s, ${size} bytes`, lateNote].filter(Boolean).join('; '), details };
+          return { ...base, status: late ? 'warn' : 'pass', ms: Date.now() - t0, message: lateNote, details };
+        }
+
+        if (step.action === 'burst') {
+          if (!cam.takeBurst) return { ...base, status: 'skip', ms: Date.now() - t0, message: 'burst not available' };
+          const burst = await cam.takeBurst(5);
+          for (const f of burst.frames) {
+            const shot = new File(f.uri);
+            if (shot.exists) shot.delete();
+          }
+          const times = burst.frames.map((f) => f.ms);
+          const span = times.length > 1 ? times[times.length - 1] - times[0] : 0;
+          const perSecond = span > 0 ? Math.round(((times.length - 1) * 1000 * 10) / span) / 10 : null;
+          const details = { shots: times.length, perSecond, firstShotMs: times[0] ?? null, ...previewDetails };
+          if (times.length < 5) return { ...base, status: 'fail', ms: Date.now() - t0, message: `only ${times.length} of 5 shots`, details };
+          return { ...base, status: 'pass', ms: Date.now() - t0, message: `${perSecond} photos/s`, details };
         }
 
         const photo = step.action === 'night' ? await cam.takeNightPhoto(4) : await cam.takePhoto({ raw: step.props.raw, flash: step.flash ?? 'off' });
@@ -181,11 +207,13 @@ export default function SelfTestScreen() {
     setError(null);
     const t0 = Date.now();
     const outcomes: StepOutcome[] = [];
+    let device: Record<string, unknown> | null = null;
     try {
-      const device = (await cameraDeviceReport()) as { cameras?: { facing: string; extensions?: string[] | null }[] } | null;
+      device = await cameraDeviceReport();
       const first = await applyProps(DEFAULT_PROPS);
       if (!first) throw new Error('The camera did not start (permission, or the camera is busy).');
-      const extensions = device?.cameras?.find((c) => c.facing === 'back')?.extensions ?? [];
+      const cameras = (device?.cameras ?? []) as { facing: string; extensions?: string[] | null }[];
+      const extensions = cameras.find((c) => c.facing === 'back')?.extensions ?? [];
       const plan = planSelfTest(first, extensions, launch != null);
       for (const step of plan) {
         setCurrent(step.label);
@@ -199,7 +227,7 @@ export default function SelfTestScreen() {
     } finally {
       selfTestHooks.setOrientation('auto');
       setCurrent(null);
-      const result = summarize(t0, outcomes);
+      const result = { ...summarize(t0, outcomes), device };
       setReport(result);
       setSteps(outcomes);
       await sendSelfTest(result);
@@ -235,6 +263,7 @@ export default function SelfTestScreen() {
           facing={props.facing}
           lens={props.lens}
           mode={props.mode}
+          nightPreview={props.mode === 'night'}
           videoResolution="4k"
           appleLog={false}
           hdrVideo={false}

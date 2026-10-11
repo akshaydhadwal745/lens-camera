@@ -212,6 +212,7 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
       "tier" to tierOf(back),
       "lenses" to backLenses.map { mapOf("id" to it.id, "factor" to it.factor, "via" to if (it.camera != null) "camera ${it.camera.id}" else "zoom") },
       "cameras" to cameras.map { describe(it, ext) },
+      "videoEncoders" to FeatureProbe.codecs(),
     )
   }
 
@@ -254,6 +255,8 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
       "fps" to runCatching { c.info.supportedFrameRateRanges.map { "${it.lower}-${it.upper}" }.sorted() }.getOrNull(),
       "videoQualities" to video?.let { v -> v.getSupportedQualities(DynamicRange.SDR).map { qualityName(it) } },
       "hdrVideo" to video?.supportedDynamicRanges?.filter { it != DynamicRange.SDR }?.map { it.toString() },
+      // Planned features (checklist 1.1): slow motion, 60 fps, video + photo, time-lapse, low-light boost…
+      "features" to FeatureProbe.camera(c),
     )
   }
 
