@@ -45,6 +45,9 @@ dependencies {
 
   // Portrait: person segmentation, model bundled in the app (no Play services needed).
   implementation "com.google.mlkit:segmentation-selfie:16.0.0-beta6"
+  // Portrait for pets/objects when no person is found: ML Kit subject segmentation
+  // (model from Google Play services, ~200 KB in the app; phones without Play services stay people-only).
+  implementation "com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1"
 
   testImplementation "junit:junit:4.13.2"
 }

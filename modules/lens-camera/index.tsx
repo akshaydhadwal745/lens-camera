@@ -174,6 +174,8 @@ export type PhotoResult = {
   frames?: number;
   /** Android Portrait: f-number chosen from the subject's size (Normal camera uses it). */
   autoAperture?: number | null;
+  /** Android Portrait: what was separated: 'person', or 'subject' (pet/object, no person found). */
+  depthKind?: 'person' | 'subject' | null;
 };
 export type VideoResult = {
   uri: string;

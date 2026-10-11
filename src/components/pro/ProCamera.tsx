@@ -284,7 +284,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       }
       const recipe = captureRecipe(photo.depth, 'photo', photo.autoAperture);
       // Portrait only blurs around a person; say so instead of a silent plain photo.
-      if (s.mode === 'portrait' && !photo.depth && !photo.raw) showNotice('No person found · saved as a normal photo');
+      if (s.mode === 'portrait' && !photo.depth && !photo.raw) showNotice('No person or subject found · saved as a normal photo');
+      // Pets/objects: the photo is blurred around the subject even though the viewfinder (people only) wasn't.
+      if (s.mode === 'portrait' && photo.depth && photo.depthKind === 'subject') showNotice('Portrait applied to the subject');
       if (recipe && s.bakeLooks && LensImaging && !photo.raw) {
         // "Bake": write the look into the file itself (no removable edit).
         setProcessing('Applying look…');

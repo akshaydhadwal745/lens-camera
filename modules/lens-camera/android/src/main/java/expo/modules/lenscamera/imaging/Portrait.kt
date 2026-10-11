@@ -55,6 +55,44 @@ object Portrait {
   /** Coverage (0…1) of the person in the last [addMask] photo, for the automatic blur strength. */
   @Volatile var lastCoverage = 0.0
     private set
+  /** What the last [addMask] separated: "person" (selfie model) or "subject" (pets/objects, Play services). */
+  @Volatile var lastKind = "person"
+    private set
+
+  private val subjectSegmenter by lazy {
+    com.google.mlkit.vision.segmentation.subject.SubjectSegmentation.getClient(
+      com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build(),
+    )
+  }
+
+  /**
+   * No person found: any main subject (pet, object) from ML Kit subject segmentation,
+   * as a mask the size of [upright], or null (no Play services, model not ready, nothing found).
+   * Beta API: every failure just means "no subject".
+   */
+  private fun subjectMask(upright: Bitmap): Bitmap? = try {
+    val result = Tasks.await(subjectSegmenter.process(InputImage.fromBitmap(upright, 0)), 10, TimeUnit.SECONDS)
+    val conf = result.foregroundConfidenceMask
+    val n = upright.width * upright.height
+    if (conf == null || conf.capacity() < n) null else {
+      conf.rewind()
+      var fg = 0
+      val pixels = IntArray(n) {
+        val v = (conf.get().coerceIn(0f, 1f) * 255).roundToInt()
+        if (v > 128) fg++
+        (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+      }
+      // A subject has to be a real part of the frame (not a speck, not everything).
+      val share = fg.toDouble() / n
+      if (share < 0.02 || share > 0.9) null else {
+        lastCoverage = share
+        Bitmap.createBitmap(pixels, upright.width, upright.height, Bitmap.Config.ARGB_8888)
+      }
+    }
+  } catch (e: Exception) {
+    Log.i(TAG, "subject segmentation unavailable: ${e.message}")
+    null
+  }
 
   fun addMask(photo: File): Boolean {
     try {
@@ -79,10 +117,15 @@ object Portrait {
         if (v > 128) subject++
         pixels[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
       }
-      // Nobody (or almost nobody) in the frame: no portrait effect.
+      // Nobody (or almost nobody) in the frame: try any main subject (pet, object) before giving up.
       lastCoverage = subject.toDouble() / (mw * mh)
-      if (subject < mw * mh * 0.02) return false
-      var maskBitmap = refine(upright, Bitmap.createBitmap(pixels, mw, mh, Bitmap.Config.ARGB_8888))
+      lastKind = "person"
+      val coarse = if (subject >= mw * mh * 0.02) {
+        Bitmap.createBitmap(pixels, mw, mh, Bitmap.Config.ARGB_8888)
+      } else {
+        subjectMask(upright)?.also { lastKind = "subject" } ?: return false
+      }
+      var maskBitmap = refine(upright, coarse)
       // …then store it in the photo's stored orientation (that's how the renderer samples it).
       val inverse = Matrix().also { toUpright.invert(it) }
       maskBitmap = Bitmap.createBitmap(maskBitmap, 0, 0, maskBitmap.width, maskBitmap.height, inverse, true)
