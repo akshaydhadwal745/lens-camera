@@ -47,7 +47,7 @@ type Features = {
   previewStabilization?: Probe<boolean>;
   zeroShutterLag?: Probe<boolean>;
 };
-type Encoder = { name: string; maxSize: string; '4k60': boolean; '1080p120': boolean; '720p240': boolean } | null;
+type Encoder = { name: string; hardware?: boolean; maxSize: string; '4k60': boolean; '1080p120': boolean; '720p240': boolean } | null;
 
 type Report = {
   device: { manufacturer: string; model: string; android: string; api: number; abis: string[]; ramGB: number; lowRam: boolean };
@@ -72,8 +72,8 @@ function featureLines(f: Features | undefined): [string, string][] {
   return [
     ['Slow motion', fpsText(f.slowMotion)],
     ['Slow-mo (Camera2)', fpsText(f.slowMotionCamera2)],
-    ['Video frame rate', err(f.fps60) ?? (f.fps60 ? Object.entries(f.fps60).map(([q, n]) => `${q} up to ${n} fps`).join(' · ') : '?')],
-    ['Photo in video', err(f.videoWithPhoto) ?? (f.videoWithPhoto ? Object.entries(f.videoWithPhoto).map(([q, ok]) => `${q} ${ok ? 'yes' : 'no'}`).join(' · ') : '?')],
+    ['Video frame rate', err(f.fps60) ?? (f.fps60 && Object.keys(f.fps60).length ? Object.entries(f.fps60).map(([q, n]) => `${q} up to ${n} fps`).join(' · ') : 'no video sizes reported')],
+    ['Photo in video', err(f.videoWithPhoto) ?? (f.videoWithPhoto && Object.keys(f.videoWithPhoto).length ? Object.entries(f.videoWithPhoto).map(([q, ok]) => `${q} ${ok ? 'yes' : 'no'}`).join(' · ') : 'no video sizes reported')],
     ['Maker time-lapse', err(f.timeLapseProfiles) ?? (Array.isArray(f.timeLapseProfiles) && f.timeLapseProfiles.length ? f.timeLapseProfiles.join(', ') : 'none')],
     ['Low-light boost', yesNo(f.lowLightBoost)],
     ['Stabilization', `video ${yesNo(f.videoStabilization)} · preview ${yesNo(f.previewStabilization)}`],
@@ -85,7 +85,7 @@ function encoderText(e: Report['videoEncoders']): string | null {
   if (!e) return null;
   if (typeof e === 'string') return `couldn't check (${e.slice(0, 60)})`;
   const one = (label: string, x: Encoder) =>
-    x ? `${label} up to ${x.maxSize}${x['4k60'] ? ' · 4K60' : ''}${x['1080p120'] ? ' · 1080p120' : ''}${x['720p240'] ? ' · 720p240' : ''}` : `${label} none`;
+    x ? `${label}${x.hardware === false ? ' (software)' : ''} up to ${x.maxSize}${x['4k60'] ? ' · 4K60' : ''}${x['1080p120'] ? ' · 1080p120' : ''}${x['720p240'] ? ' · 720p240' : ''}` : `${label} none`;
   return `${one('H.264', e.avc)}\n${one('HEVC', e.hevc)}`;
 }
 
@@ -113,7 +113,7 @@ export default function CameraInfoScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headerButton}>
           <Text style={styles.headerText}>Close</Text>
         </Pressable>
-        <Text style={styles.title}>Camera info</Text>
+        <Text style={styles.title} numberOfLines={1}>Camera info</Text>
         <Pressable
           onPress={() => report && Share.share({ message: JSON.stringify(report, null, 1) })}
           disabled={!report}
@@ -208,7 +208,8 @@ const styles = StyleSheet.create({
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
   headerText: { color: colors.link, fontSize: 17 },
-  title: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  // flex: Android measured the bold title too narrow and wrapped "Camera info" onto a hidden line.
+  title: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 17, fontWeight: '700' },
   device: { color: '#fff', fontSize: 20, fontWeight: '700' },
   muted: { color: '#86868B', fontSize: 13, marginTop: 4 },
   card: { backgroundColor: '#1C1C1E', borderRadius: 20, padding: 14, marginTop: 14 },

@@ -252,7 +252,7 @@ export default function SelfTestScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headerButton} disabled={current != null}>
           <Text style={styles.headerText}>Close</Text>
         </Pressable>
-        <Text style={styles.title}>Camera self-test</Text>
+        <Text style={styles.title} numberOfLines={1}>Camera self-test</Text>
         <View style={styles.headerButton} />
       </View>
       <View style={styles.preview}>
@@ -338,7 +338,8 @@ const styles = StyleSheet.create({
   header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerButton: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
   headerText: { color: colors.link, fontSize: 17 },
-  title: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  // flex: Android measured the bold title too narrow and wrapped "Camera info" onto a hidden line.
+  title: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 17, fontWeight: '700' },
   preview: { width: '100%', aspectRatio: 3 / 4, maxHeight: '45%', backgroundColor: '#1C1C1E', overflow: 'hidden' },
   busy: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 10, backgroundColor: 'rgba(0,0,0,0.7)', flexDirection: 'row', gap: 8, alignItems: 'center' },
   busyText: { color: '#fff', fontSize: 13, flex: 1 },

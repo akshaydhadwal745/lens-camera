@@ -40,12 +40,15 @@ object FeatureProbe {
   /** Hardware video encoders: what time-lapse, slow motion and 4K/60 can be written with. */
   fun codecs(): Any? = probe {
     val encoders = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { it.isEncoder }
+    fun software(name: String) = name.startsWith("c2.android") || name.startsWith("OMX.google")
     fun best(mime: String): Map<String, Any?>? {
-      val info = encoders.firstOrNull { e -> e.supportedTypes.any { it.equals(mime, ignoreCase = true) } && !e.name.startsWith("c2.android") && !e.name.startsWith("OMX.google") }
-        ?: return null
+      val forMime = encoders.filter { e -> e.supportedTypes.any { it.equals(mime, ignoreCase = true) } }
+      // Hardware first; a software encoder still counts (emulators, some budget phones), marked as such.
+      val info = forMime.firstOrNull { !software(it.name) } ?: forMime.firstOrNull() ?: return null
       val caps = info.getCapabilitiesForType(mime).videoCapabilities ?: return null
       return mapOf(
         "name" to info.name,
+        "hardware" to !software(info.name),
         "maxSize" to "${caps.supportedWidths.upper}x${caps.supportedHeights.upper}",
         "4k30" to caps.areSizeAndRateSupported(3840, 2160, 30.0),
         "4k60" to caps.areSizeAndRateSupported(3840, 2160, 60.0),
@@ -78,10 +81,10 @@ object FeatureProbe {
     }
   }
 
-  /** Highest frame rate CameraX offers with preview + video at 1080p and 4K. */
+  /** Highest frame rate CameraX offers with preview + video, per video quality the camera has. */
   private fun fps60(c: CameraFacts): Map<String, Any?> {
     val supported = Recorder.getVideoCapabilities(c.info).getSupportedQualities(DynamicRange.SDR)
-    return listOf(Quality.FHD, Quality.UHD).filter { it in supported }.associate { q ->
+    return supported.associate { q ->
       val video = VideoCapture.withOutput(Recorder.Builder().setQualitySelector(QualitySelector.from(q)).build())
       val ranges = c.info.getSupportedFrameRateRanges(SessionConfig(listOf(Preview.Builder().build(), video)))
       qualityName(q) to (ranges.maxOfOrNull { it.upper } ?: 0)
@@ -91,7 +94,7 @@ object FeatureProbe {
   /** Can a full-resolution photo be taken while recording (preview + video + photo at once)? */
   private fun videoWithPhoto(c: CameraFacts): Map<String, Any?> {
     val supported = Recorder.getVideoCapabilities(c.info).getSupportedQualities(DynamicRange.SDR)
-    return listOf(Quality.FHD, Quality.UHD).filter { it in supported }.associate { q ->
+    return supported.associate { q ->
       val video = VideoCapture.withOutput(Recorder.Builder().setQualitySelector(QualitySelector.from(q)).build())
       val config = SessionConfig(listOf(Preview.Builder().build(), video, ImageCapture.Builder().build()))
       qualityName(q) to c.info.isSessionConfigSupported(config)
