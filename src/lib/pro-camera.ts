@@ -4,6 +4,10 @@ import type { PortraitStyle } from './edits';
 import { loadDoc, saveDoc } from './local-store';
 
 export type Grid = 'off' | 'thirds' | 'cross';
+export type PhotoAspect = '4:3' | '16:9' | '1:1';
+/** Long side ÷ short side. */
+export const PHOTO_ASPECT_RATIO: Record<PhotoAspect, number> = { '4:3': 4 / 3, '16:9': 16 / 9, '1:1': 1 };
+
 export type Guide = 'off' | '1:1' | '4:5' | '16:9' | '2.39:1';
 export type ManualParam = 'iso' | 'shutter' | 'wb' | 'focus' | 'ev';
 
@@ -38,6 +42,8 @@ export type ProSettings = {
   nightFrames: number;
   portraitAperture: number;
   portraitStyle: PortraitStyle;
+  /** Photo shape (photo modes): 4:3 is the full sensor; 16:9 and 1:1 are saved as a removable crop. */
+  photoAspect: PhotoAspect;
 
   exposureMode: 'auto' | 'manual';
   iso: number;
@@ -90,6 +96,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   nightFrames: 6,
   portraitAperture: 2.8,
   portraitStyle: 'natural',
+  photoAspect: '4:3',
 
   exposureMode: 'auto',
   iso: 100,

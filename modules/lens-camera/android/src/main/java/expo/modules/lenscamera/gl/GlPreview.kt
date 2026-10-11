@@ -24,6 +24,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executor
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * The viewfinder: camera frames drawn with OpenGL ES 2.0 onto a SurfaceView.
@@ -79,6 +80,17 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   @Volatile private var isMirroring = false
   private var viewWidth = 1
   private var viewHeight = 1
+  /**
+   * Where the camera picture goes in the view (fractions x, y, w, h; origin top-left):
+   * the saved photo/video frame, so the viewfinder shows exactly what is kept (WYSIWYG,
+   * checklist 9 aspect ratios). Outside it is black. Default: the whole view.
+   */
+  @Volatile var frame = floatArrayOf(0f, 0f, 1f, 1f)
+  private val frameW get() = max(1, (frame[2] * viewWidth).roundToInt())
+  private val frameH get() = max(1, (frame[3] * viewHeight).roundToInt())
+  private val frameX get() = (frame[0] * viewWidth).roundToInt()
+  /** GL viewport y (origin bottom-left). */
+  private val frameYgl get() = viewHeight - (frame[1] * viewHeight).roundToInt() - frameH
   private val stMatrix = FloatArray(16)
   private val uvMatrix = FloatArray(16)
   /** stMatrix · uvMatrix of the last frame: view uv -> buffer, for tap-to-focus. */
@@ -351,7 +363,11 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       sceneWasOn = suggest
 
       GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+      // Black around the frame, the camera picture only inside it.
       GLES20.glViewport(0, 0, viewWidth, viewHeight)
+      GLES20.glClearColor(0f, 0f, 0f, 1f)
+      GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+      GLES20.glViewport(frameX, frameYgl, frameW, frameH)
       GLES20.glUseProgram(program)
       GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
       GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
@@ -386,8 +402,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       val radiusFrac = if (portraitAuto && hasSubject) {
         expo.modules.lenscamera.imaging.PortraitStyle.blurFraction(expo.modules.lenscamera.imaging.PortraitStyle.autoAperture(livePortrait.coverage))
       } else blur
-      val radiusPx = radiusFrac * max(viewWidth, viewHeight)
-      GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uBlurRadius"), radiusPx / viewWidth, radiusPx / viewHeight)
+      val radiusPx = radiusFrac * max(frameW, frameH)
+      GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uBlurRadius"), radiusPx / frameW, radiusPx / frameH)
       GlUtil.drawQuad(program)
       core.setPresentationTime(window, st.timestamp)
       core.swap(window)
@@ -445,7 +461,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
    */
   /** Viewfinder: uv matrix for the view, plus the tap-to-focus mapping. */
   private fun computeUvMatrix() {
-    computeUvMatrix(viewWidth, viewHeight, uvMatrix)
+    computeUvMatrix(frameW, frameH, uvMatrix)
     // Tap-to-focus uses exactly what the shader samples: the texture
     // coordinate, which is the buffer position (origin top-left).
     val m = FloatArray(16)
@@ -669,8 +685,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
    * ping-pong). Returns the texture to show, or 0 if it couldn't be made.
    */
   private fun accumulate(): Int {
-    val w = max(1, viewWidth)
-    val h = max(1, viewHeight)
+    val w = frameW
+    val h = frameH
     try {
       if (w != accumW || h != accumH || accumFbo[0] == 0) {
         for (i in 0..1) deleteTarget(accumTex[i], accumFbo[i])
@@ -712,8 +728,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
   /** ¼-size blur source and the ~320 px segmentation copy, sized to the view (same aspect). */
   private fun ensurePortraitTargets() {
-    val bw = max(1, viewWidth / 4)
-    val bh = max(1, viewHeight / 4)
+    val bw = max(1, frameW / 4)
+    val bh = max(1, frameH / 4)
     if (bw != blurW || bh != blurH || blurFbo == 0) {
       deleteTarget(blurTexture, blurFbo)
       val (tex, fbo) = GlUtil.framebuffer(bw, bh)
@@ -723,8 +739,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       blurH = bh
     }
     val long = SEG_LONG_SIDE.toFloat()
-    val sw = if (viewWidth >= viewHeight) SEG_LONG_SIDE else max(1, (long * viewWidth / viewHeight).toInt())
-    val sh = if (viewWidth >= viewHeight) max(1, (long * viewHeight / viewWidth).toInt()) else SEG_LONG_SIDE
+    val sw = if (frameW >= frameH) SEG_LONG_SIDE else max(1, (long * frameW / frameH).toInt())
+    val sh = if (frameW >= frameH) max(1, (long * frameH / frameW).toInt()) else SEG_LONG_SIDE
     if (sw != segW || sh != segH || segFbo == 0) {
       deleteTarget(segTexture, segFbo)
       val (tex, fbo) = GlUtil.framebuffer(sw, sh)
@@ -853,8 +869,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
    * buffer (origin top-left), for tap-to-focus. Same transform as the shader.
    */
   fun viewToBuffer(x: Float, y: Float): Pair<Float, Float> {
+    // View fractions → fractions of the camera frame inside the view.
+    val f = frame
+    val fx = ((x - f[0]) / f[2]).coerceIn(0f, 1f)
+    val fy = ((y - f[1]) / f[3]).coerceIn(0f, 1f)
     val out = FloatArray(4)
-    Matrix.multiplyMV(out, 0, focusMatrix, 0, floatArrayOf(x, 1 - y, 0f, 1f), 0)
+    Matrix.multiplyMV(out, 0, focusMatrix, 0, floatArrayOf(fx, 1 - fy, 0f, 1f), 0)
     return out[0].coerceIn(0f, 1f) to out[1].coerceIn(0f, 1f)
   }
 

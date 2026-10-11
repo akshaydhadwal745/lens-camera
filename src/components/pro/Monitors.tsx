@@ -69,8 +69,24 @@ export function LevelIndicator({ smart = false }: { smart?: boolean } = {}) {
 }
 
 /** Composition grid + aspect-ratio crop guide. */
-export function Framing({ grid, guide, width, height }: { grid: Grid; guide: Guide; width: number; height: number }) {
-  let rect = { x: 0, y: 0, w: width, h: height };
+export function Framing({
+  grid,
+  guide,
+  width: viewWidth,
+  height: viewHeight,
+  frame,
+}: {
+  grid: Grid;
+  guide: Guide;
+  width: number;
+  height: number;
+  /** Where the camera picture is (Android WYSIWYG frame); grid and guide sit inside it. */
+  frame?: { x: number; y: number; w: number; h: number };
+}) {
+  const base = frame ?? { x: 0, y: 0, w: viewWidth, h: viewHeight };
+  const width = base.w;
+  const height = base.h;
+  let rect = { x: base.x, y: base.y, w: width, h: height };
   if (guide !== 'off' && width > 0 && height > 0) {
     const [a, b] = guide.split(':').map(Number);
     // Long side of the guide runs along the long side of the screen.
@@ -86,7 +102,7 @@ export function Framing({ grid, guide, width, height }: { grid: Grid; guide: Gui
       w = Math.min(width, height * ratio);
       h = w / ratio;
     }
-    rect = { x: (width - w) / 2, y: (height - h) / 2, w, h };
+    rect = { x: base.x + (width - w) / 2, y: base.y + (height - h) / 2, w, h };
   }
 
   const lines = [];
@@ -105,9 +121,9 @@ export function Framing({ grid, guide, width, height }: { grid: Grid; guide: Gui
       {guide !== 'off' && (
         <>
           <View style={[styles.mask, { left: 0, top: 0, right: 0, height: rect.y }]} />
-          <View style={[styles.mask, { left: 0, bottom: 0, right: 0, height: height - rect.y - rect.h }]} />
+          <View style={[styles.mask, { left: 0, bottom: 0, right: 0, height: viewHeight - rect.y - rect.h }]} />
           <View style={[styles.mask, { left: 0, top: rect.y, width: rect.x, height: rect.h }]} />
-          <View style={[styles.mask, { right: 0, top: rect.y, width: width - rect.x - rect.w, height: rect.h }]} />
+          <View style={[styles.mask, { right: 0, top: rect.y, width: viewWidth - rect.x - rect.w, height: rect.h }]} />
           <View style={[styles.guideBorder, { left: rect.x, top: rect.y, width: rect.w, height: rect.h }]} />
         </>
       )}

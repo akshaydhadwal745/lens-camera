@@ -26,7 +26,7 @@ import { NamePrompt } from './NamePrompt';
 import { ValueDial } from './ValueDial';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { reportCameraError, reportCameraReady, reportPreview } from '@/lib/diagnostics';
-import { compact, EditRecipe, LOOKS, PORTRAIT_STYLES } from '@/lib/edits';
+import { centeredCrop, compact, EditRecipe, LOOKS, PORTRAIT_STYLES } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
 import {
   AUTO_NIGHT_FRAMES,
@@ -40,6 +40,8 @@ import {
   loadSettings,
   ManualParam,
   nearestIndex,
+  PHOTO_ASPECT_RATIO,
+  PhotoAspect,
   Preset,
   ProSettings,
   savePresets,
@@ -76,6 +78,38 @@ function TopButton({ icon, label, caption, active, onPress }: { icon?: IconName;
       )}
     </Pressable>
   );
+}
+
+const NEXT_ASPECT: Record<PhotoAspect, PhotoAspect> = { '4:3': '16:9', '16:9': '1:1', '1:1': '4:3' };
+
+/**
+ * The camera picture's rectangle in a view of [w]×[h]: the stream's aspect (4:3 for
+ * photo modes, 16:9 for video modes), as large as fits. Upright phone: photo frames
+ * sit just under the top controls (like the stock cameras), video is centred.
+ */
+export function cameraFrame(w: number, h: number, mode: string, topInset: number, aspect: PhotoAspect = '4:3') {
+  const video = mode === 'video' || mode === 'slowmo' || mode === 'timelapse';
+  if (w <= 0 || h <= 0) return { x: 0, y: 0, w, h };
+  // The 4:3 sensor area; 1:1 sits centred inside it, 16:9 (photo or video) is centred in the view.
+  // Largest ratio-shaped rect that fits, its long side along the view's long side.
+  const fit = (ratio: number) => {
+    if (h >= w) {
+      const fh = Math.min(h, w * ratio);
+      return { fw: fh / ratio, fh };
+    }
+    const fw = Math.min(w, h * ratio);
+    return { fw, fh: fw / ratio };
+  };
+  const ratio = video ? 16 / 9 : PHOTO_ASPECT_RATIO[aspect];
+  if (ratio >= 1.5) {
+    const { fw, fh } = fit(ratio);
+    return { x: (w - fw) / 2, y: (h - fh) / 2, w: fw, h: fh };
+  }
+  const { fw, fh } = fit(4 / 3);
+  const sensor = h >= w ? { x: (w - fw) / 2, y: Math.max(0, Math.min(topInset + 56, h - fh)), w: fw, h: fh } : { x: 0, y: (h - fh) / 2, w: fw, h: fh };
+  if (ratio > 1.01) return sensor;
+  const side = Math.min(sensor.w, sensor.h);
+  return { x: sensor.x + (sensor.w - side) / 2, y: sensor.y + (sensor.h - side) / 2, w: side, h: side };
 }
 
 /** `onUnavailable`: the native camera couldn't start on this phone (fall back to the basic camera). */
@@ -165,6 +199,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     setFocus(null);
   }
   const [previewSize, setPreviewSize] = useState({ width, height });
+  // WYSIWYG: where the camera picture sits in the view, at the stream's own shape
+  // (photo modes 4:3, video modes 16:9), so the viewfinder shows exactly what is kept.
+  const frameRect = cameraFrame(previewSize.width, previewSize.height, s.mode, insets.top, s.photoAspect);
   const [processing, setProcessing] = useState<string | null>(null);
   // A short message over the viewfinder (e.g. Portrait found nobody), gone after a few seconds.
   const [notice, setNotice] = useState<string | null>(null);
@@ -262,7 +299,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // ---------- Capture ----------
 
   /** Look (+ portrait blur) attached to a new shot, as a non-destructive recipe. */
-  const captureRecipe = (depth?: boolean, kind: 'photo' | 'video' = 'photo', autoAperture?: number | null): EditRecipe | undefined => {
+  const captureRecipe = (
+    depth?: boolean,
+    kind: 'photo' | 'video' = 'photo',
+    autoAperture?: number | null,
+    size?: { width: number; height: number },
+  ): EditRecipe | undefined => {
     const recipe: EditRecipe = {};
     if (s.look) {
       recipe.look = s.look;
@@ -272,6 +314,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     if (kind === 'photo' && !stored.pro && !tilt.flat && Math.abs(tilt.offset) >= 1 && Math.abs(tilt.offset) <= 4) {
       const mirrored = s.position === 'front' && s.mirrorSelfies;
       recipe.crop = { straighten: Math.round((mirrored ? -tilt.offset : tilt.offset) * 10) / 10 };
+    }
+    // 16:9 / 1:1: the full 4:3 photo is kept; the chosen shape is a removable crop (centred, as the viewfinder showed).
+    if (kind === 'photo' && s.photoAspect !== '4:3' && size && size.width > 0 && size.height > 0) {
+      const long = PHOTO_ASPECT_RATIO[s.photoAspect];
+      recipe.crop = { ...recipe.crop, ...centeredCrop(size.width >= size.height ? long : 1 / long, size.width, size.height) };
     }
     if (kind === 'photo' && depth && s.mode === 'portrait') {
       // Normal camera: the blur strength Lens chose from the subject's size; PRO: the user's f-number.
@@ -304,7 +351,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       } else {
         photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
       }
-      const recipe = captureRecipe(photo.depth, 'photo', photo.autoAperture);
+      const recipe = captureRecipe(photo.depth, 'photo', photo.autoAperture, photo);
       if (recipe?.crop?.straighten) showNotice(`Horizon straightened ${Math.abs(recipe.crop.straighten).toFixed(1)}°`);
       // Portrait only blurs around a person; say so instead of a silent plain photo.
       if (s.mode === 'portrait' && !photo.depth && !photo.raw) showNotice('No person or subject found · saved as a normal photo');
@@ -651,6 +698,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onBurstShot={(e) => setBurstCount(e.nativeEvent.count)}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
+            frame={
+              Platform.OS === 'android' && previewSize.width > 0 && previewSize.height > 0
+                ? [frameRect.x / previewSize.width, frameRect.y / previewSize.height, frameRect.w / previewSize.width, frameRect.h / previewSize.height]
+                : undefined
+            }
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
             shutterSound={s.shutterSound}
@@ -706,7 +758,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             }}
           />
 
-          <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} />
+          <Framing grid={s.grid} guide={s.guide} width={previewSize.width} height={previewSize.height} frame={Platform.OS === 'android' ? frameRect : undefined} />
 
           {/* PRO: the level toggle. Normal: a smart level that shows only when nearly straight. */}
           {(s.level || !stored.pro) && (
@@ -814,6 +866,14 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   caption="FPS"
                   active={s.fps !== 30}
                   onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
+                />
+              )}
+              {!recordMode && (
+                <TopButton
+                  label={s.photoAspect}
+                  caption="SIZE"
+                  active={s.photoAspect !== '4:3'}
+                  onPress={() => update({ photoAspect: NEXT_ASPECT[s.photoAspect] })}
                 />
               )}
               {!recordMode && (

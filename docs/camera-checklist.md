@@ -147,7 +147,11 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 
 ### 9. Later (after everything above)
 
-Motion photos; document scanning; QR in camera; aspect ratios; hyperlapse;
+| # | Feature | Status | Evidence / limits |
+|---|---|---|---|
+| 9.1 | Aspect ratios 4:3 / 16:9 / 1:1, WYSIWYG viewfinder (Android) | 🔨 | Built: the GL viewfinder draws the camera only inside the kept frame (black around it; photo 4:3 under the top controls, video 16:9 centred); grid/guide sit in the frame; 16:9/1:1 photos keep the full 4:3 file plus a removable centred crop. tsc clean, Kotlin compiles; emulator + S8 check pending |
+
+Still later: motion photos; document scanning; QR in camera; hyperlapse;
 astro mode; iPhone parity for Android-first features.
 
 ### ⛔ Not doing (for now)

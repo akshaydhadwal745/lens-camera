@@ -118,6 +118,8 @@ export type LensCameraProps = ViewProps & {
   portraitAuto?: boolean;
   /** Android, Normal camera with no look: suggest a look for the scene (onSceneLook). */
   sceneSuggest?: boolean;
+  /** Android: where the camera picture is drawn in the view (fractions [x, y, w, h]); black around it. Default: whole view. */
+  frame?: [number, number, number, number];
   /** Android: a Night photo is coming (Night mode or auto Night): show the viewfinder brightened and averaged like the photo. */
   nightPreview?: boolean;
   /** Android: Portrait style previewed live (natural, studio, mono, stage). */

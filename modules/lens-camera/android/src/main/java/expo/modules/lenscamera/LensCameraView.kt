@@ -62,6 +62,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   var portraitAuto = false
   /** Normal camera with no look chosen: suggest one for the scene. */
   var sceneSuggest = false
+  /** Camera frame inside the view (fractions x, y, w, h): what the photo/video keeps. */
+  var frame: List<Double>? = null
   /** A Lens Night photo is coming (Night mode or auto Night): preview it like the photo. */
   var nightPreview = false
   /** Portrait style id (natural, studio, mono, stage), previewed live. */
@@ -194,6 +196,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     val gl = glPreview ?: return
     gl.portraitBlur = if (config.mode == "portrait") LivePortrait.blurFraction(portraitAperture) else 0f
     gl.portraitAuto = portraitAuto
+    frame?.takeIf { it.size == 4 && it[2] > 0 && it[3] > 0 }?.let { f -> gl.frame = floatArrayOf(f[0].toFloat(), f[1].toFloat(), f[2].toFloat(), f[3].toFloat()) }
+      ?: run { gl.frame = floatArrayOf(0f, 0f, 1f, 1f) }
     gl.sceneSuggest = sceneSuggest && (config.mode == "photo" || config.mode == "video")
     gl.portraitStyle = PortraitStyle.code(portraitStyle)
     // The maker's Night mode has its own preview; only Lens's own merge is previewed here.
