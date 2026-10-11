@@ -88,6 +88,7 @@ class LensCameraModule : Module() {
       Prop("mirrorFront") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(mirrorFront = value) }
       Prop("saveLocation") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(saveLocation = value) }
       Prop("shutterSound") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(shutterSound = value) }
+      Prop("autoLowLight") { view: LensCameraView, value: Boolean -> view.config = view.config.copy(autoLowLight = value) }
       Prop("extension") { view: LensCameraView, value: String -> view.config = view.config.copy(extension = value) }
       Prop("captureMode") { view: LensCameraView, value: String -> view.config = view.config.copy(captureMode = value) }
       Prop("analysis") { view: LensCameraView, value: AnalysisProps ->

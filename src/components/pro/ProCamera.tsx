@@ -578,6 +578,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
             shutterSound={s.shutterSound}
+            autoLowLight={!stored.pro}
             torch={(s.mode === 'video' || s.mode === 'slowmo') && s.torch}
             zoom={s.zoom}
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
@@ -686,7 +687,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                     ? `${formatDuration(elapsed)} → ${formatDuration(Math.round(timeLapseClipSeconds(elapsed)))}`
                     : s.mode === 'slowmo' && caps?.slowMotionBound
                       ? `${formatDuration(elapsed)} · ${caps.slowMotionBound}× SLOW`
-                      : formatDuration(elapsed)}
+                      : stats?.lowLightBoost
+                        ? `${formatDuration(elapsed)} · LOW LIGHT`
+                        : formatDuration(elapsed)}
             </Text>
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>

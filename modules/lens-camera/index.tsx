@@ -80,6 +80,8 @@ export type CameraStats = {
   zoom: number;
   adjusting: boolean;
   recording: boolean;
+  /** Android: the phone's low-light boost is brightening the video right now. */
+  lowLightBoost?: boolean;
 };
 
 export type AnalysisResult = {
@@ -137,6 +139,8 @@ export type LensCameraProps = ViewProps & {
   saveLocation?: boolean;
   /** Android: camera sounds (on by default; silent/vibrate mutes them except where the law requires a shutter sound). */
   shutterSound?: boolean;
+  /** Android, Normal video: automatic low-light handling (24–30 fps in the dark, low-light boost where available). */
+  autoLowLight?: boolean;
   /** Android, Quality Lab only: bind a phone-maker extension mode in Photo mode. */
   extension?: LabExtension;
   /** Android, Quality Lab only: photo capture tuned for quality (default) or speed. */

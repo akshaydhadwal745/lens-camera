@@ -26,6 +26,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.DynamicRange
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
+import androidx.camera.core.LowLightBoostState
 import androidx.camera.core.MirrorMode
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.MeteringPoint
@@ -88,6 +89,12 @@ data class CameraConfig(
   /** Camera sounds (shutter, record start/stop); see [ShutterSound] for when they still play/stay silent. */
   val shutterSound: Boolean = true,
   /**
+   * Normal camera video: automatic low-light handling (checklist 3.6) — frame rate may
+   * drop 30 → 24 fps in the dark, and the phone's low-light boost (Android 15+) is used
+   * where it exists. PRO keeps the chosen fixed frame rate.
+   */
+  val autoLowLight: Boolean = false,
+  /**
    * Quality Lab only (docs/research/camera-quality.md): bind one of the phone
    * maker's extension modes ("auto", "hdr", "night", "bokeh", "faceRetouch")
    * in Photo mode, or "none".
@@ -107,7 +114,7 @@ data class CameraConfig(
       mode != old.mode || raw != old.raw || hdrPhoto != old.hdrPhoto ||
       extension != old.extension || captureMode != old.captureMode ||
       (isVideo && (videoResolution != old.videoResolution || hdrVideo != old.hdrVideo || fps != old.fps || stabilization != old.stabilization ||
-        (position == "front" && mirrorFront != old.mirrorFront)))
+        (position == "front" && mirrorFront != old.mirrorFront) || autoLowLight != old.autoLowLight))
 }
 
 class CameraException(message: String) : Exception(message)
@@ -161,6 +168,7 @@ class CameraController(private val context: Context) {
   /** 0 = bound with everything asked for; higher = a fallback was needed (diagnostics). */
   private var bindAttempt = 0
   /** Slow motion as bound: speed factor (4 = 120 fps, 8 = 240 fps, 2 = 60 fps re-timed), and whether CameraX's high-speed session already slowed it. */
+  private var lowLightBoostOn = false
   private var slowFactor = 1
   private var slowHighSpeed = false
   /** Per camera id: what slow motion it can do (0 = none). */
@@ -283,6 +291,7 @@ class CameraController(private val context: Context) {
     facts = cam
     lens = option
     appliedRequestKey = null
+    lowLightBoostOn = false
     aeLocked = false // a new camera/mode starts unlocked (the app resets its lock badge too)
 
     // Fallback chain: if the phone refuses a combination (HDR + 60 fps + stabilization
@@ -399,6 +408,7 @@ class CameraController(private val context: Context) {
     // camera pushed ISO instead: dark, grainy (and smeared by noise reduction).
     val rate = when {
       config.isNight && !nightExtension -> nightFrameRate(cam)
+      config.isVideo && config.autoLowLight && video.fps == 30 && !config.isSlowMo -> lowLightVideoRate(cam) ?: previewFrameRate(cam, 30)
       config.isVideo -> previewFrameRate(cam, video.fps)
       else -> photoFrameRate(cam) ?: previewFrameRate(cam, 30)
     }
@@ -489,6 +499,12 @@ class CameraController(private val context: Context) {
       ?: ranges.filter { it.upper == fps }.maxByOrNull { it.lower }
   }
 
+  /** Normal video in the dark: 24–30 fps where offered (25 % more light per frame, motion still smooth). */
+  private fun lowLightVideoRate(cam: CameraFacts): Range<Int>? {
+    val ranges = runCatching { cam.info.supportedFrameRateRanges }.getOrNull().orEmpty()
+    return ranges.firstOrNull { it.lower == 24 && it.upper == 30 }
+  }
+
   /** Variable rate for photos: up to 30 fps, down to 15 fps (not lower: hand shake). */
   private fun photoFrameRate(cam: CameraFacts): Range<Int>? {
     val ranges = runCatching { cam.info.supportedFrameRateRanges }.getOrNull().orEmpty()
@@ -512,6 +528,14 @@ class CameraController(private val context: Context) {
   private fun applyLive() {
     val cam = camera ?: return
     val f = facts ?: return
+    // Low-light boost (Android 15+ where the camera has it): Normal 30 fps SDR video only
+    // (CameraX doesn't allow it with HDR or high frame rates).
+    val wantBoost = config.isVideo && config.autoLowLight && !config.isSlowMo && !bound.hdr && bound.fps <= 30 &&
+      config.exposureMode != "manual" && runCatching { cam.cameraInfo.isLowLightBoostSupported }.getOrDefault(false)
+    if (wantBoost != lowLightBoostOn) {
+      lowLightBoostOn = wantBoost
+      runCatching { cam.cameraControl.enableLowLightBoostAsync(wantBoost) }
+    }
     val zoomState = cam.cameraInfo.zoomState.value
     if (zoomState != null) {
       val target = (baseRatio() * config.zoom).toFloat().coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
@@ -700,6 +724,8 @@ class CameraController(private val context: Context) {
       "zoom" to (ratio / baseRatio()).toDouble(),
       "adjusting" to lastAdjusting,
       "recording" to (recording != null),
+      // Low-light boost brightening the picture right now (Normal video, Android 15+).
+      "lowLightBoost" to (lowLightBoostOn && cam.cameraInfo.lowLightBoostState.value == LowLightBoostState.ACTIVE),
     )
   }
 

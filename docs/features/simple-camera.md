@@ -59,6 +59,13 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Low-light video (automatic)
+
+In the Normal camera, video in a dark place gets brighter by itself: the frame
+rate may drop from 30 to 24 fps (more light per frame), and phones with
+Android's low-light boost (Android 15+, where the camera supports it) use it;
+the REC pill then shows `LOW LIGHT`. PRO video keeps the frame rate you chose.
+
 ### Slow motion
 
 **SLO-MO** mode, only on phones that can do it, at the best speed each phone
