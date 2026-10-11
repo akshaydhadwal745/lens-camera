@@ -176,6 +176,7 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-11 | dev-51 | 2.2 volume keys | Emulator | volume-down → photo taken (`takePictureInternal`), no system volume pop-up (key consumed) ✓ |
 | 2026-10-11 | dev-51 | 2.1 lock | Emulator | long-press → badge "AF LOCK" (virtual camera has no AE lock → honest fallback label), box stays; tap unlocks + refocuses, box fades after 3 s ✓. Drag-to-brighten registers (+0.78 EV / 117 dp); visible brightness needs a real camera |
 | 2026-10-11 | dev-52, dev-53, dev-54 | release | CI | verify-release 4/4 each (dev-54 = 3.4 time-lapse, 3.5 slow motion, 3.6 low-light video) |
+| 2026-10-11 | dev-54 | 3.4 time-lapse | Emulator | TIME-LAPSE in the mode strip ✓ (SLO-MO correctly hidden: virtual camera max 30 fps); 20 s run → H.264 720×1280 (= preview buffer, held portrait), 30 fps, 22 frames, 0.73 s ✓ (emulator draws ~18 fps so some 0.5 s slots were missed; real phones to confirm). Bug found → fixed: REC showed the video "4K" badge in time-lapse |
 | 2026-10-11 | dev-53 | 2.4–2.7 Settings | Emulator 360 dp | Camera card: Grid, Mirror selfies, Save location (with note), Shutter sound, Camera info — aligned, icons, toggles work ✓ |
 | 2026-10-11 | dev-53 | 2.6 location | Emulator | photo EXIF GPS 39°14'14.1"N 123°9'0.1"W = the device's live GPS fix (39.237255, −123.150032) exactly ✓ |
 | 2026-10-11 | dev-53 | 3.3 pause | Emulator | 8 s rec + 8 s paused + 8 s rec → 16.8 s clip ✓; REC pill `0:16 · PAUSED` yellow, resume button in the flip spot ✓ |

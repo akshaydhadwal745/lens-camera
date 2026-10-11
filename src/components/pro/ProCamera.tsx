@@ -713,8 +713,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               // The mic is blocked (privacy toggle / another app) or failed: say so now, not after.
               <Text style={styles.recWarn}>NO SOUND</Text>
             )}
-            {s.appleLog && <Text style={styles.badge}>LOG</Text>}
-            <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
+            {s.mode === 'video' && s.appleLog && <Text style={styles.badge}>LOG</Text>}
+            {/* Resolution only means something for normal video (time-lapse / slow-mo have their own). */}
+            {s.mode === 'video' && <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>}
             <LiveUploadPill liveId={liveId} />
           </View>
         ) : (
