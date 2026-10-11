@@ -169,23 +169,33 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [paused, setPaused] = useState(false);
   // Recording sound: problem ('silenced' / 'error') or an external mic in use; null = fine/unknown.
   // Auto-straighten (checklist 7.4): the phone's small tilt from level at the moment of the shot.
-  const [tilt] = useState(() => ({ offset: 0, flat: true }));
+  // Astro (checklist 9.6) also needs to know the phone is held still (tripod / propped up).
+  const [tilt] = useState(() => ({ offset: 0, flat: true, jitter: 1, last: -1, stillSince: 0 }));
+  const [still, setStill] = useState(false);
   useEffect(() => {
-    if (stored.pro) return;
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       const roll = (Math.atan2(x, -y) * 180) / Math.PI;
       tilt.offset = roll - Math.round(roll / 90) * 90; // + = phone turned clockwise
       tilt.flat = Math.abs(z) > 0.85;
+      // Jitter of |g| (in g): ~0.001 on a tripod, 0.01+ in the hand.
+      const m = Math.sqrt(x * x + y * y + z * z);
+      if (tilt.last >= 0) tilt.jitter = tilt.jitter * 0.85 + Math.abs(m - tilt.last) * 0.15;
+      tilt.last = m;
+      const now = Date.now();
+      if (tilt.jitter > 0.006) tilt.stillSince = 0;
+      else if (!tilt.stillSince) tilt.stillSince = now;
+      setStill(tilt.stillSince > 0 && now - tilt.stillSince > 2000);
     });
     return () => sub.remove();
-  }, [stored.pro, tilt]);
+  }, [tilt]);
   // Smart burst: shots so far while the shutter is held (null = no burst).
   const [burstCount, setBurstCount] = useState<number | null>(null);
   // Smart look suggestion for the scene (Normal camera, no look chosen).
   const [sceneLook, setSceneLook] = useState<string | null>(null);
   // QR code in view (checklist 9.3): one chip, tap to act.
   const [code, setCode] = useState<ScannedCode | null>(null);
+  const [motionUnavailable, setMotionUnavailable] = useState(false);
   const [recAudio, setRecAudio] = useState<{ state: 'ok' | 'silenced' | 'error'; external: boolean } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   // Tap point + tap-to-expose in one state, so gestures update it functionally and
@@ -341,6 +351,24 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Flash set to AUTO or ON is the user's choice for low light: it wins over automatic Night.
   const nightCandidate = !stored.pro && s.mode === 'photo' && lowLight && s.flash === 'off' && (!caps?.modes || caps.modes.includes('night'));
   const autoNight = nightCandidate && !nightOff;
+  // Astro: Night, very dark, phone still → long exposures stacked (where the camera allows them).
+  const astroCandidate =
+    Platform.OS === 'android' && (s.mode === 'night' || autoNight) && still && !!stats && stats.iso >= 1600 && stats.shutter >= 1 / 15;
+  const [astro, setAstro] = useState<{ seconds: number } | null>(null);
+  useEffect(() => {
+    if (!astroCandidate || !cameraRef.current?.astroPlan) {
+      setAstro(null);
+      return;
+    }
+    let live = true;
+    cameraRef.current
+      .astroPlan()
+      .then((plan) => live && setAstro(plan ? { seconds: plan.seconds } : null))
+      .catch(() => live && setAstro(null));
+    return () => {
+      live = false;
+    };
+  }, [astroCandidate]);
   // Whether the top-left glass pill has anything in it (else it's hidden).
   // (Photo modes always have the timer; video has the torch when the camera does.)
   // Video-like modes record with the shutter (start/stop): video, slow motion, time-lapse.
@@ -355,7 +383,20 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     Animated.timing(flash, { toValue: 0, duration: 220, useNativeDriver: true }).start();
     try {
       let photo: PhotoResult;
-      if (s.mode === 'night' || autoNight) {
+      if (astro && astroCandidate && cameraRef.current.takeAstroPhoto) {
+        // Astro: a countdown over the long exposures, then the stack.
+        const until = Date.now() + astro.seconds * 1000;
+        setProcessing(`Astro · keep the phone still · ${Math.ceil(astro.seconds)} s`);
+        const tick = setInterval(() => {
+          const left = Math.ceil((until - Date.now()) / 1000);
+          setProcessing(left > 0 ? `Astro · keep the phone still · ${left} s` : 'Stacking…');
+        }, 500);
+        try {
+          photo = await cameraRef.current.takeAstroPhoto();
+        } finally {
+          clearInterval(tick);
+        }
+      } else if (s.mode === 'night' || autoNight) {
         setProcessing('Hold still…');
         photo = await cameraRef.current.takeNightPhoto(autoNight ? AUTO_NIGHT_FRAMES : s.nightFrames);
       } else {
@@ -731,6 +772,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             scanCodes={s.scanCodes && s.mode === 'photo'}
             onCode={(e) => setCode(e.nativeEvent.code)}
             onTimeLapse={(e) => setHyper(e.nativeEvent.hyperlapse)}
+            onMotionUnavailable={() => {
+              update({ motionPhoto: false });
+              setMotionUnavailable(true);
+              showNotice('Motion photos aren’t smooth on this phone · turned off');
+            }}
             motionPhoto={s.mode === 'photo' && s.motionPhoto && !!caps?.motionPhoto && !s.raw}
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
@@ -897,7 +943,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
                 />
               )}
-              {s.mode === 'photo' && caps?.motionPhoto && (
+              {s.mode === 'photo' && caps?.motionPhoto && !motionUnavailable && (
                 <TopButton
                   icon="play-circle-outline"
                   label="MOTION"
@@ -937,7 +983,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   accessibilityLabel={nightOff ? 'Night off. Tap to turn on' : 'Night on. Tap to turn off'}
                 >
                   <Ionicons name="moon" size={14} color={nightOff ? palette.text : '#000'} />
-                  <Text style={[styles.nightText, nightOff && { color: palette.text }]}>{nightOff ? 'Night off' : 'Night'}</Text>
+                  <Text style={[styles.nightText, nightOff && { color: palette.text }]}>
+                    {nightOff ? 'Night off' : astro && astroCandidate ? `Astro ${Math.round(astro.seconds)}s` : 'Night'}
+                  </Text>
                 </Pressable>
               )}
             </View>

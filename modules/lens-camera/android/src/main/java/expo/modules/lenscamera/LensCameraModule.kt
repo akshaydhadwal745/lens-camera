@@ -52,7 +52,7 @@ class LensCameraModule : Module() {
     }
 
     View(LensCameraView::class) {
-      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot", "onCode", "onTimeLapse")
+      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot", "onCode", "onTimeLapse", "onMotionUnavailable")
 
       OnViewDidUpdateProps { view: LensCameraView -> view.applyProps() }
       OnViewDestroys { view: LensCameraView -> view.destroy() }
@@ -102,6 +102,12 @@ class LensCameraModule : Module() {
 
       AsyncFunction("takePhoto") { view: LensCameraView, options: PhotoOptions, promise: Promise ->
         view.takePhoto(options.flash, promise)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("astroPlan") { view: LensCameraView -> view.astroPlan() }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("takeAstroPhoto") { view: LensCameraView, promise: Promise ->
+        view.takeAstroPhoto(promise)
       }.runOnQueue(Queues.MAIN)
 
       AsyncFunction("takeNightPhoto") { view: LensCameraView, frames: Int, promise: Promise ->

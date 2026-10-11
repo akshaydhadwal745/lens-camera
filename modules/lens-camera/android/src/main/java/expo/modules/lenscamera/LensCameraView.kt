@@ -48,6 +48,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onSceneLook by EventDispatcher<Map<String, Any?>>()
   private val onCode by EventDispatcher<Map<String, Any?>>()
   private val onTimeLapse by EventDispatcher<Map<String, Any?>>()
+  private val onMotionUnavailable by EventDispatcher<Map<String, Any?>>()
   // Hyperlapse (checklist 9.5): carried or still, while a time-lapse runs.
   private val handMotion = HandMotion(context).also { m ->
     m.onChange = { moving ->
@@ -147,6 +148,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       gl.onTransform = { details -> onDiagnostics(mapOf("kind" to "preview") + details) }
       gl.onSceneLook = { look -> onSceneLook(mapOf("look" to look)) }
       gl.onCode = { code -> onCode(mapOf("code" to code)) }
+      gl.onMotionUnavailable = { onMotionUnavailable(emptyMap()) }
     }
     controller.onReady = { caps ->
       updatePreviewModes() // the Night extension is only known once the camera is bound
@@ -312,6 +314,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         val motion = video != null && path != null && info["raw"] != true &&
           MotionPhoto.embed(java.io.File(path), video.first, video.second)
         video?.first?.delete()
+        if (!motion) android.util.Log.i("LensMotion", "photo saved without motion: ${c.exceptionOrNull()?.message ?: "embed failed"}")
         if (motion) info + ("motion" to true) else info
       }
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
@@ -343,6 +346,15 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   fun stopBurst() = controller.stopBurst()
+
+  /** Astro (checklist 9.6): { iso, exposureNs, frames, seconds } if long exposures would work now, else null. */
+  fun astroPlan(): Map<String, Any?>? = controller.astroPlan()
+
+  fun takeAstroPhoto(promise: Promise) {
+    controller.takeAstroPhoto { result ->
+      result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
+    }
+  }
 
   fun takeNightPhoto(frames: Int, promise: Promise) {
     controller.takeNightPhoto(frames, isHot()) { result ->

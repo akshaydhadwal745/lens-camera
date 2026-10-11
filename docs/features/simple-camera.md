@@ -214,6 +214,29 @@ also turns on the phone's **preview stabilization** where CameraX reports it
 stabilization yet (gyro-based crop smoothing is a later step if phone tests
 show shake on phones without preview stabilization).
 
+## Astro (checklist 9.6)
+
+No separate mode: **Night** (auto Night in Normal, Night mode in PRO) becomes
+**Astro** when the phone is held still (accelerometer jitter under ~0.006 g for
+2 s: tripod, wall, propped up) and the scene is very dark (auto exposure at ISO
+1600+ and 1/15 s or slower), on cameras with manual exposure that allows ≥ ½ s
+(`CameraController.astroPlan`, the arithmetic in `planAstro`, unit-tested).
+The Night pill then reads **Astro 16s**.
+
+Each frame gets about twice the light auto exposure was giving (dark skies are
+left dark by auto exposure), at most ISO 800 and at most 4 s per frame; frames
+add up to ~16 s (4–12 frames). They're aligned and stacked by the Night merge
+(`NightMerge`), so noise drops by ~√N. A countdown shows while it shoots; the
+camera returns to auto exposure afterwards. The maker's own Night mode (where
+bound) is not replaced. Not yet: star-tracking alignment (stars drift ~0.25°/min,
+fine over 16 s), focus locked at infinity.
+
+## Motion photos on slow encoders
+
+If even the smallest motion clip can't be encoded smoothly (seen on the
+emulator's software encoder, ~0.4 fps at any size), the encoder stops (battery)
+and the camera says "Motion photos aren't smooth on this phone · turned off".
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,

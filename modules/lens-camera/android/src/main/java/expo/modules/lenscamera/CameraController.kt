@@ -155,6 +155,8 @@ class CameraController(private val context: Context) {
 
   private var camera: Camera? = null
   private var facts: CameraFacts? = null
+  /** Astro capture in progress: manual (ISO, exposure ns) overriding auto exposure. */
+  private var astro: Pair<Int, Long>? = null
   private var lens: LensOption? = null
   private var preview: Preview? = null
   private var imageCapture: ImageCapture? = null
@@ -592,7 +594,15 @@ class CameraController(private val context: Context) {
     val b = CaptureRequestOptions.Builder()
     val parts = mutableListOf<String>()
 
-    if (config.exposureMode == "manual" && f.canManualExposure) {
+    val astroExposure = astro
+    if (astroExposure != null) {
+      val (iso, ns) = astroExposure
+      b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+      b.setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, iso)
+      b.setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, ns)
+      b.setCaptureRequestOption(CaptureRequest.SENSOR_FRAME_DURATION, maxOf(ns, 33_333_333L))
+      parts += "astro:$iso:$ns"
+    } else if (config.exposureMode == "manual" && f.canManualExposure) {
       val iso = (if (config.iso > 0) config.iso.roundToInt() else lastIso ?: 100).coerceIn(f.isoRange!!.lower, f.isoRange.upper)
       val ns = (if (config.shutter > 0) (config.shutter * 1e9).toLong() else lastExposureNs ?: 8_000_000L)
         .coerceIn(f.exposureRangeNs!!.lower, f.exposureRangeNs.upper)
@@ -872,10 +882,53 @@ class CameraController(private val context: Context) {
    */
   fun takeNightPhoto(frames: Int, hot: Boolean, done: (Result<Map<String, Any?>>) -> Unit) {
     if (nightExtension) return takePhoto("off", null, done)
+    // A hot phone does less work: fewer frames.
+    mergedShots((if (hot) minOf(frames, 3) else frames).coerceIn(1, 8), emptyMap(), done)
+  }
+
+  /**
+   * Astro (checklist 9.6): what a long-exposure stack would use here, or null
+   * where it can't help (no manual exposure, or the longest exposure the camera
+   * allows is under half a second, so it would just be Night again). Each frame
+   * gets about twice the light auto exposure was giving (dark skies are left
+   * dark by auto exposure), ISO at most 800 (less noise per frame), up to 4 s;
+   * frames add up to ~16 s.
+   */
+  fun astroPlan(): Map<String, Any?>? {
+    val f = facts ?: return null
+    if (!f.canManualExposure || nightExtension) return null
+    val iso0 = lastIso ?: return null
+    val ns0 = lastExposureNs ?: return null
+    return planAstro(iso0, ns0, f.isoRange!!.lower, f.isoRange.upper, f.exposureRangeNs!!.upper)
+  }
+
+  /** Astro photo: [astroPlan]'s long exposures, aligned and stacked like Night. */
+  fun takeAstroPhoto(done: (Result<Map<String, Any?>>) -> Unit) {
+    val plan = astroPlan() ?: return done(Result.failure(CameraException("Astro isn't possible on this camera.")))
+    val cam = camera ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
+    val f = facts ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
+    val ns = plan["exposureNs"] as Long
+    astro = (plan["iso"] as Int) to ns
+    applyRequestOptions(cam, f)
+    fun restore() {
+      astro = null
+      camera?.let { c -> facts?.let { applyRequestOptions(c, it) } }
+    }
+    // Let a couple of long frames through so the new exposure is in effect before shooting.
+    main.execute {
+      android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        mergedShots(plan["frames"] as Int, mapOf("astro" to plan["seconds"])) { result ->
+          main.execute { restore() }
+          done(result)
+        }
+      }, ns / 1_000_000 * 2 + 300)
+    }
+  }
+
+  /** [count] photos in a row, aligned and merged ([NightMerge]); [extra] joins the result. */
+  private fun mergedShots(count: Int, extra: Map<String, Any?>, done: (Result<Map<String, Any?>>) -> Unit) {
     val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
     capture.flashMode = ImageCapture.FLASH_MODE_OFF
-    // A hot phone does less work: fewer frames.
-    val count = (if (hot) minOf(frames, 3) else frames).coerceIn(1, 8)
     val dir = File(outputDir(), "night-${UUID.randomUUID()}").apply { mkdirs() }
     val shots = mutableListOf<File>()
     fun next() {
@@ -898,7 +951,7 @@ class CameraController(private val context: Context) {
               NightMerge.merge(shots, result)
               dir.deleteRecursively()
               val (w, h) = uprightSize(result)
-              done(Result.success(mapOf("uri" to "file://${result.absolutePath}", "width" to w, "height" to h, "raw" to false, "depth" to false, "frames" to count)))
+              done(Result.success(mapOf("uri" to "file://${result.absolutePath}", "width" to w, "height" to h, "raw" to false, "depth" to false, "frames" to count) + extra))
             } catch (e: Throwable) {
               dir.deleteRecursively()
               done(Result.failure(CameraException("Night photo failed: ${e.message}")))
@@ -1144,6 +1197,19 @@ class CameraController(private val context: Context) {
   }
 
   companion object {
+    /** [astroPlan]'s arithmetic (pure, unit-tested): auto exposure now → per-frame ISO/exposure and frame count. */
+    fun planAstro(iso0: Int, ns0: Long, isoMin: Int, isoMax: Int, maxExposureNs: Long): Map<String, Any?>? {
+      val longest = minOf(maxExposureNs, 4_000_000_000L)
+      if (longest < 500_000_000L) return null
+      val light = iso0.toDouble() * ns0 * 2
+      var ns = longest
+      val iso = (light / ns).roundToInt().coerceIn(isoMin, minOf(800, isoMax))
+      // Little light needed: shorter frames at the lowest ISO instead of overexposing.
+      if (iso.toDouble() * ns > light * 1.5) ns = (light / iso).toLong().coerceIn(500_000_000L, longest)
+      val frames = (16_000_000_000L / ns).toInt().coerceIn(4, 12)
+      return mapOf("iso" to iso, "exposureNs" to ns, "frames" to frames, "seconds" to frames * ns / 1e9)
+    }
+
     private const val TAG = "LensCamera"
     private val OK_FINALIZE = setOf(
       VideoRecordEvent.Finalize.ERROR_NONE,

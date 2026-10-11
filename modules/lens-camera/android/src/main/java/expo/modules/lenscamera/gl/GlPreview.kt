@@ -154,6 +154,9 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var lastMotionNs = 0L
   /** Long side of the motion clip; steps down when the encoder can't keep up (1280 → 960 → 640 → 480). */
   private var motionLong = 1280
+  /** The encoder couldn't keep up even at the smallest size: no motion photos this session. */
+  private var motionUnavailable = false
+  var onMotionUnavailable: (() -> Unit)? = null
   // Deflicker: frame brightness vs its running average (from the 96×72 analysis).
   private var meanLuma = -1f
   private var smoothLuma = -1f
@@ -646,7 +649,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
   /** Feed (or start/stop) the motion clip encoder with this frame: the full 4:3 photo shape, upright, ≤ 1280 px. */
   private fun updateMotion(core: EglCore, timestampNs: Long) {
-    if (!motionPhoto || !recordable || timeLapse != null) {
+    if (!motionPhoto || !recordable || timeLapse != null || motionUnavailable) {
       if (motion != null) stopMotion(core)
       return
     }
@@ -655,10 +658,17 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     val short = (long * 3 / 4).let { it - it % 16 }
     val (w, h) = if (landscape) long to short else short to long
     var clip = motion
-    if (clip != null && clip.tooSlow && motionLong > 480) {
-      motionLong = when (motionLong) { 1280 -> 960; 960 -> 640; else -> 480 }
-      Log.i(TAG, "motion encoder too slow at ${clip.width}x${clip.height}: trying ${motionLong} px")
+    if (clip != null && clip.tooSlow) {
       stopMotion(core)
+      if (motionLong > 480) {
+        motionLong = when (motionLong) { 1280 -> 960; 960 -> 640; else -> 480 }
+        Log.i(TAG, "motion encoder too slow at ${clip.width}x${clip.height}: trying $motionLong px")
+      } else {
+        // Even the smallest clip can't be encoded smoothly: stop (battery) and say so.
+        Log.i(TAG, "motion encoder too slow at ${clip.width}x${clip.height}: motion photos off on this phone")
+        motionUnavailable = true
+        mainHandler.post { onMotionUnavailable?.invoke() }
+      }
       return
     }
     if (clip != null && (clip.width != w || clip.height != h)) {

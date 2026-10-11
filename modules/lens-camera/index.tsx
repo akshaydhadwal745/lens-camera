@@ -186,6 +186,8 @@ export type LensCameraProps = ViewProps & {
   onCode?: (e: NativeSyntheticEvent<{ code: ScannedCode | null }>) => void;
   /** Android, during a time-lapse: the phone started/stopped being carried (hyperlapse: frames closer together). */
   onTimeLapse?: (e: NativeSyntheticEvent<{ hyperlapse: boolean }>) => void;
+  /** Android: this phone's encoder can't keep up with motion photos (they were turned off). */
+  onMotionUnavailable?: () => void;
   /** Android: a burst shot was saved (`count` so far). */
   onBurstShot?: (e: NativeSyntheticEvent<{ count: number }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
@@ -220,6 +222,10 @@ export type VideoResult = {
 export type LensCameraHandle = {
   takePhoto(options: { raw: boolean; flash: 'off' | 'on' | 'auto' }): Promise<PhotoResult>;
   /** Night mode: burst of `frames`, aligned and merged on the device. */
+  /** Android: would an Astro stack (long exposures) work right now? Its plan, or null. */
+  astroPlan?(): Promise<{ iso: number; exposureNs: number; frames: number; seconds: number } | null>;
+  /** Android: long exposures aligned and stacked (sky at night, on a tripod). */
+  takeAstroPhoto?(): Promise<PhotoResult & { astro?: number }>;
   takeNightPhoto(frames: number): Promise<PhotoResult>;
   /** Android, Quality Lab: `frames` shots kept as they are (no merge). */
   takeBurst?(frames: number): Promise<BurstResult>;

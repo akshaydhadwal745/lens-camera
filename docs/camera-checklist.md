@@ -12,8 +12,8 @@ Updated: 2026-10-11 (night).
 | | Count | Items |
 |---|---|---|
 | ✅ Validated | 6 | 0.1, 1.3, 3.2, 4.1, 5.2, 6.3 |
-| 🟡 Built, waiting for real-phone tests | 43 | 1.1, 1.2, 1.4–1.8, 1.10–1.12 · 2.1–2.7 · 3.1, 3.3–3.8 · 4.2–4.5 · 5.1, 5.3 · 6.1, 6.2 · 7.2–7.4 · 8.1–8.3 · 9.1–9.5 |
-| 🔨 In progress | 0 | next: section 9 (astro) |
+| 🟡 Built, waiting for real-phone tests | 44 | 1.1, 1.2, 1.4–1.8, 1.10–1.12 · 2.1–2.7 · 3.1, 3.3–3.8 · 4.2–4.5 · 5.1, 5.3 · 6.1, 6.2 · 7.2–7.4 · 8.1–8.3 · 9.1–9.6 |
+| 🔨 In progress | 0 | Section 9 built; next is test day |
 | ⬜ Pending | 3 | 1.9 (needs Quality Lab sets), 7.1 (needs test-day data), 4.6 (deferred) |
 
 **Builds:** dev-53…56 green (verify-release 4/4). dev-57 failed (ML Kit
@@ -173,8 +173,9 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 | 9.3 | QR codes in the camera | 🟡 | Built: ML Kit (bundled, already in the APK) on a 640 px viewfinder copy every 400 ms, stable chip (2 reads in / 3 misses out), open https / call / email / copy; other schemes never opened (unit test). Settings switch, on by default. Phone check pending |
 | 9.4 | Document scanning | 🟡 | Built: SCAN in the mode strip → Google's ML Kit document scanner (Play services, edges + perspective + clean-up, ≤ 20 pages) → pages saved to the roll as photos. Phone check pending (needs Play services; emulator has none in this image? check) |
 | 9.5 | Hyperlapse (time-lapse while walking) | 🟡 | Built: TIME-LAPSE detects being carried (gyro/accelerometer, hysteresis) → 8× frames + preview stabilization where supported; REC '· HYPERLAPSE'. Phone check pending (walk test on S8 + a phone with preview stabilization); software stabilization only if needed |
+| 9.6 | Astro (long exposures on a tripod) | 🟡 | Built: Night + still + very dark + manual exposure ≥ ½ s → ≤ 4 s frames at ≤ ISO 800, ~16 s stacked with the Night merge; pill 'Astro 16s' + countdown. Unit tests 4/4 (plan math). Phone check pending (S8 on a tripod outdoors at night; S8's longest exposure decides if it qualifies) |
 
-Still later: astro mode; iPhone parity for Android-first features.
+Still later: iPhone parity for Android-first features (after Android is validated).
 
 ### ⛔ Not doing (for now)
 
