@@ -57,7 +57,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 
 | # | Feature | Status | Evidence / limits |
 |---|---|---|---|
-| 0.1 | **dev-46 batch**: alignment pass (all screens), Normal/PRO restructure (creative in Normal, manual in PRO), mode-strip tap fix, live Portrait blur + "No person found", Portrait styles (Natural/Studio/Mono/Stage), Night viewfinder preview | 🔨 | Emulator 360 dp UI checked; Kotlin compiles; 7 shaders pass Khronos glslang. Needs: CI build → `verify-release` → S8 test (live blur with a person, styles, Night in a dark room) → Test Lab self-test on tiers |
+| 0.1 | **dev-46 batch** (commit 139a40f): alignment pass (all screens), Normal/PRO restructure (creative in Normal, manual in PRO), mode-strip tap fix, live Portrait blur + "No person found", Portrait styles (Natural/Studio/Mono/Stage), Night viewfinder preview | 🔨 | Done: CI all green (Android 64/32-bit, iOS), `verify-release 46` 4/4, Kotlin unit tests 32/32, 7 shaders pass Khronos glslang, Test Lab self-test on 5 tiers (no regressions; see log), emulator 360 dp: Normal/PRO layout, mode switching, style chips, "No person found" notice, Night mode draws without GL errors. **Not yet proven (needs the S8):** live blur with a real person, styles on a person, Night preview brightness/grain in the dark, Portrait smoothness + heat (emulator too slow to judge: ML runs through ARM translation) |
 
 ### 1. Measurement + core capture reliability (every phone first)
 
@@ -73,6 +73,8 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 | 1.8 | Night: auto Night + Night mode (Lens merge / maker extension) | 🟡 | Merge validated only synthetically (≈4× less noise); thresholds a first guess |
 | 1.9 | Photo quality pipeline by capability tier (single frame → burst merge → maker extensions; cloud later) | ⬜ | Plan: docs/research/camera-quality.md; Quality Lab built, waiting for S8 lab sets |
 | 1.10 | Heat / battery adaptation | 🟡 | Thermal guard built (fewer frames, uploads pause); not measured |
+| 1.11 | **Video start delay**: recording only begins when the encoder's first keyframe arrives | ⬜ | Found by Test Lab 2026-10-11: OPPO A79 delivered the first frame ~1.5 s after record was pressed (3 s test clip = 1.84 s). Fix: show "recording" only once frames flow, pre-warm the encoder, self-test measures start delay on every phone |
+| 1.12 | Dependency security alerts (GitHub Dependabot: 2 high, 3 moderate on main) | ⬜ | Review each; never merge Dependabot PR #1 (expo-router v58) |
 
 ### 2. Essentials everyone expects
 
@@ -162,3 +164,10 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-11 | dev-45 | 1.3 full-res | Galaxy S8 | 4032×3024, untouched HAL JPEG |
 | 2026-10-11 | dev-45 | 5.2 video looks playback | Galaxy S8 | user: working |
 | 2026-10-11 | — | 4.1 portrait mask | Galaxy S8 (2 selfies) | mask correct, preview blurred |
+| 2026-10-11 | dev-46 | release | CI | verify-release 4/4 (runtime n-bd085ac9189bfafe54c9) |
+| 2026-10-11 | dev-46 | self-test | F01L Android 8.1 (old) | 13 pass, 1 warn (portrait: no person in view, expected) |
+| 2026-10-11 | dev-46 | self-test | Galaxy A14 (budget) | 13 pass, 1 warn (portrait, expected) |
+| 2026-10-11 | dev-46 | self-test | OPPO A79 (budget) | 12 pass, 1 warn (portrait), **1 fail: video 1.84 s of 3 s** → 1.11 |
+| 2026-10-11 | dev-46 | self-test | Pixel 8a (mid) | 6 pass, 11 warn: known (16 MP not offered with preview; maker Night 5 MP) |
+| 2026-10-11 | dev-46 | self-test | Galaxy S22 Ultra (flagship) | 18 pass, 1 warn (portrait, expected) |
+| 2026-10-11 | dev-46 | UI | Emulator 360 dp | Normal/PRO layout, modes, styles, "No person found", Night draws; live blur with a person not testable (virtual camera can't be aimed headless) |
