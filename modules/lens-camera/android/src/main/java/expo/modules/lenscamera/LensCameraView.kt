@@ -299,6 +299,10 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   fun stopRecording() = controller.stopRecording()
 
+  fun pauseRecording() = controller.pauseRecording()
+
+  fun resumeRecording() = controller.resumeRecording()
+
   /** x/y are fractions of the view's size. [lock]: long-press AE/AF lock. Returns what was locked. */
   fun focus(x: Double, y: Double, lock: Boolean = false): Map<String, Any?> {
     val gl = glPreview

@@ -868,6 +868,11 @@ class CameraController(private val context: Context) {
     recording?.stop()
   }
 
+  /** Pause/resume the current recording (one file; paused time isn't in it). False if not recording. */
+  fun pauseRecording(): Boolean = recording?.let { it.pause(); true } ?: false
+
+  fun resumeRecording(): Boolean = recording?.let { it.resume(); true } ?: false
+
   // ---------- Helpers ----------
 
   /** Where a photo goes; front-camera photos are flipped (EXIF only, no re-encode) when saving as previewed. */

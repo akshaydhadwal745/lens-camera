@@ -169,6 +169,9 @@ export type LensCameraHandle = {
   /** Resolves when recording stops. */
   startRecording(): Promise<VideoResult>;
   stopRecording(): Promise<void>;
+  /** Android: pause/resume the current recording (one file; paused time isn't recorded). */
+  pauseRecording?(): Promise<boolean>;
+  resumeRecording?(): Promise<boolean>;
   focusAt(x: number, y: number): Promise<void>;
   /** Android: long-press lock at x/y (fractions of the view); resolves what this camera could lock. */
   lockFocus?(x: number, y: number): Promise<{ af: boolean; ae: boolean }>;

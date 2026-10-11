@@ -59,6 +59,12 @@ from Android's own location service (GPS + network; no Google Play services
 needed) and writes it into each photo (EXIF GPS) and video. A position older than
 10 minutes is never used. Photos you share keep their location.
 
+### Pause while recording
+
+While a video records, the flip button turns into **pause**. Paused time isn't
+recorded (one file, no gap), the REC pill shows `PAUSED` and the timer stops;
+tap ⏺ to continue.
+
 ### Shutter sound
 
 Settings → Camera → **Shutter sound** (on by default): the phone's own camera

@@ -132,6 +132,14 @@ class LensCameraModule : Module() {
         view.focus(x, y, lock = true)
       }.runOnQueue(Queues.MAIN)
 
+      AsyncFunction("pauseRecording") { view: LensCameraView ->
+        view.pauseRecording()
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("resumeRecording") { view: LensCameraView ->
+        view.resumeRecording()
+      }.runOnQueue(Queues.MAIN)
+
       AsyncFunction("unlockFocus") { view: LensCameraView ->
         view.unlockFocus()
       }.runOnQueue(Queues.MAIN)

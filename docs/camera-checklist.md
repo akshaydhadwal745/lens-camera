@@ -94,7 +94,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 |---|---|---|---|
 | 3.1 | 1080p/4K, 30/60 fps, stabilization, HDR video (automatic in Normal, choices in PRO) | 🟡 | Self-test records 3 s; quality not measured |
 | 3.2 | Upload while recording | ✅ | S8 (2026-10-10) |
-| 3.3 | Pause / resume recording | ⬜ | |
+| 3.3 | Pause / resume recording | 🔨 | Built: CameraX `Recording.pause()/resume()` (one file, paused time not recorded; checked in the 1.6 jar). While recording, the flip button's spot becomes ⏸ / ⏺ (enabled once frames flow); the REC pill shows `0:12 · PAUSED` with a yellow dot and the timer stops. Upload-while-recording is safe (it only uploads finished blocks; no stall timeout). To validate: S8 + emulator: pause 5 s → saved clip length = timer, no frozen frames, audio in sync |
 | 3.4 | Time-lapse (auto speed, deflicker, every phone via own frame grab + encoder) | ⬜ | Research: docs/research/camera-features.md |
 | 3.5 | Slow motion (120/240 fps where exposed → 60 fps 2× → hidden; maybe interpolation later) | ⬜ | Reach unknown until 1.1 |
 | 3.6 | Low-light video (low-light boost where supported, else tuned AE) | ⬜ | |

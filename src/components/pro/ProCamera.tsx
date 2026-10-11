@@ -125,6 +125,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Recording asked for, but frames aren't being saved yet (mic + encoder starting:
   // 0.3–1.5 s depending on the phone). REC and the timer only show once it's real.
   const [recLive, setRecLive] = useState(false);
+  // Paused mid-recording (one file; paused time isn't recorded).
+  const [paused, setPaused] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   // Tap point + tap-to-expose in one state, so gestures update it functionally and
   // never need to be rebuilt mid-drag (a rebuilt gesture cancels the active drag).
@@ -170,11 +172,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   }, [stored]);
 
   useEffect(() => {
-    if (!recording || !recLive) return;
-    setElapsed(0);
+    if (!recording || !recLive || paused) return;
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(id);
-  }, [recording, recLive]);
+  }, [recording, recLive, paused]);
 
   const update = useCallback((patch: Partial<ProSettings>) => setS((prev) => ({ ...prev, ...patch })), []);
 
@@ -301,6 +302,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     }
     setRecording(true);
     // Android tells us when frames really flow (onRecordingStarted); elsewhere assume now.
+    setElapsed(0);
     setRecLive(Platform.OS !== 'android');
     const recipe = captureRecipe(false, 'video');
     const baking = !!recipe && s.bakeLooks && !!LensImaging;
@@ -333,7 +335,17 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       .finally(() => {
         setRecording(false);
         setRecLive(false);
+        setPaused(false);
       });
+  };
+
+  const togglePause = () => {
+    const cam = cameraRef.current;
+    if (!cam?.pauseRecording || !cam.resumeRecording) return;
+    haptic(Haptics.ImpactFeedbackStyle.Light);
+    const next = !paused;
+    setPaused(next);
+    (next ? cam.pauseRecording() : cam.resumeRecording()).catch(() => setPaused(!next));
   };
 
   const onShutter = () => {
@@ -575,7 +587,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               else Alert.alert('Camera', e.nativeEvent.message);
             }}
             onDiagnostics={(e) => reportPreview(e.nativeEvent, s.position)}
-            onRecordingStarted={() => setRecLive(true)}
+            onRecordingStarted={() => {
+              setElapsed(0);
+              setRecLive(true);
+            }}
             hardwareShutter
             onHardwareShutter={() => {
               // Same as tapping the shutter (incl. cancelling a running timer); not while a sheet is open.
@@ -631,8 +646,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       <View style={[styles.topBar, { paddingTop: insets.top + 10, paddingLeft: insets.left + 16, right: clearTray }]}>
         {recording ? (
           <View style={styles.rec}>
-            <View style={[styles.recDot, !recLive && styles.recDotStarting]} />
-            <Text style={styles.recText}>{recLive ? formatDuration(elapsed) : 'Starting…'}</Text>
+            <View style={[styles.recDot, !recLive && styles.recDotStarting, paused && styles.recDotPaused]} />
+            <Text style={styles.recText}>{!recLive ? 'Starting…' : paused ? `${formatDuration(elapsed)} · PAUSED` : formatDuration(elapsed)}</Text>
             {s.appleLog && <Text style={styles.badge}>LOG</Text>}
             <Text style={styles.badge}>{s.videoResolution === '4k' ? '4K' : 'HD'}</Text>
             <LiveUploadPill liveId={liveId} />
@@ -882,14 +897,26 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             <View style={[styles.shutterInner, s.mode === 'video' && styles.shutterVideo, recording && styles.shutterRec]} />
           </Pressable>
 
-          <Pressable
-            onPress={() => update({ position: s.position === 'back' ? 'front' : 'back', zoom: 1 })}
-            disabled={recording}
-            style={[styles.flip, recording && { opacity: 0.3 }]}
-            accessibilityLabel="Switch camera"
-          >
-            <Ionicons name="camera-reverse-outline" size={24} color={palette.text} />
-          </Pressable>
+          {recording && Platform.OS === 'android' ? (
+            // While recording, the flip spot pauses/resumes (flipping can't happen mid-recording).
+            <Pressable
+              onPress={togglePause}
+              disabled={!recLive}
+              style={[styles.flip, !recLive && { opacity: 0.3 }]}
+              accessibilityLabel={paused ? 'Resume recording' : 'Pause recording'}
+            >
+              <Ionicons name={paused ? 'radio-button-on' : 'pause'} size={24} color={paused ? palette.rec : palette.text} />
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => update({ position: s.position === 'back' ? 'front' : 'back', zoom: 1 })}
+              disabled={recording}
+              style={[styles.flip, recording && { opacity: 0.3 }]}
+              accessibilityLabel="Switch camera"
+            >
+              <Ionicons name="camera-reverse-outline" size={24} color={palette.text} />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -1099,6 +1126,7 @@ const styles = StyleSheet.create({
   rec: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 22 },
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.rec },
   recDotStarting: { backgroundColor: palette.muted },
+  recDotPaused: { backgroundColor: palette.accent },
   recText: { color: palette.text, fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
   badge: { color: '#000', backgroundColor: palette.accent, fontSize: 10, fontFamily: font.monoSemibold, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
 
