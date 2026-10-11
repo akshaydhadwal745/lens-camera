@@ -120,6 +120,16 @@ class LensCameraModule : Module() {
 
       AsyncFunction("focusAt") { view: LensCameraView, x: Double, y: Double ->
         view.focus(x, y)
+        Unit
+      }.runOnQueue(Queues.MAIN)
+
+      // Long-press AE/AF lock (Android). Resolves { af, ae }: what this camera could lock.
+      AsyncFunction("lockFocus") { view: LensCameraView, x: Double, y: Double ->
+        view.focus(x, y, lock = true)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("unlockFocus") { view: LensCameraView ->
+        view.unlockFocus()
       }.runOnQueue(Queues.MAIN)
     }
   }

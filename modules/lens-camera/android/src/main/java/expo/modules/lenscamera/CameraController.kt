@@ -165,6 +165,8 @@ class CameraController(private val context: Context) {
   private var wbAnchor: ColorTemperature.Anchor? = null
   private var wbAnchorTransform: ColorSpaceTransform? = null
   private var appliedRequestKey: String? = null
+  /** Long-press lock: auto exposure held (Camera2 AE lock) until unlocked or the camera re-binds. */
+  private var aeLocked = false
 
   fun setPreviewSurface(provider: Preview.SurfaceProvider) {
     previewSurface = provider
@@ -256,6 +258,7 @@ class CameraController(private val context: Context) {
     facts = cam
     lens = option
     appliedRequestKey = null
+    aeLocked = false // a new camera/mode starts unlocked (the app resets its lock badge too)
 
     // Fallback chain: if the phone refuses a combination (HDR + 60 fps + stabilization
     // on a budget phone, say), drop the most demanding option and try again.
@@ -496,6 +499,11 @@ class CameraController(private val context: Context) {
       parts += "af:$diopters"
     }
 
+    if (aeLocked && config.exposureMode != "manual" && f.aeLockAvailable) {
+      b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
+      parts += "aelock"
+    }
+
     val key = parts.joinToString("|")
     if (key == appliedRequestKey) return
     appliedRequestKey = key
@@ -613,20 +621,48 @@ class CameraController(private val context: Context) {
   // ---------- Commands ----------
 
   /** Tap to focus at a point given as fractions of the preview buffer. */
-  fun focusAtBuffer(x: Float, y: Float) {
-    val p = preview ?: return
-    focusAt(SurfaceOrientedMeteringPointFactory(1f, 1f, p).createPoint(x, y))
+  fun focusAtBuffer(x: Float, y: Float, lock: Boolean = false): Map<String, Any?> {
+    val p = preview ?: return mapOf("af" to false, "ae" to false)
+    return focusAt(SurfaceOrientedMeteringPointFactory(1f, 1f, p).createPoint(x, y), lock)
   }
 
-  fun focusAt(point: MeteringPoint) {
-    val cam = camera ?: return
-    val flags = if (config.focusMode == "manual" || (facts?.afModes?.size ?: 0) <= 1) {
-      FocusMeteringAction.FLAG_AE
-    } else {
-      FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+  /**
+   * Focus and expose at [point]. [lock] (long-press): no auto-cancel, and auto
+   * exposure held once it has settled there. Returns what this camera could lock
+   * (fixed-focus cameras: exposure only; some LEGACY cameras: focus only).
+   */
+  fun focusAt(point: MeteringPoint, lock: Boolean = false): Map<String, Any?> {
+    val cam = camera ?: return mapOf("af" to false, "ae" to false)
+    val f = facts
+    val af = config.focusMode != "manual" && f?.hasAutofocus == true
+    val flags = if (af) FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE else FocusMeteringAction.FLAG_AE
+    val builder = FocusMeteringAction.Builder(point, flags)
+    if (lock) builder.disableAutoCancel() else builder.setAutoCancelDuration(5, TimeUnit.SECONDS)
+    val aeLock = lock && config.exposureMode != "manual" && f?.aeLockAvailable == true
+    if (aeLocked && !aeLock) {
+      aeLocked = false
+      f?.let { applyRequestOptions(cam, it) }
     }
-    val action = FocusMeteringAction.Builder(point, flags).setAutoCancelDuration(5, TimeUnit.SECONDS).build()
-    runCatching { cam.cameraControl.startFocusAndMetering(action) }
+    val future = runCatching { cam.cameraControl.startFocusAndMetering(builder.build()) }.getOrNull()
+    if (aeLock && f != null) {
+      // Hold exposure once metering at the point has finished (else it would lock the old exposure).
+      val apply = Runnable {
+        if (camera === cam) {
+          aeLocked = true
+          applyRequestOptions(cam, f)
+        }
+      }
+      if (future != null) future.addListener(apply, main) else apply.run()
+    }
+    return mapOf("af" to (lock && af), "ae" to aeLock)
+  }
+
+  /** Release a long-press lock: back to continuous auto focus and exposure. */
+  fun unlockFocus() {
+    val cam = camera ?: return
+    aeLocked = false
+    facts?.let { applyRequestOptions(cam, it) }
+    runCatching { cam.cameraControl.cancelFocusAndMetering() }
   }
 
   /**

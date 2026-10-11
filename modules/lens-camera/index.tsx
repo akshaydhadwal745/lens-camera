@@ -160,6 +160,10 @@ export type LensCameraHandle = {
   startRecording(): Promise<VideoResult>;
   stopRecording(): Promise<void>;
   focusAt(x: number, y: number): Promise<void>;
+  /** Android: long-press lock at x/y (fractions of the view); resolves what this camera could lock. */
+  lockFocus?(x: number, y: number): Promise<{ af: boolean; ae: boolean }>;
+  /** Android: release the lock (continuous auto focus/exposure again). */
+  unlockFocus?(): Promise<void>;
 };
 
 type CameraModule = {

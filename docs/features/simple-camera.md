@@ -28,6 +28,15 @@ AUTO or ON wins over automatic Night (no badge then): an explicit flash choice
 is respected. Thresholds are a
 first guess; the Quality Lab / self-test data will tune them.
 
+### Focus and brightness (Normal and PRO)
+
+- **Tap**: focus and exposure at that point; a yellow box with a sun slider shows for 3 s.
+- **Drag up/down** (one finger, while the box shows): brighter/darker
+  (exposure compensation, 150 dp per stop, within the camera's range). A new
+  tap, mode or camera resets it.
+- **Long-press**: lock. The badge says what this camera could hold: `AE/AF LOCK`,
+  `AE LOCK` (fixed-focus cameras) or `AF LOCK` (cameras without AE lock). Tap anywhere to unlock.
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,

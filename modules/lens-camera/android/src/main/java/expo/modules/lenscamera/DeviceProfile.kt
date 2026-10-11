@@ -62,6 +62,10 @@ class CameraFacts(val info: CameraInfo, private val chars: (CameraCharacteristic
   val minFocusDistance: Float = get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
   val awbModes: Set<Int> = get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)?.toSet() ?: emptySet()
   val afModes: Set<Int> = get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)?.toSet() ?: emptySet()
+  /** Auto exposure can be held (AE lock); some LEGACY cameras can't. */
+  val aeLockAvailable: Boolean = get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true
+  /** Has autofocus (fixed-focus cameras report only OFF). */
+  val hasAutofocus get() = afModes.size > 1
 
   val canManualExposure get() = manualSensor && isoRange != null && exposureRangeNs != null
   val canManualFocus get() = manualSensor && minFocusDistance > 0f

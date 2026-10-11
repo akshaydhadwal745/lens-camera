@@ -80,7 +80,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 
 | # | Feature | Status | Evidence / limits |
 |---|---|---|---|
-| 2.1 | Focus + exposure lock (hold) and exposure slider | ⬜ | |
+| 2.1 | Focus + exposure lock (hold) and exposure slider | 🔨 | Built (dev-50): tap = focus+expose (5 s auto-cancel) + sun slider; drag up/down = exposure compensation in Normal and PRO (150 dp/EV, clamped to the camera's range, haptic at 0), reset on a new tap / mode / camera; long-press = lock (no auto-cancel + Camera2 `CONTROL_AE_LOCK` after metering settles), badge says what the camera could hold (AE/AF, AE: fixed-focus, AF: no AE lock), tap unlocks. Emulator: tap box + sun ✓, drag → +0.4 EV for 66 dp ✓ (dev-48 native + new JS). To validate: lock on dev-50 (emulator + S8), exposure visibly changes, lock holds when pointing at a bright window, fixed-focus front camera shows "AE LOCK" |
 | 2.2 | Volume-button shutter | ⬜ | |
 | 2.3 | Timer (3/10 s) | 🟡 | Now in Normal (dev-46) |
 | 2.4 | Grid in Normal + smart level (shows when nearly straight) | ⬜ | Grid/level exist in PRO (🟡) |

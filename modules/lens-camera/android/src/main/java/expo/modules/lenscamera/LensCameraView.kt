@@ -286,14 +286,17 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   fun stopRecording() = controller.stopRecording()
 
-  /** x/y are fractions of the view's size. */
-  fun focus(x: Double, y: Double) {
+  /** x/y are fractions of the view's size. [lock]: long-press AE/AF lock. Returns what was locked. */
+  fun focus(x: Double, y: Double, lock: Boolean = false): Map<String, Any?> {
     val gl = glPreview
-    if (gl != null) {
+    return if (gl != null) {
       val (bx, by) = gl.viewToBuffer(x.toFloat(), y.toFloat())
-      controller.focusAtBuffer(bx, by)
+      controller.focusAtBuffer(bx, by, lock)
     } else {
-      previewView?.let { controller.focusAt(it.meteringPointFactory.createPoint((x * width).toFloat(), (y * height).toFloat())) }
+      previewView?.let { controller.focusAt(it.meteringPointFactory.createPoint((x * width).toFloat(), (y * height).toFloat()), lock) }
+        ?: mapOf("af" to false, "ae" to false)
     }
   }
+
+  fun unlockFocus() = controller.unlockFocus()
 }

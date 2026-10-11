@@ -113,7 +113,23 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // 0.3–1.5 s depending on the phone). REC and the timer only show once it's real.
   const [recLive, setRecLive] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [focusMark, setFocusMark] = useState<{ x: number; y: number; key: number } | null>(null);
+  // Tap point + tap-to-expose in one state, so gestures update it functionally and
+  // never need to be rebuilt mid-drag (a rebuilt gesture cancels the active drag).
+  // ev: drag up/down after a tap (Normal and PRO), added on top of PRO's EV; kept
+  // after the box fades, reset by a new tap. visible: the box + sun slider show.
+  const [focus, setFocus] = useState<{ x: number; y: number; n: number; ev: number; visible: boolean } | null>(null);
+  const tapEv = focus?.ev ?? 0;
+  const focusMark = focus?.visible ? focus : null;
+  // Long-press lock: what this camera could hold ("AE/AF", "AE" or "AF"), or null.
+  const [lockLabel, setLockLabel] = useState<string | null>(null);
+  // A new camera or mode starts unlocked at normal brightness (the camera re-binds).
+  const cameraKey = `${s.mode}|${s.position}|${s.lens}`;
+  const [lastCameraKey, setLastCameraKey] = useState(cameraKey);
+  if (cameraKey !== lastCameraKey) {
+    setLastCameraKey(cameraKey);
+    setLockLabel(null);
+    setFocus(null);
+  }
   const [previewSize, setPreviewSize] = useState({ width, height });
   const [processing, setProcessing] = useState<string | null>(null);
   // A short message over the viewfinder (e.g. Portrait found nobody), gone after a few seconds.
@@ -132,7 +148,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const hot = useStore((st) => isHot(st.thermal));
   const latest = items[0];
   const flash = useRef(new Animated.Value(0)).current;
-  const zoomStart = useRef(1);
   const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Persist settings (debounced; dials change them rapidly).
@@ -341,6 +356,23 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   // ---------- Gestures ----------
 
+  // Gestures only record what was asked; this effect talks to the camera.
+  const [focusRequest, setFocusRequest] = useState<{ x: number; y: number; lock: boolean; unlock: boolean; n: number } | null>(null);
+  useEffect(() => {
+    const cam = cameraRef.current;
+    if (!focusRequest || !cam) return;
+    const { x, y, lock, unlock } = focusRequest;
+    if (unlock) cam.unlockFocus?.().catch(() => {});
+    if (lock && cam.lockFocus) {
+      cam
+        .lockFocus(x / previewSize.width, y / previewSize.height)
+        .then((r) => setLockLabel(r.ae && r.af ? 'AE/AF LOCK' : r.ae ? 'AE LOCK' : r.af ? 'AF LOCK' : null))
+        .catch(() => setLockLabel(null));
+    } else {
+      cam.focusAt(x / previewSize.width, y / previewSize.height).catch(() => {});
+    }
+  }, [focusRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const gesture = useMemo(() => {
     const tap = Gesture.Tap()
       .runOnJS(true)
@@ -350,27 +382,56 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           setParam(null);
           return;
         }
-        cameraRef.current?.focusAt(e.x / previewSize.width, e.y / previewSize.height).catch(() => {});
-        setFocusMark({ x: e.x, y: e.y, key: Date.now() });
+        // A tap releases any lock and starts fresh at the new point (unlocking an unlocked camera is harmless).
+        setLockLabel(null);
+        setFocusRequest((r) => ({ x: e.x, y: e.y, lock: false, unlock: true, n: (r?.n ?? 0) + 1 }));
+        setFocus((f) => ({ x: e.x, y: e.y, n: (f?.n ?? 0) + 1, ev: 0, visible: true }));
       });
+    const lock = Gesture.LongPress()
+      .minDuration(500)
+      .runOnJS(true)
+      .onStart((e) => {
+        if (sheet !== 'none') return;
+        haptic(Haptics.ImpactFeedbackStyle.Heavy);
+        setFocusRequest((r) => ({ x: e.x, y: e.y, lock: true, unlock: false, n: (r?.n ?? 0) + 1 }));
+        setFocus((f) => ({ x: e.x, y: e.y, n: (f?.n ?? 0) + 1, ev: 0, visible: true }));
+      });
+    // Brighter/darker: one finger up/down while the focus box is showing (or locked).
+    const expose = Gesture.Pan()
+      .maxPointers(1)
+      .activeOffsetY([-12, 12])
+      .failOffsetX([-30, 30])
+      .runOnJS(true)
+      .onChange((e) => {
+        if (!caps || (caps.maxEV ?? 0) <= (caps.minEV ?? 0)) return;
+        // Only while the box shows. 150 dp of drag = 1 EV (about a third of a screen); up = brighter.
+        setFocus((f) => {
+          if (!f?.visible) return f;
+          const ev = clampEv(f.ev - e.changeY / 150, caps);
+          if (f.ev !== 0 && Math.sign(ev) !== Math.sign(f.ev)) haptic(Haptics.ImpactFeedbackStyle.Light);
+          return { ...f, ev, n: f.n + 1 };
+        });
+      });
+    // Per-move scale change, so the gesture doesn't depend on the current zoom (no rebuild mid-pinch).
     const pinch = Gesture.Pinch()
       .runOnJS(true)
-      .onStart(() => {
-        zoomStart.current = s.zoom;
-      })
-      .onUpdate((e) => {
+      .onChange((e) => {
         const min = caps?.minZoom ?? 1;
         const max = caps?.maxZoom ?? 10;
-        update({ zoom: Math.max(min, Math.min(max, zoomStart.current * e.scale)) });
+        setS((prev) => ({ ...prev, zoom: Math.max(min, Math.min(max, prev.zoom * e.scaleChange)) }));
       });
-    return Gesture.Race(pinch, tap);
-  }, [sheet, param, previewSize, s.zoom, caps, update]);
+    return Gesture.Race(pinch, expose, Gesture.Exclusive(lock, tap));
+  }, [sheet, param, previewSize, caps]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The box (and its sun slider) fades 3 s after the last touch; a lock keeps it. The brightness stays.
+  const focusN = focus?.visible ? focus.n : null;
   useEffect(() => {
-    if (!focusMark) return;
-    const t = setTimeout(() => setFocusMark(null), 1200);
+    if (focusN === null || lockLabel) return;
+    const t = setTimeout(() => setFocus((f) => (f && f.n === focusN ? { ...f, visible: false } : f)), 3000);
     return () => clearTimeout(t);
-  }, [focusMark]);
+  }, [focusN, lockLabel]);
+
+
 
   // ---------- Presets ----------
 
@@ -464,7 +525,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             exposureMode={manualExposureAvailable ? s.exposureMode : 'auto'}
             iso={s.iso}
             shutter={s.shutter}
-            ev={s.ev}
+            ev={clampEv(s.ev + tapEv, caps)}
             whiteBalanceMode={s.whiteBalanceMode}
             temperature={s.temperature}
             tint={s.tint}
@@ -510,7 +571,19 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           )}
 
           {focusMark && (
-            <View pointerEvents="none" style={[styles.focusMark, { left: focusMark.x - 36, top: focusMark.y - 36 }]} />
+            <View pointerEvents="none" style={[styles.focusWrap, { left: focusMark.x - 36, top: focusMark.y - 36 }]}>
+              {lockLabel && <Text style={styles.lockBadge}>{lockLabel}</Text>}
+              <View style={styles.focusMark} />
+              {(caps?.maxEV ?? 0) > (caps?.minEV ?? 0) && (
+                // Sun slider: the sun moves with the brightness change.
+                <View style={styles.evTrack}>
+                  <View style={[styles.evSun, { top: 36 - 9 - (tapEv / Math.max(1, caps!.maxEV!)) * 30 }]}>
+                    <Ionicons name="sunny" size={16} color={palette.accent} />
+                  </View>
+                  {tapEv !== 0 && <Text style={styles.evValue}>{formatEv(Math.round(tapEv * 10) / 10)}</Text>}
+                </View>
+              )}
+            </View>
           )}
 
           {processing && (
@@ -953,6 +1026,14 @@ function ModeStrip<M extends string>({ modes, mode, disabled, onSelect }: { mode
   );
 }
 
+/** Exposure compensation within what this camera allows. */
+function clampEv(ev: number, caps: { minEV?: number; maxEV?: number } | null | undefined): number {
+  const min = caps?.minEV ?? 0;
+  const max = caps?.maxEV ?? 0;
+  if (max <= min) return 0;
+  return Math.max(min, Math.min(max, ev));
+}
+
 function describePreset(p: Preset): string {
   const parts: string[] = [];
   const v = p.settings;
@@ -1021,7 +1102,25 @@ const styles = StyleSheet.create({
   lookChipOn: { backgroundColor: palette.accent },
   lookChipText: { color: palette.text, fontSize: 12, fontFamily: font.semibold },
   lookChipTextOn: { color: '#000' },
-  focusMark: { position: 'absolute', width: 72, height: 72, borderWidth: 1.5, borderColor: 'rgba(250,204,21,0.9)', borderRadius: 6 },
+  focusWrap: { position: 'absolute', width: 72, height: 72 },
+  focusMark: { width: 72, height: 72, borderWidth: 1.5, borderColor: 'rgba(250,204,21,0.9)', borderRadius: 6 },
+  lockBadge: {
+    position: 'absolute',
+    top: -30,
+    alignSelf: 'center',
+    color: '#000',
+    backgroundColor: palette.accent,
+    fontSize: 10,
+    fontFamily: font.monoSemibold,
+    letterSpacing: 0.6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  evTrack: { position: 'absolute', left: 80, top: 0, width: 24, height: 72, alignItems: 'center' },
+  evSun: { position: 'absolute', width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
+  evValue: { position: 'absolute', top: 76, color: palette.accent, fontSize: 11, fontFamily: font.monoSemibold, width: 40, textAlign: 'center' },
   countdown: { color: palette.text, fontSize: 120, fontFamily: font.mono },
 
   // The glass tray: everything you touch to shoot lives in one floating card.
