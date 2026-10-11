@@ -954,6 +954,73 @@ class CameraController(private val context: Context) {
     next()
   }
 
+  // ---------- Smart burst (checklist 7.3) ----------
+
+  @Volatile private var burstStop = false
+  private var bursting = false
+
+  /**
+   * Hold-the-shutter burst: photos back to back until [stopBurst] (or [max]), each
+   * like a normal photo (mirror, location, sound). [onShot] gets the running count.
+   * Then the best shot is picked off the main thread ([BurstPicker]).
+   */
+  fun startBurst(max: Int, onShot: (Int) -> Unit, done: (Result<Map<String, Any?>>) -> Unit) {
+    val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
+    if (bursting) return done(Result.failure(CameraException("Already taking a burst.")))
+    if (photoFormat == ImageCapture.OUTPUT_FORMAT_RAW) return done(Result.failure(CameraException("Burst takes JPEG photos: turn RAW off.")))
+    capture.flashMode = ImageCapture.FLASH_MODE_OFF
+    bursting = true
+    burstStop = false
+    val dir = File(outputDir(), "burst-${UUID.randomUUID()}").apply { mkdirs() }
+    val files = mutableListOf<File>()
+    val sizes = mutableListOf<Pair<Int, Int>>()
+    fun finish() {
+      bursting = false
+      if (files.isEmpty()) {
+        dir.deleteRecursively()
+        return done(Result.failure(CameraException("No photos were taken.")))
+      }
+      io.execute {
+        val (best, shots) = runCatching { expo.modules.lenscamera.imaging.BurstPicker.pick(files) }.getOrElse { 0 to emptyList() }
+        val frames = files.mapIndexed { i, f ->
+          mapOf("uri" to "file://${f.absolutePath}", "width" to sizes[i].first, "height" to sizes[i].second,
+            "sharpness" to shots.getOrNull(i)?.sharpness, "faces" to shots.getOrNull(i)?.faces)
+        }
+        main.execute { done(Result.success(mapOf("frames" to frames, "pick" to best))) }
+      }
+    }
+    fun next() {
+      if (burstStop || files.size >= max) return finish()
+      val file = File(dir, "${files.size}.jpg")
+      capture.takePicture(
+        outputOptions(file),
+        io,
+        object : ImageCapture.OnImageSavedCallback {
+          override fun onCaptureStarted() = sounds.shutter()
+
+          override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+            files += file
+            sizes += uprightSize(file)
+            main.execute {
+              onShot(files.size)
+              next()
+            }
+          }
+
+          override fun onError(exception: ImageCaptureException) {
+            Log.w(TAG, "burst shot failed", exception)
+            main.execute { finish() }
+          }
+        },
+      )
+    }
+    next()
+  }
+
+  fun stopBurst() {
+    burstStop = true
+  }
+
   @SuppressLint("MissingPermission")
   fun startRecording(done: (Result<Map<String, Any?>>) -> Unit) {
     val capture = videoCapture ?: return done(Result.failure(CameraException("Switch to video mode to record.")))

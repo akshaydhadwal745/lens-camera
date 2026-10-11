@@ -108,6 +108,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
 
       {item.kind === 'video' && item.duration != null && <Text style={styles.duration}>{formatDuration(item.duration)}</Text>}
       {frame != null && !selecting && <Text style={styles.frame}>#{frame}</Text>}
+      {item.edit?.burst?.pick && item.edit.burst.count > 1 && !selecting && <Text style={styles.burst}>⧉ {item.edit.burst.count}</Text>}
       {showOwner && item.ownerName && (
         <Text style={styles.owner} numberOfLines={1}>
           {item.ownerName}
@@ -137,6 +138,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontFamily: font.monoMedium,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 3,
+  },
+  burst: {
+    position: 'absolute',
+    left: 5,
+    top: 4,
+    color: '#F5F5F7',
+    fontSize: 10,
+    fontFamily: font.monoSemibold,
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowRadius: 3,
   },

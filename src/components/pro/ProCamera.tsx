@@ -128,6 +128,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Paused mid-recording (one file; paused time isn't recorded).
   const [paused, setPaused] = useState(false);
   // Recording sound: problem ('silenced' / 'error') or an external mic in use; null = fine/unknown.
+  // Smart burst: shots so far while the shutter is held (null = no burst).
+  const [burstCount, setBurstCount] = useState<number | null>(null);
   // Smart look suggestion for the scene (Normal camera, no look chosen).
   const [sceneLook, setSceneLook] = useState<string | null>(null);
   const [recAudio, setRecAudio] = useState<{ state: 'ok' | 'silenced' | 'error'; external: boolean } | null>(null);
@@ -390,6 +392,33 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       .catch((error) => Alert.alert('Could not take photo', error instanceof Error ? error.message : String(error)));
   };
 
+  /** Hold the shutter (Photo mode): burst until release; Lens picks the best shot, the rest stay one tap away. */
+  const startBurst = () => {
+    const cam = cameraRef.current;
+    if (!cam?.startBurst || s.mode !== 'photo' || autoNight || busy) return;
+    haptic(Haptics.ImpactFeedbackStyle.Heavy);
+    setBurstCount(0);
+    const recipe = captureRecipe(false);
+    const id = newId();
+    cam
+      .startBurst(20)
+      .then(({ frames, pick }) => {
+        setProcessing(null);
+        frames.forEach((f, i) => {
+          const burst = { id, pick: i === pick, count: frames.length };
+          capture({ kind: 'photo', sourceUri: f.uri, width: f.width, height: f.height, edit: compact({ ...(recipe ?? {}), burst }) ?? undefined });
+        });
+        if (frames.length > 1) showNotice(`Burst of ${frames.length} · best shot in your roll`);
+      })
+      .catch((error) => Alert.alert('Burst', error instanceof Error ? error.message : String(error)))
+      .finally(() => setBurstCount(null));
+  };
+  const endBurst = () => {
+    if (burstCount === null) return;
+    void cameraRef.current?.stopBurst?.();
+    setProcessing('Picking the best shot…');
+  };
+
   const togglePause = () => {
     const cam = cameraRef.current;
     if (!cam?.pauseRecording || !cam.resumeRecording) return;
@@ -600,6 +629,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             portraitAuto={!stored.pro}
             sceneSuggest={!stored.pro && !s.look}
             onSceneLook={(e) => setSceneLook(e.nativeEvent.look)}
+            onBurstShot={(e) => setBurstCount(e.nativeEvent.count)}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
             mirrorFront={s.mirrorSelfies}
@@ -987,11 +1017,17 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
           <Pressable
             onPress={onShutter}
+            // Photo mode: hold for a burst (Lens picks the best shot).
+            onLongPress={s.mode === 'photo' && Platform.OS === 'android' ? startBurst : undefined}
+            delayLongPress={350}
+            onPressOut={endBurst}
             disabled={busy || !caps}
             style={({ pressed }) => [styles.shutter, (autoNight || s.mode === 'night') && styles.shutterNight, pressed && { transform: [{ scale: 0.94 }] }]}
-            accessibilityLabel={recordMode ? (recording ? 'Stop recording' : 'Record') : 'Take photo'}
+            accessibilityLabel={recordMode ? (recording ? 'Stop recording' : 'Record') : 'Take photo, hold for a burst'}
           >
-            <View style={[styles.shutterInner, recordMode && styles.shutterVideo, recording && styles.shutterRec]} />
+            <View style={[styles.shutterInner, recordMode && styles.shutterVideo, recording && styles.shutterRec]}>
+              {burstCount !== null && <Text style={styles.burstCount}>{burstCount}</Text>}
+            </View>
           </Pressable>
 
           {recording && Platform.OS === 'android' && s.mode === 'video' ? (
@@ -1243,6 +1279,7 @@ const styles = StyleSheet.create({
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.rec },
   recDotStarting: { backgroundColor: palette.muted },
   recDotPaused: { backgroundColor: palette.accent },
+  burstCount: { color: '#000', fontSize: 22, fontFamily: font.monoSemibold, textAlign: 'center' },
   recWarn: { color: '#000', backgroundColor: palette.accent, fontSize: 11, fontFamily: font.monoSemibold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
   recText: { color: palette.text, fontSize: 16, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
   badge: { color: '#000', backgroundColor: palette.accent, fontSize: 10, fontFamily: font.monoSemibold, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
@@ -1334,7 +1371,7 @@ const styles = StyleSheet.create({
   shutter: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: palette.text, alignItems: 'center', justifyContent: 'center' },
   // Yellow ring = Lens is doing something smart (Night) for this shot.
   shutterNight: { borderColor: palette.accent },
-  shutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: palette.text },
+  shutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: palette.text, alignItems: 'center', justifyContent: 'center' },
   shutterVideo: { backgroundColor: palette.rec },
   shutterRec: { width: 28, height: 28, borderRadius: 6 },
   flip: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },

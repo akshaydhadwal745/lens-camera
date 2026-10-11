@@ -37,6 +37,13 @@ first guess; the Quality Lab / self-test data will tune them.
 - **Long-press**: lock. The badge says what this camera could hold: `AE/AF LOCK`,
   `AE LOCK` (fixed-focus cameras) or `AF LOCK` (cameras without AE lock). Tap anywhere to unlock.
 
+### Smart burst
+
+Hold the shutter in Photo mode: Lens keeps shooting until you let go (up to 20),
+then picks the best shot (sharpest, eyes open, smiling) and shows only that one in
+your roll, marked `⧉ 12`. Open it and swipe to see the others; tap `⧉ MAKE PICK` on
+another shot to show that one instead. All shots are kept and backed up.
+
 ### Faces first (automatic)
 
 In the Normal camera, phones whose camera can detect faces expose and focus for

@@ -134,7 +134,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 |---|---|---|---|
 | 7.1 | Scene-aware automatic decisions (Night, HDR, frame counts) from measured data | ⬜ | Depends on 1.9 |
 | 7.2 | Face-aware exposure / focus | 🔨 | Built (Normal camera, auto exposure, not Night, not while long-press locked): Camera2 `CONTROL_SCENE_MODE_FACE_PRIORITY` where the camera lists it (`CONTROL_AVAILABLE_SCENE_MODES`): the camera's own face detection steers AE/AF/AWB (no ML, no heat; 3A modes, EV and tap-to-focus keep working per the Camera2 spec). Reach added to the 1.1 probes (`facePriority`). If test day shows low reach: fallback = our own face detection → metering points. To validate: S8 backlit face (window behind) Normal vs PRO |
-| 7.3 | Smart burst (hold shutter, best shot, stack) | ⬜ | |
+| 7.3 | Smart burst (hold shutter, best shot, stack) | 🔨 | Built (Photo mode, Normal + PRO, not RAW / auto-Night): hold the shutter ≥ 0.35 s → photos back to back until release (max 20), counter on the shutter, each a normal photo (mirror, location, sound). Best shot picked on the phone (`BurstPicker`): sharpness (Laplacian variance of a 512 px copy, normalised in the burst) + eyes open + smile where ML Kit face detection (Play services) finds faces (else sharpness only). Stack without a server change: `edit.burst = {id, pick, count}` (synced with the photo, never a visual edit, not pasted). Roll shows only the pick with `⧉ N`; the viewer browses the burst (shots sit together) with `⧉ PICK` / `⧉ MAKE PICK · N`. Unit test (sharp > soft > softer, 37/37). To validate: S8 burst speed + pick quality (moving kid/pet, eyes closed in one frame), Test Lab burst fps (self-test) |
 | 7.4 | Auto straighten / horizon | ⬜ | |
 
 ### 8. PRO (manual controls only)

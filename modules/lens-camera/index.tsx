@@ -163,6 +163,8 @@ export type LensCameraProps = ViewProps & {
   onRecordingAudio?: (e: NativeSyntheticEvent<{ state: 'ok' | 'silenced' | 'error'; external: boolean }>) => void;
   /** Android: a look that suits the scene (or null), from on-phone scene labels. */
   onSceneLook?: (e: NativeSyntheticEvent<{ look: string | null }>) => void;
+  /** Android: a burst shot was saved (`count` so far). */
+  onBurstShot?: (e: NativeSyntheticEvent<{ count: number }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
   hardwareShutter?: boolean;
   /** Android: a volume/camera key was pressed (with `hardwareShutter`). */
@@ -205,6 +207,9 @@ export type LensCameraHandle = {
   stopRecording(): Promise<void>;
   /** Android: pause/resume the current recording (one file; paused time isn't recorded). */
   pauseRecording?(): Promise<boolean>;
+  /** Android, Photo mode: hold-the-shutter burst; resolves after stopBurst() with the shots and the best one. */
+  startBurst?(max: number): Promise<{ frames: { uri: string; width: number; height: number }[]; pick: number }>;
+  stopBurst?(): Promise<void>;
   /** Android, while recording: a photo (full resolution where supported, else the video frame: `fromVideo`). */
   takeVideoPhoto?(): Promise<PhotoResult & { fromVideo?: boolean }>;
   /** Android, mode 'timelapse': resolves with the clip when stopTimeLapse() finishes it. */

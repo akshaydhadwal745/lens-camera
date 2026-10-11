@@ -52,7 +52,7 @@ class LensCameraModule : Module() {
     }
 
     View(LensCameraView::class) {
-      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook")
+      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot")
 
       OnViewDidUpdateProps { view: LensCameraView -> view.applyProps() }
       OnViewDestroys { view: LensCameraView -> view.destroy() }
@@ -133,6 +133,14 @@ class LensCameraModule : Module() {
       // Long-press AE/AF lock (Android). Resolves { af, ae }: what this camera could lock.
       AsyncFunction("lockFocus") { view: LensCameraView, x: Double, y: Double ->
         view.focus(x, y, lock = true)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("startBurst") { view: LensCameraView, max: Int, promise: Promise ->
+        view.startBurst(max, promise)
+      }.runOnQueue(Queues.MAIN)
+
+      AsyncFunction("stopBurst") { view: LensCameraView ->
+        view.stopBurst()
       }.runOnQueue(Queues.MAIN)
 
       AsyncFunction("takeVideoPhoto") { view: LensCameraView, promise: Promise ->

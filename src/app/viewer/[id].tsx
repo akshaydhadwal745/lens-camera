@@ -23,7 +23,8 @@ import { formatBytes, formatDate, formatDuration, formatEta, formatRate } from '
 import { hasEdit, useFullQuality, webCanShowOriginal } from '@/lib/full-view';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
-import { removeSharedItem, selectGallery, selectShared, useStore } from '@/lib/store';
+import { removeSharedItem, saveEdit, selectGallery, selectShared, useStore } from '@/lib/store';
+import { compact } from '@/lib/edits';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { keepOnly, prefetchVideo } from '@/lib/video-prefetch';
 import { font, glass, palette } from '@/lib/theme';
@@ -339,6 +340,25 @@ export default function ViewerScreen() {
               {safe && meta ? <Text style={styles.sub} numberOfLines={1}>{meta}</Text> : <SyncLine item={current} />}
             </View>
             <View style={styles.topRight}>
+              {!shared && current.edit?.burst && current.edit.burst.count > 1 && (
+                // Smart burst: where this shot sits; a non-pick can become the one the roll shows.
+                <Pressable
+                  onPress={() => {
+                    if (current.edit?.burst?.pick) return;
+                    const id = current.edit!.burst!.id;
+                    const old = items.find((i) => i.edit?.burst?.id === id && i.edit.burst.pick);
+                    void saveEdit(current.id, compact({ ...current.edit, burst: { ...current.edit!.burst!, pick: true } }));
+                    if (old) void saveEdit(old.id, compact({ ...old.edit, burst: { ...old.edit!.burst!, pick: false } }));
+                    notify('Burst', 'This shot now shows in your roll.');
+                  }}
+                  style={styles.hdPill}
+                  accessibilityLabel={current.edit.burst.pick ? 'Burst: the pick' : 'Burst: make this the pick'}
+                >
+                  <Text style={styles.hd}>
+                    {current.edit.burst.pick ? '⧉ PICK' : '⧉ MAKE PICK'} · {items.filter((i) => i.edit?.burst?.id === current.edit!.burst!.id).length}
+                  </Text>
+                </Pressable>
+              )}
               {current.kind === 'photo' && !current.localUri && (current.remoteUrl || current.location) && !loadOriginalFor(current) && !(isWeb && !webCanShowOriginal(current)) ? (
                 <Pressable onPress={() => setHd((prev) => new Set(prev).add(current.id))} style={styles.hdPill} accessibilityLabel="Load full quality">
                   <Text style={styles.hd}>HD</Text>

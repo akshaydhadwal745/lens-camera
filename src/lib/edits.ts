@@ -36,7 +36,16 @@ export type EditRecipe = {
   portrait?: { aperture?: number; style?: PortraitStyle };
   /** Video trim, seconds into the original (removable; the original stays whole). */
   trim?: Trim;
+  /** Smart burst membership (synced with the photo; not a visual edit): the shots share `id`; one is the `pick`. */
+  burst?: Burst;
 };
+
+export type Burst = { id: string; pick: boolean; count: number };
+
+/** A burst shot that isn't the pick: hidden in the roll (browse it from the pick in the viewer). */
+export function isBurstExtra(recipe?: EditRecipe | null): boolean {
+  return !!recipe?.burst && !recipe.burst.pick;
+}
 
 export type Trim = { start?: number; end?: number };
 
@@ -138,8 +147,9 @@ export function isNeutral(recipe?: EditRecipe | null): boolean {
 
 /** Removes neutral values so stored recipes stay small. */
 export function compact(recipe: EditRecipe): EditRecipe | null {
-  if (isNeutral(recipe)) return null;
+  if (isNeutral(recipe) && !recipe.burst) return null;
   const out: EditRecipe = { v: 1 };
+  if (recipe.burst) out.burst = recipe.burst;
   if (recipe.look && (recipe.intensity ?? 1) > 0) {
     out.look = recipe.look;
     if ((recipe.intensity ?? 1) < 1) out.intensity = Math.round((recipe.intensity ?? 1) * 100) / 100;
@@ -165,6 +175,6 @@ export function compact(recipe: EditRecipe): EditRecipe | null {
 
 /** What "Paste edit" copies to other photos: everything except crop. */
 export function forPaste(recipe: EditRecipe): EditRecipe {
-  const { crop: _crop, portrait: _portrait, trim: _trim, ...rest } = recipe;
+  const { crop: _crop, portrait: _portrait, trim: _trim, burst: _burst, ...rest } = recipe;
   return rest;
 }

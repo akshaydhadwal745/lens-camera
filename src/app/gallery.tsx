@@ -43,6 +43,7 @@ import { formatBytes, formatEta, formatRate } from '@/lib/format';
 import { keepOnly, prefetchPhoto, prefetchVideo } from '@/lib/video-prefetch';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { loadDoc, saveDoc } from '@/lib/local-store';
+import { isBurstExtra } from '@/lib/edits';
 import { providerInfo } from '@/lib/storage/providers';
 import { GalleryItem } from '@/lib/types';
 import { font, palette, type as typeStyle } from '@/lib/theme';
@@ -185,7 +186,8 @@ export default function GalleryScreen() {
 
   const [videosOnly, setVideosOnly] = useState(false);
   const all = tab === 'mine' ? mine : shared;
-  const items = useMemo(() => (videosOnly ? all.filter((i) => i.kind === 'video') : all), [all, videosOnly]);
+  // Burst shots other than the pick stay out of the roll (the pick shows ⧉ N; browse them in the viewer).
+  const items = useMemo(() => all.filter((i) => (!videosOnly || i.kind === 'video') && !isBurstExtra(i.edit)), [all, videosOnly]);
   const contentWidth = Math.min(width, MAX_CONTENT_WIDTH);
   const gridWidth = contentWidth - PERF - SIDE;
   const columns = Math.max(3, Math.floor(gridWidth / TARGET_TILE));

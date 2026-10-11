@@ -50,6 +50,8 @@ dependencies {
   implementation "com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1"
   // Smart look suggestion: scene labels (model from Play services, ~200 KB in the app).
   implementation "com.google.android.gms:play-services-mlkit-image-labeling:16.0.8"
+  // Smart burst: eyes open / smiles when picking the best shot (Play services; sharpness-only without it).
+  implementation "com.google.android.gms:play-services-mlkit-face-detection:17.1.0"
 
   testImplementation "junit:junit:4.13.2"
 }
