@@ -107,7 +107,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 |---|---|---|---|
 | 4.1 | Person mask in the photo + blur as an edit | ✅ | S8 selfies 2026-10-10: mask correct and aligned, blurred preview (cloud) |
 | 4.2 | Live blur in viewfinder, styles, "No person found" | 🔨 | In 0.1 |
-| 4.3 | Edge refinement (hair), realistic disc bokeh, edge-aware compositing | ⬜ | docs/research/portrait.md (A4, B2, B4) |
+| 4.3 | Edge refinement (hair), realistic disc bokeh, edge-aware compositing | 🔨 | Prototyped on the user's real S8 portraits (research/portrait.md: halo −0.043 → −0.009, ring ghosts gone, hair outline follows hair). Built: capture-time guided-filter refinement in a 1.5 % trimap band, mask stored at 768 px (20–29 KB); renderer 64-tap golden-angle disc, highlight-weighted, background-only taps, radius = fraction of the long side (2.2 % at f/2.8; previews now match exports); tile margin = blur reach; live viewfinder same mapping. Unit tests 34/34 (new: guided filter sharpens a soft mask onto the photo edge; blur mapping). To validate: new S8 portraits (hair, glasses, busy background), export time on S8 for 12 MP, editor live preview speed |
 | 4.4 | Automatic blur strength (subject size/distance) | ⬜ | |
 | 4.5 | Pets/objects (ML Kit subject segmentation where Play services exist) | ⬜ | |
 | 4.6 | Maker bokeh extension where offered; depth-graded blur (depth / cloud) | ⬜ | |

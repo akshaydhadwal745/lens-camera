@@ -50,6 +50,8 @@ class EditRenderer {
     val geometry: DoubleArray,
     val outputWidth: Int,
     val outputHeight: Int,
+    /** Width / height of the whole stored image (Portrait blur radius is a fraction of its long side). */
+    val imageAspect: Float = sourceWidth.toFloat() / sourceHeight * (region[3] / region[2]),
   )
 
   /**
@@ -102,9 +104,12 @@ class EditRenderer {
     GLES20.glUniform3f(u("uCSV"), r.contrast.toFloat(), r.saturation.toFloat(), r.vibrance.toFloat())
     GLES20.glUniform3f(u("uFx"), r.sharpness.toFloat(), r.vignette.toFloat(), r.grain.toFloat())
     GLES20.glUniform1f(u("uLutMix"), if (r.look != null && inputs.lut != 0) r.intensity.toFloat().coerceIn(0f, 1f) else 0f)
-    // Portrait: f/1.4 = strongest blur … f/16 = none (same mapping as iOS).
-    val blur = r.aperture?.let { ((1 - (it - 1.4) / 14.6) * 22).coerceIn(0.0, 22.0) } ?: 0.0
-    GLES20.glUniform1f(u("uBlur"), if (inputs.mask != 0) blur.toFloat() else 0f)
+    // Portrait: a disc bokeh whose radius is a fraction of the photo's long side, so a
+    // preview and the full-size export look the same (f/1.4 strongest … f/16 none).
+    val frac = if (inputs.mask != 0) PortraitStyle.blurFraction(r.aperture) else 0f
+    val (bx, by) = if (inputs.imageAspect >= 1f) frac to frac * inputs.imageAspect else frac / inputs.imageAspect to frac
+    GLES20.glUniform2f(u("uBlurUv"), bx, by)
+    GLES20.glUniform4f(u("uRegionF"), inputs.region[0], inputs.region[1], inputs.region[2], inputs.region[3])
     GLES20.glUniform1f(u("uStyle"), if (inputs.mask != 0) PortraitStyle.code(r.portraitStyle) else 0f)
     GLES20.glUniform1f(u("uAspect"), inputs.outputWidth.toFloat() / inputs.outputHeight)
     GlUtil.drawQuad(p)
@@ -169,7 +174,8 @@ class EditRenderer {
       uniform vec3 uCSV;
       uniform vec3 uFx;
       uniform float uLutMix;
-      uniform float uBlur;
+      uniform vec2 uBlurUv;
+      uniform vec4 uRegionF;
       uniform float uStyle;
       uniform float uAspect;
       uniform float uHasBase;
@@ -182,22 +188,29 @@ class EditRenderer {
         float l = luma(c);
         return mix(vec3(l), c, 1.0 + amount * (1.0 - (mx - mn)) * 1.5);
       }
+      // Portrait (checklist 4.3; prototyped on real S8 portraits, docs/research/portrait.md):
+      // a 64-tap golden-angle disc like a real lens, bright points weighted up (bokeh
+      // discs), and only background pixels feeding the blur (no dark halo of hair/face).
       vec3 source(vec2 t) {
         vec3 c = texture2D(uSrc, t).rgb;
-        if (uBlur > 0.0) {
-          // Portrait: blur the background, keep the subject (mask = 1) sharp.
+        if (uBlurUv.x > 0.0) {
           float subject = texture2D(uMask, vSrc).r;
-          float radius = uBlur * (1.0 - subject);
-          if (radius > 0.3) {
-            vec3 acc = c;
-            float n = 1.0;
-            for (int i = 0; i < 12; i++) {
-              float a = float(i) * 0.5236;
-              vec2 d = vec2(cos(a), sin(a)) * uTexel * radius * 1.6;
-              acc += texture2D(uSrc, t + d).rgb + texture2D(uSrc, t + d * 0.5).rgb;
-              n += 2.0;
+          if (subject < 0.995) {
+            vec3 acc = vec3(0.0);
+            float wsum = 0.0;
+            for (int i = 0; i < 64; i++) {
+              float fi = float(i);
+              float r = sqrt((fi + 0.5) / 64.0);
+              float a = fi * 2.39996323;
+              vec2 dSrc = vec2(cos(a), sin(a)) * r * uBlurUv;
+              vec3 s = texture2D(uSrc, t + dSrc / uRegionF.zw).rgb;
+              float bg = 1.0 - texture2D(uMask, vSrc + dSrc).r;
+              float hi = max(luma(s) - 0.75, 0.0);
+              float w = (1.0 + 6.0 * hi * sqrt(hi)) * bg + 0.0001;
+              acc += s * w;
+              wsum += w;
             }
-            c = acc / n;
+            c = mix(acc / wsum, c, subject);
           }
         }
         return c;

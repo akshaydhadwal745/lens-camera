@@ -80,6 +80,24 @@ reshaping by default.**
   picked a style → else A3/A1 + A4 → A2 for pets/objects where Play services exist → A7 later as "enhance in cloud".
 - In Photo mode, when a face fills enough of the frame, suggest Portrait (badge), don't switch silently.
 
+## Measured: edge refinement + disc bokeh (2026-10-11, checklist 4.3)
+
+Prototype `research`-style on the user's two real S8 Portrait selfies (photo +
+stored mask, half resolution), three versions side by side:
+
+| Version | Halo (band just outside the subject vs background; 0 = none) | Look |
+|---|---|---|
+| Current: 384 px mask + 12-direction ring blur (~1 % radius) | −0.043 | background shows doubled "ring" ghosts (window grille), dark band around the hair |
+| Refined mask (guided filter) + ring blur | −0.045 | hair outline follows the hair; without a trimap it leaked into a dark wall |
+| Refined mask (guided filter in a 1.5 % trimap band) + 64-tap disc, highlight-weighted, background-only taps, 2.2 % radius at f/2.8 | **−0.009** | background dissolves like a fast lens; face sharp; halo ~80 % smaller |
+
+Mask PNG at 768 px: 20–29 KB (fits the 64 KB JPEG segment). Shipped (A4 + B2 +
+B4): `Portrait.refine` (Kotlin guided filter with integral-image box means +
+chamfer-distance trimap, at capture), `EditRenderer` disc bokeh with the radius as
+a fraction of the photo's long side (also fixes previews blurring relatively more
+than full exports), tile margin = blur reach, live viewfinder on the same mapping.
+Unit test: a soft, 2 px-off mask gets closer to the photo's edge and >2× steeper.
+
 ## Test plan
 
 1. **Accuracy offline (no phones needed):** run A1/A2/A3 (+A4) on a fixed set of

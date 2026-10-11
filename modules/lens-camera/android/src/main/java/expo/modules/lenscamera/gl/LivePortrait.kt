@@ -108,10 +108,7 @@ class LivePortrait {
   companion object {
     private const val TAG = "LensPreview"
 
-    /** Background blur as a fraction of the frame's long side, matching EditRenderer's portrait blur on a ~3264 px photo. */
-    fun blurFraction(aperture: Double): Float {
-      val blur = ((1 - (aperture - 1.4) / 14.6) * 22).coerceIn(0.0, 22.0)
-      return (blur * 1.6 / 3264.0).toFloat()
-    }
+    /** Background blur as a fraction of the frame's long side: the same as the saved photo's disc. */
+    fun blurFraction(aperture: Double): Float = expo.modules.lenscamera.imaging.PortraitStyle.blurFraction(aperture)
   }
 }

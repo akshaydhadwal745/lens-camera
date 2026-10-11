@@ -290,7 +290,9 @@ object ImagingEngine {
       var sample = 1
       while (sample * 2 <= density) sample *= 2
       // Neighbours read by sharpening/portrait blur must exist at tile edges.
-      val margin = (if (recipe?.aperture != null) 48 else 4) * sample
+      // Portrait disc reaches blurFraction × long side: tiles need that much neighbourhood.
+      val portraitReach = (PortraitStyle.blurFraction(recipe?.aperture) * max(source.width, source.height)).toInt()
+      val margin = if (recipe?.aperture != null) portraitReach + 8 * sample else 4 * sample
 
       GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fb)
       var ty = 0

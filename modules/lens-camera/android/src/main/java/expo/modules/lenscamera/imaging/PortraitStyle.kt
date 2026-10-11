@@ -9,6 +9,17 @@ package expo.modules.lenscamera.imaging
 object PortraitStyle {
   val IDS = listOf("natural", "studio", "mono", "stage")
 
+  /**
+   * Background blur radius as a fraction of the photo's long side for an
+   * f-number (f/1.4 strongest ≈ 2.4 % … f/16 none). Prototype on real S8
+   * portraits: 2.2 % at f/2.8 reads like a real fast lens.
+   */
+  fun blurFraction(aperture: Double?): Float {
+    val a = aperture ?: return 0f
+    val k = (1 - (a - 1.4) / 14.6).coerceIn(0.0, 1.0)
+    return (0.024 * k).toFloat()
+  }
+
   /** Shader code for a style id (0 = natural, nothing extra). */
   fun code(id: String?): Float = when (id) {
     "studio" -> 1f

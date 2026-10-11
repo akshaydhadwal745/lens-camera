@@ -23,7 +23,8 @@ import kotlin.math.roundToInt
  */
 object Portrait {
   private const val TAG = "LensPortrait"
-  private const val MASK_PX = 384
+  /** Stored mask size (long side). 768 px keeps refined hair edges and fits the 64 KB JPEG segment (~20–30 KB). */
+  private const val MASK_PX = 768
 
   private val segmenter by lazy {
     Segmentation.getClient(
@@ -76,10 +77,10 @@ object Portrait {
       }
       // Nobody (or almost nobody) in the frame: no portrait effect.
       if (subject < mw * mh * 0.02) return false
-      var maskBitmap = Bitmap.createBitmap(pixels, mw, mh, Bitmap.Config.ARGB_8888)
+      var maskBitmap = refine(upright, Bitmap.createBitmap(pixels, mw, mh, Bitmap.Config.ARGB_8888))
       // …then store it in the photo's stored orientation (that's how the renderer samples it).
       val inverse = Matrix().also { toUpright.invert(it) }
-      maskBitmap = Bitmap.createBitmap(maskBitmap, 0, 0, mw, mh, inverse, true)
+      maskBitmap = Bitmap.createBitmap(maskBitmap, 0, 0, maskBitmap.width, maskBitmap.height, inverse, true)
       val scale = MASK_PX.toFloat() / max(maskBitmap.width, maskBitmap.height)
       if (scale < 1f) {
         maskBitmap = Bitmap.createScaledBitmap(maskBitmap, (maskBitmap.width * scale).roundToInt(), (maskBitmap.height * scale).roundToInt(), true)
@@ -96,6 +97,105 @@ object Portrait {
       Log.w(TAG, "segmentation failed", e)
       return false
     }
+  }
+
+  /**
+   * Edge refinement (checklist 4.3, measured on real S8 portraits in
+   * docs/research/portrait.md): the model's coarse mask snapped to the photo's own
+   * edges with a guided filter (He et al.), only within a thin band around the
+   * coarse edge (a trimap), so hair outlines follow the hair without leaking into
+   * a similar-looking background. Works at the photo copy's size (~640–1280 px).
+   */
+  internal fun refine(photo: Bitmap, coarse: Bitmap): Bitmap {
+    val w = photo.width
+    val h = photo.height
+    val n = w * h
+    val px = IntArray(n).also { photo.getPixels(it, 0, w, 0, 0, w, h) }
+    val guide = FloatArray(n) { i ->
+      val c = px[i]
+      (0.299f * ((c shr 16) and 0xFF) + 0.587f * ((c shr 8) and 0xFF) + 0.114f * (c and 0xFF)) / 255f
+    }
+    val up = Bitmap.createScaledBitmap(coarse, w, h, true)
+    val mp = IntArray(n).also { up.getPixels(it, 0, w, 0, 0, w, h) }
+    up.recycle()
+    val p = FloatArray(n) { (mp[it] and 0xFF) / 255f }
+    val refined = guidedFilter(guide, p, w, h, radius = (0.006f * max(w, h)).roundToInt() + 2, eps = 1e-3f)
+    // Trimap band: within ~1.5 % of the long side of the coarse edge use the refined value, fading to coarse outside.
+    val band = 0.015f * max(w, h)
+    val dist = edgeDistance(p, w, h, band)
+    val out = IntArray(n)
+    for (i in 0 until n) {
+      val t = (1f - dist[i] / band).coerceIn(0f, 1f)
+      val v = ((refined[i] * t + p[i] * (1f - t)).coerceIn(0f, 1f) * 255).roundToInt()
+      out[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+    }
+    return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
+  }
+
+  /** Guided filter with box means from integral images (O(n) whatever the radius). */
+  internal fun guidedFilter(i: FloatArray, p: FloatArray, w: Int, h: Int, radius: Int, eps: Float): FloatArray {
+    val n = w * h
+    val mI = boxMean(i, w, h, radius)
+    val mP = boxMean(p, w, h, radius)
+    val mIp = boxMean(FloatArray(n) { i[it] * p[it] }, w, h, radius)
+    val mII = boxMean(FloatArray(n) { i[it] * i[it] }, w, h, radius)
+    val a = FloatArray(n)
+    val b = FloatArray(n)
+    for (k in 0 until n) {
+      val cov = mIp[k] - mI[k] * mP[k]
+      val variance = mII[k] - mI[k] * mI[k]
+      a[k] = cov / (variance + eps)
+      b[k] = mP[k] - a[k] * mI[k]
+    }
+    val mA = boxMean(a, w, h, radius)
+    val mB = boxMean(b, w, h, radius)
+    return FloatArray(n) { (mA[it] * i[it] + mB[it]).coerceIn(0f, 1f) }
+  }
+
+  private fun boxMean(x: FloatArray, w: Int, h: Int, r: Int): FloatArray {
+    // Integral image with a zero row/column; doubles keep precision on 1 MP images.
+    val iw = w + 1
+    val sum = DoubleArray(iw * (h + 1))
+    for (y in 0 until h) {
+      var row = 0.0
+      for (xx in 0 until w) {
+        row += x[y * w + xx]
+        sum[(y + 1) * iw + xx + 1] = sum[y * iw + xx + 1] + row
+      }
+    }
+    val out = FloatArray(w * h)
+    for (y in 0 until h) {
+      val y0 = maxOf(0, y - r)
+      val y1 = minOf(h, y + r + 1)
+      for (xx in 0 until w) {
+        val x0 = maxOf(0, xx - r)
+        val x1 = minOf(w, xx + r + 1)
+        val s = sum[y1 * iw + x1] - sum[y0 * iw + x1] - sum[y1 * iw + x0] + sum[y0 * iw + x0]
+        out[y * w + xx] = (s / ((y1 - y0) * (x1 - x0))).toFloat()
+      }
+    }
+    return out
+  }
+
+  /** Approximate distance (px) to the coarse mask's 0.5 edge, capped at [cap] (two-pass chamfer). */
+  private fun edgeDistance(m: FloatArray, w: Int, h: Int, cap: Float): FloatArray {
+    val inside = BooleanArray(w * h) { m[it] > 0.5f }
+    val d = FloatArray(w * h) { cap }
+    for (y in 0 until h) for (x in 0 until w) {
+      val k = y * w + x
+      if ((x > 0 && inside[k - 1] != inside[k]) || (y > 0 && inside[k - w] != inside[k])) d[k] = 0f
+    }
+    for (y in 0 until h) for (x in 0 until w) {
+      val k = y * w + x
+      if (x > 0) d[k] = minOf(d[k], d[k - 1] + 1f)
+      if (y > 0) d[k] = minOf(d[k], d[k - w] + 1f)
+    }
+    for (y in h - 1 downTo 0) for (x in w - 1 downTo 0) {
+      val k = y * w + x
+      if (x < w - 1) d[k] = minOf(d[k], d[k + 1] + 1f)
+      if (y < h - 1) d[k] = minOf(d[k], d[k + w] + 1f)
+    }
+    return d
   }
 
   private fun encode(bitmap: Bitmap): ByteArray =
