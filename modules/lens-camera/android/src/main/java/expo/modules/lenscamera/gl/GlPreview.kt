@@ -52,6 +52,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   var onFailed: ((String) -> Unit)? = null
   /** How the camera hands frames to the preview (diagnostics: which rotation path ran). */
   var onTransform: ((Map<String, Any?>) -> Unit)? = null
+  /** Smart look suggestion changed (a look id, or null). */
+  var onSceneLook: ((String?) -> Unit)? = null
   /** First frame drawn after a new camera stream (hides the black gap on switches). */
   var onFirstFrame: (() -> Unit)? = null
 
@@ -129,6 +131,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   // Deflicker: frame brightness vs its running average (from the 96×72 analysis).
   private var meanLuma = -1f
   private var smoothLuma = -1f
+  // Smart look suggestion (checklist 5.3): scene labels a few times a minute.
+  private val scene = SceneLabeler().also { s ->
+    s.onSuggestion = { look -> mainHandler.post { onSceneLook?.invoke(look) } }
+  }
+  private var lastScene = 0L
+  private var sceneWasOn = false
   private val livePortrait = LivePortrait().also { live ->
     live.onMask = { mask, w, h, subject -> gl.post { uploadMask(mask, w, h, subject) } }
   }
@@ -146,6 +154,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   @Volatile var portraitStyle = 0f
   /** Night photo coming (Night mode or auto Night with Lens's own merge): preview it brightened and averaged. */
   @Volatile var nightPreview = false
+  /** Suggest a look for the scene (Normal camera, no look chosen, not Portrait/time-lapse). */
+  @Volatile var sceneSuggest = false
   /** Frames shown so far (preview frame rate: self-test, checklist 1.1). */
   @Volatile var framesDrawn = 0L
     private set
@@ -330,6 +340,15 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         livePortrait.reset()
       }
       portraitWasOn = portrait
+      val suggest = sceneSuggest && !portrait
+      if (suggest && !scene.busy && now - lastScene >= SCENE_INTERVAL_MS) {
+        lastScene = now
+        ensurePortraitTargets()
+        readSegmentationCopy()?.let { scene.submit(it, segW, segH) }
+      } else if (!suggest && sceneWasOn) {
+        scene.reset()
+      }
+      sceneWasOn = suggest
 
       GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
       GLES20.glViewport(0, 0, viewWidth, viewHeight)
@@ -743,7 +762,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   }
 
   private fun submitForSegmentation() {
-    val buffer = segPixels ?: return
+    readSegmentationCopy()?.let { livePortrait.submit(it, segW, segH) }
+  }
+
+  /** The ~320 px copy of the visible frame (RGBA, bottom row first), for the ML models. */
+  private fun readSegmentationCopy(): ByteArray? {
+    val buffer = segPixels ?: return null
     renderCopy(segFbo, segW, segH)
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, segFbo)
     buffer.position(0)
@@ -752,7 +776,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     val bytes = ByteArray(segW * segH * 4)
     buffer.position(0)
     buffer.get(bytes)
-    livePortrait.submit(bytes, segW, segH)
+    return bytes
   }
 
   /** GL thread: a new mask from [LivePortrait] (top row first, 1 byte per pixel). */
@@ -836,6 +860,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
 
   fun release() {
     livePortrait.close()
+    scene.close()
     gl.post {
       timeLapse?.cancel()
       timeLapse = null
@@ -863,6 +888,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
     /** Live Portrait: the person mask is refreshed this often (~6 a second), on a ~320 px copy. */
     private const val SEG_INTERVAL_MS = 160L
     private const val SEG_LONG_SIDE = 320
+    /** Smart look suggestion: one scene label every 1.5 s (cheap; stops when a look is chosen). */
+    private const val SCENE_INTERVAL_MS = 1500L
 
     private const val VERTEX = """
       attribute vec2 aPos;

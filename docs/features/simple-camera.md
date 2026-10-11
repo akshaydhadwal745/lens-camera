@@ -37,6 +37,14 @@ first guess; the Quality Lab / self-test data will tune them.
 - **Long-press**: lock. The badge says what this camera could hold: `AE/AF LOCK`,
   `AE LOCK` (fixed-focus cameras) or `AF LOCK` (cameras without AE lock). Tap anywhere to unlock.
 
+### Look suggestion
+
+With no look chosen, the Normal camera may suggest one that suits the scene
+(sunset → Golden hour, food → Warm, snow → Cool, night → Cinematic, nature →
+Vivid) as a "✦" chip at the start of the looks row. Tap it to apply; nothing
+changes by itself. Uses Google's on-phone scene labels via Play services (no
+suggestion on phones without them).
+
 ### Grid and level
 
 - **Grid**: Settings → Camera → Grid (rule of thirds; off by default). PRO has its own grid/guides.

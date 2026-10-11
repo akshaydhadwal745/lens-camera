@@ -67,6 +67,7 @@ public class LensCameraModule: Module {
       Prop("shutterSound") { (_: LensCameraView, _: Bool) in }
       Prop("autoLowLight") { (_: LensCameraView, _: Bool) in }
       Prop("portraitAuto") { (_: LensCameraView, _: Bool) in }
+      Prop("sceneSuggest") { (_: LensCameraView, _: Bool) in }
       Prop("hardwareShutter") { (_: LensCameraView, _: Bool) in }
       Prop("torch") { (view: LensCameraView, value: Bool) in
         view.config.torch = value

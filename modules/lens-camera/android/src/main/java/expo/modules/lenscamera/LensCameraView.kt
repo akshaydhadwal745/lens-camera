@@ -44,6 +44,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onDiagnostics by EventDispatcher<Map<String, Any?>>()
   private val onRecordingStarted by EventDispatcher<Map<String, Any?>>()
   private val onRecordingAudio by EventDispatcher<Map<String, Any?>>()
+  private val onSceneLook by EventDispatcher<Map<String, Any?>>()
   private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
   /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
   var hardwareShutter = false
@@ -58,6 +59,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   var portraitAperture = 2.8
   /** Normal camera: blur strength chosen from the subject's size (PRO uses [portraitAperture]). */
   var portraitAuto = false
+  /** Normal camera with no look chosen: suggest one for the scene. */
+  var sceneSuggest = false
   /** A Lens Night photo is coming (Night mode or auto Night): preview it like the photo. */
   var nightPreview = false
   /** Portrait style id (natural, studio, mono, stage), previewed live. */
@@ -125,6 +128,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         usePlainPreview()
       }
       gl.onTransform = { details -> onDiagnostics(mapOf("kind" to "preview") + details) }
+      gl.onSceneLook = { look -> onSceneLook(mapOf("look" to look)) }
     }
     controller.onReady = { caps ->
       updatePreviewModes() // the Night extension is only known once the camera is bound
@@ -189,6 +193,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     val gl = glPreview ?: return
     gl.portraitBlur = if (config.mode == "portrait") LivePortrait.blurFraction(portraitAperture) else 0f
     gl.portraitAuto = portraitAuto
+    gl.sceneSuggest = sceneSuggest && (config.mode == "photo" || config.mode == "video")
     gl.portraitStyle = PortraitStyle.code(portraitStyle)
     // The maker's Night mode has its own preview; only Lens's own merge is previewed here.
     gl.nightPreview = nightPreview && !(config.isNight && controller.usesNightExtension)

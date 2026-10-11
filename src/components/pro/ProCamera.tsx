@@ -128,6 +128,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // Paused mid-recording (one file; paused time isn't recorded).
   const [paused, setPaused] = useState(false);
   // Recording sound: problem ('silenced' / 'error') or an external mic in use; null = fine/unknown.
+  // Smart look suggestion for the scene (Normal camera, no look chosen).
+  const [sceneLook, setSceneLook] = useState<string | null>(null);
   const [recAudio, setRecAudio] = useState<{ state: 'ok' | 'silenced' | 'error'; external: boolean } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   // Tap point + tap-to-expose in one state, so gestures update it functionally and
@@ -596,6 +598,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             lookIntensity={s.lookIntensity}
             portraitAperture={s.portraitAperture}
             portraitAuto={!stored.pro}
+            sceneSuggest={!stored.pro && !s.look}
+            onSceneLook={(e) => setSceneLook(e.nativeEvent.look)}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
             mirrorFront={s.mirrorSelfies}
@@ -898,6 +902,19 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         {/* Looks: a creative choice, so in Normal and PRO alike (PRO only adds manual controls). */}
         {s.mode !== 'portrait' && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looksRow}>
+            {!s.look && sceneLook && LOOKS.some((l) => l.id === sceneLook) && (
+              // Smart suggestion: a look that suits this scene; one tap applies it.
+              <Pressable
+                onPress={() => {
+                  haptic(Haptics.ImpactFeedbackStyle.Light);
+                  update({ look: sceneLook });
+                }}
+                style={[styles.lookChip, styles.lookChipSuggested]}
+                accessibilityLabel={`Suggested look: ${LOOKS.find((l) => l.id === sceneLook)?.name}`}
+              >
+                <Text style={[styles.lookChipText, { color: palette.accent }]}>✦ {LOOKS.find((l) => l.id === sceneLook)?.name}</Text>
+              </Pressable>
+            )}
             <Pressable onPress={() => { update({ look: null }); setLookDial(false); }} style={[styles.lookChip, !s.look && styles.lookChipOn]}>
               <Text style={[styles.lookChipText, !s.look && styles.lookChipTextOn]}>No look</Text>
             </Pressable>
@@ -1250,6 +1267,7 @@ const styles = StyleSheet.create({
   looksRow: { paddingHorizontal: 12, gap: 8, paddingVertical: 6 },
   lookChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.08)' },
   lookChipOn: { backgroundColor: palette.accent },
+  lookChipSuggested: { borderWidth: 1, borderColor: palette.accent, backgroundColor: 'rgba(250,204,21,0.12)' },
   lookChipText: { color: palette.text, fontSize: 12, fontFamily: font.semibold },
   lookChipTextOn: { color: '#000' },
   focusWrap: { position: 'absolute', width: 72, height: 72 },

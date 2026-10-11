@@ -116,6 +116,8 @@ export type LensCameraProps = ViewProps & {
   portraitAperture?: number;
   /** Android, Normal camera: blur strength from how much of the frame the person fills. */
   portraitAuto?: boolean;
+  /** Android, Normal camera with no look: suggest a look for the scene (onSceneLook). */
+  sceneSuggest?: boolean;
   /** Android: a Night photo is coming (Night mode or auto Night): show the viewfinder brightened and averaged like the photo. */
   nightPreview?: boolean;
   /** Android: Portrait style previewed live (natural, studio, mono, stage). */
@@ -159,6 +161,8 @@ export type LensCameraProps = ViewProps & {
   onRecordingStarted?: (e: NativeSyntheticEvent<{ delayMs: number }>) => void;
   /** Android: recording sound: 'ok', 'silenced' (mic blocked) or 'error'; `external`: a wired/USB mic. */
   onRecordingAudio?: (e: NativeSyntheticEvent<{ state: 'ok' | 'silenced' | 'error'; external: boolean }>) => void;
+  /** Android: a look that suits the scene (or null), from on-phone scene labels. */
+  onSceneLook?: (e: NativeSyntheticEvent<{ look: string | null }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
   hardwareShutter?: boolean;
   /** Android: a volume/camera key was pressed (with `hardwareShutter`). */
