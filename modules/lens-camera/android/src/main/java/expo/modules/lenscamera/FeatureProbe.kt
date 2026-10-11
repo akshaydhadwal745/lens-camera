@@ -35,6 +35,7 @@ object FeatureProbe {
     "previewStabilization" to probe { Preview.getPreviewCapabilities(c.info).isStabilizationSupported },
     "zeroShutterLag" to probe { c.info.isZslSupported },
     "torchStrength" to probe { c.info.isTorchStrengthSupported },
+    "facePriority" to probe { c.facePriority },
   )
 
   /** Hardware video encoders: what time-lapse, slow motion and 4K/60 can be written with. */

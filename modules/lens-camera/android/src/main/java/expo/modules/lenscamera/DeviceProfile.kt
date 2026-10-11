@@ -64,6 +64,8 @@ class CameraFacts(val info: CameraInfo, private val chars: (CameraCharacteristic
   val afModes: Set<Int> = get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)?.toSet() ?: emptySet()
   /** Auto exposure can be held (AE lock); some LEGACY cameras can't. */
   val aeLockAvailable: Boolean = get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true
+  /** The camera's own face detection can steer exposure/focus/white balance (scene mode FACE_PRIORITY). */
+  val facePriority: Boolean = get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES)?.contains(CameraMetadata.CONTROL_SCENE_MODE_FACE_PRIORITY) == true
   /** Has autofocus (fixed-focus cameras report only OFF). */
   val hasAutofocus get() = afModes.size > 1
 

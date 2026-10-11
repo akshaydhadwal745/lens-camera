@@ -37,6 +37,12 @@ first guess; the Quality Lab / self-test data will tune them.
 - **Long-press**: lock. The badge says what this camera could hold: `AE/AF LOCK`,
   `AE LOCK` (fixed-focus cameras) or `AF LOCK` (cameras without AE lock). Tap anywhere to unlock.
 
+### Faces first (automatic)
+
+In the Normal camera, phones whose camera can detect faces expose and focus for
+the faces (Camera2 face priority): a face against a bright window stays visible.
+PRO and a long-press lock use plain auto exposure.
+
 ### Look suggestion
 
 With no look chosen, the Normal camera may suggest one that suits the scene

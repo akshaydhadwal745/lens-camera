@@ -133,7 +133,7 @@ shots (S8 now; more phones later) with blind A/B against the stock camera.
 | # | Feature | Status | Evidence / limits |
 |---|---|---|---|
 | 7.1 | Scene-aware automatic decisions (Night, HDR, frame counts) from measured data | ⬜ | Depends on 1.9 |
-| 7.2 | Face-aware exposure / focus | ⬜ | |
+| 7.2 | Face-aware exposure / focus | 🔨 | Built (Normal camera, auto exposure, not Night, not while long-press locked): Camera2 `CONTROL_SCENE_MODE_FACE_PRIORITY` where the camera lists it (`CONTROL_AVAILABLE_SCENE_MODES`): the camera's own face detection steers AE/AF/AWB (no ML, no heat; 3A modes, EV and tap-to-focus keep working per the Camera2 spec). Reach added to the 1.1 probes (`facePriority`). If test day shows low reach: fallback = our own face detection → metering points. To validate: S8 backlit face (window behind) Normal vs PRO |
 | 7.3 | Smart burst (hold shutter, best shot, stack) | ⬜ | |
 | 7.4 | Auto straighten / horizon | ⬜ | |
 

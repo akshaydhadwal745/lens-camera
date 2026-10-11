@@ -634,6 +634,14 @@ class CameraController(private val context: Context) {
       parts += "af:$diopters"
     }
 
+    // Face-aware exposure/focus (checklist 7.2): Normal camera, automatic exposure, where the
+    // camera's own face detection offers it. Not with a long-press lock (that point wins).
+    if (config.autoLowLight && config.exposureMode != "manual" && !aeLocked && f.facePriority && !config.isNight) {
+      b.setCaptureRequestOption(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE)
+      b.setCaptureRequestOption(CaptureRequest.CONTROL_SCENE_MODE, CaptureRequest.CONTROL_SCENE_MODE_FACE_PRIORITY)
+      parts += "faces"
+    }
+
     if (aeLocked && config.exposureMode != "manual" && f.aeLockAvailable) {
       b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
       parts += "aelock"
