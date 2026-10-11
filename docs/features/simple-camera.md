@@ -158,6 +158,27 @@ Photo modes sit just under the top controls at 4:3; video modes are centred 16:9
 the edit recipe, so the shape can be undone in the editor. Grid and crop guides
 are drawn inside the frame.
 
+## Motion photos (checklist 9.2)
+
+**MOTION** in the top bar (Photo mode, Android phones whose GPU viewfinder can
+feed a video encoder; off by default). While on, the viewfinder is encoded all
+the time (H.264, 1280×960 or the 4:3 shape that fits, 30 fps, key frame every
+second, `gl/MotionClip.kt`) and only the last ~2 s stay in memory. A shot keeps
+1.5 s before and 1.5 s after the press; the photo is ready ~1.5 s after the
+shot (the shutter is busy until then).
+
+The clip is joined to the JPEG in Google's **Motion Photo** format
+(`imaging/MotionPhoto.kt`): XMP `Camera:MotionPhoto` + a `Container:Directory`
+listing the video's length, MP4 appended after the image. Ultra HDR photos keep
+their gain map (the video is listed after it). Google Photos plays it; any other
+app just sees the photo. In Lens the viewer shows **▶ MOTION** on photos taken
+on this phone; it plays the clip once, muted (`LensImaging.motionVideo` extracts
+it into the cache).
+
+Limits: no sound; ~+1.5 MB per photo (counts toward storage/upload, hence off by
+default); not with RAW, Night, Portrait, burst or "bake looks"; the cloud copy
+keeps the clip but only the phone that took it shows ▶ MOTION for now.
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,

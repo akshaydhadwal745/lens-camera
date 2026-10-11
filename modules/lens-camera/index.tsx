@@ -43,6 +43,8 @@ export type Capabilities = {
   modes?: CameraMode[];
   /** Android: what the hardware allows. pro = manual sensor + white balance, basic = auto only. */
   tier?: 'pro' | 'standard' | 'basic';
+  /** Android: photos can carry a motion clip (GPU viewfinder can feed an encoder). */
+  motionPhoto?: boolean;
   /** Android 14+: Ultra HDR photos (JPEG with an HDR gain map). */
   ultraHdr?: boolean;
   /** Android: the maker extension mode bound right now ("none" if none). */
@@ -120,6 +122,8 @@ export type LensCameraProps = ViewProps & {
   sceneSuggest?: boolean;
   /** Android: where the camera picture is drawn in the view (fractions [x, y, w, h]); black around it. Default: whole view. */
   frame?: [number, number, number, number];
+  /** Android, Photo mode: photos carry the ~3 s around the shot (Google Motion Photo format). */
+  motionPhoto?: boolean;
   /** Android: a Night photo is coming (Night mode or auto Night): show the viewfinder brightened and averaged like the photo. */
   nightPreview?: boolean;
   /** Android: Portrait style previewed live (natural, studio, mono, stage). */
@@ -182,6 +186,8 @@ export type PhotoResult = {
   frames?: number;
   /** Android Portrait: f-number chosen from the subject's size (Normal camera uses it). */
   autoAperture?: number | null;
+  /** Android: the photo carries a motion clip (Motion on, Photo mode). */
+  motion?: boolean;
   /** Android Portrait: what was separated: 'person', or 'subject' (pet/object, no person found). */
   depthKind?: 'person' | 'subject' | null;
 };
@@ -258,6 +264,8 @@ type ImagingModule = {
   renderImage(uri: string, recipe: object | null, options: { maxPixel?: number; format?: 'heic' | 'jpeg'; quality?: number }): Promise<RenderResult>;
   exportVideo(uri: string, recipe: object | null): Promise<{ uri: string }>;
   hasDepth(uri: string): Promise<boolean>;
+  /** Android: the clip of a motion photo as its own MP4 (cached), or null if it has none. Missing before the 9.2 APK. */
+  motionVideo?(uri: string): Promise<string | null>;
   /**
    * Plays a video with its look (colour part of the edit), live on the GPU:
    * the same shader as exportVideo, on expo-video's player. Android only;

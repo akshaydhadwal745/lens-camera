@@ -703,6 +703,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 ? [frameRect.x / previewSize.width, frameRect.y / previewSize.height, frameRect.w / previewSize.width, frameRect.h / previewSize.height]
                 : undefined
             }
+            motionPhoto={s.mode === 'photo' && s.motionPhoto && !!caps?.motionPhoto && !s.raw}
             mirrorFront={s.mirrorSelfies}
             saveLocation={s.saveLocation}
             shutterSound={s.shutterSound}
@@ -866,6 +867,14 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   caption="FPS"
                   active={s.fps !== 30}
                   onPress={() => update({ fps: s.fps === 30 ? (caps?.fps60 ? 60 : 24) : s.fps === 60 ? 24 : 30 })}
+                />
+              )}
+              {s.mode === 'photo' && caps?.motionPhoto && (
+                <TopButton
+                  icon="play-circle-outline"
+                  label="MOTION"
+                  active={s.motionPhoto}
+                  onPress={() => update({ motionPhoto: !s.motionPhoto })}
                 />
               )}
               {!recordMode && (

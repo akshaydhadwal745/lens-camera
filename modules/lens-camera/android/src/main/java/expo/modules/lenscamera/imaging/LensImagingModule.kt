@@ -55,6 +55,14 @@ class LensImagingModule : Module() {
       VideoLook.apply(context, VideoLook.exoPlayerOf(player), EditRecipe.from(recipe))
     }.runOnQueue(Queues.MAIN)
 
+    // Motion photo (checklist 9.2): the clip inside, as its own MP4 in the cache, or null.
+    AsyncFunction("motionVideo") { uri: String ->
+      val file = ImagingEngine.fileOf(uri)
+      val out = java.io.File(context.cacheDir, "motion-${file.name}.mp4")
+      if (out.exists() && out.length() > 0) return@AsyncFunction "file://${out.absolutePath}"
+      if (runCatching { MotionPhoto.extract(file, out) }.getOrDefault(false)) "file://${out.absolutePath}" else null
+    }
+
     AsyncFunction("hasDepth") { uri: String ->
       runCatching { Portrait.hasMask(ImagingEngine.fileOf(uri)) }.getOrDefault(false)
     }

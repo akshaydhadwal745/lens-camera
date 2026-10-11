@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   NativeScrollEvent,
@@ -20,7 +21,7 @@ import { ZoomableImage } from '@/components/ZoomableImage';
 import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
 import { formatBytes, formatDate, formatDuration, formatEta, formatRate } from '@/lib/format';
-import { hasEdit, useFullQuality, webCanShowOriginal } from '@/lib/full-view';
+import { hasEdit, useFullQuality, useMotionVideo, webCanShowOriginal } from '@/lib/full-view';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
 import { removeSharedItem, saveEdit, selectGallery, selectShared, useStore } from '@/lib/store';
@@ -31,6 +32,23 @@ import { font, glass, palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const isWeb = Platform.OS === 'web';
+
+/** Plays a motion photo's clip once over the photo, then gets out of the way. */
+function MotionPlayer({ uri, onEnd }: { uri: string; onEnd: () => void }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.muted = true;
+    p.play();
+  });
+  useEffect(() => {
+    const sub = player.addListener('playToEnd', onEnd);
+    return () => sub.remove();
+  }, [player, onEnd]);
+  return (
+    <Pressable style={StyleSheet.absoluteFill} onPress={onEnd} accessibilityLabel="Stop motion">
+      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
+    </Pressable>
+  );
+}
 
 function PhotoPage({
   item,
@@ -216,6 +234,9 @@ export default function ViewerScreen() {
   const listRef = useRef<FlatList<GalleryItem>>(null);
 
   const current = items[Math.min(index, items.length - 1)];
+  const motion = useMotionVideo(current);
+  const [playingMotion, setPlayingMotion] = useState<string | null>(null);
+  const stopMotion = useCallback(() => setPlayingMotion(null), []);
 
   // Intent preloading: a video's poster on screen means ▶ is likely next;
   // its neighbours are a swipe away (those only on Wi-Fi, see video-prefetch).
@@ -326,6 +347,8 @@ export default function ViewerScreen() {
         }
       />
 
+      {playingMotion && playingMotion === motion && <MotionPlayer uri={playingMotion} onEnd={stopMotion} />}
+
       {chrome && (
         <>
           {/* Design B: glass controls float over the photo. */}
@@ -340,6 +363,12 @@ export default function ViewerScreen() {
               {safe && meta ? <Text style={styles.sub} numberOfLines={1}>{meta}</Text> : <SyncLine item={current} />}
             </View>
             <View style={styles.topRight}>
+              {motion && (
+                // Motion photo: play the moments around the shot.
+                <Pressable onPress={() => setPlayingMotion(motion)} style={styles.hdPill} accessibilityLabel="Play motion">
+                  <Text style={styles.hd}>▶ MOTION</Text>
+                </Pressable>
+              )}
               {!shared && current.edit?.burst && current.edit.burst.count > 1 && (
                 // Smart burst: where this shot sits; a non-pick can become the one the roll shows.
                 <Pressable

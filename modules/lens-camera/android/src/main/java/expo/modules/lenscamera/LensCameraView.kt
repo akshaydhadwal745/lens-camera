@@ -19,6 +19,7 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import expo.modules.lenscamera.gl.GlPreview
 import expo.modules.lenscamera.gl.LivePortrait
+import expo.modules.lenscamera.imaging.MotionPhoto
 import expo.modules.lenscamera.imaging.PortraitStyle
 import kotlin.math.roundToInt
 
@@ -64,6 +65,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   var sceneSuggest = false
   /** Camera frame inside the view (fractions x, y, w, h): what the photo/video keeps. */
   var frame: List<Double>? = null
+  /** Motion photos: photos in Photo mode carry the 3 s around the shot (checklist 9.2). */
+  var motionPhoto = false
   /** A Lens Night photo is coming (Night mode or auto Night): preview it like the photo. */
   var nightPreview = false
   /** Portrait style id (natural, studio, mono, stage), previewed live. */
@@ -138,7 +141,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       // Time-lapse is made from GPU viewfinder frames: offered only where that works.
       @Suppress("UNCHECKED_CAST")
       val modes = (caps["modes"] as? List<String>).orEmpty() + if (glPreview?.canTimeLapse == true) listOf("timelapse") else emptyList()
-      onReady(caps + mapOf("liveLooks" to (glPreview != null), "modes" to modes))
+      onReady(caps + mapOf("liveLooks" to (glPreview != null), "modes" to modes, "motionPhoto" to (glPreview?.canTimeLapse == true)))
     }
     controller.onError = { message, fatal -> onError(mapOf("message" to message, "fatal" to fatal)) }
     controller.onRecordingStarted = { delayMs -> onRecordingStarted(mapOf("delayMs" to delayMs)) }
@@ -198,6 +201,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     gl.portraitAuto = portraitAuto
     frame?.takeIf { it.size == 4 && it[2] > 0 && it[3] > 0 }?.let { f -> gl.frame = floatArrayOf(f[0].toFloat(), f[1].toFloat(), f[2].toFloat(), f[3].toFloat()) }
       ?: run { gl.frame = floatArrayOf(0f, 0f, 1f, 1f) }
+    gl.motionPhoto = motionPhoto && config.mode == "photo"
     gl.sceneSuggest = sceneSuggest && (config.mode == "photo" || config.mode == "video")
     gl.portraitStyle = PortraitStyle.code(portraitStyle)
     // The maker's Night mode has its own preview; only Lens's own merge is previewed here.
@@ -274,9 +278,35 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   // ---------- Commands ----------
 
   fun takePhoto(flash: String, promise: Promise) {
-    controller.takePhoto(flash, screenFlash()) { result ->
+    val gl = glPreview
+    if (gl == null || !gl.motionPhoto) {
+      controller.takePhoto(flash, screenFlash()) { result ->
+        result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
+      }
+      return
+    }
+    // Motion photo: the clip around the press (ready ~1.5 s later) joins the saved photo.
+    val lock = Any()
+    var photo: Result<Map<String, Any?>>? = null
+    var clip: Result<Pair<java.io.File, Long>>? = null
+    fun finish() {
+      val p = photo ?: return
+      val c = clip ?: return
+      val result = p.map { info ->
+        val video = c.getOrNull()
+        val path = (info["uri"] as? String)?.removePrefix("file://")
+        val motion = video != null && path != null && info["raw"] != true &&
+          MotionPhoto.embed(java.io.File(path), video.first, video.second)
+        video?.first?.delete()
+        if (motion) info + ("motion" to true) else info
+      }
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }
+    val dir = java.io.File(context.cacheDir, "LensCamera").apply { mkdirs() }
+    gl.motionClip(java.io.File(dir, "motion-${java.util.UUID.randomUUID()}.mp4")) { r ->
+      Thread { synchronized(lock) { clip = r; finish() } }.start()
+    }
+    controller.takePhoto(flash, screenFlash()) { r -> synchronized(lock) { photo = r; finish() } }
   }
 
   /**

@@ -140,6 +140,13 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private var timeLapseDone: ((Result<Map<String, Any?>>) -> Unit)? = null
   private var timeLapseFile: java.io.File? = null
   private val timeLapseUv = FloatArray(16)
+  // Motion photos (checklist 9.2): the last seconds of the viewfinder, encoded, while on.
+  /** Keep a motion clip ready for photos (photo mode with Motion on). */
+  @Volatile var motionPhoto = false
+  private var motion: MotionClip? = null
+  private var motionSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+  private val motionUv = FloatArray(16)
+  private var lastMotionNs = 0L
   // Deflicker: frame brightness vs its running average (from the 96×72 analysis).
   private var meanLuma = -1f
   private var smoothLuma = -1f
@@ -412,6 +419,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         timeLapseLast = now
         drawTimeLapseFrame(core)
       }
+      updateMotion(core, st.timestamp)
       if (firstFrame) {
         firstFrame = false
         Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees target $targetRotation cameraTransform $hasCameraTransform (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")
@@ -601,6 +609,77 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       Log.w(TAG, "time-lapse frame failed", e)
     } finally {
       core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+    }
+  }
+
+  // ---------- Motion photos ----------
+
+  /** Feed (or start/stop) the motion clip encoder with this frame: the full 4:3 photo shape, upright, ≤ 1280 px. */
+  private fun updateMotion(core: EglCore, timestampNs: Long) {
+    if (!motionPhoto || !recordable || timeLapse != null) {
+      if (motion != null) stopMotion(core)
+      return
+    }
+    val landscape = viewWidth >= viewHeight
+    val long = minOf(1280, max(bufferSize.width, bufferSize.height)).let { it - it % 16 }
+    val short = (long * 3 / 4).let { it - it % 16 }
+    val (w, h) = if (landscape) long to short else short to long
+    var clip = motion
+    if (clip != null && (clip.width != w || clip.height != h)) {
+      stopMotion(core)
+      clip = null
+    }
+    if (clip == null) {
+      clip = runCatching { MotionClip(w, h) }.onFailure { Log.w(TAG, "motion clip encoder failed", it) }.getOrNull() ?: run {
+        motionPhoto = false
+        return
+      }
+      motionSurface = core.windowSurface(clip.inputSurface)
+      motion = clip
+      Log.i(TAG, "motion clip ${w}x$h")
+    }
+    // 30 fps at most (the viewfinder may draw faster).
+    if (timestampNs - lastMotionNs < 30_000_000L) return
+    lastMotionNs = timestampNs
+    try {
+      core.makeCurrent(motionSurface)
+      computeUvMatrix(w, h, motionUv)
+      GLES20.glViewport(0, 0, w, h)
+      GLES20.glUseProgram(copyProgram)
+      GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+      GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
+      GLES20.glUniform1i(GLES20.glGetUniformLocation(copyProgram, "uCam"), 0)
+      GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uTexMatrix"), 1, false, stMatrix, 0)
+      GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uUvMatrix"), 1, false, motionUv, 0)
+      GLES20.glUniform2f(GLES20.glGetUniformLocation(copyProgram, "uStep"), 0f, 0f)
+      GLES20.glUniform1f(GLES20.glGetUniformLocation(copyProgram, "uGain"), 1f)
+      GlUtil.drawQuad(copyProgram)
+      core.setPresentationTime(motionSurface, timestampNs)
+      core.swap(motionSurface)
+      clip.frameDrawn(timestampNs / 1000)
+    } catch (e: Exception) {
+      Log.w(TAG, "motion frame failed", e)
+    } finally {
+      core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+    }
+  }
+
+  private fun stopMotion(core: EglCore?) {
+    core?.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
+    if (motionSurface != EGL14.EGL_NO_SURFACE) core?.releaseSurface(motionSurface)
+    motionSurface = EGL14.EGL_NO_SURFACE
+    motion?.release()
+    motion = null
+  }
+
+  /**
+   * The motion clip around now (the shot) into [file]: [done] gets (file, still
+   * time in the clip in µs) about 1.5 s later, or a failure when Motion is off.
+   */
+  fun motionClip(file: java.io.File, done: (Result<Pair<java.io.File, Long>>) -> Unit) {
+    gl.post {
+      val clip = motion ?: return@post done(Result.failure(IllegalStateException("Motion is off")))
+      clip.capture(file, done)
     }
   }
 
@@ -886,6 +965,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       timeLapse = null
       timeLapseDone?.invoke(Result.failure(IllegalStateException("Camera closed")))
       timeLapseDone = null
+      stopMotion(egl)
       deleteTarget(blurTexture, blurFbo)
       deleteTarget(segTexture, segFbo)
       for (i in 0..1) deleteTarget(accumTex[i], accumFbo[i])

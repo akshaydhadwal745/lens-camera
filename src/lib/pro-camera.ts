@@ -44,6 +44,8 @@ export type ProSettings = {
   portraitStyle: PortraitStyle;
   /** Photo shape (photo modes): 4:3 is the full sensor; 16:9 and 1:1 are saved as a removable crop. */
   photoAspect: PhotoAspect;
+  /** Photo mode: keep the ~3 s around each shot as a motion photo (Android; off by default: +~1.5 MB a photo). */
+  motionPhoto: boolean;
 
   exposureMode: 'auto' | 'manual';
   iso: number;
@@ -97,6 +99,7 @@ export const DEFAULT_SETTINGS: ProSettings = {
   portraitAperture: 2.8,
   portraitStyle: 'natural',
   photoAspect: '4:3',
+  motionPhoto: false,
 
   exposureMode: 'auto',
   iso: 100,

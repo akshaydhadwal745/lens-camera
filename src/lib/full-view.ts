@@ -64,3 +64,27 @@ export function useFullQuality(item: GalleryItem | undefined, allowed: boolean):
   }
   return original;
 }
+
+/**
+ * Motion photo (checklist 9.2): the clip inside a JPEG this phone took with
+ * Motion on, extracted once into the cache; null for every other photo.
+ */
+export function useMotionVideo(item: GalleryItem | undefined): string | null {
+  const [found, setFound] = useState<{ id: string; uri: string | null } | null>(null);
+  const id = item?.id;
+  const localUri = item?.kind === 'photo' && (!item.contentType || item.contentType === 'image/jpeg') ? item.localUri : undefined;
+  useEffect(() => {
+    if (!id || !localUri || Platform.OS !== 'android' || !LensImaging?.motionVideo) return;
+    let live = true;
+    asFileUri(localUri, id, 'jpg')
+      .then((file) => LensImaging!.motionVideo!(file))
+      .then((uri) => {
+        if (live) setFound({ id, uri });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [id, localUri]);
+  return found && found.id === id ? found.uri : null;
+}
