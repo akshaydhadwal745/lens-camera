@@ -63,6 +63,18 @@ class LensImagingModule : Module() {
       if (runCatching { MotionPhoto.extract(file, out) }.getOrDefault(false)) "file://${out.absolutePath}" else null
     }
 
+    // Document scanning (checklist 9.4): resolves the scanned pages (empty when cancelled).
+    AsyncFunction("scanDocument") { promise: Promise ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction promise.reject("ERR_SCAN", "No screen to show the scanner on.", null)
+      DocumentScan.start(activity) { result ->
+        result.fold({ promise.resolve(it) }, { promise.reject("ERR_SCAN", it.message, it) })
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    OnActivityResult { _, payload ->
+      DocumentScan.onResult(context, payload.requestCode, payload.resultCode, payload.data)
+    }
+
     AsyncFunction("hasDepth") { uri: String ->
       runCatching { Portrait.hasMask(ImagingEngine.fileOf(uri)) }.getOrDefault(false)
     }

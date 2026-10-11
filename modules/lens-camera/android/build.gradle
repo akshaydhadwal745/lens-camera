@@ -54,6 +54,8 @@ dependencies {
   implementation "com.google.android.gms:play-services-mlkit-face-detection:17.1.0"
   // QR codes in the camera (checklist 9.3): the same bundled scanner expo-camera already ships (no extra size).
   implementation "com.google.mlkit:barcode-scanning:17.3.0"
+  // Document scanning (checklist 9.4): Google's scanner flow from Play services (downloaded on first use).
+  implementation "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"
 
   testImplementation "junit:junit:4.13.2"
 }

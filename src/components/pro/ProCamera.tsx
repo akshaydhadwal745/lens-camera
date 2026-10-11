@@ -523,6 +523,19 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     }, 1000);
   };
 
+  // Document scanning (checklist 9.4): Google's scanner flow; pages land in the roll as photos.
+  const scanDocument = async () => {
+    if (!LensImaging?.scanDocument || busy || recording) return;
+    haptic();
+    try {
+      const pages = await LensImaging.scanDocument();
+      for (const page of pages) capture({ kind: 'photo', sourceUri: page.uri, width: page.width, height: page.height });
+      if (pages.length) showNotice(pages.length === 1 ? 'Scan saved' : `${pages.length} pages saved`);
+    } catch (error) {
+      Alert.alert('Could not scan', error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const switchMode = async (mode: CameraMode) => {
     if (mode === s.mode || recording) return;
     // Ask for the mic before the session is rebuilt for video, so audio is attached.
@@ -1098,7 +1111,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           </View>
         )}
 
-        <ModeStrip modes={modes} mode={s.mode} disabled={recording || busy} onSelect={switchMode} />
+        <ModeStrip
+          modes={Platform.OS === 'android' && LensImaging?.scanDocument ? [...modes, 'scan' as const] : modes}
+          mode={s.mode}
+          disabled={recording || busy}
+          onSelect={(m) => void (m === 'scan' ? scanDocument() : switchMode(m))}
+        />
 
         <View style={styles.captureRow}>
           {recording && s.mode === 'video' && Platform.OS === 'android' ? (

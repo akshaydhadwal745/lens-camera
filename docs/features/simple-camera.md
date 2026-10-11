@@ -191,6 +191,16 @@ One glass chip near the bottom of the frame says what a tap does:
 schemes (intent:, javascript:, app links) are never opened, only copied.
 Settings → Camera → **Scan QR codes** (on by default).
 
+## Document scanning (checklist 9.4)
+
+**SCAN** at the end of the mode strip (Android phones with Google Play
+services). It opens Google's ML Kit document scanner (`imaging/DocumentScan.kt`,
+`play-services-mlkit-document-scanner`, downloaded by Play services on first use,
+nothing bundled): it finds the page edges, flattens the perspective, and offers
+its clean-up filters (shadows, stains, fingers), up to 20 pages. Each page comes
+back as a JPEG and goes into the roll as a photo (backed up like any photo).
+Cancel = nothing saved. Phones without Play services don't show SCAN.
+
 ## Pro (`pro: true`, the PRO button): manual controls only
 
 Normal + the technical layer: manual ISO / shutter / WB / focus dials and EV,

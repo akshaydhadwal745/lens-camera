@@ -279,6 +279,8 @@ type ImagingModule = {
   renderImage(uri: string, recipe: object | null, options: { maxPixel?: number; format?: 'heic' | 'jpeg'; quality?: number }): Promise<RenderResult>;
   exportVideo(uri: string, recipe: object | null): Promise<{ uri: string }>;
   hasDepth(uri: string): Promise<boolean>;
+  /** Android (Play services): Google's document scanner; resolves the pages (empty if cancelled). Missing before the 9.4 APK. */
+  scanDocument?(): Promise<{ uri: string; width: number; height: number }[]>;
   /** Android: the clip of a motion photo as its own MP4 (cached), or null if it has none. Missing before the 9.2 APK. */
   motionVideo?(uri: string): Promise<string | null>;
   /**
