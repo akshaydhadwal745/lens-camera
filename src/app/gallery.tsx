@@ -93,10 +93,17 @@ function buildRows(items: GalleryItem[], columns: number, numbered: boolean): Ro
     const count = j - i;
     const date = `${day.getDate()} ${MONTHS[day.getMonth()]}${day.getFullYear() !== now.getFullYear() ? ` ${day.getFullYear()}` : ''}`;
     const today = dayKey === todayKey;
+    // Where most of that day's photos were taken (own items with a saved location): "12 OCT · GOA".
+    const places = new Map<string, number>();
+    for (let k = i; k < j; k++) {
+      const city = items[k].place?.city;
+      if (city) places.set(city, (places.get(city) ?? 0) + 1);
+    }
+    const city = [...places.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     rows.push({
       type: 'day',
       key: `d-${dayKey}`,
-      label: `${today ? 'TODAY · ' : ''}${date} · ${groupDigits(count)} ${numbered ? (count === 1 ? 'FRAME' : 'FRAMES') : 'SHARED'}`,
+      label: `${today ? 'TODAY · ' : ''}${date}${city ? ` · ${city.toUpperCase()}` : ''} · ${groupDigits(count)} ${numbered ? (count === 1 ? 'FRAME' : 'FRAMES') : 'SHARED'}`,
       today,
     });
     for (let k = i; k < j; k += columns) {
@@ -478,6 +485,11 @@ export default function GalleryScreen() {
             <Pressable onPress={() => router.push('/albums')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Albums">
               <Text style={styles.filterText}>Albums</Text>
             </Pressable>
+            {!isWeb ? (
+              <Pressable onPress={() => router.push('/places')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Places">
+                <Text style={styles.filterText}>Places</Text>
+              </Pressable>
+            ) : null}
             {tab === 'mine' && indicator && (
               // Where new shots go + its health; opens Storage settings.
               <Pressable

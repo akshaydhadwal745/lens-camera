@@ -43,6 +43,7 @@ import { makeDerivatives } from './derivatives';
 import { renderCloudDerivatives } from './edit-remote';
 import { compact, EditRecipe, forPaste } from './edits';
 import { md5Of, pushEdit, UploadCancelled, uploadEntry } from './uploader';
+import { gpsOfFile } from './exif-gps';
 import { notify } from './ui';
 import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
@@ -286,6 +287,8 @@ export function selectGallery(s: State): GalleryItem[] {
       edit: r.edit,
       location: r.location,
       contentType: r.contentType,
+      place: r.place,
+      hasGps: r.hasGps,
     });
   }
   for (const e of s.entries) {
@@ -1597,5 +1600,26 @@ export async function flushPendingShares() {
   } finally {
     flushingShares = false;
   }
+}
+
+// ---------- Places: positions for photos uploaded before (step 2) ----------
+
+/**
+ * Once per account on this phone: reads the GPS tag of local photos already in
+ * the cloud and sends the positions (100 per request). New uploads send theirs.
+ */
+export async function backfillPlaces(): Promise<number> {
+  const id = state.identity?.id;
+  if (!id || loadDoc<string | null>('places-backfilled', null) === id) return 0;
+  const items: { id: string; lat: number; lng: number }[] = [];
+  for (const e of state.entries) {
+    if (!e.uploadedAt || e.kind !== 'photo' || e.contentType !== 'image/jpeg' || e.offloadedAt || e.awaitingCopy) continue;
+    const gps = gpsOfFile(captureFile(e.fileName));
+    if (gps) items.push({ id: e.id, ...gps });
+  }
+  let updated = 0;
+  for (let i = 0; i < items.length; i += 100) updated += (await api.setPlaces(items.slice(i, i + 100))).updated;
+  saveDoc('places-backfilled', id);
+  return updated;
 }
 

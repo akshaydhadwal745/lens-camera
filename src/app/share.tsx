@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,6 +51,8 @@ export default function ShareScreen() {
   const [chosen, setChosen] = useState<Map<string, Person>>(new Map());
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Location stays private by default: recipients get photos without the GPS position.
+  const [includeLocation, setIncludeLocation] = useState(false);
 
   useEffect(() => {
     api
@@ -112,7 +114,11 @@ export default function ShareScreen() {
       // Still uploading: queued, sent to the same people the moment each reaches the cloud.
       const later = album ? [] : requested.filter((id) => !ready.includes(id));
       if (later.length) queueShare(later, to);
-      const result = album ? await api.shareAlbum(album, to) : ready.length ? await api.share(ready, to) : { shared: 0, recipients: [...chosen.values()].map((p) => p.name), requests: [] };
+      const result = album
+        ? await api.shareAlbum(album, to, includeLocation)
+        : ready.length
+          ? await api.share(ready, to, includeLocation)
+          : { shared: 0, recipients: [...chosen.values()].map((p) => p.name), requests: [] };
       const requests = result.requests ?? [];
       const waiting = requests.filter((r) => r.status === 'pending').map((r) => r.name);
       const auto = requests.filter((r) => r.status === 'accepted').map((r) => r.name);
@@ -140,6 +146,8 @@ export default function ShareScreen() {
 
   const showingSearch = query.trim().length >= 3;
   const list = showingSearch ? results : recent;
+  // Picked photos that carry a GPS position (from Places): the confirm sheet offers to include it.
+  const located = album ? 0 : requested.filter((id) => gallery.find((g) => g.id === id)?.hasGps).length;
   // Album mode: the album's items; otherwise the picked items already in the cloud.
   const count = album ? Number(albumCount ?? 0) : requested.length;
   const skipped = album ? 0 : requested.length - ready.length;
@@ -246,6 +254,18 @@ export default function ShareScreen() {
                 </View>
               </View>
             ))}
+            {located > 0 || album ? (
+              <View style={styles.locationRow}>
+                <Ionicons name="location-outline" size={18} color="#86868B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.locationTitle}>Include where they were taken</Text>
+                  <Text style={styles.sheetNote}>
+                    {album ? 'Off: they get the photos without the location.' : `${located} of these ${located === 1 ? 'has' : 'have'} a saved location. Off: they get them without it.`}
+                  </Text>
+                </View>
+                <Switch value={includeLocation} onValueChange={setIncludeLocation} />
+              </View>
+            ) : null}
             <Text style={styles.sheetNote}>They&apos;ll be asked to accept first. Until they do, you can cancel it in Shared → Sent; after that you can still revoke it.</Text>
             <View style={styles.sheetButtons}>
               <Pressable style={[styles.sheetButton, styles.sheetSecondary]} onPress={() => setConfirming(false)} disabled={sending}>
@@ -297,6 +317,8 @@ const styles = StyleSheet.create({
   sheetTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
   sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   sheetNote: { color: '#86868B', fontSize: 13, lineHeight: 18 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, backgroundColor: '#2C2C2E' },
+  locationTitle: { color: '#fff', fontSize: 15, fontWeight: '600' },
   sheetButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
   sheetButton: { flex: 1, minHeight: 48, borderRadius: 980, alignItems: 'center', justifyContent: 'center' },
   sheetPrimary: { backgroundColor: colors.action },

@@ -190,6 +190,29 @@ SR=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB
 call POST "/shares/in/$SR/accept" "$TB" >/dev/null
 [[ $(call GET /shared "$TB" | j .items.length) == 2 ]] && ok "direct share restored"
 
+# --- Places + private location (docs/design/organise-and-share.md step 2) ---
+C=$(curl -sS -X POST "$API/devices"); TC=$(echo "$C" | j .token)
+GPSF="$(dirname "$0")/fixtures/gps.jpg"; GSIZE=$(stat -c %s "$GPSF"); GMD5=$(md5b64 "$GPSF")
+IDG="$(node -p "Date.now().toString(36).padStart(8,'0')")-gpsplace"
+R=$(call POST /media "$TC" -d "{\"id\":\"$IDG\",\"contentType\":\"image/jpeg\",\"size\":$GSIZE,\"kind\":\"photo\",\"md5\":\"$GMD5\",\"gps\":{\"lat\":30.741,\"lng\":76.7833}}")
+curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $GMD5" --data-binary @"$GPSF" -o /dev/null
+R=$(call POST "/media/$IDG/complete" "$TC"); [[ $(echo "$R" | j .media.place.city) == Chandigarh && $(echo "$R" | j .media.hasGps) == true ]] && ok "photo with a position gets its place (Chandigarh)"
+[[ $(call GET /places "$TC" | j '.places.find(p=>p.city==="Chandigarh").count') == 1 ]] && ok "Places groups it"
+[[ $(call GET "/places/items?key=$(node -p "encodeURIComponent('IN|Chandigarh|Chandigarh')")" "$TC" | j '.items[0].id') == "$IDG" ]] && ok "the place lists the photo"
+[[ $(call POST /media/places "$TC" -d "{\"items\":[{\"id\":\"$IDG\",\"lat\":48.8584,\"lng\":2.2945}]}" | j .updated) == 1 ]] && ok "backfill sets a place for a photo"
+[[ $(call GET /places "$TC" | j '.places.map(p=>p.city).join()') == Paris ]] && ok "… it moves to Paris"
+call POST /media/places "$TC" -d "{\"items\":[{\"id\":\"$IDG\",\"lat\":30.741,\"lng\":76.7833}]}" >/dev/null
+SG=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDG\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId'); call POST "/shares/in/$SG/accept" "$TB" >/dev/null
+R=$(call GET /shared "$TB"); [[ $(echo "$R" | j ".items.find(i=>i.id==='$IDG').place") == "" ]] && ok "recipient doesn't get the place"
+curl -sS -o "$TMP/shared-gps.jpg" "$(echo "$R" | j ".items.find(i=>i.id==='$IDG').url")"
+node -e "const b=require('fs').readFileSync('$TMP/shared-gps.jpg');process.exit(b.includes(Buffer.from([0x1e,0,0,0,1,0,0,0]))||b.length!==$GSIZE?1:0)" && ok "recipient's copy has the GPS wiped (same size)"
+cmp -s "$TMP/shared-gps.jpg" "$GPSF" && fail "recipient got the original with GPS" || true
+call POST "/shares/out/$SG/cancel" "$TC" >/dev/null
+SG2=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDG\"],\"to\":[\"$IB\"],\"includeLocation\":true}" | j '.requests[0].shareId'); call POST "/shares/in/$SG2/accept" "$TB" >/dev/null
+curl -sS -o "$TMP/shared-gps2.jpg" "$(call GET /shared "$TB" | j ".items.find(i=>i.id==='$IDG').url")"
+cmp -s "$TMP/shared-gps2.jpg" "$GPSF" && ok "with \"include location\" the recipient gets the original"
+call POST "/shares/out/$SG2/cancel" "$TC" >/dev/null
+
 # --- pairing (web sign-in) ---
 CODE=$(call POST /pairing "$TA" | j .code); ok "pairing code $CODE"
 W=$(curl -sS -X POST "$API/pairing/claim" -H 'content-type: application/json' -d "{\"code\":\"$CODE\"}"); TW=$(echo "$W" | j .token)

@@ -25,6 +25,10 @@ export interface RemoteMedia {
   contentType?: string;
   /** The original lives in the owner's own storage (no `url`); previews are in Lens. */
   location?: StorageLocation;
+  /** Nearest city (Places); only on my own items. */
+  place?: { city: string; region: string; country: string };
+  /** The original carries a GPS position (shared without location → recipients get a GPS-free copy). */
+  hasGps?: boolean;
 }
 
 /** An original stored in a connected storage (Google Drive file id, Dropbox path…). */
@@ -173,6 +177,9 @@ export interface GalleryItem {
   ownerName?: string;
   /** Shared with me as part of this album. */
   albumId?: string;
+  /** Nearest city (my own items with a saved location). */
+  place?: { city: string; region: string; country: string };
+  hasGps?: boolean;
 }
 
 export interface NewCapture {

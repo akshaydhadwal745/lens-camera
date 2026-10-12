@@ -109,8 +109,8 @@ export async function albumMediaIds(ownerId: string, albumId: string): Promise<s
 }
 
 /** People who accepted this shared album: [{ memberId, shareId }]. */
-export async function albumMembers(ownerId: string, albumId: string): Promise<{ memberId: string; name?: string; shareId: string }[]> {
-  return (await queryAll(`D#${ownerId}`, `AM#${albumId}#`)).map((i) => ({ memberId: i.memberId as string, name: i.name as string | undefined, shareId: i.shareId as string }));
+export async function albumMembers(ownerId: string, albumId: string): Promise<{ memberId: string; name?: string; shareId: string; withLocation?: boolean }[]> {
+  return (await queryAll(`D#${ownerId}`, `AM#${albumId}#`)).map((i) => ({ memberId: i.memberId as string, name: i.name as string | undefined, shareId: i.shareId as string, withLocation: i.withLocation === true }));
 }
 
 async function view(owner: Identity, album: Album) {
@@ -207,7 +207,7 @@ export async function renameAlbum(identity: Identity, albumId: string, req: Req)
 }
 
 /** Access records for members of a shared album (the same shape shares.ts writes). */
-function memberAccess(owner: Identity, memberId: string, shareId: string, albumId: string, m: MediaRecord, now: number) {
+function memberAccess(owner: Identity, memberId: string, shareId: string, albumId: string, m: MediaRecord, now: number, withLocation = false) {
   return {
     pk: `D#${memberId}`,
     sk: `S#${m.id}#${owner.id}`,
@@ -225,6 +225,7 @@ function memberAccess(owner: Identity, memberId: string, shareId: string, albumI
     sharedAt: now,
     shareId,
     albumId,
+    ...(withLocation ? { withLocation: true } : {}),
     gsi1pk: `SM#${owner.id}#${m.id}`,
     gsi1sk: `D#${memberId}`,
   };
@@ -242,7 +243,7 @@ async function changeItems(identity: Identity, albumId: string, add: string[], r
   await batchWrite([
     ...media.map((m) => ({ PutRequest: { Item: { pk: `D#${identity.id}`, sk: `AI#${albumId}#${m.id}`, mediaId: m.id, addedAt: now } } })),
     ...remove.map((id) => ({ DeleteRequest: { Key: { pk: `D#${identity.id}`, sk: `AI#${albumId}#${id}` } } })),
-    ...members.flatMap((mem) => ready.map((m) => ({ PutRequest: { Item: memberAccess(identity, mem.memberId, mem.shareId, albumId, m, now) } }))),
+    ...members.flatMap((mem) => ready.map((m) => ({ PutRequest: { Item: memberAccess(identity, mem.memberId, mem.shareId, albumId, m, now, mem.withLocation) } }))),
   ]);
   if (remove.length) await Promise.all(members.map((mem) => revokeAlbumAccess(mem.memberId, identity.id, albumId, remove)));
   return refresh(identity.id, albumId);
@@ -289,10 +290,10 @@ export async function deleteAlbum(identity: Identity, albumId: string): Promise<
 }
 
 /** A member accepted the shared album (called by shares.ts). */
-export async function addMember(owner: { id: string; name: string }, albumId: string, albumName: string, member: { id: string; name: string }, shareId: string) {
+export async function addMember(owner: { id: string; name: string }, albumId: string, albumName: string, member: { id: string; name: string }, shareId: string, withLocation = false) {
   const now = Date.now();
   await batchWrite([
-    { PutRequest: { Item: { pk: `D#${owner.id}`, sk: `AM#${albumId}#${member.id}`, memberId: member.id, name: member.name, shareId, at: now } } },
+    { PutRequest: { Item: { pk: `D#${owner.id}`, sk: `AM#${albumId}#${member.id}`, memberId: member.id, name: member.name, shareId, at: now, ...(withLocation ? { withLocation: true } : {}) } } },
     { PutRequest: { Item: { pk: `D#${member.id}`, sk: `SA#${albumId}#${owner.id}`, albumId, name: albumName, ownerId: owner.id, ownerName: owner.name, shareId, at: now } } },
   ]);
 }

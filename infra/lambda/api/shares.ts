@@ -1,7 +1,10 @@
 import { BatchGetCommand, BatchWriteCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { ddb, decodeCursor, encodeCursor, env, HttpError, json, randomId, Req, Res, signMediaUrl } from './lib';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+
+import { stripGps } from './exif-strip';
+import { ddb, decodeCursor, encodeCursor, env, HttpError, json, randomId, Req, Res, s3, signMediaUrl } from './lib';
 import { addMember, albumMediaIds, getAlbum, removeMember } from './albums';
 import { derivativeKey, MediaRecord, mediaKey, toClient } from './media';
 import { notify } from './push';
@@ -44,6 +47,8 @@ type ShareRequest = {
   /** A shared album (docs/design/organise-and-share.md): the member gets its items, now and as they're added. */
   albumId?: string;
   albumName?: string;
+  /** The sender chose to include where photos were taken (off by default: recipients get GPS-free copies). */
+  withLocation?: boolean;
 };
 
 async function batchGet(keys: { pk: string; sk: string }[]): Promise<Record<string, any>[]> {
@@ -101,6 +106,7 @@ function accessRecords(r: ShareRequest, media: MediaRecord[], now: number) {
     sharedAt: now,
     shareId: r.shareId,
     ...(r.albumId ? { albumId: r.albumId } : {}),
+    ...(r.withLocation ? { withLocation: true } : {}),
     gsi1pk: `SM#${r.fromId}#${m.id}`,
     gsi1sk: `D#${r.toId}`,
   }));
@@ -116,7 +122,7 @@ async function grant(r: ShareRequest, trusted: boolean | undefined, now: number)
   // A shared album gives what's in it now (it may have changed since the request was sent).
   const mediaIds = r.albumId ? await albumMediaIds(r.fromId, r.albumId) : r.mediaIds;
   const media = await shareableMedia(r.fromId, mediaIds);
-  if (r.albumId) await addMember({ id: r.fromId, name: r.fromName }, r.albumId, r.albumName ?? 'Album', { id: r.toId, name: r.toName }, r.shareId);
+  if (r.albumId) await addMember({ id: r.fromId, name: r.fromName }, r.albumId, r.albumName ?? 'Album', { id: r.toId, name: r.toName }, r.shareId, !!r.withLocation);
   const contact = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${r.toId}`, sk: `C#${r.fromId}` } }))).Item;
   await batchWrite([
     ...accessRecords(r, media, now).map(put),
@@ -185,6 +191,7 @@ export async function share(identity: Identity, req: Req): Promise<Res> {
       expiresAt: now + EXPIRE_MS,
       ...(auto ? { respondedAt: now } : {}),
       ...(album ? { albumId: album.albumId, albumName: album.name } : {}),
+      ...(req.body.includeLocation === true ? { withLocation: true } : {}),
     };
     writes.push(put({ ...base, pk: `D#${identity.id}`, sk: `OUT#${shareId}` }));
     if (!blockedBy.has(rid)) writes.push(put({ ...base, pk: `D#${rid}`, sk: `IN#${shareId}` }));
@@ -412,14 +419,14 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
   });
   const items = await Promise.all(
     shareItems.map(async (s) => ({
-      ...(await toClient({
+      ...(await withoutLocation(s, current.get(`${s.ownerId}#${s.mediaId}`)!, await toClient({
         ...(s as any),
         id: s.mediaId,
         status: 'ready',
         derivVersion: current.get(`${s.ownerId}#${s.mediaId}`)?.derivVersion,
         location: current.get(`${s.ownerId}#${s.mediaId}`)?.location, // own storage: preview only (free plan)
         edit: current.get(`${s.ownerId}#${s.mediaId}`)?.edit,
-      })),
+      }))),
       ownerId: s.ownerId,
       ownerName: s.ownerName,
       sharedAt: s.sharedAt,
@@ -427,6 +434,25 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
     })),
   );
   return json(200, { items, cursor: encodeCursor(result.LastEvaluatedKey) });
+}
+
+/**
+ * Location is private by default: a photo with a GPS position, shared without
+ * "include location", reaches the recipient as a copy with the GPS block wiped
+ * (same pixels, byte edits only; made once, at x/<owner>/<id>.jpg).
+ */
+async function withoutLocation<T extends { url?: string }>(s: Record<string, any>, owner: MediaRecord, client: T): Promise<T> {
+  if (!owner.gps || s.withLocation || !client.url) return client;
+  if (owner.contentType !== 'image/jpeg') return { ...client, url: undefined }; // can't wipe it safely: preview only
+  let key = s.strippedKey as string | undefined;
+  if (!key) {
+    key = `x/${s.ownerId}/${s.mediaId}.jpg`;
+    const original = await s3.send(new GetObjectCommand({ Bucket: env.bucket, Key: owner.key }));
+    const bytes = new Uint8Array(await original.Body!.transformToByteArray());
+    await s3.send(new PutObjectCommand({ Bucket: env.bucket, Key: key, Body: stripGps(bytes).bytes, ContentType: 'image/jpeg' }));
+    await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: s.pk, sk: s.sk }, UpdateExpression: 'SET strippedKey = :k', ExpressionAttributeValues: { ':k': key } }));
+  }
+  return { ...client, url: await signMediaUrl(key) };
 }
 
 /** DELETE /v1/shared/:ownerId/:mediaId: hide a shared item from my list. */

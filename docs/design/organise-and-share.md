@@ -7,7 +7,7 @@ and new Android phones. Built **one step at a time**, each tested before the nex
 | Step | What | Where it runs | Status |
 |---|---|---|---|
 | 1 | **Albums + smarter bulk sharing**: albums, shared albums (one request, later additions reach accepted members, revocable), share-while-uploading, exact-duplicate detection, recipient suggestions (frequency + album members) | JS + API (OTA) | **done** (deployed, e2e 246/246, emulator walk-through 2026-10-12) |
-| 2 | **Places**: coordinates sent with the upload only when "Save location" is on; place names from the phone's own geocoder (no paid API); Places view; place on day markers; permission asked in context | JS + API + small native | **building** |
+| 2 | **Places**: coordinates sent with the upload only when "Save location" is on; place names from the phone's own geocoder (no paid API); Places view; place on day markers; permission asked in context | JS + API (no native needed) | **built** (deploy + test pending) |
 | 3 | **Nearby** (same Wi-Fi): opt-in; phones exchange only short-lived random codes over mDNS; the server resolves a code to a display name only for people who opted in (identity verified by the server, not by network presence); only while the roll/share screen is open | native module + API | later |
 | 4 | **People**: on-device face grouping (never uploaded; while charging; on previews); the user labels a group; suggestions "share with X?" only when X turned on "Let friends' Lens suggest me"; always review + confirm + recipient accepts; off by default; "delete all face data" | on-device | last |
 

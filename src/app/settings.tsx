@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Href, router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import { api, NotificationPrefs, Session } from '@/lib/api';
 import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
+import { setSaveLocation as setSaveLocationPref } from '@/lib/location-pref';
 import { askForNotifications } from '@/lib/push';
 import { formatBytes } from '@/lib/format';
 import {
@@ -371,21 +372,7 @@ export default function SettingsScreen() {
   const [shareDiagnostics, setShareDiagnostics] = useState(() => diagnosticsEnabled());
   /** Opt-in location: ask for permission when switched on; stay off if refused. */
   const onSaveLocation = async (on: boolean) => {
-    if (on) {
-      const result = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
-      ]).catch(() => null);
-      const granted =
-        result?.[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === 'granted' ||
-        result?.[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] === 'granted';
-      if (!granted) {
-        notify('Location is off', 'Lens needs location permission to save where you took photos. You can allow it in Android settings.');
-        return;
-      }
-    }
-    setSaveLocation(on);
-    setCameraOption('saveLocation', on);
+    setSaveLocation(await setSaveLocationPref(on));
   };
   const identity = useStore((s) => s.identity);
   const usage = useStore((s) => s.usage);

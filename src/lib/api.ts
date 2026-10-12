@@ -145,6 +145,8 @@ export type ShareRequest = {
 };
 type Page<T> = { items: T[]; cursor: string | null };
 export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
+export type Place = { city: string; region: string; country: string };
+export type PlaceGroup = Place & { key: string; count: number; first: number; last: number; cover: RemoteMedia };
 export type Album = { id: string; name: string; count: number; createdAt: number; updatedAt: number; cover: RemoteMedia | null };
 /** An album someone shared with me (its items are in the Shared list with this albumId). */
 export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; at: number };
@@ -176,6 +178,8 @@ export const api = {
   startUpload: (body: {
     /** Base64 MD5 of the whole file (single-PUT uploads); S3 verifies it. */
     md5?: string;
+    /** Where the photo was taken (its own GPS tag), for Places; owner only. */
+    gps?: { lat: number; lng: number };
     /** Look/edit chosen at capture (non-destructive). */
     edit?: EditRecipe;
     /** Thumbnail + preview to upload first (base64 MD5 + bytes). */
@@ -245,13 +249,17 @@ export const api = {
   deleteAlbum: (id: string) => request<unknown>('DELETE', `/albums/${id}`),
   editAlbum: (id: string, change: { add?: string[]; remove?: string[] }) => request<{ id: string; count: number }>('POST', `/albums/${id}/items`, change),
   leaveAlbum: (ownerId: string, id: string) => request<unknown>('DELETE', `/shared-albums/${ownerId}/${id}`),
-  shareAlbum: (albumId: string, to: string[]) =>
-    request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { albumId, to }),
+  shareAlbum: (albumId: string, to: string[], includeLocation = false) =>
+    request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { albumId, to, includeLocation }),
+  // Places (step 2): positions for photos uploaded before, then the grouped view.
+  setPlaces: (items: { id: string; lat: number; lng: number }[]) => request<{ updated: number }>('POST', '/media/places', { items }),
+  places: () => request<{ places: PlaceGroup[] }>('GET', '/places'),
+  placeItems: (key: string) => request<{ items: RemoteMedia[] }>('GET', `/places/items?key=${encodeURIComponent(key)}`),
   /** Is this exact file (MD5 base64 + size) already in my Lens? */
   checkDuplicate: (md5: string, size: number) => request<{ duplicate: RemoteMedia | null }>('POST', '/media/check', { md5, size }),
   lookupUser: (id: string) => request<{ user: Person }>('GET', `/users/${encodeURIComponent(id)}`),
-  share: (mediaIds: string[], to: string[]) =>
-    request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { mediaIds, to }),
+  share: (mediaIds: string[], to: string[], includeLocation = false) =>
+    request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { mediaIds, to, includeLocation }),
   // Share requests: nothing is shared until the recipient accepts (docs/design/sharing-consent.md).
   sharesIn: (cursor?: string | null) => request<{ requests: ShareRequest[]; pending: number; cursor: string | null }>('GET', `/shares/in${q(cursor)}`),
   sharesOut: (cursor?: string | null) => request<{ requests: ShareRequest[]; cursor: string | null }>('GET', `/shares/out${q(cursor)}`),

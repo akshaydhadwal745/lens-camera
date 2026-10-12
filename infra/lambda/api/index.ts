@@ -24,6 +24,7 @@ import { checkDuplicate, completeExternal, completeUpload, listMedia, partUrls, 
 import { commitEdit, startEdit } from './edits';
 import { accept, cancel, decline, inbox, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
 import { notificationPrefs, registerPush, unregisterPush } from './push';
+import { listPlaces, placeItems, setPlaces } from './places';
 import { albumDetail, createAlbum, deleteAlbum, editAlbumItems, leaveAlbum, listAlbums, renameAlbum } from './albums';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
@@ -142,6 +143,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /media') return await listMedia(identity, req);
     if (route === 'POST /media') return await startUpload(identity, req);
     if (route === 'POST /media/check') return await checkDuplicate(identity, req);
+    // Places (step 2).
+    if (route === 'POST /media/places') return await setPlaces(identity, req);
+    if (route === 'GET /places') return await listPlaces(identity);
+    if (route === 'GET /places/items') return await placeItems(identity, req);
     // Albums (docs/design/organise-and-share.md).
     if (route === 'GET /albums') return await listAlbums(identity);
     if (route === 'POST /albums') return await createAlbum(identity, req);

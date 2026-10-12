@@ -18,6 +18,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
+import { nearestPlace, parseGps, type Place } from './places';
 import { checkQuota, ddb, decodeCursor, encodeCursor, env, HttpError, json, quotaFor, Req, Res, s3, signMediaUrl } from './lib';
 import { notify } from './push';
 import { listStorages, PROVIDERS, Provider } from './storage';
@@ -78,6 +79,10 @@ export type MediaRecord = {
   storageClass?: string;
   /** MD5 (base64) of the original the phone sent with a single upload. */
   md5?: string;
+  /** Where it was taken (from the photo's own GPS tag, "Save location" on), ~100 m; owner only. */
+  gps?: { lat: number; lng: number };
+  /** Nearest city for Places (places.ts); owner only. */
+  place?: Place;
   /** Thumbnail + preview uploaded and verified (visible before the original finishes). */
   previewReady?: boolean;
   /** Non-destructive edit recipe (look, adjustments, crop…); the original is never modified. */
@@ -225,6 +230,8 @@ type ClientFields = Pick<
   | 'status'
   | 'previewReady'
   | 'edit'
+  | 'place'
+  | 'gps'
   | 'derivVersion'
   | 'location'
 > & { contentType?: string };
@@ -254,6 +261,9 @@ export async function toClient(item: ClientFields) {
     location: item.location?.ref
       ? { storageId: item.location.storageId, provider: item.location.provider, ref: item.location.ref }
       : undefined,
+    // Owner's own records only: share records never carry these (recipients don't learn where).
+    place: item.place,
+    hasGps: item.gps ? true : undefined,
   };
 }
 
@@ -360,6 +370,13 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
   };
   // Checksum of the original (single uploads): indexed at /complete for the "already in Lens" check.
   if (md5) item.md5 = md5;
+  // Places: the position the phone read from the photo's GPS tag (only there when "Save location" is on).
+  const gps = parseGps(req.body.gps);
+  if (gps) {
+    item.gps = gps;
+    const place = nearestPlace(gps.lat, gps.lng);
+    if (place) item.place = place;
+  }
 
   if (location) item.location = location;
   else item.storageClass = ORIGINAL_STORAGE_CLASS;
