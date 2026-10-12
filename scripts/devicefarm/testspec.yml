@@ -17,7 +17,7 @@ phases:
       - adb -s $DEVICEFARM_DEVICE_UDID logcat -c || true
   test:
     commands:
-      - adb -s $DEVICEFARM_DEVICE_UDID shell am start -W -a com.google.intent.action.TEST_LOOP -n com.akshay.lens/.MainActivity --ei scenario 1
+      - adb -s $DEVICEFARM_DEVICE_UDID shell am start -W -a com.google.intent.action.TEST_LOOP -t application/javascript -n com.akshay.lens/.MainActivity --ei scenario 1
       # The self-test closes its screen when done (finishTestLoop); give it up to 10 minutes. Wait for
       # the activity itself to go (not for focus: a system pop-up on top would end the wait too early).
       - for i in $(seq 1 120); do sleep 5; adb -s $DEVICEFARM_DEVICE_UDID shell dumpsys activity activities | grep -q "com.akshay.lens/.MainActivity" || break; done
