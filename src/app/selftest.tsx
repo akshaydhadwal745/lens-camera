@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView, LensImaging, MediaInfo } from '../../modules/lens-camera';
 import { selfTestHooks } from '../../modules/lens-device';
 import { buildInfo, buildLabel } from '@/lib/build-info';
-import { sendSelfTest } from '@/lib/diagnostics';
+import { diagnosticsEnabled, sendSelfTest } from '@/lib/diagnostics';
 import {
   cameraKey,
   checkPhoto,
@@ -475,7 +475,8 @@ export default function SelfTestScreen() {
       const result = { ...summarize(t0, outcomes), device, thermal: { start: thermalStart.current, end: thermalEnd.current } };
       setReport(result);
       setSteps(outcomes);
-      await sendSelfTest(result);
+      // Test Lab / Device Farm runs always report (that's their purpose); a user's own run follows Settings.
+      if (launch || diagnosticsEnabled()) await sendSelfTest(result);
       if (launch) {
         if (launch.resultUri) await selfTestHooks.writeResult(launch.resultUri, JSON.stringify({ build: buildInfo(), ...result }, null, 1)).catch(() => false);
         selfTestHooks.finish();

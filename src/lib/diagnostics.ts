@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 import { type Capabilities, type CameraDiagnostics, cameraDeviceReport } from '../../modules/lens-camera';
 import { api } from './api';
 import { buildInfo } from './build-info';
+import { loadDoc, saveDoc } from './local-store';
 import type { SelfTestReport } from './self-test';
 
 export type DiagnosticEvent = { kind: string; at: string; details: Record<string, unknown> };
@@ -47,6 +48,20 @@ function saveSent() {
   }
 }
 
+/** Settings → Camera → "Share camera diagnostics" (on by default). Off = nothing automatic is sent. */
+export function diagnosticsEnabled(): boolean {
+  return loadDoc<{ share?: boolean }>('diagnostics-prefs', {}).share !== false;
+}
+
+export function setDiagnosticsEnabled(share: boolean) {
+  saveDoc('diagnostics-prefs', { share });
+  if (!share) {
+    queue = [];
+    if (timer) clearTimeout(timer);
+    timer = null;
+  }
+}
+
 function device() {
   const c = Platform.constants as unknown as Record<string, unknown>;
   return {
@@ -60,7 +75,7 @@ function device() {
 
 /** Queues an event; `key` dedupes it (once per day per build). */
 function record(kind: string, details: Record<string, unknown>, key: string) {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || !diagnosticsEnabled()) return;
   const day = new Date().toISOString().slice(0, 10);
   const build = buildInfo();
   const fullKey = `${build.code ?? 'local'}|${kind}|${key}`;
@@ -96,7 +111,7 @@ let capabilitiesStarted = false;
  * the ones we test. Anonymous like the rest (no account, no photos).
  */
 async function reportCapabilities() {
-  if (Platform.OS !== 'android' || capabilitiesStarted) return;
+  if (Platform.OS !== 'android' || capabilitiesStarted || !diagnosticsEnabled()) return;
   capabilitiesStarted = true;
   const key = `${buildInfo().code ?? 'local'}|capabilities`;
   const sent = loadSent();

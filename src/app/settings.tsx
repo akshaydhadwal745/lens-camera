@@ -10,6 +10,7 @@ import { isProCameraAvailable } from '../../modules/lens-camera';
 
 import { api, Session } from '@/lib/api';
 import { buildLabel } from '@/lib/build-info';
+import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
@@ -325,6 +326,7 @@ export default function SettingsScreen() {
   const [saveLocation, setSaveLocation] = useState(() => loadSettings().saveLocation);
   const [shutterSound, setShutterSound] = useState(() => loadSettings().shutterSound);
   const [scanCodes, setScanCodes] = useState(() => loadSettings().scanCodes);
+  const [shareDiagnostics, setShareDiagnostics] = useState(() => diagnosticsEnabled());
   /** Opt-in location: ask for permission when switched on; stay off if refused. */
   const onSaveLocation = async (on: boolean) => {
     if (on) {
@@ -560,6 +562,17 @@ export default function SettingsScreen() {
                     />
                   </>
                 )}
+                <View style={styles.divider} />
+                <SwitchRow
+                  icon="pulse-outline"
+                  label="Share camera diagnostics"
+                  hint="Anonymous: your phone model and what its camera can do, so Lens works well on every phone. No photos, no location, not linked to you."
+                  value={shareDiagnostics}
+                  onChange={(v) => {
+                    setShareDiagnostics(v);
+                    setDiagnosticsEnabled(v);
+                  }}
+                />
                 <View style={styles.divider} />
                 <LinkRow icon="hardware-chip-outline" label="Camera info & self-test" onPress={() => router.push('/camera-info')} />
               </Section>

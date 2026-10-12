@@ -21,6 +21,12 @@ the privacy policy, section 1).
 | `capabilities` | **once per app build**, after the first camera start (2026-10-12) | the full camera report (Camera info / `deviceReport`): every camera's lenses, megapixels, hardware level, streams, ISO/shutter range, extensions, feature probes (slow motion, 60 fps, photo while recording, low-light boost, face priority, stabilization, ZSL, time-lapse profiles) and video encoders; 3–8 KB. Sent so every phone that installs Lens reports what it can do, not only the phones we test. Retried on the next app start if offline |
 | `selftest` | self-test run (Settings, Test Lab, Device Farm) | every step with status, message and details (photo sizes, capture ms, previewStats, video file stats…); the camera report is left out (sent as `capabilities`) |
 
+**Off switch:** Settings → Camera → **Share camera diagnostics** (on by
+default; `diagnosticsEnabled()` / `setDiagnosticsEnabled()`, saved in the
+`diagnostics-prefs` doc). Off = no automatic event is sent and the queue is
+dropped; a user's own self-test doesn't report either. Test Lab / Device Farm
+self-test runs always report (that's what they're for).
+
 Each report is sent at most once per day per app build (dedupe file
 `Documents/diagnostics-sent.json`), batched 4 s after the camera settles. Every
 failure is swallowed: diagnostics never affect the app.
