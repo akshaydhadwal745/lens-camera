@@ -45,7 +45,7 @@ cp -r "$HERE/devicefarm/package" "$WORK/package"
 echo pytest > "$WORK/package/requirements.txt"
 python3 -m pip download -q --only-binary=:all: --python-version 3.9 --platform any -d "$WORK/package/wheelhouse" pytest
 (cd "$WORK/package" && zip -qr "$WORK/tests.zip" .)
-cp "$HERE/devicefarm/testspec.yml" "$WORK/lens-selftest.yml"
+cp "$HERE/devicefarm/${SPEC:-testspec}.yml" "$WORK/lens-selftest.yml"
 APP=$(upload "$WORK/Lens.apk" ANDROID_APP)
 TESTS=$(upload "$WORK/tests.zip" APPIUM_PYTHON_TEST_PACKAGE)
 SPEC=$(upload "$WORK/lens-selftest.yml" APPIUM_PYTHON_TEST_SPEC)
@@ -68,7 +68,7 @@ EOF
 POOL=$("${AWSDF[@]}" create-device-pool --project-arn "$PROJECT" --name "dev-$N $(date +%H%M%S)" \
   --rules "[{\"attribute\":\"ARN\",\"operator\":\"IN\",\"value\":$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$ARNS")}]" | j "d['devicePool']['arn']")
 
-RUN=$("${AWSDF[@]}" schedule-run --project-arn "$PROJECT" --app-arn "$APP" --device-pool-arn "$POOL" --name "dev-$N self-test" \
+RUN=$("${AWSDF[@]}" schedule-run --project-arn "$PROJECT" --app-arn "$APP" --device-pool-arn "$POOL" --name "dev-$N ${SPEC:-self-test}" \
   --test "type=APPIUM_PYTHON,testPackageArn=$TESTS,testSpecArn=$SPEC" \
   --execution-configuration jobTimeoutMinutes=15,videoCapture=true | j "d['run']['arn']")
 echo "Started $RUN (results → $OUT)"
