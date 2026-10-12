@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -461,7 +462,7 @@ export default function GalleryScreen() {
           {rollStatus ? <Text style={[typeStyle.monoLabel, { color: rollStatus.color }]}>{rollStatus.text}</Text> : null}
         </Text>
         {!selecting && (
-          <View style={styles.filters}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filters}>
             {(
               [
                 ['All', 'mine', false],
@@ -507,7 +508,7 @@ export default function GalleryScreen() {
                 </Text>
               </Pressable>
             )}
-          </View>
+          </ScrollView>
         )}
       </View>
 
@@ -656,7 +657,9 @@ const styles = StyleSheet.create({
   roundButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center' },
   headerButton: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: 4 },
   headerAction: { color: palette.link, fontSize: 17 },
-  filters: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
+  // Scrolls sideways: chips (filters, Albums, Places, storage) don't fit a 360 dp phone.
+  filtersScroll: { marginTop: 14, flexGrow: 0 },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
   filter: { paddingHorizontal: 14, height: 32, borderRadius: 16, backgroundColor: palette.surface, justifyContent: 'center' },
   filterOn: { backgroundColor: palette.text },
   filterText: { color: palette.soft, fontSize: 14, fontWeight: '500' },
