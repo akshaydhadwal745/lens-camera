@@ -25,6 +25,7 @@ import { commitEdit, startEdit } from './edits';
 import { accept, cancel, decline, inbox, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
 import { notificationPrefs, registerPush, unregisterPush } from './push';
 import { listPlaces, placeItems, setPlaces } from './places';
+import { nearbyCode, nearbyResolve, nearbySettings } from './nearby';
 import { albumDetail, createAlbum, deleteAlbum, editAlbumItems, leaveAlbum, listAlbums, renameAlbum } from './albums';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
@@ -147,6 +148,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /media/places') return await setPlaces(identity, req);
     if (route === 'GET /places') return await listPlaces(identity);
     if (route === 'GET /places/items') return await placeItems(identity, req);
+    // Nearby on this Wi-Fi (step 3).
+    if (route === 'GET /nearby' || route === 'PUT /nearby') return await nearbySettings(identity, req);
+    if (route === 'POST /nearby/code') return await nearbyCode(identity);
+    if (route === 'POST /nearby/resolve') return await nearbyResolve(identity, req);
     // Albums (docs/design/organise-and-share.md).
     if (route === 'GET /albums') return await listAlbums(identity);
     if (route === 'POST /albums') return await createAlbum(identity, req);

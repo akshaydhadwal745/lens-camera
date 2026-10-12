@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { AlbumPicker } from '@/components/AlbumPicker';
+import { useNearbyPeople } from '@/lib/nearby';
 import { api } from '@/lib/api';
 import { SharesStrip } from '@/components/SharesStrip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -192,6 +193,8 @@ export default function GalleryScreen() {
   const [tab, setTab] = useState<Tab>(params.tab === 'shared' ? 'shared' : 'mine');
   const [selecting, setSelecting] = useState(false);
   const [albumPicking, setAlbumPicking] = useState(false);
+  // Lens users on this Wi-Fi (opt-in on both sides, verified by the server): while the roll is open.
+  const nearby = useNearbyPeople(!isWeb);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const copiedEdit = useStore((s) => s.copiedEdit);
   const [pasting, setPasting] = useState(false);
@@ -513,6 +516,15 @@ export default function GalleryScreen() {
       </View>
 
       {tab === 'mine' && banner}
+      {tab === 'mine' && !selecting && nearby.length > 0 ? (
+        <Pressable style={styles.nearbyStrip} onPress={() => setSelecting(true)} accessibilityRole="button">
+          <Ionicons name="wifi" size={16} color={palette.accent} />
+          <Text style={styles.nearbyText} numberOfLines={1}>
+            {nearby.length === 1 ? `${nearby[0].name} is nearby` : `${nearby[0].name} and ${nearby.length - 1} more nearby`}
+          </Text>
+          <Text style={styles.nearbyAction}>Pick photos</Text>
+        </Pressable>
+      ) : null}
       {tab === 'shared' && <SharesStrip />}
 
       {items.length === 0 ? (
@@ -657,6 +669,9 @@ const styles = StyleSheet.create({
   roundButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center' },
   headerButton: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: 4 },
   headerAction: { color: palette.link, fontSize: 17 },
+  nearbyStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginTop: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: palette.surface },
+  nearbyText: { flex: 1, color: palette.text, fontSize: 14, fontWeight: '600' },
+  nearbyAction: { color: palette.link, fontSize: 14, fontWeight: '600' },
   // Scrolls sideways: chips (filters, Albums, Places, storage) don't fit a 360 dp phone.
   filtersScroll: { marginTop: 14, flexGrow: 0 },
   filters: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },

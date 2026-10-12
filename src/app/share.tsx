@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, Person } from '@/lib/api';
 import { onPersonPicked } from '@/lib/person-code';
 import { askForNotifications } from '@/lib/push';
+import { useNearbyPeople } from '@/lib/nearby';
 import { queueShare, selectGallery, useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
 
@@ -144,6 +145,8 @@ export default function ShareScreen() {
     }
   };
 
+  // People on this Wi-Fi who are visible (verified by the server), shown first.
+  const nearby = useNearbyPeople(true);
   const showingSearch = query.trim().length >= 3;
   const list = showingSearch ? results : recent;
   // Picked photos that carry a GPS position (from Places): the confirm sheet offers to include it.
@@ -207,6 +210,24 @@ export default function ShareScreen() {
         </View>
       )}
 
+      {!showingSearch && nearby.length > 0 ? (
+        <View>
+          <Text style={styles.section}>Nearby on this Wi-Fi</Text>
+          {nearby.map((p) => {
+            const on = chosen.has(p.id);
+            return (
+              <Pressable key={p.id} onPress={() => toggle(p)} style={styles.row} accessibilityState={{ selected: on }}>
+                <Avatar name={p.name} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{p.name}</Text>
+                  <PersonFacts person={p} />
+                </View>
+                <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? colors.link : '#636366'} />
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       <Text style={styles.section}>{showingSearch ? 'Results' : 'Suggested'}</Text>
       <FlatList
         data={list}

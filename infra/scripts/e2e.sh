@@ -213,6 +213,19 @@ curl -sS -o "$TMP/shared-gps2.jpg" "$(call GET /shared "$TB" | j ".items.find(i=
 cmp -s "$TMP/shared-gps2.jpg" "$GPSF" && ok "with \"include location\" the recipient gets the original"
 call POST "/shares/out/$SG2/cancel" "$TC" >/dev/null
 
+# --- Nearby on this Wi-Fi (step 3): codes only, names only for people who opted in ---
+[[ $(call POST /nearby/code "$TA" | j .code) == "" ]] && ok "not visible: no code to announce"
+call PUT /nearby "$TA" -d '{"visible":true}' >/dev/null
+NCA=$(call POST /nearby/code "$TA" | j .code); [[ ${#NCA} == 16 ]] && ok "visible: a 16-character code"
+[[ $(call POST /nearby/resolve "$TB" -d "{\"codes\":[\"$NCA\",\"AAAAAAAAAAAAAAAA\"]}" | j '.people.map(p=>p.name).join()') == "$NA" ]] && ok "B on the same Wi-Fi sees $NA (a made-up code shows nothing)"
+[[ $(call POST /nearby/resolve "$TA" -d "{\"codes\":[\"$NCA\"]}" | j .people.length) == 0 ]] && ok "you don't see yourself"
+call PUT /nearby "$TA" -d '{"visible":false}' >/dev/null
+[[ $(call POST /nearby/resolve "$TB" -d "{\"codes\":[\"$NCA\"]}" | j .people.length) == 0 ]] && ok "turned off: the old code shows nothing"
+call PUT /nearby "$TA" -d '{"visible":true}' >/dev/null; NCA=$(call POST /nearby/code "$TA" | j .code)
+call POST "/blocks/$IA" "$TB" >/dev/null
+[[ $(call POST /nearby/resolve "$TB" -d "{\"codes\":[\"$NCA\"]}" | j .people.length) == 0 ]] && ok "blocked people don't show as nearby"
+call DELETE "/blocks/$IA" "$TB" >/dev/null; call PUT /nearby "$TA" -d '{"visible":false}' >/dev/null
+
 # --- pairing (web sign-in) ---
 CODE=$(call POST /pairing "$TA" | j .code); ok "pairing code $CODE"
 W=$(curl -sS -X POST "$API/pairing/claim" -H 'content-type: application/json' -d "{\"code\":\"$CODE\"}"); TW=$(echo "$W" | j .token)

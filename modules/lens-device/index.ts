@@ -29,6 +29,9 @@ type LensDeviceNative = {
   canRead(uri: string): boolean;
   copyMedia(uri: string, destination: string): Promise<number>;
   addListener(event: 'onThermalChange', listener: (e: { level: ThermalLevel }) => void): { remove(): void };
+  addListener(event: 'onNearby', listener: (e: { codes: string[] }) => void): { remove(): void };
+  nearbyStart?(code: string | null): boolean;
+  nearbyStop?(): void;
   supportedAbis?(): string[];
   testLoop?(): { scenario: number; resultUri: string | null } | null;
   writeTestResult?(uri: string, text: string): Promise<boolean>;
@@ -141,3 +144,22 @@ export function supportedAbis(): string[] {
     return [];
   }
 }
+
+/**
+ * Nearby Lens users on the same Wi-Fi: announce `code` (null = just look) and
+ * get the codes other phones announce. Missing before the step-3 APK.
+ */
+export const nearbyDiscovery =
+  native?.nearbyStart && native.nearbyStop
+    ? {
+        start(code: string | null, onCodes: (codes: string[]) => void): () => void {
+          const sub = native!.addListener('onNearby', (e) => onCodes(e.codes));
+          native!.nearbyStart!(code);
+          return () => {
+            sub.remove();
+            native!.nearbyStop!();
+          };
+        },
+      }
+    : null;
+

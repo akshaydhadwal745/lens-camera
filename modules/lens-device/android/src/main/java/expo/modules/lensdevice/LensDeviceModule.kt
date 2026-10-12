@@ -25,6 +25,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 private const val TEST_LOOP = "com.google.intent.action.TEST_LOOP"
 
 class LensDeviceModule : Module() {
+  private var nearby: NearbyDiscovery? = null
+
   private var listener: PowerManager.OnThermalStatusChangedListener? = null
   private val handler = Handler(Looper.getMainLooper())
   private var lastBatteryLevel: String? = null
@@ -44,7 +46,22 @@ class LensDeviceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("LensDevice")
-    Events("onThermalChange")
+    Events("onThermalChange", "onNearby")
+
+    // Nearby Lens users on this Wi-Fi (NearbyDiscovery): only codes travel the network.
+    Function("nearbyStart") { code: String? ->
+      val context = appContext.reactContext ?: return@Function false
+      val d = nearby ?: NearbyDiscovery(context) { codes -> sendEvent("onNearby", mapOf("codes" to codes)) }.also { nearby = it }
+      d.start(code)
+      true
+    }
+
+    Function("nearbyStop") {
+      nearby?.stop()
+      Unit
+    }
+
+    OnDestroy { nearby?.stop() }
 
     Function("thermalLevel") { currentLevel() }
 

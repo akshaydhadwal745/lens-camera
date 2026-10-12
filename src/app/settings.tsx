@@ -13,6 +13,7 @@ import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
 import { setSaveLocation as setSaveLocationPref } from '@/lib/location-pref';
+import { nearbySupported } from '@/lib/nearby';
 import { askForNotifications } from '@/lib/push';
 import { formatBytes } from '@/lib/format';
 import {
@@ -370,6 +371,10 @@ export default function SettingsScreen() {
   const [shutterSound, setShutterSound] = useState(() => loadSettings().shutterSound);
   const [scanCodes, setScanCodes] = useState(() => loadSettings().scanCodes);
   const [shareDiagnostics, setShareDiagnostics] = useState(() => diagnosticsEnabled());
+  const [nearbyVisible, setNearbyVisible] = useState(false);
+  useEffect(() => {
+    if (nearbySupported) api.nearbySettings().then((r) => setNearbyVisible(r.visible), () => {});
+  }, []);
   /** Opt-in location: ask for permission when switched on; stay off if refused. */
   const onSaveLocation = async (on: boolean) => {
     setSaveLocation(await setSaveLocationPref(on));
@@ -664,6 +669,21 @@ export default function SettingsScreen() {
 
             <Section title="Sharing" footer="Friends scan your code to share with exactly you. You accept each share before it reaches your Shared tab, and you can cancel or revoke what you send.">
               <LinkRow icon="qr-code-outline" label="My Lens code" onPress={() => router.push('/my-code')} />
+              {nearbySupported ? (
+                <>
+                  <View style={styles.divider} />
+                  <SwitchRow
+                    icon="wifi-outline"
+                    label="Visible to nearby Lens users"
+                    hint="People on the same Wi-Fi who also turned this on see your Lens name, so they can share without searching. Only while Lens is open; never your location."
+                    value={nearbyVisible}
+                    onChange={(v) => {
+                      setNearbyVisible(v);
+                      api.setNearbyVisible(v).then((r) => setNearbyVisible(r.visible), () => setNearbyVisible(!v));
+                    }}
+                  />
+                </>
+              ) : null}
               <View style={styles.divider} />
               <LinkRow icon="swap-horizontal-outline" label="Requests and sent" onPress={() => router.push('/shares')} />
             </Section>

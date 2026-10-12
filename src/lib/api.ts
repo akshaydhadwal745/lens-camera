@@ -255,6 +255,11 @@ export const api = {
   setPlaces: (items: { id: string; lat: number; lng: number }[]) => request<{ updated: number }>('POST', '/media/places', { items }),
   places: () => request<{ places: PlaceGroup[] }>('GET', '/places'),
   placeItems: (key: string) => request<{ items: RemoteMedia[] }>('GET', `/places/items?key=${encodeURIComponent(key)}`),
+  // Nearby on this Wi-Fi (step 3): opt-in, short-lived codes, names only from the server.
+  nearbySettings: () => request<{ visible: boolean }>('GET', '/nearby'),
+  setNearbyVisible: (visible: boolean) => request<{ visible: boolean }>('PUT', '/nearby', { visible }),
+  nearbyCode: () => request<{ code: string | null; expiresAt?: number }>('POST', '/nearby/code'),
+  nearbyResolve: (codes: string[]) => request<{ people: (Person & { nearby: true })[] }>('POST', '/nearby/resolve', { codes }),
   /** Is this exact file (MD5 base64 + size) already in my Lens? */
   checkDuplicate: (md5: string, size: number) => request<{ duplicate: RemoteMedia | null }>('POST', '/media/check', { md5, size }),
   lookupUser: (id: string) => request<{ user: Person }>('GET', `/users/${encodeURIComponent(id)}`),
