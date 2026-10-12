@@ -4,8 +4,27 @@ import { palette } from './theme';
 
 const isWeb = Platform.OS === 'web';
 
-export function notify(title: string, message?: string) {
-  if (isWeb) window.alert(message ? `${title}\n${message}` : title);
+export type ToastMessage = { title: string; message?: string; tone: 'ok' | 'problem' };
+let toastListener: ((m: ToastMessage) => void) | null = null;
+
+/** The banner host (src/components/Toast.tsx, mounted once in the root layout). */
+export function onToast(listener: (m: ToastMessage) => void): () => void {
+  toastListener = listener;
+  return () => {
+    if (toastListener === listener) toastListener = null;
+  };
+}
+
+const PROBLEM = /could not|couldn't|can't|error|fail|wrong|is off|too many|not found/i;
+
+/**
+ * A short message to the user, as Lens's own banner (not the system alert box).
+ * Problems get the red style: from the title's wording, or pass the tone.
+ */
+export function notify(title: string, message?: string, tone?: ToastMessage['tone']) {
+  const m: ToastMessage = { title, message, tone: tone ?? (PROBLEM.test(title) ? 'problem' : 'ok') };
+  if (toastListener) toastListener(m);
+  else if (isWeb) window.alert(message ? `${title}\n${message}` : title);
   else Alert.alert(title, message);
 }
 

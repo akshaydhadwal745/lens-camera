@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { STATUS_LABEL, whatText } from '@/components/SharesList';
 import { Text } from '@/components/ui/Text';
 import { api, ShareRequest } from '@/lib/api';
+import { refreshShared } from '@/lib/store';
 import { palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
@@ -43,7 +44,9 @@ export default function ShareRequestScreen() {
     setBusy('accept');
     try {
       const res = await api.acceptShare(r.shareId, always);
-      notify('Accepted', `${res.count} item${res.count === 1 ? '' : 's'} from ${r.from.name} are in your Shared tab.`);
+      // The Shared tab reads the store: load the new items before going there.
+      await refreshShared();
+      notify('Accepted', `${res.count} item${res.count === 1 ? '' : 's'} from ${r.from.name} ${res.count === 1 ? 'is' : 'are'} in your Shared tab.`);
       router.replace({ pathname: '/gallery', params: { tab: 'shared' } });
     } catch (e) {
       notify('Could not accept', errorMessage(e));

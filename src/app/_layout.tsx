@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LensImaging } from '../../modules/lens-camera';
 import { BrandIntro } from '@/components/BrandIntro';
+import { ToastHost } from '@/components/Toast';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { identityChanged, startPush } from '@/lib/push';
 import { boot, useStore } from '@/lib/store';
@@ -69,6 +70,7 @@ export default function RootLayout() {
         <Stack.Screen name="edit/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack>
       <UpdateBanner />
+      <ToastHost />
       {introVisible && <BrandIntro done={status !== 'booting'} onFinished={() => setIntroVisible(false)} />}
     </GestureHandlerRootView>
   );
