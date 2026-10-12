@@ -34,8 +34,9 @@ def phones(root: Path):
 def crashes(phone_dir: Path):
     """Lens crashes (FATAL EXCEPTION / native signal) and freezes (ANR) in the logcat."""
     found = []
-    for log in phone_dir.rglob("logcat*"):
-        if not log.is_file():
+    # Test Lab: "logcat"; Device Farm: "Logcat.logcat", "lens-logcat.txt".
+    for log in phone_dir.rglob("*"):
+        if not log.is_file() or "logcat" not in log.name.lower():
             continue
         lines = log.read_text(errors="replace").splitlines()
         for i, line in enumerate(lines):

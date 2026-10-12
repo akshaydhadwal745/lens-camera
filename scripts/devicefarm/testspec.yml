@@ -1,0 +1,26 @@
+# AWS Device Farm custom environment: runs the Lens camera self-test the way
+# Firebase Test Lab's game loop does (TEST_LOOP intent → /selftest), waits for
+# it to finish, and keeps the logcat. The report itself goes to our
+# diagnostics store (POST /v1/diagnostics, research/diagnostics.py).
+version: 0.1
+android_test_host: amazon_linux_2
+phases:
+  install:
+    commands:
+      - echo "Lens self-test on $DEVICEFARM_DEVICE_NAME ($DEVICEFARM_DEVICE_OS_VERSION)"
+  pre_test:
+    commands:
+      - adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.akshay.lens android.permission.CAMERA || true
+      - adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.akshay.lens android.permission.RECORD_AUDIO || true
+      - adb -s $DEVICEFARM_DEVICE_UDID logcat -c || true
+  test:
+    commands:
+      - adb -s $DEVICEFARM_DEVICE_UDID shell am start -W -a com.google.intent.action.TEST_LOOP -n com.akshay.lens/.MainActivity --ei scenario 1
+      # The self-test closes its screen when done (finishTestLoop); give it up to 10 minutes.
+      - for i in $(seq 1 120); do sleep 5; adb -s $DEVICEFARM_DEVICE_UDID shell dumpsys window | grep -q "mCurrentFocus.*com.akshay.lens" || break; done
+      - echo "self-test screen closed after $((i * 5)) s"
+  post_test:
+    commands:
+      - adb -s $DEVICEFARM_DEVICE_UDID logcat -d > $DEVICEFARM_LOG_DIR/lens-logcat.txt || true
+artifacts:
+  - $DEVICEFARM_LOG_DIR

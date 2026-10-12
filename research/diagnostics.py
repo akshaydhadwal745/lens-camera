@@ -3,6 +3,8 @@
 
     research/.venv/bin/python research/diagnostics.py            # sync last 14 days + summary
     research/.venv/bin/python research/diagnostics.py --days 60
+    research/.venv/bin/python research/diagnostics.py --days 1 --selftest 68   # every step of dev-68 self-tests
+                                                                               # (Device Farm runs report here)
 
 Per phone model: camera starts, photo size vs the largest the camera offers
 (the S8 1.5 MP bug shows up as a low ratio), preview path (cameraTransform),
@@ -36,6 +38,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=int, default=14)
     ap.add_argument('--no-sync', action='store_true')
+    ap.add_argument('--selftest', metavar='BUILD', help='print every self-test step of this build (all phones)')
     args = ap.parse_args()
     days = [(dt.date.today() - dt.timedelta(days=i)).isoformat() for i in range(args.days)]
     if not args.no_sync:
@@ -69,9 +72,15 @@ def main():
             for e in k.get(kind, []):
                 print(f"  {kind} dev-{e['build']}: {e.get('message')}")
         for t in k.get('selftest', []):
-            print(f"  selftest dev-{t['build']}: {t.get('passed')} passed, {t.get('failed')} failed, {t.get('skipped')} skipped")
+            if args.selftest and str(t['build']) != str(args.selftest):
+                continue
+            print(f"  selftest dev-{t['build']}: {t.get('passed')} passed, {t.get('warnings', 0)} warnings, {t.get('failed')} failed, {t.get('skipped')} skipped, thermal {t.get('thermal')}")
             for st in t.get('steps', []):
-                if st.get('status') != 'pass':
+                if args.selftest:
+                    d = st.get('details') or {}
+                    extra = {key: d[key] for key in ('saved', 'max', 'captureMs', 'avgMs', 'previewStats', 'file', 'clip') if key in d}
+                    print(f"    {st.get('status'):4} {st.get('label')}: {st.get('message') or ''} {json.dumps(extra) if extra else ''}")
+                elif st.get('status') != 'pass':
                     print(f"    {st.get('status')} {st.get('label')}: {st.get('message')}")
         for b in k.get('basicPhoto', []):
             print(f"  basicPhoto dev-{b['build']}: {b.get('size')}")
