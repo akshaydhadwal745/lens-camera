@@ -1,11 +1,8 @@
-// Place labels for Places and the roll's day markers (country names in the phone's language).
+// Place labels for Places and the roll's day markers.
+import { COUNTRIES } from './countries';
 
 export function countryName(code: string): string {
-  try {
-    return new Intl.DisplayNames(undefined, { type: 'region' }).of(code) ?? code;
-  } catch {
-    return code;
-  }
+  return COUNTRIES[code] ?? code;
 }
 
 export function placeLine(p: { city: string; region: string; country: string }): string {
