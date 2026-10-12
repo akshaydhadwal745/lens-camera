@@ -201,6 +201,23 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   /** Frames shown so far (preview frame rate: self-test, checklist 1.1). */
   @Volatile var framesDrawn = 0L
     private set
+  /**
+   * Self-test timing (where a slow viewfinder loses its time): camera frames that
+   * arrived, and the GL thread's time in the whole draw, the frame readers (QR,
+   * scene labels, Portrait copies + mask), the swap to the screen and the motion
+   * photo encoder. Nanoseconds, summed since the view started.
+   */
+  @Volatile var framesArrived = 0L
+    private set
+  @Volatile var drawNs = 0L
+    private set
+  @Volatile var readersNs = 0L
+    private set
+  @Volatile var swapNs = 0L
+    private set
+  @Volatile var motionNs = 0L
+    private set
+  @Volatile var maxDrawNs = 0L
 
   init {
     view.holder.addCallback(this)
@@ -346,6 +363,8 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
   private fun draw() {
     val core = egl ?: return
     val st = surfaceTexture ?: return
+    framesArrived++
+    val drawStart = System.nanoTime()
     try {
       core.makeCurrent(if (window != EGL14.EGL_NO_SURFACE) window else pbuffer)
       st.updateTexImage()
@@ -370,6 +389,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       if (night) nightLift += (nightLiftTarget - nightLift) * 0.15f
       val blur = portraitBlur
       val portrait = blur > 0f
+      val readersStart = System.nanoTime()
       if (portrait) {
         ensurePortraitTargets()
         renderCopy(blurFbo, blurW, blurH)
@@ -398,6 +418,7 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         qr.reset()
       }
       qrWasOn = scanCodes
+      readersNs += System.nanoTime() - readersStart
 
       GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
       // Black around the frame, the camera picture only inside it.
@@ -443,7 +464,9 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
       GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uBlurRadius"), radiusPx / frameW, radiusPx / frameH)
       GlUtil.drawQuad(program)
       core.setPresentationTime(window, st.timestamp)
+      val swapStart = System.nanoTime()
       core.swap(window)
+      swapNs += System.nanoTime() - swapStart
       framesDrawn++
       val lapseInterval = if (hyperlapse) TimeLapseEncoder.hyperIntervalMs(now - timeLapseStart) else TimeLapseEncoder.intervalMs(now - timeLapseStart)
       if (lapse && now - timeLapseLast >= lapseInterval) {
@@ -451,7 +474,12 @@ class GlPreview(private val context: Context) : Preview.SurfaceProvider, Surface
         timeLapseLast = now
         drawTimeLapseFrame(core)
       }
+      val motionStart = System.nanoTime()
       updateMotion(core, st.timestamp)
+      motionNs += System.nanoTime() - motionStart
+      val spent = System.nanoTime() - drawStart
+      drawNs += spent
+      if (spent > maxDrawNs) maxDrawNs = spent
       if (firstFrame) {
         firstFrame = false
         Log.i(TAG, "first frame ${bufferSize.width}x${bufferSize.height} rotation $rotationDegrees target $targetRotation cameraTransform $hasCameraTransform (st ${stMatrixRotation()}) view ${viewWidth}x$viewHeight")

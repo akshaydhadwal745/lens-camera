@@ -85,7 +85,22 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "android": {
+            "fonts": [
+              "./assets/fonts/Geist-Regular.ttf",
+              "./assets/fonts/Geist-Medium.ttf",
+              "./assets/fonts/Geist-SemiBold.ttf",
+              "./assets/fonts/Geist-Bold.ttf",
+              "./assets/fonts/IBMPlexMono-Regular.ttf",
+              "./assets/fonts/IBMPlexMono-Medium.ttf",
+              "./assets/fonts/IBMPlexMono-SemiBold.ttf"
+            ]
+          }
+        }
+      ],
       "expo-secure-store",
       [
         "expo-splash-screen",

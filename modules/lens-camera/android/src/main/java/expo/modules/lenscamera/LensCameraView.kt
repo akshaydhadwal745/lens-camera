@@ -375,6 +375,37 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     handler.postDelayed({ done(((gl.framesDrawn - start) * 1000.0 / ms * 10).roundToInt() / 10.0) }, ms)
   }
 
+  /**
+   * Self-test: viewfinder timing over [ms] — frames shown and frames the camera
+   * delivered per second, and the average GL time per drawn frame (whole draw,
+   * frame readers, screen swap, motion encoder) plus the slowest draw, in ms.
+   */
+  fun previewStats(ms: Long, done: (Map<String, Any?>?) -> Unit) {
+    val gl = glPreview ?: return done(null)
+    val drawn = gl.framesDrawn
+    val arrived = gl.framesArrived
+    val draw = gl.drawNs
+    val readers = gl.readersNs
+    val swap = gl.swapNs
+    val motion = gl.motionNs
+    gl.maxDrawNs = 0L
+    handler.postDelayed({
+      val frames = (gl.framesDrawn - drawn).coerceAtLeast(1)
+      fun avg(now: Long, before: Long) = ((now - before) / 1e6 / frames * 10).roundToInt() / 10.0
+      done(
+        mapOf(
+          "fps" to ((gl.framesDrawn - drawn) * 1000.0 / ms * 10).roundToInt() / 10.0,
+          "cameraFps" to ((gl.framesArrived - arrived) * 1000.0 / ms * 10).roundToInt() / 10.0,
+          "drawMs" to avg(gl.drawNs, draw),
+          "readersMs" to avg(gl.readersNs, readers),
+          "swapMs" to avg(gl.swapNs, swap),
+          "motionMs" to avg(gl.motionNs, motion),
+          "maxDrawMs" to (gl.maxDrawNs / 1e5).roundToInt() / 10.0,
+        ),
+      )
+    }, ms)
+  }
+
   /** Thermal status (0 none … 6 shutdown; -1 before Android 10), for the Quality Lab. */
   fun thermalStatus(): Int {
     val power = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return -1

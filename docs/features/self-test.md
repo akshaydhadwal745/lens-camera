@@ -32,18 +32,22 @@ pass/fail per step. Runs:
 | Pause and resume (dev-67) | 1.5 s + 2 s paused + 1.5 s → a clip of 2–4.2 s (the pause left out) |
 | Slow motion (3 s) / Time-lapse (6 s) | where offered: slowed clip length / ≥ 6 frames; dev-67 adds the file's real frames and fps |
 | Burst speed (5 shots) | 5 photos back to back; reports photos/second |
+| Shutter speed (dev-68) | 3 photos each: Ultra HDR (where offered), plain JPEG, quick capture; press → saved ms; the user's default path over 1 s = warn. Every photo step also records `captureMs` |
 | Smart burst + best-shot pick (dev-67) | hold for 1.5 s → shots, then the on-phone pick; pick slower than 4 s = warn |
 | RAW | DNG saved (phones with RAW) |
 | Plain JPEG | phones without Ultra HDR |
 | Maker AUTO / HDR / NIGHT | binds and saves (skipped where the phone lacks it) |
 | Editor: full-size edited photo (dev-67) | the back photo rendered at full size with a look, light/colour and a 2.1° straighten (+ portrait blur when a mask was found); slower than 8 s = warn |
 | Play services models (dev-67) | document scanner, scene labels, subjects (pets/objects), faces: present / downloaded (up to 90 s) / missing; no Play services = warn |
-| Upload (Test Lab only) | photo confirmed in the cloud through the real upload queue within 2 min |
+| Upload (Test Lab only) | photo confirmed in the cloud through the real upload queue within 2 min; a hot phone pauses uploads by design (warn, dev-68) |
 | Heat after the test (dev-67) | PowerManager thermal status at the start and end (Android 10+); severe or worse = warn |
 
 Back photo, Normal camera readers, Motion photo, Portrait (live blur on), Night (night preview on) and Video also record
 the **viewfinder frame rate** over 2 s (`previewFps`), so the cost of the live
-Portrait/Night previews is measured per phone. The Test Lab result file also
+Portrait/Night previews is measured per phone. dev-68 adds `previewStats`:
+frames the camera delivered vs frames shown, and the average GL time per frame
+in the whole draw, the frame readers, the screen swap and the motion encoder
+(plus the slowest draw), so a slow viewfinder shows where its time goes. The Test Lab result file also
 carries the full camera report (`device`) including the **feature probes**
 (slow motion, 60 fps, photo while recording, maker time-lapse profiles,
 low-light boost, stabilization, zero shutter lag, video encoders; checklist 1.1).

@@ -20,6 +20,7 @@ import {
   FPS_STEPS,
   MAX_FPS_DROP,
   MAX_RENDER_MS,
+  MAX_SHUTTER_MS,
   MAX_VIDEO_START_MS,
   MIN_MOTION_FPS,
   RENDER_RECIPE,
@@ -31,7 +32,7 @@ import {
   StepOutcome,
   summarize,
 } from '@/lib/self-test';
-import { capture as saveCapture, getState } from '@/lib/store';
+import { capture as saveCapture, getState, isHot } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
 const MARK = { pass: '✓', warn: '!', fail: '✗', skip: '–' } as const;
@@ -161,7 +162,7 @@ export default function SelfTestScreen() {
     }
     if (step.action === 'mlModules') {
       if (!LensImaging?.mlModules) return done('skip', 'needs dev-67 or newer');
-      const r = await LensImaging.mlModules(true, 90000);
+      const r = await LensImaging.mlModules(true, 150000);
       if (!r.playServices) return done('warn', 'no Google Play services: no document scanner, scene suggestions, pet portraits or face-aware burst pick', r);
       const names = ['documentScanner', 'sceneLabels', 'subjects', 'faces'];
       const bad = names.filter((n) => {
@@ -210,11 +211,31 @@ export default function SelfTestScreen() {
           return { ...base, status: 'skip', ms: Date.now() - t0, message: `maker mode not available (bound ${caps.extension})` };
         }
         const preview = latestPreview.current;
-        const fps = FPS_STEPS.has(step.id) && cam.previewFps ? await cam.previewFps(2000) : undefined;
+        // dev-68+: frames shown + delivered, and where the GL time goes; older APKs: frames shown only.
+        const stats = FPS_STEPS.has(step.id) && cam.previewStats ? await cam.previewStats(2000).catch(() => null) : null;
+        const fps = stats ? stats.fps : FPS_STEPS.has(step.id) && cam.previewFps ? await cam.previewFps(2000) : undefined;
         const previewDetails = {
           ...(preview ? { cameraTransform: preview.cameraTransform, mirroring: preview.mirroring, targetRotation: preview.targetRotation } : {}),
           ...(fps !== undefined ? { previewFps: fps } : {}),
+          ...(stats ? { previewStats: stats } : {}),
         };
+
+        if (step.action === 'shutter') {
+          const times: number[] = [];
+          for (let i = 0; i < 3; i++) {
+            const s0 = Date.now();
+            const p = await cam.takePhoto({ raw: false, flash: 'off' });
+            times.push(Date.now() - s0);
+            deleteFile(p.uri);
+            await wait(300);
+          }
+          const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+          const details = { captureMs: times, avgMs: avg, format: caps.photoFormat ?? null };
+          // Only the path users get by default is judged; the others are measurements.
+          const isDefault = step.id === 'shutter-uhdr' || (step.id === 'shutter-jpeg' && !caps.ultraHdr);
+          const status = isDefault && avg > MAX_SHUTTER_MS ? 'warn' : 'pass';
+          return { ...base, status, ms: Date.now() - t0, message: `${avg} ms per photo (${times.join(', ')})`, details };
+        }
 
         if (step.action === 'video') {
           const done = cam.startRecording();
@@ -287,7 +308,8 @@ export default function SelfTestScreen() {
           if (!caps.manualExposure || longest < 0.5) {
             return { ...base, status: 'skip', ms: Date.now() - t0, message: `longest exposure ${longest.toFixed(2)} s: no astro on this phone (Night still works)`, details };
           }
-          return { ...base, status: 'pass', ms: Date.now() - t0, message: `astro possible: exposures up to ${longest.toFixed(1)} s${plan ? '' : ' (not dark here)'}`, details };
+          // Capabilities cap maxShutter at 1 s (the PRO dial); the full range is in the device report.
+          return { ...base, status: 'pass', ms: Date.now() - t0, message: `astro possible: manual exposures of ½ s and longer${plan ? '' : ' (not dark here)'}`, details };
         }
 
         if (step.action === 'motion') {
@@ -359,11 +381,13 @@ export default function SelfTestScreen() {
           return { ...base, status: 'pass', ms: Date.now() - t0, message: `${perSecond} photos/s`, details };
         }
 
+        const shot0 = Date.now();
         const photo = step.action === 'night' ? await cam.takeNightPhoto(4) : await cam.takePhoto({ raw: step.props.raw, flash: step.flash ?? 'off' });
+        const captureMs = Date.now() - shot0;
         const file = new File(photo.uri);
         const bytes = file.size ?? 0;
         const check = checkPhoto(photo, caps);
-        const details = { ...check.details, bytes, raw: photo.raw, depth: photo.depth ?? null, frames: photo.frames ?? null, ...previewDetails };
+        const details = { ...check.details, bytes, raw: photo.raw, depth: photo.depth ?? null, frames: photo.frames ?? null, captureMs, ...previewDetails };
 
         if (step.action === 'upload') {
           // Test Lab only: through the app's real upload queue, until confirmed in the cloud.
@@ -374,6 +398,8 @@ export default function SelfTestScreen() {
             if (e?.error) return { ...base, status: 'fail', ms: Date.now() - t0, message: `upload failed: ${e.error}`, details };
             await wait(1000);
           }
+          // A hot phone pauses uploads until it cools (by design: store isHot), so that's not a failure.
+          if (isHot(getState().thermal)) return { ...base, status: 'warn', ms: Date.now() - t0, message: 'phone hot: uploads paused until it cools (by design)', details };
           return { ...base, status: 'fail', ms: Date.now() - t0, message: 'upload not confirmed within 2 minutes', details };
         }
 
@@ -508,6 +534,7 @@ export default function SelfTestScreen() {
           raw={props.raw}
           hdrPhoto={props.hdrPhoto}
           extension={props.extension}
+          captureMode={props.captureMode ?? 'quality'}
           analysis={ANALYSIS}
           onReady={(e) => onReady(e.nativeEvent)}
           onDiagnostics={(e) => onDiagnostics(e.nativeEvent)}

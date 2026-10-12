@@ -227,4 +227,12 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-11 | dev-65 | 9.4 scan | Emulator | SCAN in the mode strip ✓; this emulator image's Play services can't fetch the scanner module → clear "Could not scan … not available" dialog ✓ (real phones with the Play Store download it on first use) |
 | 2026-10-11 | dev-65 | 9.5 hyperlapse | Emulator | fake gyro movement → REC shows `0:33 → 0:03 · HYPERLAPSE` ✓; clip 720×1280, 40 frames, valid ✓ (frame rate limited by the emulator's draw speed; the 8× rate needs a phone) |
 | 2026-10-12 | dev-66 | release | CI | verify-release 66 4/4 — test-day build |
+| 2026-10-12 | dev-67 | release | CI | verify-release 67 4/4 (runtime n-ef68e383a45e9ee380fe); extended self-test |
+| 2026-10-12 | dev-67 | self-test | F01L Android 8.1 (old) | 23 pass, 1 warn (portrait: no person), 1 skip (no heat API); motion clip 3.2 s 23.7 fps; pause 2.9 s ✓; trim export 1.5 s ✓; editor 12 MP 3.2 s; ML models ✓ |
+| 2026-10-12 | dev-67 | self-test | Galaxy A14 (budget) | 22 pass, 3 warn, **1 fail: smart burst 1 shot in 1.5 s** (0.6 photos/s); video start 808 ms; ML models download timed out |
+| 2026-10-12 | dev-67 | self-test | OPPO A79 (budget) | 20 pass, 4 warn, 2 fail: smart burst 1 shot; upload paused because the phone was "severe" hot (by design → now a warning); video start 1387 ms |
+| 2026-10-12 | dev-67 | self-test | Xiaomi 14 Android 15 | 26 pass, 1 warn (portrait), 0 fail; 4K video, motion clip 29.8 fps, readers cost 0 fps |
+| 2026-10-12 | dev-67 | self-test | Galaxy S25 Ultra Android 15 | 22 pass, 3 warn, 2 fail: **viewfinder 30 → 15 fps with readers/motion/Portrait**; smart burst 1 shot (first shot 2.4 s); Quality Lab maker NIGHT: Samsung camera HAL crashed after the RAW step (user Night mode passed) |
+| 2026-10-12 | dev-67 | Robo (real screens) | virtual Android 15, 16 | no crash/ANR; **found: Geist labels clipped ("PHOT", "Coo", "Golden")**: text measured before the runtime font load kept the system font's width → fonts now built into the APK (expo-font plugin); fix verified on Android 15 Robo (repacked APK): all labels whole |
+| 2026-10-12 | dev-67 | measured | 5 phones | probes table filled in docs/research/camera-features.md "Measured results" |
 | 2026-10-11 | dev-46 | UI | Emulator 360 dp | Normal/PRO layout, modes, styles, "No person found", Night draws; live blur with a person not testable (virtual camera can't be aimed headless) |

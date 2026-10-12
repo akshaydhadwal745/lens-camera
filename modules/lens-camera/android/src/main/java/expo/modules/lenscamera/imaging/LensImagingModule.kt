@@ -81,6 +81,8 @@ class LensImagingModule : Module() {
 
     // Self-test: the Play services ML Kit models (present / downloaded / missing).
     AsyncFunction("mlModules") { install: Boolean, timeoutMs: Double -> MlModules.report(context, install, timeoutMs.toLong()) }
+    // App start: background download of missing Play services models (returns at once).
+    AsyncFunction("requestMlModules") { MlModules.request(context) }
 
     AsyncFunction("hasDepth") { uri: String ->
       runCatching { Portrait.hasMask(ImagingEngine.fileOf(uri)) }.getOrDefault(false)

@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { LensImaging } from '../../modules/lens-camera';
 import { BrandIntro } from '@/components/BrandIntro';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { boot, useStore } from '@/lib/store';
@@ -15,14 +16,19 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const status = useStore((s) => s.status);
   const [introVisible, setIntroVisible] = useState(true);
-  // Geist + IBM Plex Mono (bundled). Until they load (a moment on first launch)
-  // the intro is showing anyway; text falls back to the system font if a file fails.
+  // Geist + IBM Plex Mono. Android has them built into the APK (expo-font plugin
+  // in app.json): text measured before a runtime load finished kept the narrower
+  // system font's width, so Geist labels lost their last letter ("PHOT", Test Lab
+  // dev-67). This runtime load is for iOS and web (and harmless on Android).
   useFonts(fontFiles);
 
   useEffect(() => {
     // The animated intro takes over from the static native splash.
     SplashScreen.hideAsync().catch(() => {});
     boot();
+    // Android: website installs don't get Play's install-time model download, so ask for the
+    // scanner / scene / subject / face models now; they're ready before first use.
+    LensImaging?.requestMlModules?.().catch(() => {});
   }, []);
 
   return (

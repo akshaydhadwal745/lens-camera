@@ -231,6 +231,8 @@ export type LensCameraHandle = {
   takeBurst?(frames: number): Promise<BurstResult>;
   /** Android, self-test: viewfinder frames per second over `ms` (-1 without the GL preview). */
   previewFps?(ms: number): Promise<number>;
+  /** Android self-test (dev-68+): frames shown/delivered per second and average GL ms per frame (draw, readers, swap, motion), slowest draw. */
+  previewStats?(ms: number): Promise<{ fps: number; cameraFps: number; drawMs: number; readersMs: number; swapMs: number; motionMs: number; maxDrawMs: number } | null>;
   /** Android, Quality Lab: thermal status 0 (none) … 6, or -1 if unknown. */
   thermalStatus?(): Promise<number>;
   /** Resolves when recording stops. */
@@ -303,6 +305,8 @@ type ImagingModule = {
   mediaInfo?(uri: string): Promise<MediaInfo>;
   /** Android self-test: the Play services ML Kit models; install = download missing ones (up to timeoutMs). Missing before dev-67. */
   mlModules?(install: boolean, timeoutMs: number): Promise<Record<string, unknown>>;
+  /** Android, app start: Play services fetches missing ML Kit models in the background (returns at once). Missing before dev-68. */
+  requestMlModules?(): Promise<void>;
 };
 
 export type PhotoInfo = { bytes: number; orientation: number; mirrored: boolean; gps: boolean; ultraHdr: boolean; motion: boolean; makerNote: boolean };

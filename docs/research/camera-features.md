@@ -99,10 +99,26 @@ begin before the press (same buffer as Motion Photos).
 
 ## Measured results
 
-(Filled in after step 0.)
+Firebase Test Lab self-test, dev-67, 2026-10-12 (real phones in a rack; raw
+files in research/quality/out/testlab-dev-67, `scripts/testlab-summary.py`).
 
-| Phone | Tier | Slow-mo (fps @ size) | 60 fps | Video+photo | Burst fps | Low-light boost |
-|---|---|---|---|---|---|---|
+| Phone | Android | Slow-mo | 60 fps | Photo while recording | Burst (photos/s) | Low-light boost | Face priority | Preview stab. | Maker extensions | Longest exposure | Video start | Viewfinder fps: plain / readers / motion / Portrait / Night |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| F01L (old) | 8.1 | no | 1080p | full photo stream 1080p | 1.7 | no | yes | no | none | 0.8 s | 541 ms | 24.5 / 24.5 / 24 / 24.5 / 10 |
+| Galaxy A14 5G (budget) | 14 | 720p (2× fallback) | 1080p | photo stream 4080×2296 | 0.6 | no | yes | no | none | 16 s | 808 ms | 29.5 / 29.5 / 30 / 30 / 10 |
+| OPPO A79 (budget) | 14 | 720p | 1080p | photo stream 3840×2160 | 0.6 | no | yes | no | none | 32 s | 1387 ms | 20 / 19.5 / 20 / 20 / 20 |
+| Xiaomi 14 (flagship) | 15 | 1080p high speed | 4K | photo stream 4K | 1.9 | no | yes | yes | night, bokeh | 1.0 s+ | 315 ms | 30 / 30 / 30 / 30 / 13 |
+| Galaxy S25 Ultra (flagship) | 15 | 1080p high speed | 4K | photo stream 4K | 0.5 | no | yes | yes | night, bokeh, faceRetouch | 1/6 s | 295 ms | 30 / **15 / 15.5 / 15** / 23.5 |
+
+What it tells us:
+- **Face priority (7.2) is everywhere** (5/5): no own face detection needed.
+- **Low-light boost (3.6): 0/5**, even on the two Android 15 phones → the 24–30 fps auto range is what users actually get.
+- **Photo while recording (3.7): full photo stream on all 5** (tier A).
+- **Maker bokeh (4.6)** exists on Xiaomi 14 and S25 Ultra only → keep our own Portrait as the default.
+- **Astro (9.6):** possible on 4/5; the S25 Ultra exposes only 1/6 s to apps.
+- **Burst is slow with best-quality capture** on budget phones and the S25 Ultra (0.5–0.6 photos/s, first shot 2.4 s on S25 Ultra) → smart burst got 1 shot in 1.5 s. dev-68 measures the quick capture path on every phone before changing anything.
+- **S25 Ultra halves the viewfinder** (30 → 15 fps) whenever a reader runs (QR + scenes, motion buffer, live Portrait); the Xiaomi 14 (similar Snapdragon) doesn't. dev-68 reports where the frame time goes.
+- Play services models: present/downloaded on F01L, Xiaomi 14, S25 Ultra; timed out on A14 and OPPO within 90 s (dev-68 asks for them at app start and waits 150 s in the test).
 
 ## Sources
 

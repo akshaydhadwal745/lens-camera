@@ -22,6 +22,8 @@ export type SelfTestProps = {
   motion?: boolean;
   /** The Normal camera's always-on frame readers: QR codes (9.3) + scene labels (5.3). No camera rebind. */
   live?: boolean;
+  /** Photo capture: best quality (default) or the phone's quick path (shutter-speed comparison). */
+  captureMode?: 'quality' | 'latency';
 };
 
 export const DEFAULT_PROPS: SelfTestProps = { facing: 'back', lens: 'wide', mode: 'photo', raw: false, hdrPhoto: true, extension: 'none' };
@@ -51,7 +53,8 @@ export type SelfTestStep = {
     | 'videoExport'
     | 'editRender'
     | 'mlModules'
-    | 'heat';
+    | 'heat'
+    | 'shutter';
   /** Works on files already captured (or the phone itself): no camera change needed. */
   offline?: boolean;
   /** Photo with the flash forced on (phones with a flash). */
@@ -116,6 +119,11 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   if (back.modes?.includes('timelapse')) steps.push({ id: 'timelapse', label: 'Time-lapse (6 s)', props: { ...DEFAULT_PROPS, mode: 'timelapse' }, action: 'timelapse' });
   // Burst speed: 5 photos back to back (checklist 1.1; smart burst needs this per phone).
   steps.push({ id: 'burst', label: 'Burst speed (5 shots)', props: DEFAULT_PROPS, action: 'burst' });
+  // Shutter speed (press → photo saved), 3 photos per capture path: what users get (Ultra HDR where the
+  // phone has it, best quality), plain JPEG, and the quick path — evidence for choosing per capability.
+  if (back.ultraHdr) steps.push({ id: 'shutter-uhdr', label: 'Shutter speed: Ultra HDR', props: DEFAULT_PROPS, action: 'shutter' });
+  steps.push({ id: 'shutter-jpeg', label: 'Shutter speed: plain JPEG', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'shutter' });
+  steps.push({ id: 'shutter-latency', label: 'Shutter speed: quick capture', props: { ...DEFAULT_PROPS, hdrPhoto: false, captureMode: 'latency' }, action: 'shutter' });
   // Hold-shutter smart burst (7.3): shots until release, then the best-shot pick on the phone.
   steps.push({ id: 'burst-pick', label: 'Smart burst + best-shot pick', props: DEFAULT_PROPS, action: 'burstPick' });
   if (back.raw) steps.push({ id: 'raw', label: 'RAW photo', props: { ...DEFAULT_PROPS, raw: true }, action: 'photo' });
@@ -185,6 +193,9 @@ export const THERMAL = ['none', 'light', 'moderate', 'severe', 'critical', 'emer
 
 /** Motion photo clips below this frame rate look choppy (9.2); under 8 fps the camera drops the clip itself. */
 export const MIN_MOTION_FPS = 15;
+
+/** Press → photo saved slower than this feels laggy (the user's default capture path). */
+export const MAX_SHUTTER_MS = 1000;
 
 /** A full-size edited photo slower than this feels broken on Save/Share (6.1). */
 export const MAX_RENDER_MS = 8000;
