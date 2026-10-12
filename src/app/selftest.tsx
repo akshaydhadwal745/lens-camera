@@ -9,15 +9,21 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView } from '../../modules/lens-camera';
+import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView, LensImaging, MediaInfo } from '../../modules/lens-camera';
 import { selfTestHooks } from '../../modules/lens-device';
 import { buildInfo, buildLabel } from '@/lib/build-info';
 import { sendSelfTest } from '@/lib/diagnostics';
 import {
+  cameraKey,
   checkPhoto,
   DEFAULT_PROPS,
   FPS_STEPS,
+  MAX_FPS_DROP,
+  MAX_RENDER_MS,
   MAX_VIDEO_START_MS,
+  MIN_MOTION_FPS,
+  RENDER_RECIPE,
+  THERMAL,
   planSelfTest,
   SelfTestProps,
   SelfTestReport,
@@ -33,6 +39,17 @@ const MARK_COLOR = { pass: '#30D158', warn: '#FACC15', fail: '#FF453A', skip: '#
 
 const ANALYSIS = { peaking: false, zebra: false, zebraLevel: 0.95, falseColor: false, histogram: false };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** A video's real frames / rate / sound (dev-67+ APKs), or null. */
+async function videoInfo(uri: string): Promise<MediaInfo | null> {
+  return LensImaging?.mediaInfo ? LensImaging.mediaInfo(uri).catch(() => null) : null;
+}
+
+function deleteFile(uri: string | undefined) {
+  if (!uri) return;
+  const f = new File(uri);
+  if (f.exists) f.delete();
+}
 
 type Waiter<T> = { match: (v: T) => boolean; resolve: (v: T | null) => void };
 
@@ -51,6 +68,13 @@ export default function SelfTestScreen() {
   const [report, setReport] = useState<SelfTestReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
+  /** Files kept for the later checks (editor render, trim export), deleted at the end. */
+  const kept = useRef<{ photo?: string; portrait?: string; video?: string }>({});
+  /** Viewfinder fps of the plain back camera, to compare the live readers / motion buffer with. */
+  const plainFps = useRef<number | null>(null);
+  const motionOff = useRef(false);
+  const thermalStart = useRef(-1);
+  const thermalEnd = useRef(-1);
   const screen = useRef<'portrait' | 'landscape' | 'reverseLandscape'>('portrait');
 
   const onReady = useCallback((c: Capabilities) => {
@@ -92,13 +116,69 @@ export default function SelfTestScreen() {
       (next.facing === 'front' || c.lens === next.lens) &&
       (next.extension === 'none' || c.extension === next.extension) &&
       (c.photoFormat === 'raw') === next.raw;
-    const changed = JSON.stringify(next) !== JSON.stringify(propsRef.current);
+    const changed = cameraKey(next) !== cameraKey(propsRef.current);
+    // Motion buffer / live readers change only the viewfinder side: no new onReady, but they need time to fill/warm up.
+    const viewfinderOnly = !changed && JSON.stringify(next) !== JSON.stringify(propsRef.current);
     const got = waitFor(capsWaiter, latestCaps.current, match, 15000, changed);
     propsRef.current = next;
     setProps(next);
     const caps = await got;
-    await wait(1200); // exposure and focus settle
+    await wait(viewfinderOnly ? 2500 : 1200); // exposure and focus settle
     return caps;
+  }, []);
+
+  /** Steps on files already captured, or the phone itself (no camera change). */
+  const runOffline = useCallback(async (step: SelfTestStep, base: { id: string; label: string }, t0: number): Promise<StepOutcome> => {
+    const done = (status: StepOutcome['status'], message?: string, details?: Record<string, unknown>): StepOutcome => ({ ...base, status, ms: Date.now() - t0, message, details });
+    if (step.action === 'videoExport') {
+      const source = kept.current.video;
+      if (!source || !LensImaging) return done('skip', 'no video from the video step');
+      // Trim 0.5–2.0 s with a look: Media3 export (6.2 trim, 5.2 looks on Save/Share).
+      const out = await LensImaging.exportVideo(source, { v: 1, look: 'warm', intensity: 1, trim: { start: 0.5, end: 2 } });
+      const info = await videoInfo(out.uri);
+      deleteFile(out.uri);
+      const details = { exportMs: Date.now() - t0, file: info };
+      if (info && Math.abs(info.duration - 1.5) > 0.4) return done('fail', `exported ${info.duration.toFixed(2)} s, expected 1.5 s`, details);
+      return done('pass', `1.5 s clip exported in ${((Date.now() - t0) / 1000).toFixed(1)} s`, details);
+    }
+    if (step.action === 'editRender') {
+      const source = kept.current.photo;
+      if (!source || !LensImaging) return done('skip', 'no photo from the back camera step');
+      const out = await LensImaging.renderImage(source, RENDER_RECIPE, { format: 'jpeg', quality: 0.95 });
+      const renderMs = Date.now() - t0;
+      deleteFile(out.uri);
+      const details: Record<string, unknown> = { renderMs, size: `${out.width}x${out.height}` };
+      // Portrait blur on the full photo too, when the rack phone found a person/subject.
+      if (kept.current.portrait) {
+        const p0 = Date.now();
+        const p = await LensImaging.renderImage(kept.current.portrait, { v: 1, portrait: { aperture: 2.8, style: 'natural' } }, { format: 'jpeg', quality: 0.95 });
+        deleteFile(p.uri);
+        details.portraitMs = Date.now() - p0;
+      }
+      const slow = renderMs > MAX_RENDER_MS || (typeof details.portraitMs === 'number' && details.portraitMs > MAX_RENDER_MS);
+      const message = `${out.width}×${out.height} in ${(renderMs / 1000).toFixed(1)} s${typeof details.portraitMs === 'number' ? `, portrait blur ${(details.portraitMs / 1000).toFixed(1)} s` : ''}`;
+      return done(slow ? 'warn' : 'pass', message, details);
+    }
+    if (step.action === 'mlModules') {
+      if (!LensImaging?.mlModules) return done('skip', 'needs dev-67 or newer');
+      const r = await LensImaging.mlModules(true, 90000);
+      if (!r.playServices) return done('warn', 'no Google Play services: no document scanner, scene suggestions, pet portraits or face-aware burst pick', r);
+      const names = ['documentScanner', 'sceneLabels', 'subjects', 'faces'];
+      const bad = names.filter((n) => {
+        const st = (r[n] as { state?: string } | undefined)?.state;
+        return st !== 'present' && st !== 'downloaded';
+      });
+      const states = names.map((n) => `${n} ${(r[n] as { state?: string } | undefined)?.state ?? '?'}`).join(', ');
+      return done(bad.length ? 'warn' : 'pass', states, r);
+    }
+    if (step.action === 'heat') {
+      const end = camera.current?.thermalStatus ? await camera.current.thermalStatus() : -1;
+      thermalEnd.current = end;
+      const details = { start: thermalStart.current, end };
+      if (end < 0) return done('skip', 'phone does not report heat (Android 9 or older)', details);
+      return done(end >= 3 ? 'warn' : 'pass', `${THERMAL[thermalStart.current] ?? '?'} → ${THERMAL[end] ?? '?'}`, details);
+    }
+    return done('skip', 'unknown step');
   }, []);
 
   const runStep = useCallback(
@@ -108,6 +188,7 @@ export default function SelfTestScreen() {
       const cam = camera.current;
       if (!cam) return { ...base, status: 'fail', ms: 0, message: 'camera view missing' };
       try {
+        if (step.offline) return await runOffline(step, base, t0);
         if (!step.orientation && screen.current !== 'portrait') {
           // Steps without their own rotation run in portrait.
           const back = waitFor(previewWaiter, latestPreview.current, (d) => d.targetRotation === 0, 8000, true);
@@ -155,16 +236,98 @@ export default function SelfTestScreen() {
           await cam.stopRecording();
           const v = await done;
           const size = new File(v.uri).size ?? 0;
-          new File(v.uri).delete();
+          const info = await videoInfo(v.uri);
+          // The 3 s clip is kept for the trim + look export check.
+          if (step.id === 'video' && size > 0) kept.current.video = v.uri;
+          else new File(v.uri).delete();
           // Slow motion: the clip plays `slowFactor` times longer than it was recorded.
           const factor = step.props.mode === 'slowmo' ? (v.slowFactor ?? 1) : 1;
           const ok = v.duration >= 2 * factor && size > 0 && (step.props.mode !== 'slowmo' || factor >= 2);
           const delay = v.startDelayMs ?? null;
           const late = delay !== null && delay > MAX_VIDEO_START_MS;
-          const details = { duration: v.duration, bytes: size, startDelayMs: delay, slowFactor: factor, videoPhoto, ...previewDetails };
-          const lateNote = late ? `recording started ${delay} ms after record was pressed` : undefined;
-          if (!ok) return { ...base, status: 'fail', ms: Date.now() - t0, message: [`video ${v.duration}s, ${size} bytes`, lateNote].filter(Boolean).join('; '), details };
-          return { ...base, status: late ? 'warn' : 'pass', ms: Date.now() - t0, message: lateNote, details };
+          const details = { duration: v.duration, bytes: size, startDelayMs: delay, slowFactor: factor, videoPhoto, file: info, ...previewDetails };
+          const notes = [
+            late ? `recording started ${delay} ms after record was pressed` : null,
+            // Normal video has sound; slow motion is silent by design.
+            info && step.props.mode === 'video' && !info.audio ? 'no sound track' : null,
+            info && step.props.mode === 'video' && info.fps !== null && info.fps < 20 ? `only ${info.fps} fps recorded` : null,
+            videoPhoto?.startsWith('failed') ? `photo while recording ${videoPhoto}` : null,
+          ].filter(Boolean);
+          const message = notes.length ? notes.join('; ') : info ? `${info.width}×${info.height} ${info.fps ?? '?'} fps${info.audio ? ' + sound' : ''}` : undefined;
+          if (!ok) return { ...base, status: 'fail', ms: Date.now() - t0, message: [`video ${v.duration}s, ${size} bytes`, ...notes].join('; '), details };
+          return { ...base, status: notes.length ? 'warn' : 'pass', ms: Date.now() - t0, message, details };
+        }
+
+        if (step.action === 'pause') {
+          if (!cam.pauseRecording || !cam.resumeRecording) return { ...base, status: 'skip', ms: Date.now() - t0, message: 'pause not available' };
+          // 1.5 s recorded, 2 s paused (not in the file), 1.5 s recorded → a ~3 s clip.
+          const done = cam.startRecording();
+          await wait(1500);
+          const paused = await cam.pauseRecording();
+          await wait(2000);
+          const resumed = await cam.resumeRecording();
+          await wait(1500);
+          await cam.stopRecording();
+          const v = await done;
+          const info = await videoInfo(v.uri);
+          deleteFile(v.uri);
+          const length = info?.duration ?? v.duration;
+          const details = { paused, resumed, duration: v.duration, file: info };
+          if (!paused || !resumed) return { ...base, status: 'fail', ms: Date.now() - t0, message: `pause ${paused}, resume ${resumed}`, details };
+          // Up to ~0.7 s of start delay is lost at the front; more than 4.2 s means the pause was recorded.
+          if (length < 2 || length > 4.2) return { ...base, status: 'fail', ms: Date.now() - t0, message: `clip ${length.toFixed(1)} s, expected about 3 s`, details };
+          return { ...base, status: 'pass', ms: Date.now() - t0, message: `clip ${length.toFixed(1)} s (2 s pause left out)`, details };
+        }
+
+        if (step.action === 'astro') {
+          // Astro needs manual exposures of at least ½ s (9.6). The plan itself needs real darkness, so a lit rack says "not now".
+          const plan = cam.astroPlan ? await cam.astroPlan().catch(() => null) : null;
+          const longest = caps.maxShutter;
+          const details = { maxShutter: longest, manualExposure: caps.manualExposure, plan };
+          if (!caps.manualExposure || longest < 0.5) {
+            return { ...base, status: 'skip', ms: Date.now() - t0, message: `longest exposure ${longest.toFixed(2)} s: no astro on this phone (Night still works)`, details };
+          }
+          return { ...base, status: 'pass', ms: Date.now() - t0, message: `astro possible: exposures up to ${longest.toFixed(1)} s${plan ? '' : ' (not dark here)'}`, details };
+        }
+
+        if (step.action === 'motion') {
+          motionOff.current = false;
+          const photo = await cam.takePhoto({ raw: false, flash: 'off' });
+          const meta = LensImaging?.inspectPhoto ? await LensImaging.inspectPhoto(photo.uri).catch(() => null) : null;
+          const clipUri = LensImaging?.motionVideo ? await LensImaging.motionVideo(photo.uri).catch(() => null) : null;
+          const clip = clipUri ? await videoInfo(clipUri) : null;
+          deleteFile(clipUri ?? undefined);
+          deleteFile(photo.uri);
+          const fpsDrop = fps !== undefined && plainFps.current ? 1 - fps / plainFps.current : null;
+          const details = { motion: photo.motion ?? false, xmp: meta?.motion ?? null, clip, fpsDrop, turnedOff: motionOff.current, ...previewDetails };
+          if (!photo.motion) {
+            // By design a phone whose encoder can't keep up saves the photo without the clip.
+            return { ...base, status: 'warn', ms: Date.now() - t0, message: motionOff.current ? 'phone too slow: motion photos turned themselves off' : 'photo saved without the motion clip', details };
+          }
+          const notes = [
+            meta && !meta.motion ? 'motion XMP missing' : null,
+            !clip ? 'clip could not be read' : null,
+            clip && clip.fps !== null && clip.fps < MIN_MOTION_FPS ? `clip only ${clip.fps} fps` : null,
+            clip && clip.duration < 2 ? `clip only ${clip.duration.toFixed(1)} s` : null,
+            fpsDrop !== null && fpsDrop > MAX_FPS_DROP ? `viewfinder ${Math.round(fpsDrop * 100)}% slower with MOTION on` : null,
+          ].filter(Boolean);
+          const message = notes.length ? notes.join('; ') : clip ? `clip ${clip.duration.toFixed(1)} s, ${clip.width}×${clip.height}, ${clip.fps} fps` : undefined;
+          return { ...base, status: notes.length ? 'warn' : 'pass', ms: Date.now() - t0, message, details };
+        }
+
+        if (step.action === 'burstPick') {
+          if (!cam.startBurst || !cam.stopBurst) return { ...base, status: 'skip', ms: Date.now() - t0, message: 'smart burst not available' };
+          const done = cam.startBurst(20);
+          await wait(1500);
+          const released = Date.now();
+          await cam.stopBurst();
+          const burst = await done;
+          const pickMs = Date.now() - released;
+          for (const f of burst.frames) deleteFile(f.uri);
+          const shots = burst.frames.length;
+          const details = { shots, pick: burst.pick, pickMs, perSecond: Math.round((shots / 1.5) * 10) / 10 };
+          if (shots < 2 || burst.pick < 0 || burst.pick >= shots) return { ...base, status: 'fail', ms: Date.now() - t0, message: `${shots} shots, pick ${burst.pick}`, details };
+          return { ...base, status: pickMs > 4000 ? 'warn' : 'pass', ms: Date.now() - t0, message: `${shots} shots in 1.5 s, best shot picked in ${(pickMs / 1000).toFixed(1)} s`, details };
         }
 
         if (step.action === 'timelapse') {
@@ -214,9 +377,26 @@ export default function SelfTestScreen() {
           return { ...base, status: 'fail', ms: Date.now() - t0, message: 'upload not confirmed within 2 minutes', details };
         }
 
-        if (file.exists) file.delete();
+        // What the file really holds: Ultra HDR gain map (back), mirror flag (front selfie).
+        const meta = (step.id === 'back-photo' || step.id === 'front-photo') && LensImaging?.inspectPhoto ? await LensImaging.inspectPhoto(photo.uri).catch(() => null) : null;
+        if (meta) Object.assign(details, { file: meta });
+        if (step.id === 'back-photo' && fps !== undefined) plainFps.current = fps;
+        if (step.id === 'back-photo' && bytes > 0) kept.current.photo = photo.uri;
+        else if (step.id === 'portrait' && photo.depth) kept.current.portrait = photo.uri;
+        else if (file.exists) file.delete();
         if (bytes <= 0) return { ...base, status: 'fail', ms: Date.now() - t0, message: 'empty photo file', details };
         if (check.status === 'fail') return { ...base, status: 'fail', ms: Date.now() - t0, message: check.message, details };
+        if (step.id === 'back-photo' && meta && caps.photoFormat === 'ultraHdr' && !meta.ultraHdr) {
+          return { ...base, status: 'warn', ms: Date.now() - t0, message: 'Ultra HDR was on, but the file has no gain map', details };
+        }
+        if (step.id === 'front-photo' && meta && !meta.mirrored) {
+          return { ...base, status: 'warn', ms: Date.now() - t0, message: `selfie not mirrored like the preview (EXIF orientation ${meta.orientation})`, details };
+        }
+        if (step.id === 'normal-load' && fps !== undefined && plainFps.current) {
+          const drop = 1 - fps / plainFps.current;
+          const message = `viewfinder ${fps} fps with the readers, ${plainFps.current} fps without`;
+          return { ...base, status: drop > MAX_FPS_DROP ? 'warn' : 'pass', ms: Date.now() - t0, message, details: { ...details, fpsDrop: drop } };
+        }
         // The mask needs a person in view; a test-rack phone sees none.
         if (step.id === 'portrait' && !photo.depth) {
           return { ...base, status: 'warn', ms: Date.now() - t0, message: 'no person found in view, so no portrait mask (point it at someone to check)', details };
@@ -226,7 +406,7 @@ export default function SelfTestScreen() {
         return { ...base, status: 'fail', ms: Date.now() - t0, message: errorMessage(e) };
       }
     },
-    [applyProps],
+    [applyProps, runOffline],
   );
 
   const run = useCallback(async () => {
@@ -238,10 +418,15 @@ export default function SelfTestScreen() {
     const t0 = Date.now();
     const outcomes: StepOutcome[] = [];
     let device: Record<string, unknown> | null = null;
+    kept.current = {};
+    plainFps.current = null;
+    thermalStart.current = -1;
+    thermalEnd.current = -1;
     try {
       device = await cameraDeviceReport();
       const first = await applyProps(DEFAULT_PROPS);
       if (!first) throw new Error('The camera did not start (permission, or the camera is busy).');
+      thermalStart.current = camera.current?.thermalStatus ? await camera.current.thermalStatus().catch(() => -1) : -1;
       const cameras = (device?.cameras ?? []) as { facing: string; extensions?: string[] | null }[];
       const extensions = cameras.find((c) => c.facing === 'back')?.extensions ?? [];
       const plan = planSelfTest(first, extensions, launch != null);
@@ -257,7 +442,11 @@ export default function SelfTestScreen() {
     } finally {
       selfTestHooks.setOrientation('auto');
       setCurrent(null);
-      const result = { ...summarize(t0, outcomes), device };
+      deleteFile(kept.current.photo);
+      deleteFile(kept.current.portrait);
+      deleteFile(kept.current.video);
+      kept.current = {};
+      const result = { ...summarize(t0, outcomes), device, thermal: { start: thermalStart.current, end: thermalEnd.current } };
       setReport(result);
       setSteps(outcomes);
       await sendSelfTest(result);
@@ -294,6 +483,10 @@ export default function SelfTestScreen() {
           lens={props.lens}
           mode={props.mode}
           nightPreview={props.mode === 'night'}
+          motionPhoto={props.motion ?? false}
+          scanCodes={props.live ?? false}
+          sceneSuggest={props.live ?? false}
+          mirrorFront
           videoResolution="4k"
           appleLog={false}
           hdrVideo={false}
@@ -318,6 +511,9 @@ export default function SelfTestScreen() {
           analysis={ANALYSIS}
           onReady={(e) => onReady(e.nativeEvent)}
           onDiagnostics={(e) => onDiagnostics(e.nativeEvent)}
+          onMotionUnavailable={() => {
+            motionOff.current = true;
+          }}
           onError={(e) => setError(e.nativeEvent.message)}
         />
         {current ? (

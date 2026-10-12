@@ -1,7 +1,10 @@
 // Camera self-test (Android): drives the real camera through every mode this
 // phone supports and checks each result — photo size vs the camera's maximum,
-// orientation in both landscapes, front camera, every lens, Night, Portrait,
-// video, RAW / Ultra HDR / maker modes, and (on Test Lab) an upload.
+// orientation in both landscapes, front camera (mirror), every lens, Night,
+// astro reach, Portrait, motion photos, the Normal camera's live readers,
+// video (real frame rate, sound, pause, trim export), time-lapse, slow motion,
+// burst + best-shot pick, RAW / Ultra HDR / maker modes, editor render time,
+// Play services models, heat, and (on Test Lab) an upload.
 // Runs from Settings → Camera info → Run self-test, and automatically when
 // Firebase Test Lab starts the app as a "game loop" (docs/features/self-test.md).
 import type { Capabilities, LabExtension, Lens } from '../../modules/lens-camera';
@@ -15,16 +18,42 @@ export type SelfTestProps = {
   raw: boolean;
   hdrPhoto: boolean;
   extension: LabExtension;
+  /** Motion photo ring buffer on (9.2). Viewfinder-side: no camera rebind. */
+  motion?: boolean;
+  /** The Normal camera's always-on frame readers: QR codes (9.3) + scene labels (5.3). No camera rebind. */
+  live?: boolean;
 };
 
 export const DEFAULT_PROPS: SelfTestProps = { facing: 'back', lens: 'wide', mode: 'photo', raw: false, hdrPhoto: true, extension: 'none' };
+
+/** Props that make the camera rebind (and send a new onReady); motion/live don't. */
+export function cameraKey(p: SelfTestProps): string {
+  const { motion: _m, live: _l, ...camera } = p;
+  return JSON.stringify(camera);
+}
 
 export type SelfTestStep = {
   id: string;
   label: string;
   props: SelfTestProps;
   orientation?: Orientation;
-  action: 'photo' | 'night' | 'video' | 'upload' | 'burst' | 'timelapse';
+  action:
+    | 'photo'
+    | 'night'
+    | 'video'
+    | 'upload'
+    | 'burst'
+    | 'timelapse'
+    | 'motion'
+    | 'pause'
+    | 'astro'
+    | 'burstPick'
+    | 'videoExport'
+    | 'editRender'
+    | 'mlModules'
+    | 'heat';
+  /** Works on files already captured (or the phone itself): no camera change needed. */
+  offline?: boolean;
   /** Photo with the flash forced on (phones with a flash). */
   flash?: 'on';
   /**
@@ -68,15 +97,27 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
     action: 'photo',
     expectScreen: 'landscape',
   });
+  // The Normal camera runs QR + scene-label readers on the viewfinder all the time: what they cost in fps.
+  steps.push({ id: 'normal-load', label: 'Normal camera readers (QR + scenes)', props: { ...DEFAULT_PROPS, live: true }, action: 'photo' });
+  if (back.motionPhoto) steps.push({ id: 'motion', label: 'Motion photo', props: { ...DEFAULT_PROPS, motion: true }, action: 'motion' });
   const modes = back.modes ?? ['photo', 'video', 'night', 'portrait'];
-  if (modes.includes('night')) steps.push({ id: 'night', label: 'Night photo', props: { ...DEFAULT_PROPS, mode: 'night' }, action: 'night' });
+  if (modes.includes('night')) {
+    steps.push({ id: 'night', label: 'Night photo', props: { ...DEFAULT_PROPS, mode: 'night' }, action: 'night' });
+    steps.push({ id: 'astro', label: 'Astro reach (long exposures)', props: { ...DEFAULT_PROPS, mode: 'night' }, action: 'astro' });
+  }
   if (modes.includes('portrait')) steps.push({ id: 'portrait', label: 'Portrait photo', props: { ...DEFAULT_PROPS, mode: 'portrait' }, action: 'photo' });
-  if (modes.includes('video')) steps.push({ id: 'video', label: 'Video (3 s)', props: { ...DEFAULT_PROPS, mode: 'video' }, action: 'video' });
+  if (modes.includes('video')) {
+    steps.push({ id: 'video', label: 'Video (3 s)', props: { ...DEFAULT_PROPS, mode: 'video' }, action: 'video' });
+    steps.push({ id: 'video-export', label: 'Video trim + look export', props: DEFAULT_PROPS, action: 'videoExport', offline: true });
+    steps.push({ id: 'pause', label: 'Pause and resume recording', props: { ...DEFAULT_PROPS, mode: 'video' }, action: 'pause' });
+  }
   // Slow motion (3 s real → about 3 × factor s of clip) and time-lapse (6 s → frames written), where offered.
   if (back.modes?.includes('slowmo')) steps.push({ id: 'slowmo', label: 'Slow motion (3 s)', props: { ...DEFAULT_PROPS, mode: 'slowmo' }, action: 'video' });
   if (back.modes?.includes('timelapse')) steps.push({ id: 'timelapse', label: 'Time-lapse (6 s)', props: { ...DEFAULT_PROPS, mode: 'timelapse' }, action: 'timelapse' });
   // Burst speed: 5 photos back to back (checklist 1.1; smart burst needs this per phone).
   steps.push({ id: 'burst', label: 'Burst speed (5 shots)', props: DEFAULT_PROPS, action: 'burst' });
+  // Hold-shutter smart burst (7.3): shots until release, then the best-shot pick on the phone.
+  steps.push({ id: 'burst-pick', label: 'Smart burst + best-shot pick', props: DEFAULT_PROPS, action: 'burstPick' });
   if (back.raw) steps.push({ id: 'raw', label: 'RAW photo', props: { ...DEFAULT_PROPS, raw: true }, action: 'photo' });
   if (!back.ultraHdr) steps.push({ id: 'plain-jpeg', label: 'Plain JPEG photo', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'photo' });
   for (const ext of ['auto', 'hdr', 'night'] as const) {
@@ -84,7 +125,10 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
       steps.push({ id: `maker-${ext}`, label: `Maker ${ext.toUpperCase()} photo`, props: { ...DEFAULT_PROPS, hdrPhoto: false, extension: ext }, action: 'photo' });
     }
   }
+  steps.push({ id: 'edit-render', label: 'Editor: full-size edited photo', props: DEFAULT_PROPS, action: 'editRender', offline: true });
+  steps.push({ id: 'ml-modules', label: 'Play services models (scanner, scenes, pets, faces)', props: DEFAULT_PROPS, action: 'mlModules', offline: true });
   if (upload) steps.push({ id: 'upload', label: 'Upload a photo', props: DEFAULT_PROPS, action: 'upload' });
+  steps.push({ id: 'heat', label: 'Heat after the test', props: DEFAULT_PROPS, action: 'heat', offline: true });
   return steps;
 }
 
@@ -126,10 +170,33 @@ export type SelfTestReport = {
   steps: StepOutcome[];
   /** The phone's camera report incl. feature probes (Test Lab results, checklist 1.1). */
   device?: Record<string, unknown> | null;
+  /** PowerManager thermal status at the start and end (−1 = not reported). */
+  thermal?: { start: number; end: number };
 };
 
 /** Steps whose viewfinder frame rate is measured (what live Portrait/Night cost vs plain photo). */
-export const FPS_STEPS = new Set(['back-photo', 'portrait', 'night', 'video']);
+export const FPS_STEPS = new Set(['back-photo', 'normal-load', 'motion', 'portrait', 'night', 'video']);
+
+/** Live readers / motion buffer costing more than this share of the plain viewfinder's fps = warn. */
+export const MAX_FPS_DROP = 0.25;
+
+/** Android PowerManager thermal status names (−1 = not reported, before Android 10). */
+export const THERMAL = ['none', 'light', 'moderate', 'severe', 'critical', 'emergency', 'shutdown'];
+
+/** Motion photo clips below this frame rate look choppy (9.2); under 8 fps the camera drops the clip itself. */
+export const MIN_MOTION_FPS = 15;
+
+/** A full-size edited photo slower than this feels broken on Save/Share (6.1). */
+export const MAX_RENDER_MS = 8000;
+
+/** The edit the editor check renders: a look, light/colour, and a straighten (crop + rotate). */
+export const RENDER_RECIPE = {
+  v: 1,
+  look: 'vivid',
+  intensity: 0.8,
+  adjust: { exposure: 0.3, contrast: 0.2, shadows: 0.2, vibrance: 0.2, sharpness: 0.3 },
+  crop: { straighten: 2.1 },
+};
 
 /** Recording that starts later than this loses the first moment the user wanted (checklist 1.11). */
 export const MAX_VIDEO_START_MS = 700;

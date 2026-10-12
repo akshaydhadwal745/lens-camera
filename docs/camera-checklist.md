@@ -23,9 +23,18 @@ manifest merge) → fixed in e3ab356; dev-58/59 cancelled (superseded). dev-60
 (9.2 motion photos), dev-63 (9.3 QR), dev-64 (motion fixes), dev-65 (9.4 scan, 9.5 hyperlapse) 4/4.
 dev-66 (187c683: 9.6 astro + motion auto-off) verify-release 4/4 = **test-day build** (runtime n-09b93dc58996f20ab0e5).
 
-**Next:** test day 2026-10-12 — Test Lab physical tiers (budget/mid/flagship,
-Android 8–16, 32-bit next day) + Galaxy S8 walk-through of every 🟡 item, in
-checklist order. ✅ only with evidence; failures are fixed before moving on.
+**Next (2026-10-12, S8 not available → Firebase first):** the self-test was
+extended so Test Lab checks every item a rack phone can (dev-67: Normal camera
+readers fps, motion photo clip fps, selfie mirror flag, Ultra HDR gain map,
+astro reach, pause/resume, trim + look export, editor render time, smart burst
+pick, Play services models, real video fps/sound, heat; `scripts/testlab-summary.py`
+adds logcat crash/ANR scan + probe lines; `TYPE=robo` crawls the real screens).
+Day 1 physical: F01L/27, a14xm/34, OP573DL1/34, houji/35 (Xiaomi 14), pa3q/35
+(S25 Ultra) + Robo on virtual MediumPhone.arm/35, /36. Day 2: a10/29:32,
+TECNO-BF6/31:32, frankel/36 (Pixel 10), dubai/34, XQ-DC54/34. Items only a real
+phone in a real scene can prove (image quality, person/pet portrait, dark Night,
+QR, scan UI, hyperlapse walk, astro tripod, location, keys, sound) stay 🟡 for
+the S8. ✅ only with evidence; failures are fixed before moving on.
 
 ## Status legend
 

@@ -297,6 +297,25 @@ type ImagingModule = {
    * missing in APKs before dev-43.
    */
   setVideoLook?(player: object, recipe: object | null): Promise<void>;
+  /** Android self-test: what a saved photo contains. Missing before dev-67. */
+  inspectPhoto?(uri: string): Promise<PhotoInfo>;
+  /** Android self-test: a video's real frames, frame rate, length and sound. Missing before dev-67. */
+  mediaInfo?(uri: string): Promise<MediaInfo>;
+  /** Android self-test: the Play services ML Kit models; install = download missing ones (up to timeoutMs). Missing before dev-67. */
+  mlModules?(install: boolean, timeoutMs: number): Promise<Record<string, unknown>>;
+};
+
+export type PhotoInfo = { bytes: number; orientation: number; mirrored: boolean; gps: boolean; ultraHdr: boolean; motion: boolean; makerNote: boolean };
+export type MediaInfo = {
+  bytes: number;
+  duration: number;
+  frames: number;
+  fps: number | null;
+  width: number;
+  height: number;
+  rotation: number | null;
+  codec: string | null;
+  audio: boolean;
 };
 
 const imaging = Platform.OS === 'web' ? null : requireOptionalNativeModule<ImagingModule>('LensImaging');

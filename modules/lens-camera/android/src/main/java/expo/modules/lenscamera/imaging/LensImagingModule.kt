@@ -75,6 +75,13 @@ class LensImagingModule : Module() {
       DocumentScan.onResult(context, payload.requestCode, payload.resultCode, payload.data)
     }
 
+    // Self-test: what a saved photo / video really contains (MediaProbe).
+    AsyncFunction("inspectPhoto") { uri: String -> MediaProbe.photo(ImagingEngine.fileOf(uri)) }
+    AsyncFunction("mediaInfo") { uri: String -> MediaProbe.video(ImagingEngine.fileOf(uri)) }
+
+    // Self-test: the Play services ML Kit models (present / downloaded / missing).
+    AsyncFunction("mlModules") { install: Boolean, timeoutMs: Double -> MlModules.report(context, install, timeoutMs.toLong()) }
+
     AsyncFunction("hasDepth") { uri: String ->
       runCatching { Portrait.hasMask(ImagingEngine.fileOf(uri)) }.getOrDefault(false)
     }

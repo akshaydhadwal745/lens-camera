@@ -56,6 +56,8 @@ dependencies {
   implementation "com.google.mlkit:barcode-scanning:17.3.0"
   // Document scanning (checklist 9.4): Google's scanner flow from Play services (downloaded on first use).
   implementation "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"
+  // Self-test: ModuleInstall reports whether the Play services models above are on the phone.
+  implementation "com.google.android.gms:play-services-base:18.5.0"
 
   testImplementation "junit:junit:4.13.2"
 }

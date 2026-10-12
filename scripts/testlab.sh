@@ -6,7 +6,10 @@
 #   scripts/testlab.sh 36                       # default phone set
 #   scripts/testlab.sh 36 akita/34 a14xm/34     # pick phones
 # 32-bit-only phones get Lens-32bit.apk automatically (list them with :32,
-# e.g. a10/29:32). Free plan: 5 physical phones per day.
+# e.g. a10/29:32). Free plan: 5 physical + 10 virtual phones per day.
+#   TYPE=robo scripts/testlab.sh 67 MediumPhone.arm/35   # Robo crawls the real app
+#   screens (camera, roll, viewer, settings) looking for crashes, instead of the self-test.
+# Results: scripts/testlab-summary.py (self-test steps, probes, logcat crashes).
 set -euo pipefail
 
 N=${1:?usage: testlab.sh <build number> [model/version ...]}
@@ -27,8 +30,10 @@ run_matrix() { # apk-name devices...
   curl -sfL -o "$WORK/$apk" "https://github.com/$REPO/releases/download/dev-$N/$apk"
   local args=()
   for d in "$@"; do args+=(--device "model=${d%/*},version=${d#*/}"); done
-  "$G" firebase test android run --project "$PROJECT" --type game-loop --scenario-numbers 1 \
-    --app "$WORK/$apk" "${args[@]}" --timeout 600s --async >/dev/null 2>"$WORK/run.log" || { cat "$WORK/run.log"; exit 1; }
+  local type=(--type game-loop --scenario-numbers 1 --timeout 600s)
+  [ "${TYPE:-}" = robo ] && type=(--type robo --timeout 300s)
+  "$G" firebase test android run --project "$PROJECT" "${type[@]}" \
+    --app "$WORK/$apk" "${args[@]}" --async >/dev/null 2>"$WORK/run.log" || { cat "$WORK/run.log"; exit 1; }
   # gcloud's stdout format varies (id or console link); its log always names the matrix.
   grep -o 'matrix-[a-z0-9]*' "$WORK/run.log" | head -1
 }
@@ -69,25 +74,5 @@ EOF
   "$G" storage cp -r "$GCS*" "$OUT/" >/dev/null 2>&1 || true
 done
 
-# Each phone's self-test result file (written by the app).
-python3 - "$OUT" <<'EOF'
-import json, sys
-from pathlib import Path
-found = False
-for f in sorted(Path(sys.argv[1]).rglob("*.json")):
-    try:
-        r = json.loads(f.read_text())
-    except Exception:
-        continue
-    if "steps" not in r:
-        continue
-    found = True
-    print(f"\n{f.relative_to(sys.argv[1]).parts[0]}: {r['passed']} passed, {r.get('warnings', 0)} warnings, {r['failed']} failed, {r['skipped']} skipped ({r['totalMs'] / 1000:.0f} s)")
-    for s in r["steps"]:
-        mark = {"pass": "✓", "warn": "!", "fail": "✗", "skip": "–"}[s["status"]]
-        d = s.get("details") or {}
-        size = f" {d.get('saved')} of {d.get('max')}" if d.get("saved") else ""
-        print(f"  {mark} {s['label']}{size}{' — ' + s['message'] if s.get('message') else ''}")
-if not found:
-    print("\nNo self-test result files found; check the Test Lab console videos/logcat in", sys.argv[1])
-EOF
+# Each phone: self-test steps, feature probes, Lens crashes/freezes in the logcat.
+python3 "$(dirname "$0")/testlab-summary.py" "$OUT"
