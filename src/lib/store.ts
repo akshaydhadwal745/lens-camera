@@ -42,7 +42,8 @@ import {
 import { makeDerivatives } from './derivatives';
 import { renderCloudDerivatives } from './edit-remote';
 import { compact, EditRecipe, forPaste } from './edits';
-import { pushEdit, UploadCancelled, uploadEntry } from './uploader';
+import { md5Of, pushEdit, UploadCancelled, uploadEntry } from './uploader';
+import { notify } from './ui';
 import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
 import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 import { LiveUpload } from './live-upload';
@@ -343,6 +344,7 @@ export function selectShared(s: State): GalleryItem[] {
     edit: m.edit,
     ownerId: m.ownerId,
     ownerName: m.ownerName,
+    albumId: m.albumId,
   }));
   sharedMemo = { shared: s.shared, out };
   return out;
@@ -797,6 +799,9 @@ export function kickSync() {
  * service ("Backing up 3 of 12") keeps the app running when you leave it or
  * turn the screen off. Started only while the app is visible (Android rule).
  */
+/** Imported files skipped because the same bytes are already in Lens (told once at the end). */
+let duplicatesSkipped = 0;
+
 const backup = {
   active: false,
   total: 0,
@@ -821,6 +826,11 @@ const backup = {
     if (!this.active) return;
     backupService.stop();
     this.active = false;
+    if (duplicatesSkipped) {
+      const n = duplicatesSkipped;
+      duplicatesSkipped = 0;
+      notify('Already in Lens', `${n} imported item${n === 1 ? ' was' : 's were'} already backed up, so ${n === 1 ? 'it was' : 'they were'} skipped.`);
+    }
     // Everything waiting went up: say so once (only when Lens isn't on screen).
     if (this.done > 0 && !state.entries.some((e) => !e.uploadedAt && !e.error)) void notifyBackupDone(this.done);
   },
@@ -918,6 +928,7 @@ async function syncLoop() {
         upsertRemote(result.media);
         if (result.originalDone) {
           backup.itemDone();
+          void flushPendingShares();
           // Imports: the original is still in their phone gallery; drop our copy right away.
           if (entry.importUri) offloadOriginals(state.entries.filter((e) => e.id === next.id), 'imported');
           guardSpace(); // this original may now be offloaded
@@ -1160,6 +1171,21 @@ async function copyImport(entry: LocalEntry): Promise<boolean> {
   set({ importWaitingForSpace: false });
   try {
     const size = await mediaPicker.copy(entry.importUri, captureFile(entry.fileName).uri);
+    // Already in Lens (the same bytes imported before)? Skip it. Photos-sized files only: their
+    // checksum is what the server indexed (single uploads ≤ 16 MB).
+    if (size <= 16 * 1024 * 1024 && state.identity) {
+      try {
+        const { duplicate } = await api.checkDuplicate(md5Of(captureFile(entry.fileName)), size);
+        if (duplicate) {
+          deleteFileFor(entry);
+          setEntries(state.entries.filter((e) => e.id !== entry.id));
+          duplicatesSkipped += 1;
+          return false;
+        }
+      } catch {
+        // Offline or older server: just upload it.
+      }
+    }
     updateEntry(entry.id, { awaitingCopy: undefined, size });
     return true;
   } catch {
@@ -1523,3 +1549,53 @@ export function setCellularUploads(policy: CellularPolicy) {
   set({ settings });
   kickSync();
 }
+
+// ---------- Share while uploading ----------
+// Items still uploading when you share go out automatically as soon as they
+// reach the cloud (same people, same request flow). Kept on the phone for 7 days.
+
+type PendingShare = { mediaIds: string[]; to: string[]; at: number };
+const PENDING_SHARE_DAYS = 7;
+let flushingShares = false;
+
+export function queueShare(mediaIds: string[], to: string[]) {
+  if (!mediaIds.length || !to.length) return;
+  const list = loadDoc<PendingShare[]>('pending-shares', []);
+  list.push({ mediaIds, to, at: Date.now() });
+  saveDoc('pending-shares', list);
+}
+
+export function pendingShareCount(): number {
+  return loadDoc<PendingShare[]>('pending-shares', []).reduce((n, p) => n + p.mediaIds.length, 0);
+}
+
+/** Sends the queued items that are now in the cloud; the rest keep waiting. */
+export async function flushPendingShares() {
+  if (flushingShares) return;
+  flushingShares = true;
+  try {
+    const now = Date.now();
+    const done = new Set(state.entries.filter((e) => e.uploadedAt).map((e) => e.id));
+    const keep: PendingShare[] = [];
+    for (const p of loadDoc<PendingShare[]>('pending-shares', [])) {
+      if (now - p.at > PENDING_SHARE_DAYS * 86400000) continue;
+      // Gone from the phone (deleted) or failed for good: drop it.
+      const alive = p.mediaIds.filter((id) => state.entries.some((e) => e.id === id && !e.error) || done.has(id));
+      const ready = alive.filter((id) => done.has(id));
+      const waiting = alive.filter((id) => !done.has(id));
+      if (ready.length) {
+        try {
+          await api.share(ready, p.to);
+        } catch {
+          keep.push(p); // offline: try the whole thing again later
+          continue;
+        }
+      }
+      if (waiting.length) keep.push({ ...p, mediaIds: waiting });
+    }
+    saveDoc('pending-shares', keep);
+  } finally {
+    flushingShares = false;
+  }
+}
+

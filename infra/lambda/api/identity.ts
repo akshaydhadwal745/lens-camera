@@ -322,6 +322,7 @@ export async function contacts(identity: Identity): Promise<Res> {
       lastSharedAt: item.lastAt as number,
       account: item.account === true,
       trusted: item.trusted === true,
+      shares: (item.shares as number | undefined) ?? 0,
     }))
     .sort((a, b) => b.lastSharedAt - a.lastSharedAt)
     .slice(0, 50);

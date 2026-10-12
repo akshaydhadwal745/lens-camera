@@ -76,6 +76,8 @@ export type MediaRecord = {
   uploadId?: string;
   partSize?: number;
   storageClass?: string;
+  /** MD5 (base64) of the original the phone sent with a single upload. */
+  md5?: string;
   /** Thumbnail + preview uploaded and verified (visible before the original finishes). */
   previewReady?: boolean;
   /** Non-destructive edit recipe (look, adjustments, crop…); the original is never modified. */
@@ -356,6 +358,8 @@ export async function startUpload(identity: Identity, req: Req): Promise<Res> {
     createdAt: num(createdAt) ?? Date.now(),
     edit,
   };
+  // Checksum of the original (single uploads): indexed at /complete for the "already in Lens" check.
+  if (md5) item.md5 = md5;
 
   if (location) item.location = location;
   else item.storageClass = ORIGINAL_STORAGE_CLASS;
@@ -646,6 +650,10 @@ export async function completeUpload(identity: Identity, id: string, req?: Req):
         ],
       }),
     );
+    // Exact-duplicate index: the same bytes imported again can be skipped (POST /media/check).
+    if (item.md5) {
+      await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `D#${identity.id}`, sk: `H#${item.md5}#${item.size}`, mediaId: id, at: Date.now() } }));
+    }
     // Crossing 90 % of the Lens storage with this upload: tell them once (not on every upload after).
     const quota = quotaFor(identity);
     const before = identity.usedBytes;
@@ -661,6 +669,20 @@ export async function completeUpload(identity: Identity, id: string, req?: Req):
     if (error?.name !== 'TransactionCanceledException') throw error;
   }
   return json(200, { media: await toClient({ ...item, status: 'ready' }) });
+}
+
+/**
+ * POST /v1/media/check {md5, size}: is this exact file already in my Lens?
+ * (Importing the same photo twice: skip it.) → { duplicate: media | null }
+ */
+export async function checkDuplicate(identity: Identity, req: Req): Promise<Res> {
+  const md5 = md5Param(req.body?.md5);
+  const size = req.body?.size;
+  if (!md5 || !Number.isInteger(size) || size <= 0) throw new HttpError(400, 'md5 and size required');
+  const hit = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${identity.id}`, sk: `H#${md5}#${size}` } }))).Item;
+  const media = hit ? await getMedia(identity.id, hit.mediaId as string) : undefined;
+  const there = media && media.status === 'ready' && !media.deletedAt && !media.ownerHidden;
+  return json(200, { duplicate: there ? await toClient(media) : null });
 }
 
 /** GET /v1/media?cursor=: this identity's uploaded media, newest first. */

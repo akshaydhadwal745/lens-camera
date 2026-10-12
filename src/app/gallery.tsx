@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { AlbumPicker } from '@/components/AlbumPicker';
+import { api } from '@/lib/api';
 import { SharesStrip } from '@/components/SharesStrip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -181,6 +183,7 @@ export default function GalleryScreen() {
 
   const [tab, setTab] = useState<Tab>(params.tab === 'shared' ? 'shared' : 'mine');
   const [selecting, setSelecting] = useState(false);
+  const [albumPicking, setAlbumPicking] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const copiedEdit = useStore((s) => s.copiedEdit);
   const [pasting, setPasting] = useState(false);
@@ -472,6 +475,9 @@ export default function GalleryScreen() {
                 </Pressable>
               );
             })}
+            <Pressable onPress={() => router.push('/albums')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Albums">
+              <Text style={styles.filterText}>Albums</Text>
+            </Pressable>
             {tab === 'mine' && indicator && (
               // Where new shots go + its health; opens Storage settings.
               <Pressable
@@ -585,6 +591,12 @@ export default function GalleryScreen() {
             </Pressable>
           )}
           {tab === 'mine' && (
+            <Pressable onPress={() => setAlbumPicking(true)} disabled={!selected.size} style={styles.actionButton}>
+              <Ionicons name="albums-outline" size={22} color={selected.size ? palette.text : '#636366'} />
+              <Text style={[styles.actionText, !selected.size && { color: '#636366' }]}>Add to album</Text>
+            </Pressable>
+          )}
+          {tab === 'mine' && (
             <Pressable onPress={shareSelected} disabled={!selected.size} style={styles.actionButton}>
               <Ionicons name="paper-plane-outline" size={22} color={selected.size ? palette.text : '#636366'} />
               <Text style={[styles.actionText, !selected.size && { color: '#636366' }]}>Send to friends</Text>
@@ -598,6 +610,23 @@ export default function GalleryScreen() {
           </Pressable>
         </View>
       )}
+      <AlbumPicker
+        visible={albumPicking}
+        count={selected.size}
+        onClose={() => setAlbumPicking(false)}
+        onPick={async (choice) => {
+          // Only what's in the cloud can be in an album (it lives there); the rest is skipped and said so.
+          const chosen = [...selected];
+          const ready = chosen.filter((id) => mine.find((g) => g.id === id)?.sync === 'synced');
+          if (!ready.length) throw new Error('These are still uploading. Add them once they are in the cloud.');
+          const name = 'newName' in choice ? choice.newName : choice.name;
+          if ('newName' in choice) await api.createAlbum(choice.newName, ready);
+          else await api.editAlbum(choice.id, { add: ready });
+          const skipped = chosen.length - ready.length;
+          notify('Added to album', `${ready.length} item${ready.length === 1 ? '' : 's'} in “${name}”.${skipped ? ` ${skipped} still uploading ${skipped === 1 ? 'was' : 'were'} skipped.` : ''}`);
+          exitSelect();
+        }}
+      />
     </View>
   );
 }

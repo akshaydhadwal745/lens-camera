@@ -53,6 +53,8 @@ export default function RootLayout() {
         <Stack.Screen name="shares/sent" />
         <Stack.Screen name="shares/[id]" />
         <Stack.Screen name="my-code" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="albums" />
+        <Stack.Screen name="album/[id]" />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />

@@ -124,7 +124,7 @@ export type UploadPlan = PlanExtras &
 export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
 /** Someone to share with: `account` = signed in (not a guest phone); `sharedBefore` = an accepted share before. */
 export type Person = { id: string; name: string; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
-export type Contact = Person & { lastSharedAt: number; trusted?: boolean };
+export type Contact = Person & { lastSharedAt: number; trusted?: boolean; shares?: number };
 export type ShareStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'revoked' | 'expired';
 export type ShareRequest = {
   shareId: string;
@@ -140,9 +140,14 @@ export type ShareRequest = {
   knownSender?: boolean;
   /** Small thumbnails only (never the preview or original): from known senders, or after "Show previews". */
   thumbs?: { id: string; kind: string; thumbUrl?: string }[];
+  /** Set when a whole album is offered. */
+  album?: { id: string; name: string };
 };
 type Page<T> = { items: T[]; cursor: string | null };
 export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
+export type Album = { id: string; name: string; count: number; createdAt: number; updatedAt: number; cover: RemoteMedia | null };
+/** An album someone shared with me (its items are in the Shared list with this albumId). */
+export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; at: number };
 
 const q = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '');
 
@@ -232,6 +237,18 @@ export const api = {
 
   searchUsers: (query: string) => request<{ users: Person[] }>('GET', `/users?q=${encodeURIComponent(query)}`),
   contacts: () => request<{ contacts: Contact[] }>('GET', '/contacts'),
+  // Albums (docs/design/organise-and-share.md).
+  albums: () => request<{ albums: Album[]; shared: SharedAlbum[] }>('GET', '/albums'),
+  createAlbum: (name: string, mediaIds: string[] = []) => request<{ album: Album }>('POST', '/albums', { name, mediaIds }),
+  album: (id: string) => request<{ album: Album; items: RemoteMedia[]; members: { id: string; name?: string; shareId: string }[] }>('GET', `/albums/${id}`),
+  renameAlbum: (id: string, name: string) => request<{ id: string; name: string }>('PUT', `/albums/${id}`, { name }),
+  deleteAlbum: (id: string) => request<unknown>('DELETE', `/albums/${id}`),
+  editAlbum: (id: string, change: { add?: string[]; remove?: string[] }) => request<{ id: string; count: number }>('POST', `/albums/${id}/items`, change),
+  leaveAlbum: (ownerId: string, id: string) => request<unknown>('DELETE', `/shared-albums/${ownerId}/${id}`),
+  shareAlbum: (albumId: string, to: string[]) =>
+    request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { albumId, to }),
+  /** Is this exact file (MD5 base64 + size) already in my Lens? */
+  checkDuplicate: (md5: string, size: number) => request<{ duplicate: RemoteMedia | null }>('POST', '/media/check', { md5, size }),
   lookupUser: (id: string) => request<{ user: Person }>('GET', `/users/${encodeURIComponent(id)}`),
   share: (mediaIds: string[], to: string[]) =>
     request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { mediaIds, to }),

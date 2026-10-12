@@ -20,10 +20,11 @@ import {
 } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
 import { createSet, saveDiagnostics, saveProbe } from './lab';
-import { completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
+import { checkDuplicate, completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
 import { accept, cancel, decline, inbox, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
 import { notificationPrefs, registerPush, unregisterPush } from './push';
+import { albumDetail, createAlbum, deleteAlbum, editAlbumItems, leaveAlbum, listAlbums, renameAlbum } from './albums';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { requestStream } from './stream';
@@ -140,6 +141,15 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
 
     if (route === 'GET /media') return await listMedia(identity, req);
     if (route === 'POST /media') return await startUpload(identity, req);
+    if (route === 'POST /media/check') return await checkDuplicate(identity, req);
+    // Albums (docs/design/organise-and-share.md).
+    if (route === 'GET /albums') return await listAlbums(identity);
+    if (route === 'POST /albums') return await createAlbum(identity, req);
+    if (seg[1] === 'albums' && seg.length === 3 && method === 'GET') return await albumDetail(identity, seg[2]);
+    if (seg[1] === 'albums' && seg.length === 3 && method === 'PUT') return await renameAlbum(identity, seg[2], req);
+    if (seg[1] === 'albums' && seg.length === 3 && method === 'DELETE') return await deleteAlbum(identity, seg[2]);
+    if (seg[1] === 'albums' && seg.length === 4 && seg[3] === 'items' && method === 'POST') return await editAlbumItems(identity, seg[2], req);
+    if (seg[1] === 'shared-albums' && seg.length === 4 && method === 'DELETE') return await leaveAlbum(identity, seg[2], seg[3]);
     if (seg[1] === 'media' && seg.length === 3 && method === 'DELETE') return await deleteMedia(identity, seg[2], req);
     if (route === 'GET /trash') return await listTrash(identity, req);
     if (seg[1] === 'media' && seg.length === 4) {

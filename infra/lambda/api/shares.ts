@@ -1,7 +1,8 @@
-import { BatchGetCommand, BatchWriteCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchGetCommand, BatchWriteCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
 import { ddb, decodeCursor, encodeCursor, env, HttpError, json, randomId, Req, Res, signMediaUrl } from './lib';
+import { addMember, albumMediaIds, getAlbum, removeMember } from './albums';
 import { derivativeKey, MediaRecord, mediaKey, toClient } from './media';
 import { notify } from './push';
 import { archiveIfOrphaned } from './trash';
@@ -40,6 +41,9 @@ type ShareRequest = {
   createdAt: number;
   expiresAt: number;
   respondedAt?: number;
+  /** A shared album (docs/design/organise-and-share.md): the member gets its items, now and as they're added. */
+  albumId?: string;
+  albumName?: string;
 };
 
 async function batchGet(keys: { pk: string; sk: string }[]): Promise<Record<string, any>[]> {
@@ -96,6 +100,7 @@ function accessRecords(r: ShareRequest, media: MediaRecord[], now: number) {
     previewReady: !!m.previewReady,
     sharedAt: now,
     shareId: r.shareId,
+    ...(r.albumId ? { albumId: r.albumId } : {}),
     gsi1pk: `SM#${r.fromId}#${m.id}`,
     gsi1sk: `D#${r.toId}`,
   }));
@@ -108,13 +113,25 @@ async function shareableMedia(ownerId: string, mediaIds: string[]): Promise<Medi
 
 /** Writes access + contacts for an accepted request (both sides now know each other). */
 async function grant(r: ShareRequest, trusted: boolean | undefined, now: number): Promise<number> {
-  const media = await shareableMedia(r.fromId, r.mediaIds);
+  // A shared album gives what's in it now (it may have changed since the request was sent).
+  const mediaIds = r.albumId ? await albumMediaIds(r.fromId, r.albumId) : r.mediaIds;
+  const media = await shareableMedia(r.fromId, mediaIds);
+  if (r.albumId) await addMember({ id: r.fromId, name: r.fromName }, r.albumId, r.albumName ?? 'Album', { id: r.toId, name: r.toName }, r.shareId);
   const contact = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${r.toId}`, sk: `C#${r.fromId}` } }))).Item;
   await batchWrite([
     ...accessRecords(r, media, now).map(put),
     put({ pk: `D#${r.toId}`, sk: `C#${r.fromId}`, name: r.fromName, account: r.fromAccount, lastAt: now, trusted: trusted ?? contact?.trusted ?? false }),
-    put({ pk: `D#${r.fromId}`, sk: `C#${r.toId}`, name: r.toName, account: r.toAccount, lastAt: now }),
   ]);
+  // The sender's side keeps a count: who they share with most comes first in suggestions.
+  await ddb.send(
+    new UpdateCommand({
+      TableName: env.table,
+      Key: { pk: `D#${r.fromId}`, sk: `C#${r.toId}` },
+      UpdateExpression: 'SET #n = :n, account = :a, lastAt = :now ADD shares :one',
+      ExpressionAttributeNames: { '#n': 'name' },
+      ExpressionAttributeValues: { ':n': r.toName, ':a': r.toAccount, ':now': now, ':one': 1 },
+    }),
+  );
   return media.length;
 }
 
@@ -124,9 +141,13 @@ async function grant(r: ShareRequest, trusted: boolean | undefined, now: number)
  * kept on the sender's side only (they see it waiting, then expired).
  */
 export async function share(identity: Identity, req: Req): Promise<Res> {
-  const mediaIds = unique(req.body.mediaIds).slice(0, MAX_MEDIA);
+  // A whole album ({albumId}) or picked items ({mediaIds}).
+  const albumId = typeof req.body.albumId === 'string' ? req.body.albumId : undefined;
+  const album = albumId ? await getAlbum(identity.id, albumId) : undefined;
+  if (albumId && !album) throw new HttpError(404, 'Album not found');
+  const mediaIds = album ? await albumMediaIds(identity.id, album.albumId) : unique(req.body.mediaIds).slice(0, MAX_MEDIA);
   const to = unique(req.body.to).filter((id) => id !== identity.id).slice(0, MAX_RECIPIENTS);
-  if (!mediaIds.length || !to.length) throw new HttpError(400, 'Choose media and at least one person');
+  if (!mediaIds.length || !to.length) throw new HttpError(400, album ? 'This album is empty' : 'Choose media and at least one person');
 
   const ready = await shareableMedia(identity.id, mediaIds);
   if (!ready.length) throw new HttpError(404, 'Nothing to share yet: items must finish uploading first');
@@ -163,6 +184,7 @@ export async function share(identity: Identity, req: Req): Promise<Res> {
       createdAt: now,
       expiresAt: now + EXPIRE_MS,
       ...(auto ? { respondedAt: now } : {}),
+      ...(album ? { albumId: album.albumId, albumName: album.name } : {}),
     };
     writes.push(put({ ...base, pk: `D#${identity.id}`, sk: `OUT#${shareId}` }));
     if (!blockedBy.has(rid)) writes.push(put({ ...base, pk: `D#${rid}`, sk: `IN#${shareId}` }));
@@ -172,7 +194,7 @@ export async function share(identity: Identity, req: Req): Promise<Res> {
   await batchWrite(writes);
   for (const r of accepted) await grant(r, undefined, now);
 
-  const what = describe(photos, videos);
+  const what = album ? `the album "${album.name}" (${describe(photos, videos)})` : describe(photos, videos);
   await Promise.all(
     results
       .filter((r) => !blockedBy.has(r.id))
@@ -211,6 +233,7 @@ function view(r: ShareRequest, now = Date.now()) {
     photos: r.photos,
     videos: r.videos,
     count: r.mediaIds.length,
+    album: r.albumId ? { id: r.albumId, name: r.albumName ?? 'Album' } : undefined,
     status: effectiveStatus(r, now),
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,
@@ -338,7 +361,9 @@ export async function cancel(identity: Identity, shareId: string): Promise<Res> 
   }
   if (status !== 'accepted') throw new HttpError(409, `This share is ${status}`);
   await transition(r, 'accepted', 'revoked', now);
-  await batchWrite(r.mediaIds.map((id) => del({ pk: `D#${r.toId}`, sk: `S#${id}#${r.fromId}` })));
+  // A shared album: the membership and everything it gave (also items added since).
+  if (r.albumId) await removeMember(r.fromId, r.albumId, r.toId);
+  else await batchWrite(r.mediaIds.map((id) => del({ pk: `D#${r.toId}`, sk: `S#${id}#${r.fromId}` })));
   await Promise.all(r.mediaIds.map((id) => archiveIfOrphaned(r.fromId, id)));
   return json(200, { status: 'revoked' });
 }
@@ -398,6 +423,7 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
       ownerId: s.ownerId,
       ownerName: s.ownerName,
       sharedAt: s.sharedAt,
+      albumId: s.albumId,
     })),
   );
   return json(200, { items, cursor: encodeCursor(result.LastEvaluatedKey) });

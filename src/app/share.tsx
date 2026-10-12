@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, Person } from '@/lib/api';
 import { onPersonPicked } from '@/lib/person-code';
 import { askForNotifications } from '@/lib/push';
-import { selectGallery, useStore } from '@/lib/store';
+import { queueShare, selectGallery, useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
 
 function Avatar({ name }: { name: string }) {
@@ -33,7 +33,8 @@ function PersonFacts({ person }: { person: Person }) {
 
 export default function ShareScreen() {
   const insets = useSafeAreaInsets();
-  const { ids } = useLocalSearchParams<{ ids?: string }>();
+  // Picked items (?ids=) or a whole album (?album=&albumName=&albumCount=).
+  const { ids, album, albumName, albumCount } = useLocalSearchParams<{ ids?: string; album?: string; albumName?: string; albumCount?: string }>();
   const gallery = useStore(selectGallery);
   const myName = useStore((s) => s.identity?.name);
 
@@ -54,7 +55,14 @@ export default function ShareScreen() {
   useEffect(() => {
     api
       .contacts()
-      .then((r) => setRecent(r.contacts.map((c) => ({ ...c, sharedBefore: true }))))
+      // Suggestions: who you share with most, then most recent.
+      .then((r) =>
+        setRecent(
+          [...r.contacts]
+            .sort((a, b) => (b.shares ?? 0) - (a.shares ?? 0) || b.lastSharedAt - a.lastSharedAt)
+            .map((c) => ({ ...c, sharedBefore: true })),
+        ),
+      )
       .catch(() => {});
   }, []);
 
@@ -97,14 +105,18 @@ export default function ShareScreen() {
   };
 
   const send = async () => {
-    if (!chosen.size || !ready.length) return;
+    if (!chosen.size || (!count && !requested.length)) return;
     setSending(true);
     try {
-      const result = await api.share(ready, [...chosen.keys()]);
+      const to = [...chosen.keys()];
+      // Still uploading: queued, sent to the same people the moment each reaches the cloud.
+      const later = album ? [] : requested.filter((id) => !ready.includes(id));
+      if (later.length) queueShare(later, to);
+      const result = album ? await api.shareAlbum(album, to) : ready.length ? await api.share(ready, to) : { shared: 0, recipients: [...chosen.values()].map((p) => p.name), requests: [] };
       const requests = result.requests ?? [];
       const waiting = requests.filter((r) => r.status === 'pending').map((r) => r.name);
       const auto = requests.filter((r) => r.status === 'accepted').map((r) => r.name);
-      const items = `${result.shared} item${result.shared === 1 ? '' : 's'}`;
+      const items = album ? `the album “${albumName ?? 'Album'}”` : `${result.shared} item${result.shared === 1 ? '' : 's'}`;
       notify(
         'Sent',
         [
@@ -112,6 +124,7 @@ export default function ShareScreen() {
           auto.length ? `${auto.join(', ')} accept everything from you: shared now.` : '',
         ]
           .filter(Boolean)
+          .concat(later.length ? [`${later.length} still uploading: they go to the same people as soon as they're in the cloud.`] : [])
           .join('\n\n') || `${items} sent to ${result.recipients.join(', ')}`,
       );
       setConfirming(false);
@@ -127,7 +140,9 @@ export default function ShareScreen() {
 
   const showingSearch = query.trim().length >= 3;
   const list = showingSearch ? results : recent;
-  const skipped = requested.length - ready.length;
+  // Album mode: the album's items; otherwise the picked items already in the cloud.
+  const count = album ? Number(albumCount ?? 0) : requested.length;
+  const skipped = album ? 0 : requested.length - ready.length;
 
   return (
     <View style={[styles.fill, { paddingTop: insets.top || 12 }]}>
@@ -136,20 +151,20 @@ export default function ShareScreen() {
           <Text style={styles.headerAction}>Cancel</Text>
         </Pressable>
         <Text style={styles.title}>
-          Send {ready.length} item{ready.length === 1 ? '' : 's'}
+          {album ? `Share “${albumName ?? 'Album'}”` : `Send ${count} item${count === 1 ? '' : 's'}`}
         </Text>
-        <Pressable onPress={() => setConfirming(true)} disabled={!chosen.size || !ready.length || sending} hitSlop={10} style={styles.headerButton}>
+        <Pressable onPress={() => setConfirming(true)} disabled={!chosen.size || !count || sending} hitSlop={10} style={styles.headerButton}>
           {sending ? (
             <ActivityIndicator color={colors.link} />
           ) : (
-            <Text style={[styles.headerAction, styles.bold, (!chosen.size || !ready.length) && { color: '#636366' }]}>Send</Text>
+            <Text style={[styles.headerAction, styles.bold, (!chosen.size || !count) && { color: '#636366' }]}>Send</Text>
           )}
         </Pressable>
       </View>
 
       {skipped > 0 && (
         <Text style={styles.note}>
-          {skipped} item{skipped === 1 ? ' is' : 's are'} still uploading and will be skipped.
+          {skipped} item{skipped === 1 ? ' is' : 's are'} still uploading: {skipped === 1 ? 'it goes' : 'they go'} out as soon as {skipped === 1 ? "it's" : "they're"} in the cloud.
         </Text>
       )}
 
@@ -184,7 +199,7 @@ export default function ShareScreen() {
         </View>
       )}
 
-      <Text style={styles.section}>{showingSearch ? 'Results' : 'Recent'}</Text>
+      <Text style={styles.section}>{showingSearch ? 'Results' : 'Suggested'}</Text>
       <FlatList
         data={list}
         keyExtractor={(p) => p.id}
@@ -220,7 +235,7 @@ export default function ShareScreen() {
         <View style={styles.backdrop}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <Text style={styles.sheetTitle}>
-              Share {ready.length} item{ready.length === 1 ? '' : 's'} with
+              {album ? `Share the album “${albumName ?? 'Album'}” (${count} item${count === 1 ? '' : 's'}) with` : `Share ${count} item${count === 1 ? '' : 's'} with`}
             </Text>
             {[...chosen.values()].map((p) => (
               <View key={p.id} style={styles.sheetRow}>

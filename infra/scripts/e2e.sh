@@ -160,6 +160,36 @@ S6=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID2\"],\"to\":[\"$IB\"]}" | j
 call DELETE "/blocks/$IA" "$TB" >/dev/null && ok "B unblocks A"
 [[ $(call GET /shared "$TB" | j .items.length) == 2 ]] && ok "accepted items stay through decline/block"
 
+# --- albums, shared albums, duplicate check (docs/design/organise-and-share.md) ---
+R=$(call POST /albums "$TA" -d "{\"name\":\"  Goa   trip \",\"mediaIds\":[\"$ID1\",\"$ID2\"]}"); AL=$(echo "$R" | j .album.id)
+[[ $(echo "$R" | j .album.name) == "Goa trip" && $(echo "$R" | j .album.count) == 2 ]] && ok "album created with 2 items ($AL)"
+[[ $(call GET /albums "$TA" | j '.albums[0].name') == "Goa trip" ]] && ok "album listed"
+[[ $(call GET "/albums/$AL" "$TA" | j .items.length) == 2 ]] && ok "album shows its items"
+[[ $(call POST /albums "$TA" -d '{"name":""}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "album needs a name"
+R=$(call POST /shares "$TA" -d "{\"albumId\":\"$AL\",\"to\":[\"$IB\"]}"); SA=$(echo "$R" | j '.requests[0].shareId')
+[[ $(echo "$R" | j '.requests[0].status') == pending ]] && ok "album share is a request"
+[[ $(call GET "/shares/in/$SA" "$TB" | j .album.name) == "Goa trip" ]] && ok "B sees which album is offered"
+[[ $(call GET /albums "$TB" | j .shared.length) == 0 ]] && ok "no shared album before accepting"
+call POST "/shares/in/$SA/accept" "$TB" >/dev/null
+[[ $(call GET /albums "$TB" | j '.shared[0].name') == "Goa trip" ]] && ok "B has the shared album"
+[[ $(call GET /shared "$TB" | j ".items.filter(i=>i.albumId==='$AL').length") == 2 ]] && ok "its 2 items are in B's Shared tab"
+call POST "/albums/$AL/items" "$TA" -d "{\"remove\":[\"$ID2\"]}" >/dev/null
+[[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$ID2')") == false ]] && ok "removed from the album → B loses that item"
+call POST "/albums/$AL/items" "$TA" -d "{\"add\":[\"$ID2\"]}" >/dev/null
+[[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$ID2')") == true ]] && ok "added to the album → B gets it without a new request"
+call PUT "/albums/$AL" "$TA" -d '{"name":"Goa 2026"}' >/dev/null
+[[ $(call GET /albums "$TB" | j '.shared[0].name') == "Goa 2026" ]] && ok "rename reaches members"
+[[ $(call POST "/shares/out/$SA/cancel" "$TA" | j .status) == revoked ]] && ok "A revokes the album from B"
+[[ $(call GET /albums "$TB" | j .shared.length) == 0 && $(call GET /shared "$TB" | j .items.length) == 0 ]] && ok "B loses the album and its items"
+call DELETE "/albums/$AL" "$TA" >/dev/null
+[[ $(call GET /albums "$TA" | j .albums.length) == 0 && $(call GET /media "$TA" | j .items.length) == 2 ]] && ok "deleting an album keeps the photos"
+[[ $(call POST /media/check "$TA" -d "{\"md5\":\"$PMD5\",\"size\":300000}" | j .duplicate.id) == "$ID1" ]] && ok "the same file again is recognised as already in Lens"
+[[ $(call POST /media/check "$TA" -d '{"md5":"AAAAAAAAAAAAAAAAAAAAAA==","size":300000}' | j .duplicate) == "" ]] && ok "a different file isn't"
+# Back to a plain direct share of both items for the tests below.
+SR=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+call POST "/shares/in/$SR/accept" "$TB" >/dev/null
+[[ $(call GET /shared "$TB" | j .items.length) == 2 ]] && ok "direct share restored"
+
 # --- pairing (web sign-in) ---
 CODE=$(call POST /pairing "$TA" | j .code); ok "pairing code $CODE"
 W=$(curl -sS -X POST "$API/pairing/claim" -H 'content-type: application/json' -d "{\"code\":\"$CODE\"}"); TW=$(echo "$W" | j .token)

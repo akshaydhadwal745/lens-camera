@@ -152,6 +152,9 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
     const sk = i.sk as string;
     if (sk.startsWith('OUT#')) return [{ pk: `D#${i.toId}`, sk: `IN#${i.shareId}` }];
     if (sk.startsWith('IN#')) return [{ pk: `D#${i.fromId}`, sk: `OUT#${i.shareId}` }];
+    // Shared albums: my albums in members' lists, and my memberships in owners' albums.
+    if (sk.startsWith('AM#')) return [{ pk: `D#${i.memberId}`, sk: `SA#${sk.split('#')[1]}#${id}` }];
+    if (sk.startsWith('SA#')) return [{ pk: `D#${i.ownerId}`, sk: `AM#${i.albumId}#${id}` }];
     return [];
   });
   await deleteKeys(reverseRequests);
