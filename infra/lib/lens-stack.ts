@@ -389,6 +389,19 @@ function handler(event) {
     maintenance.addPermission('DeveloperInvoke', {
       principal: new iam.ArnPrincipal(`arn:aws:iam::${this.account}:role/lens-developer`),
     });
+    // Camera testing on real phones in AWS Device Farm (us-west-2, scripts/devicefarm.sh):
+    // per-minute use only. Buying unmetered slots or private devices ($200–250/month) is denied.
+    new iam.Policy(this, 'DeveloperDeviceFarm', {
+      roles: [iam.Role.fromRoleName(this, 'DeveloperRole', 'lens-developer', { mutable: true })],
+      statements: [
+        new iam.PolicyStatement({ actions: ['devicefarm:*'], resources: ['*'] }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.DENY,
+          actions: ['devicefarm:PurchaseOffering', 'devicefarm:RenewOffering', 'devicefarm:CreateInstanceProfile'],
+          resources: ['*'],
+        }),
+      ],
+    });
     new events.Rule(this, 'DailyMaintenance', {
       schedule: events.Schedule.rate(Duration.days(1)),
       targets: [new targets.LambdaFunction(maintenance)],
