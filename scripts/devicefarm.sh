@@ -40,7 +40,11 @@ upload() { # file type → upload arn (waits until processed)
 }
 
 curl -sfL -o "$WORK/Lens.apk" "https://github.com/$REPO/releases/download/dev-$N/Lens.apk"
-(cd "$HERE/devicefarm/package" && zip -qr "$WORK/tests.zip" .)
+# Device Farm wants an Appium Python package with at least one wheel: pytest (pure Python).
+cp -r "$HERE/devicefarm/package" "$WORK/package"
+echo pytest > "$WORK/package/requirements.txt"
+python3 -m pip download -q --only-binary=:all: --python-version 3.9 --platform any -d "$WORK/package/wheelhouse" pytest
+(cd "$WORK/package" && zip -qr "$WORK/tests.zip" .)
 cp "$HERE/devicefarm/testspec.yml" "$WORK/lens-selftest.yml"
 APP=$(upload "$WORK/Lens.apk" ANDROID_APP)
 TESTS=$(upload "$WORK/tests.zip" APPIUM_PYTHON_TEST_PACKAGE)
