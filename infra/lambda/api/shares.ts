@@ -439,14 +439,14 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
 /**
  * Location is private by default: a photo with a GPS position, shared without
  * "include location", reaches the recipient as a copy with the GPS block wiped
- * (same pixels, byte edits only; made once, at x/<owner>/<id>.jpg).
+ * (same pixels, byte edits only; made once, next to its previews: d/<owner>/<id>/nogps.jpg).
  */
 async function withoutLocation<T extends { url?: string }>(s: Record<string, any>, owner: MediaRecord, client: T): Promise<T> {
   if (!owner.gps || s.withLocation || !client.url) return client;
   if (owner.contentType !== 'image/jpeg') return { ...client, url: undefined }; // can't wipe it safely: preview only
   let key = s.strippedKey as string | undefined;
   if (!key) {
-    key = `x/${s.ownerId}/${s.mediaId}.jpg`;
+    key = `d/${s.ownerId}/${s.mediaId}/nogps.jpg`; // next to its previews: signed CloudFront links, deleted with the photo/account
     const original = await s3.send(new GetObjectCommand({ Bucket: env.bucket, Key: owner.key }));
     const bytes = new Uint8Array(await original.Body!.transformToByteArray());
     await s3.send(new PutObjectCommand({ Bucket: env.bucket, Key: key, Body: stripGps(bytes).bytes, ContentType: 'image/jpeg' }));

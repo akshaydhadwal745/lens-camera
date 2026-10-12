@@ -18,7 +18,7 @@
   photos with a position, shared without **Include where they were taken** (the
   confirm sheet's switch, off by default), reach them as a copy with the EXIF GPS
   block wiped: byte edits only, same pixels, same size (`exif-strip.ts`, made
-  once at `x/<owner>/<id>.jpg`, deleted with the account). Phone-made previews
+  once at `d/<owner>/<id>/nogps.jpg (next to its previews)`, deleted with the account). Phone-made previews
   carry no metadata at all.
 - **Limits:** photos only (videos keep the position in the file's own metadata;
   Lens doesn't read or wipe it yet); photos in the user's own storage get no copy

@@ -205,7 +205,7 @@ call POST /media/places "$TC" -d "{\"items\":[{\"id\":\"$IDG\",\"lat\":30.741,\"
 SG=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDG\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId'); call POST "/shares/in/$SG/accept" "$TB" >/dev/null
 R=$(call GET /shared "$TB"); [[ $(echo "$R" | j ".items.find(i=>i.id==='$IDG').place") == "" ]] && ok "recipient doesn't get the place"
 curl -sS -o "$TMP/shared-gps.jpg" "$(echo "$R" | j ".items.find(i=>i.id==='$IDG').url")"
-node -e "const b=require('fs').readFileSync('$TMP/shared-gps.jpg');process.exit(b.includes(Buffer.from([0x1e,0,0,0,1,0,0,0]))||b.length!==$GSIZE?1:0)" && ok "recipient's copy has the GPS wiped (same size)"
+node -e "const b=require('fs').readFileSync('$TMP/shared-gps.jpg');process.exit(b.includes(Buffer.from([0x1e,0,0,0,1,0,0,0]))||b.length!==$GSIZE?1:0)" && ok "recipient's copy has the GPS wiped (same size)" || fail "recipient copy not GPS-free"
 cmp -s "$TMP/shared-gps.jpg" "$GPSF" && fail "recipient got the original with GPS" || true
 call POST "/shares/out/$SG/cancel" "$TC" >/dev/null
 SG2=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDG\"],\"to\":[\"$IB\"],\"includeLocation\":true}" | j '.requests[0].shareId'); call POST "/shares/in/$SG2/accept" "$TB" >/dev/null

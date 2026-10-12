@@ -138,7 +138,7 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
   }
 
   // Every stored object and old version: originals, previews, streaming copies.
-  for (const prefix of [`m/${id}/`, `d/${id}/`, `h/${id}/`, `x/${id}/`]) {
+  for (const prefix of [`m/${id}/`, `d/${id}/`, `h/${id}/`]) {
     if (Date.now() > deadline) return false;
     await deleteAllVersions(prefix);
   }
