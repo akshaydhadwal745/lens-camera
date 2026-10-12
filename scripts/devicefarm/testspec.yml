@@ -12,12 +12,15 @@ phases:
     commands:
       - adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.akshay.lens android.permission.CAMERA || true
       - adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.akshay.lens android.permission.RECORD_AUDIO || true
+      # Android 13+: uploads ask for notification permission; a pop-up mid-test would cover the self-test.
+      - adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.akshay.lens android.permission.POST_NOTIFICATIONS || true
       - adb -s $DEVICEFARM_DEVICE_UDID logcat -c || true
   test:
     commands:
       - adb -s $DEVICEFARM_DEVICE_UDID shell am start -W -a com.google.intent.action.TEST_LOOP -n com.akshay.lens/.MainActivity --ei scenario 1
-      # The self-test closes its screen when done (finishTestLoop); give it up to 10 minutes.
-      - for i in $(seq 1 120); do sleep 5; adb -s $DEVICEFARM_DEVICE_UDID shell dumpsys window | grep -q "mCurrentFocus.*com.akshay.lens" || break; done
+      # The self-test closes its screen when done (finishTestLoop); give it up to 10 minutes. Wait for
+      # the activity itself to go (not for focus: a system pop-up on top would end the wait too early).
+      - for i in $(seq 1 120); do sleep 5; adb -s $DEVICEFARM_DEVICE_UDID shell dumpsys activity activities | grep -q "com.akshay.lens/.MainActivity" || break; done
       - echo "self-test screen closed after $((i * 5)) s"
   post_test:
     commands:
