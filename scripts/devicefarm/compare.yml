@@ -14,19 +14,22 @@ phases:
       - adb -s $DEVICEFARM_DEVICE_UDID shell settings put system screen_off_timeout 600000 || true
   test:
     commands:
-      - A="adb -s $DEVICEFARM_DEVICE_UDID"
-      - shot() { $A shell screencap -p /sdcard/$1.png; $A pull /sdcard/$1.png $DEVICEFARM_LOG_DIR/$1.png; }
-      # 1. The phone's own camera app (whatever answers "take a photo").
-      - STOCK=$($A shell cmd package resolve-activity --brief -a android.media.action.STILL_IMAGE_CAMERA | tail -1 | tr -d '\r'); echo "stock camera: $STOCK"
-      - $A shell am start -a android.media.action.STILL_IMAGE_CAMERA
-      - sleep 8; shot stock-1; sleep 5; shot stock-2
-      - $A shell ls -t /sdcard/DCIM/Camera > /tmp/before.txt 2>/dev/null || true
-      - $A shell input keyevent KEYCODE_VOLUME_DOWN; sleep 4; shot stock-3
-      - NEW=$($A shell ls -t /sdcard/DCIM/Camera 2>/dev/null | head -1 | tr -d '\r'); echo "stock photo: $NEW"; [ -n "$NEW" ] && $A pull "/sdcard/DCIM/Camera/$NEW" $DEVICEFARM_LOG_DIR/stock-photo.jpg || true
-      - $A shell am force-stop ${STOCK%%/*} || true
-      # 2. Lens, opened like a user does (intro animation, then the camera).
-      - $A shell am start -n com.akshay.lens/.MainActivity
-      - sleep 14; shot lens-1; sleep 5; shot lens-2
+      - |
+        A="adb -s $DEVICEFARM_DEVICE_UDID"
+        shot() { $A shell screencap -p /sdcard/$1.png; $A pull /sdcard/$1.png $DEVICEFARM_LOG_DIR/$1.png; }
+        # 1. The phone's own camera app (whatever answers "take a photo").
+        STOCK=$($A shell cmd package resolve-activity --brief -a android.media.action.STILL_IMAGE_CAMERA | tail -1 | tr -d '\r')
+        echo "stock camera = $STOCK"
+        $A shell am start -a android.media.action.STILL_IMAGE_CAMERA
+        sleep 8; shot stock-1; sleep 5; shot stock-2
+        $A shell input keyevent KEYCODE_VOLUME_DOWN; sleep 4; shot stock-3
+        NEW=$($A shell ls -t /sdcard/DCIM/Camera 2>/dev/null | head -1 | tr -d '\r')
+        echo "stock photo = $NEW"
+        [ -n "$NEW" ] && $A pull "/sdcard/DCIM/Camera/$NEW" $DEVICEFARM_LOG_DIR/stock-photo.jpg || true
+        $A shell am force-stop ${STOCK%%/*} || true
+        # 2. Lens, opened like a user does (intro animation, then the camera).
+        $A shell am start -n com.akshay.lens/.MainActivity
+        sleep 14; shot lens-1; sleep 5; shot lens-2
   post_test:
     commands:
       - adb -s $DEVICEFARM_DEVICE_UDID logcat -d > $DEVICEFARM_LOG_DIR/lens-logcat.txt || true
