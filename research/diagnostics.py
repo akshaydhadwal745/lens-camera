@@ -3,6 +3,7 @@
 
     research/.venv/bin/python research/diagnostics.py            # sync last 14 days + summary
     research/.venv/bin/python research/diagnostics.py --days 60
+    research/.venv/bin/python research/diagnostics.py --capabilities           # what every phone's cameras support
     research/.venv/bin/python research/diagnostics.py --days 1 --selftest 68   # every step of dev-68 self-tests
                                                                                # (Device Farm runs report here)
 
@@ -34,11 +35,28 @@ def area(size: str | None) -> int:
         return 0
 
 
+def capability_line(report: dict) -> str:
+    """The camera report (Camera info / deviceReport) in one line: what this phone offers."""
+    cams = report.get('cameras') or []
+    back = next((c for c in cams if c.get('facing') == 'back'), {})
+    f = back.get('features') or {}
+    on = lambda d: ', '.join(k for k, v in (d or {}).items() if v) or 'no'
+    slow = f.get('slowMotion') or f.get('slowMotionCamera2')
+    enc = report.get('videoEncoders') or {}
+    avc = enc.get('avc') or {}
+    return (f"dev-{report.get('build')} tier {report.get('tier')}, {len(cams)} cameras ({', '.join(str(c.get('facing')) + ' ' + str(c.get('megapixels')) + 'MP' for c in cams)}), "
+            f"level {back.get('level')}, slow-mo {', '.join(slow) if isinstance(slow, dict) else (slow or 'no')}, 60fps {on(f.get('fps60'))}, "
+            f"photo+video {on(f.get('videoWithPhoto'))}, low-light boost {f.get('lowLightBoost')}, face priority {f.get('facePriority')}, "
+            f"preview stab {f.get('previewStabilization')}, ZSL {f.get('zeroShutterLag')}, extensions {back.get('extensions')}, shutter {back.get('shutter')}, "
+            f"encoder {avc.get('name')} hw={avc.get('hardware')} 4k30={avc.get('4k30')}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=int, default=14)
     ap.add_argument('--no-sync', action='store_true')
     ap.add_argument('--selftest', metavar='BUILD', help='print every self-test step of this build (all phones)')
+    ap.add_argument('--capabilities', action='store_true', help='one line per phone model: what its cameras support (sent once per app build)')
     args = ap.parse_args()
     days = [(dt.date.today() - dt.timedelta(days=i)).isoformat() for i in range(args.days)]
     if not args.no_sync:
@@ -82,6 +100,8 @@ def main():
                     print(f"    {st.get('status'):4} {st.get('label')}: {st.get('message') or ''} {json.dumps(extra) if extra else ''}")
                 elif st.get('status') != 'pass':
                     print(f"    {st.get('status')} {st.get('label')}: {st.get('message')}")
+        for cap in k.get('capabilities', [])[-1:] if args.capabilities else []:
+            print('  capabilities ' + capability_line(cap))
         for b in k.get('basicPhoto', []):
             print(f"  basicPhoto dev-{b['build']}: {b.get('size')}")
 

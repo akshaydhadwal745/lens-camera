@@ -8,7 +8,7 @@
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
-import type { Capabilities, CameraDiagnostics } from '../../modules/lens-camera';
+import { type Capabilities, type CameraDiagnostics, cameraDeviceReport } from '../../modules/lens-camera';
 import { api } from './api';
 import { buildInfo } from './build-info';
 import type { SelfTestReport } from './self-test';
@@ -84,8 +84,37 @@ async function flush() {
   }
 }
 
+/** The diagnostics API takes ≤ 32 KB per request; camera reports are 3–8 KB. */
+const MAX_CAPABILITIES_BYTES = 28 * 1024;
+let capabilitiesStarted = false;
+
+/**
+ * What this phone's cameras can do (the Camera info report: lenses, sizes,
+ * frame rates, slow motion, 60 fps, photo while recording, stabilization,
+ * extensions, encoders…), sent once per app build after the first camera
+ * start — so every phone that installs Lens tells us its capabilities, not only
+ * the ones we test. Anonymous like the rest (no account, no photos).
+ */
+async function reportCapabilities() {
+  if (Platform.OS !== 'android' || capabilitiesStarted) return;
+  capabilitiesStarted = true;
+  const key = `${buildInfo().code ?? 'local'}|capabilities`;
+  const sent = loadSent();
+  if (sent[key]) return;
+  try {
+    const report = await cameraDeviceReport();
+    if (!report || JSON.stringify(report).length > MAX_CAPABILITIES_BYTES) return;
+    await api.diagnostics({ device: device(), build: buildInfo(), events: [{ kind: 'capabilities', at: new Date().toISOString(), details: report }] });
+    sent[key] = new Date().toISOString().slice(0, 10);
+    saveSent();
+  } catch {
+    // Offline or rejected: tried again on the next app start (not on every camera rebind).
+  }
+}
+
 /** Camera bound (onReady): the photo size it really got is the key check. */
 export function reportCameraReady(c: Capabilities) {
+  void reportCapabilities();
   record(
     'camera',
     {

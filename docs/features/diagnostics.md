@@ -18,6 +18,8 @@ the privacy policy, section 1).
 | `fallbackBasic` | pro camera fatal → basic camera | message |
 | `cameraError` | non-fatal camera error | message |
 | `basicPhoto` | photo taken with the basic camera | saved size |
+| `capabilities` | **once per app build**, after the first camera start (2026-10-12) | the full camera report (Camera info / `deviceReport`): every camera's lenses, megapixels, hardware level, streams, ISO/shutter range, extensions, feature probes (slow motion, 60 fps, photo while recording, low-light boost, face priority, stabilization, ZSL, time-lapse profiles) and video encoders; 3–8 KB. Sent so every phone that installs Lens reports what it can do, not only the phones we test. Retried on the next app start if offline |
+| `selftest` | self-test run (Settings, Test Lab, Device Farm) | every step with status, message and details (photo sizes, capture ms, previewStats, video file stats…); the camera report is left out (sent as `capabilities`) |
 
 Each report is sent at most once per day per app build (dedupe file
 `Documents/diagnostics-sent.json`), batched 4 s after the camera settles. Every
@@ -30,6 +32,8 @@ build: `buildInfo()` (APK and JS build numbers, commit).
 
 ```
 research/.venv/bin/python research/diagnostics.py          # sync last 14 days + per-model summary
+research/.venv/bin/python research/diagnostics.py --capabilities          # + one line per model: what its cameras support
+research/.venv/bin/python research/diagnostics.py --days 1 --selftest 68  # every self-test step of build 68
 ```
 
 Flags `⚠ photo smaller than the camera offers` when the bound photo is under
