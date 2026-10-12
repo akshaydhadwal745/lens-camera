@@ -6,7 +6,8 @@
 #   scripts/testlab.sh 36                       # default phone set
 #   scripts/testlab.sh 36 akita/34 a14xm/34     # pick phones
 # 32-bit-only phones get Lens-32bit.apk automatically (list them with :32,
-# e.g. a10/29:32). Free plan: 5 physical + 10 virtual phones per day.
+# e.g. a10/29:32). Free plan: 5 physical + 10 virtual phones per day; the day
+# resets at midnight Pacific time (12:30 IST), TEST_QUOTA_EXCEEDED until then.
 #   TYPE=robo scripts/testlab.sh 67 MediumPhone.arm/35   # Robo crawls the real app
 #   screens (camera, roll, viewer, settings) looking for crashes, instead of the self-test.
 # Results: scripts/testlab-summary.py (self-test steps, probes, logcat crashes).
@@ -33,7 +34,7 @@ run_matrix() { # apk-name devices...
   local type=(--type game-loop --scenario-numbers 1 --timeout 600s)
   [ "${TYPE:-}" = robo ] && type=(--type robo --timeout 300s)
   "$G" firebase test android run --project "$PROJECT" "${type[@]}" \
-    --app "$WORK/$apk" "${args[@]}" --async >/dev/null 2>"$WORK/run.log" || { cat "$WORK/run.log"; exit 1; }
+    --app "$WORK/$apk" "${args[@]}" --async >/dev/null 2>"$WORK/run.log" || { grep -E "ERROR|Reason" "$WORK/run.log" >&2; exit 1; }
   # gcloud's stdout format varies (id or console link); its log always names the matrix.
   grep -o 'matrix-[a-z0-9]*' "$WORK/run.log" | head -1
 }
