@@ -444,6 +444,8 @@ function handler(event) {
           // OAuth client ids/secrets for connecting user storages (set with scripts/set-oauth-client.sh).
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/oauth/*`,
           `arn:aws:ssm:${this.region}:${this.account}:parameter${STREAM_KEY_PARAM}`,
+          // Firebase Cloud Messaging service account for push notifications (lambda/api/push.ts).
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/fcm/*`,
         ],
         }),
       );

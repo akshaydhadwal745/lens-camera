@@ -246,4 +246,9 @@ effort, uneven or poor results across phones, low value for our users.
 | 2026-10-12 | dev-68 | self-test (Device Farm) | Galaxy A14 5G Android 13 | 25 pass, 2 warn, 1 fail (smart burst 1 shot); viewfinder 29.5–30 fps with readers/motion, motion clip 29.8 fps, 1080p video + sound; shutter JPEG 1.75 s vs quick 0.54 s |
 | 2026-10-12 | dev-68 | stock camera vs Lens (Device Farm screenshots) | S9, S25 Ultra, Pixel 8a | dark box: Lens turned Night on automatically and lifted the viewfinder (stock apps black); lens chips real lenses only (S25U .6/1/5.1×, Pixel .5/1/2×); labels whole. **Found:** OTA "New version ready" pill overlaps the mode strip/shutter; ✦ "Vivid" suggestion shown in a black scene. Stock photo not captured (volume key ignored) |
 | 2026-10-12 | — | **finding (7 phones)** | all | **quick capture is 2.5–3× faster than best quality everywhere; smart burst gets 1 shot in 1.5 s on every phone** → 7.3 fix: burst on the quick path (measure quality difference before switching the single shot) |
+| 2026-10-12 | dev-71 | release | CI | verify-release 71 4/4 |
+| 2026-10-12 | dev-71 | self-test (Device Farm) | Pixel 8a | **smart burst 6 shots in 1.5 s** (was 1); **Night 3024×4032 (12 MP) via Lens Night** (was 5 MP maker mode); 19 pass, 12 warn (12-of-16 MP limit), 0 fail |
+| 2026-10-12 | dev-71 | self-test (Device Farm) | Galaxy A14 5G | **smart burst 4 shots** (was 1); 26 pass, 2 warn, 0 fail |
+| 2026-10-12 | dev-71 | self-test (Device Farm) | Galaxy S25 Ultra | smart burst 2 shots (was 1); 27 pass, 2 warn, 1 fail (Quality Lab maker NIGHT after RAW, known) |
+| 2026-10-12 | dev-71 | self-test (Device Farm) | Galaxy S9 Android 9 | smart burst still 1 shot (quick capture itself 1.25 s on this phone + the swap): open; 20 pass, 4 warn, 1 fail |
 | 2026-10-11 | dev-46 | UI | Emulator 360 dp | Normal/PRO layout, modes, styles, "No person found", Night draws; live blur with a person not testable (virtual camera can't be aimed headless) |

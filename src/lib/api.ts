@@ -122,9 +122,27 @@ export type UploadPlan = PlanExtras &
     | { mode: 'external'; location: StorageLocation }
   );
 export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
-export type Person = { id: string; name: string };
-export type Contact = Person & { lastSharedAt: number };
+/** Someone to share with: `account` = signed in (not a guest phone); `sharedBefore` = an accepted share before. */
+export type Person = { id: string; name: string; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
+export type Contact = Person & { lastSharedAt: number; trusted?: boolean };
+export type ShareStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'revoked' | 'expired';
+export type ShareRequest = {
+  shareId: string;
+  from: { id: string; name: string; account: boolean };
+  to: { id: string; name: string; account: boolean };
+  photos: number;
+  videos: number;
+  count: number;
+  status: ShareStatus;
+  createdAt: number;
+  expiresAt: number;
+  respondedAt?: number;
+  knownSender?: boolean;
+  /** Small thumbnails only (never the preview or original): from known senders, or after "Show previews". */
+  thumbs?: { id: string; kind: string; thumbUrl?: string }[];
+};
 type Page<T> = { items: T[]; cursor: string | null };
+export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
 
 const q = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '');
 
@@ -214,8 +232,23 @@ export const api = {
 
   searchUsers: (query: string) => request<{ users: Person[] }>('GET', `/users?q=${encodeURIComponent(query)}`),
   contacts: () => request<{ contacts: Contact[] }>('GET', '/contacts'),
+  lookupUser: (id: string) => request<{ user: Person }>('GET', `/users/${encodeURIComponent(id)}`),
   share: (mediaIds: string[], to: string[]) =>
-    request<{ shared: number; recipients: string[] }>('POST', '/shares', { mediaIds, to }),
+    request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { mediaIds, to }),
+  // Share requests: nothing is shared until the recipient accepts (docs/design/sharing-consent.md).
+  sharesIn: (cursor?: string | null) => request<{ requests: ShareRequest[]; pending: number; cursor: string | null }>('GET', `/shares/in${q(cursor)}`),
+  sharesOut: (cursor?: string | null) => request<{ requests: ShareRequest[]; cursor: string | null }>('GET', `/shares/out${q(cursor)}`),
+  shareRequest: (id: string, previews = false) => request<ShareRequest>('GET', `/shares/in/${id}${previews ? '?previews=1' : ''}`),
+  acceptShare: (id: string, alwaysAccept = false) => request<{ status: ShareStatus; count: number }>('POST', `/shares/in/${id}/accept`, { alwaysAccept }),
+  declineShare: (id: string, block = false) => request<{ status: ShareStatus; blocked: boolean }>('POST', `/shares/in/${id}/decline`, { block }),
+  cancelShare: (id: string) => request<{ status: ShareStatus }>('POST', `/shares/out/${id}/cancel`),
+  setBlocked: (userId: string, blocked: boolean) => request<{ blocked: boolean }>(blocked ? 'POST' : 'DELETE', `/blocks/${userId}`),
+  setTrusted: (userId: string, trusted: boolean) => request<{ trusted: boolean }>('PUT', `/contacts/${userId}`, { trusted }),
+  // Push notifications (FCM token per phone) and which kinds the user wants.
+  registerPush: (token: string, platform: string) => request<{ ok: boolean }>('PUT', '/push', { token, platform }),
+  unregisterPush: (token: string) => request<{ ok: boolean }>('DELETE', '/push', { token }),
+  notificationPrefs: () => request<NotificationPrefs>('GET', '/notifications'),
+  setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => request<NotificationPrefs>('PUT', '/notifications', prefs),
   shared: (cursor?: string | null) => request<Page<SharedMedia>>('GET', `/shared${q(cursor)}`),
   removeShared: (ownerId: string, mediaId: string) => request<unknown>('DELETE', `/shared/${ownerId}/${mediaId}`),
 

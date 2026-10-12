@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api, Person } from '@/lib/api';
+import { onPersonPicked } from '@/lib/person-code';
+import { askForNotifications } from '@/lib/push';
 import { selectGallery, useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
 
@@ -17,6 +19,16 @@ function Avatar({ name }: { name: string }) {
       <Text style={styles.avatarText}>{name.slice(0, 1).toUpperCase()}</Text>
     </View>
   );
+}
+
+/** What tells look-alike names apart: signed-in account vs guest phone, and whether you've shared before. */
+function PersonFacts({ person }: { person: Person }) {
+  const facts = [
+    person.account === undefined ? null : person.account ? 'Signed-in account' : 'Guest phone',
+    person.sharedBefore || person.lastSharedAt ? 'Shared before' : person.account === undefined ? null : 'New to you',
+  ].filter(Boolean);
+  if (!facts.length) return null;
+  return <Text style={styles.facts}>{facts.join(' · ')}</Text>;
 }
 
 export default function ShareScreen() {
@@ -37,18 +49,30 @@ export default function ShareScreen() {
   const [searching, setSearching] = useState(false);
   const [chosen, setChosen] = useState<Map<string, Person>>(new Map());
   const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     api
       .contacts()
-      .then((r) => setRecent(r.contacts))
+      .then((r) => setRecent(r.contacts.map((c) => ({ ...c, sharedBefore: true }))))
       .catch(() => {});
   }, []);
+
+  // A friend's scanned "My Lens code" (Scan code): exactly that person.
+  useEffect(
+    () =>
+      onPersonPicked((person) => {
+        setChosen((prev) => new Map(prev).set(person.id, person));
+        setQuery('');
+      }),
+    [],
+  );
 
   // Debounced name search.
   useEffect(() => {
     const q = query.trim().toLowerCase();
-    if (q.length < 2) {
+    // 3+ letters: two-letter prefixes match too many look-alike names.
+    if (q.length < 3) {
       setResults([]);
       return;
     }
@@ -77,7 +101,22 @@ export default function ShareScreen() {
     setSending(true);
     try {
       const result = await api.share(ready, [...chosen.keys()]);
-      notify('Sent', `${result.shared} item${result.shared === 1 ? '' : 's'} sent to ${result.recipients.join(', ')}`);
+      const requests = result.requests ?? [];
+      const waiting = requests.filter((r) => r.status === 'pending').map((r) => r.name);
+      const auto = requests.filter((r) => r.status === 'accepted').map((r) => r.name);
+      const items = `${result.shared} item${result.shared === 1 ? '' : 's'}`;
+      notify(
+        'Sent',
+        [
+          waiting.length ? `${waiting.join(', ')} will be asked to accept ${items}. You can cancel in Shared → Sent until they do.` : '',
+          auto.length ? `${auto.join(', ')} accept everything from you: shared now.` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n') || `${items} sent to ${result.recipients.join(', ')}`,
+      );
+      setConfirming(false);
+      // Hear back when they accept (asked once, at a moment it makes sense).
+      void askForNotifications();
       router.back();
     } catch (error) {
       notify('Could not send', errorMessage(error));
@@ -86,7 +125,7 @@ export default function ShareScreen() {
     }
   };
 
-  const showingSearch = query.trim().length >= 2;
+  const showingSearch = query.trim().length >= 3;
   const list = showingSearch ? results : recent;
   const skipped = requested.length - ready.length;
 
@@ -99,7 +138,7 @@ export default function ShareScreen() {
         <Text style={styles.title}>
           Send {ready.length} item{ready.length === 1 ? '' : 's'}
         </Text>
-        <Pressable onPress={send} disabled={!chosen.size || !ready.length || sending} hitSlop={10} style={styles.headerButton}>
+        <Pressable onPress={() => setConfirming(true)} disabled={!chosen.size || !ready.length || sending} hitSlop={10} style={styles.headerButton}>
           {sending ? (
             <ActivityIndicator color={colors.link} />
           ) : (
@@ -119,7 +158,7 @@ export default function ShareScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search people by name"
+          placeholder="Full Lens name, e.g. quiet-tiger-8703"
           placeholderTextColor="#636366"
           autoCapitalize="none"
           autoCorrect={false}
@@ -127,6 +166,11 @@ export default function ShareScreen() {
           returnKeyType="search"
         />
         {searching && <ActivityIndicator size="small" color="#86868B" />}
+        {Platform.OS !== 'web' && (
+          <Pressable onPress={() => router.push({ pathname: '/scan', params: { for: 'person' } })} hitSlop={8} accessibilityLabel="Scan a friend's Lens code">
+            <Ionicons name="qr-code-outline" size={20} color={colors.link} />
+          </Pressable>
+        )}
       </View>
 
       {chosen.size > 0 && (
@@ -152,7 +196,7 @@ export default function ShareScreen() {
               ? searching
                 ? ''
                 : 'No one found with that name.'
-              : `No recent people yet. Search for a friend's name above.${myName ? ` Yours is ${myName}.` : ''}`}
+              : `No recent people yet. Type a friend's full Lens name or scan their code.${myName ? ` Yours is ${myName}.` : ''}`}
           </Text>
         }
         renderItem={({ item }) => {
@@ -160,12 +204,45 @@ export default function ShareScreen() {
           return (
             <Pressable onPress={() => toggle(item)} style={styles.row} accessibilityState={{ selected: on }}>
               <Avatar name={item.name} />
-              <Text style={styles.name}>{item.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{item.name}</Text>
+                <PersonFacts person={item} />
+              </View>
+              {item.exact ? <Text style={styles.exact}>Exact</Text> : null}
               <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? colors.link : '#636366'} />
             </Pressable>
           );
         }}
       />
+
+      {/* Last look before anything is sent: exactly who, and what. */}
+      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
+        <View style={styles.backdrop}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <Text style={styles.sheetTitle}>
+              Share {ready.length} item{ready.length === 1 ? '' : 's'} with
+            </Text>
+            {[...chosen.values()].map((p) => (
+              <View key={p.id} style={styles.sheetRow}>
+                <Avatar name={p.name} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{p.name}</Text>
+                  <PersonFacts person={p} />
+                </View>
+              </View>
+            ))}
+            <Text style={styles.sheetNote}>They&apos;ll be asked to accept first. Until they do, you can cancel it in Shared → Sent; after that you can still revoke it.</Text>
+            <View style={styles.sheetButtons}>
+              <Pressable style={[styles.sheetButton, styles.sheetSecondary]} onPress={() => setConfirming(false)} disabled={sending}>
+                <Text style={styles.sheetSecondaryText}>Back</Text>
+              </Pressable>
+              <Pressable style={[styles.sheetButton, styles.sheetPrimary]} onPress={send} disabled={sending}>
+                {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sheetPrimaryText}>Share</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -198,4 +275,17 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   name: { flex: 1, color: '#fff', fontSize: 16 },
   empty: { color: '#86868B', fontSize: 14, paddingHorizontal: 16, paddingTop: 12, lineHeight: 20 },
+  facts: { color: '#86868B', fontSize: 12, marginTop: 2 },
+  exact: { color: '#000', backgroundColor: colors.text, fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  sheetTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sheetNote: { color: '#86868B', fontSize: 13, lineHeight: 18 },
+  sheetButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  sheetButton: { flex: 1, minHeight: 48, borderRadius: 980, alignItems: 'center', justifyContent: 'center' },
+  sheetPrimary: { backgroundColor: colors.action },
+  sheetPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  sheetSecondary: { backgroundColor: '#2C2C2E' },
+  sheetSecondaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

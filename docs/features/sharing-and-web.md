@@ -1,5 +1,7 @@
 # Identity, sharing and web viewer
 
+> **2026-10-12: sharing is by request.** A share must be accepted by the recipient before anything is reachable; the sender can cancel or revoke; people are picked by exact name or by scanning "My Lens code". Full design, statuses, API and screens: [docs/design/sharing-consent.md](../design/sharing-consent.md). Notifications: [notifications.md](notifications.md).
+
 **Code:** `src/lib/identity.ts`, `src/app/share.tsx`, `src/app/settings.tsx`,
 `src/app/link.tsx`; server `infra/lambda/api/identity.ts`, `shares.ts`.
 

@@ -71,3 +71,4 @@ research/quality/out/
 
 # Secrets: never commit anything under infra/keys/
 infra/keys/
+google-services.json

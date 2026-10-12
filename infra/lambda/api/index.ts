@@ -15,13 +15,15 @@ import {
   register,
   revokeWebSessions,
   searchUsers,
+  lookupUser,
   signOutCurrent,
 } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
 import { createSet, saveDiagnostics, saveProbe } from './lab';
 import { completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
-import { removeShared, share, sharedWithMe } from './shares';
+import { accept, cancel, decline, inbox, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
+import { notificationPrefs, registerPush, unregisterPush } from './push';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { requestStream } from './stream';
@@ -96,6 +98,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'DELETE /sessions') return await revokeOtherSessions(identity);
     if (seg[1] === 'sessions' && seg.length === 3 && method === 'DELETE') return await revokeSession(identity, seg[2]);
     if (route === 'GET /users') return await searchUsers(identity, req);
+    if (seg[1] === 'users' && seg.length === 3 && method === 'GET') return await lookupUser(identity, seg[2]);
     if (route === 'GET /contacts') return await contacts(identity);
     if (route === 'POST /pairing') return await createPairing(identity);
     // Phone side of QR sign-in, and the phone's list of signed-in browsers.
@@ -167,6 +170,18 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     }
 
     if (route === 'POST /shares') return await share(identity, req);
+    // Share requests (docs/design/sharing-consent.md).
+    if (route === 'GET /shares/in') return await inbox(identity, req);
+    if (route === 'GET /shares/out') return await sent(identity, req);
+    if (seg[1] === 'shares' && seg[2] === 'in' && seg.length === 4 && method === 'GET') return await shareRequest(identity, seg[3], req);
+    if (seg[1] === 'shares' && seg[2] === 'in' && seg.length === 5 && method === 'POST' && seg[4] === 'accept') return await accept(identity, seg[3], req);
+    if (seg[1] === 'shares' && seg[2] === 'in' && seg.length === 5 && method === 'POST' && seg[4] === 'decline') return await decline(identity, seg[3], req);
+    if (seg[1] === 'shares' && seg[2] === 'out' && seg.length === 5 && method === 'POST' && seg[4] === 'cancel') return await cancel(identity, seg[3]);
+    if (seg[1] === 'blocks' && seg.length === 3 && (method === 'POST' || method === 'DELETE')) return await setBlocked(identity, seg[2], method === 'POST');
+    if (seg[1] === 'contacts' && seg.length === 3 && method === 'PUT') return await setTrusted(identity, seg[2], req);
+    if (route === 'PUT /push') return await registerPush(identity, req);
+    if (route === 'DELETE /push') return await unregisterPush(identity, req);
+    if (route === 'GET /notifications' || route === 'PUT /notifications') return await notificationPrefs(identity, req);
     if (route === 'GET /shared') return await sharedWithMe(identity, req);
     if (seg[1] === 'shared' && seg.length === 4 && method === 'DELETE') return await removeShared(identity, seg[2], seg[3]);
 

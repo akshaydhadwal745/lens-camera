@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 
-import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchGetCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import {
   clearedCookie,
@@ -250,25 +250,63 @@ export function me(identity: Identity): Res {
 }
 
 /** GET /v1/users?q=prefix: search identities by name prefix. */
+/** Profile + relation facts the share screens show so the sender picks the right person. */
+async function describeUsers(identity: Identity, ids: string[]) {
+  if (!ids.length) return [];
+  const keys = ids.flatMap((id) => [{ pk: `D#${id}`, sk: 'PROFILE' }, { pk: `D#${identity.id}`, sk: `C#${id}` }]);
+  const result = await ddb.send(new BatchGetCommand({ RequestItems: { [env.table]: { Keys: keys } } }));
+  const got = result.Responses?.[env.table] ?? [];
+  const profile = new Map(got.filter((x) => x.sk === 'PROFILE').map((x) => [(x.pk as string).slice(2), x]));
+  const contact = new Map(got.filter((x) => (x.sk as string).startsWith('C#')).map((x) => [(x.sk as string).slice(2), x]));
+  return ids
+    .filter((id) => profile.has(id))
+    .map((id) => ({
+      id,
+      name: profile.get(id)!.name as string,
+      // Signed in with email/Google (vs a guest phone): one more hint it's the right person.
+      account: !!profile.get(id)!.email,
+      sharedBefore: contact.has(id),
+      lastSharedAt: (contact.get(id)?.lastAt as number | undefined) ?? null,
+    }));
+}
+
+/**
+ * GET /v1/users?q=: find people by Lens name. The exact name comes first (names
+ * look alike: quiet-tiger-8703 vs quiet-tiger-8730), then up to 10 starting with
+ * the text once it's long enough to be specific. Rate-limited (no name scraping).
+ */
 export async function searchUsers(identity: Identity, req: Req): Promise<Res> {
   const q = (req.query.q ?? '').trim().toLowerCase();
-  if (q.length < 2) return json(200, { users: [] });
+  if (q.length < 3) return json(200, { users: [] });
+  await rateLimit(`users#${identity.id}`, 300, 'Too many searches. Try again later.');
   const result = await ddb.send(
     new QueryCommand({
       TableName: env.table,
       IndexName: 'gsi1',
       KeyConditionExpression: 'gsi1pk = :p AND begins_with(gsi1sk, :q)',
       ExpressionAttributeValues: { ':p': 'NAME', ':q': q },
-      Limit: 20,
+      Limit: 10,
     }),
   );
-  const users = (result.Items ?? [])
+  const ids = (result.Items ?? [])
     .map((item) => ({ id: (item.pk as string).slice(2), name: item.name as string }))
-    .filter((u) => u.id !== identity.id);
+    .filter((u) => u.id !== identity.id)
+    .sort((a, b) => Number(b.name === q) - Number(a.name === q))
+    .map((u) => u.id);
+  const users = (await describeUsers(identity, ids)).map((u) => ({ ...u, exact: u.name === q }));
   return json(200, { users });
 }
 
-/** GET /v1/contacts: people this identity has shared with, most recent first. */
+/** GET /v1/users/:id: one person, from a scanned "My Lens code" (no guessing between look-alike names). */
+export async function lookupUser(identity: Identity, id: string): Promise<Res> {
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(id) || id === identity.id) throw new HttpError(404, 'Not found');
+  await rateLimit(`users#${identity.id}`, 300, 'Too many searches. Try again later.');
+  const [user] = await describeUsers(identity, [id]);
+  if (!user) throw new HttpError(404, 'Not found');
+  return json(200, { user });
+}
+
+/** GET /v1/contacts: people this identity has shared with (accepted), most recent first. */
 export async function contacts(identity: Identity): Promise<Res> {
   const result = await ddb.send(
     new QueryCommand({
@@ -278,7 +316,13 @@ export async function contacts(identity: Identity): Promise<Res> {
     }),
   );
   const list = (result.Items ?? [])
-    .map((item) => ({ id: (item.sk as string).slice(2), name: item.name as string, lastSharedAt: item.lastAt as number }))
+    .map((item) => ({
+      id: (item.sk as string).slice(2),
+      name: item.name as string,
+      lastSharedAt: item.lastAt as number,
+      account: item.account === true,
+      trusted: item.trusted === true,
+    }))
     .sort((a, b) => b.lastSharedAt - a.lastSharedAt)
     .slice(0, 50);
   return json(200, { contacts: list });

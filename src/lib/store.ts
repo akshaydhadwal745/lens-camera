@@ -25,6 +25,7 @@ import {
   saveRemoteCache,
   uriFor,
 } from './local-store';
+import { notifyBackupDone } from './local-notify';
 import {
   DeleteScope,
   GalleryItem,
@@ -620,6 +621,8 @@ export async function signInWithGoogle() {
 export async function logOut() {
   const waiting = state.entries.filter((e) => !e.uploadedAt).length;
   if (waiting) throw new Error(`${waiting} item${waiting === 1 ? ' is' : 's are'} still uploading. Wait until everything is in the cloud.`);
+  // No more notifications for the account leaving this phone (push imports the store: load it lazily).
+  await import('./push').then((m) => m.unregisterPush()).catch(() => {});
   await api.revokeSession('current').catch(() => {});
   state.entries.forEach(deleteFileFor);
   setEntries([]);
@@ -818,6 +821,8 @@ const backup = {
     if (!this.active) return;
     backupService.stop();
     this.active = false;
+    // Everything waiting went up: say so once (only when Lens isn't on screen).
+    if (this.done > 0 && !state.entries.some((e) => !e.uploadedAt && !e.error)) void notifyBackupDone(this.done);
   },
 };
 

@@ -147,6 +147,14 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
   const rest = await partitionItems(id);
   const reverseContacts = rest.filter((i) => (i.sk as string).startsWith('C#')).map((i) => ({ pk: `D#${(i.sk as string).slice(2)}`, sk: `C#${id}` }));
   await deleteKeys(reverseContacts);
+  // Share requests: their copies in the other people's inbox / Sent list go too.
+  const reverseRequests = rest.flatMap((i) => {
+    const sk = i.sk as string;
+    if (sk.startsWith('OUT#')) return [{ pk: `D#${i.toId}`, sk: `IN#${i.shareId}` }];
+    if (sk.startsWith('IN#')) return [{ pk: `D#${i.fromId}`, sk: `OUT#${i.shareId}` }];
+    return [];
+  });
+  await deleteKeys(reverseRequests);
 
   // Everything else in the account (received shares, contacts, storages…), then the name and profile.
   await deleteKeys(rest.filter((i) => i.sk !== 'PROFILE').map((i) => ({ pk: i.pk, sk: i.sk })));

@@ -18,7 +18,8 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { checkQuota, ddb, decodeCursor, encodeCursor, env, HttpError, json, Req, Res, s3, signMediaUrl } from './lib';
+import { checkQuota, ddb, decodeCursor, encodeCursor, env, HttpError, json, quotaFor, Req, Res, s3, signMediaUrl } from './lib';
+import { notify } from './push';
 import { listStorages, PROVIDERS, Provider } from './storage';
 
 /** Files up to this size use a single PUT; larger ones use S3 multipart. */
@@ -645,6 +646,16 @@ export async function completeUpload(identity: Identity, id: string, req?: Req):
         ],
       }),
     );
+    // Crossing 90 % of the Lens storage with this upload: tell them once (not on every upload after).
+    const quota = quotaFor(identity);
+    const before = identity.usedBytes;
+    if (!item.location && quota > 0 && before < quota * 0.9 && before + item.size >= quota * 0.9) {
+      await notify(identity.id, 'storage', {
+        title: 'Lens storage is 90% full',
+        body: 'Free up space or get more, so new photos keep backing up.',
+        route: '/storage',
+      });
+    }
   } catch (error: any) {
     // Another request completed it first; that's fine.
     if (error?.name !== 'TransactionCanceledException') throw error;

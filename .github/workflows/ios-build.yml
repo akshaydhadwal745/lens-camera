@@ -219,6 +219,12 @@ jobs:
           done
           test -f "$ANDROID_HOME/ndk/$NDK/source.properties"
 
+      # Push notifications (FCM): the Firebase app config is a secret, not in the public repo.
+      - name: Firebase config
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json && test -s google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+
       - name: Generate native project
         run: npx expo prebuild --platform android --clean --no-install
         env:

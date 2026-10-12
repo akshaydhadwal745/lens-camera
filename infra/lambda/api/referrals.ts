@@ -23,6 +23,7 @@ import { Attribution, attribute, canonicalEmail, createCode, lookupCode, today }
 import { audit } from './audit';
 import type { Identity } from './identity';
 import { ddb, env, HttpError, json, randomId, Req, Res } from './lib';
+import { notify as pushNotify } from './push';
 
 const GB = 1024 ** 3;
 export const referralSettings = {
@@ -262,6 +263,11 @@ async function grant(friend: Record<string, any>, friendId: string, attribution:
       ExpressionAttributeValues: { ':s': 'rewarded', ':b': referralSettings.inviterBytes, ':n': Date.now() },
     }),
   );
+  await pushNotify(inviterId, 'invites', {
+    title: `+${Math.round(referralSettings.inviterBytes / 1024 ** 3)} GB: ${friend.name ?? 'A friend'} joined Lens`,
+    body: 'Your invite worked. The extra storage is yours.',
+    route: '/invite',
+  });
   await audit({
     entity: `referral:${friendId}`,
     action: 'referral.rewarded',

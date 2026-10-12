@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LensImaging } from '../../modules/lens-camera';
 import { BrandIntro } from '@/components/BrandIntro';
 import { UpdateBanner } from '@/components/UpdateBanner';
+import { identityChanged, startPush } from '@/lib/push';
 import { boot, useStore } from '@/lib/store';
 import { fontFiles } from '@/lib/theme';
 
@@ -29,7 +30,14 @@ export default function RootLayout() {
     // Android: website installs don't get Play's install-time model download, so ask for the
     // scanner / scene / subject / face models now; they're ready before first use.
     LensImaging?.requestMlModules?.().catch(() => {});
+    void startPush();
   }, []);
+
+  // Push tokens belong to the identity: re-register after signing in on this phone.
+  const identityId = useStore((s) => s.identity?.id);
+  useEffect(() => {
+    if (identityId) identityChanged();
+  }, [identityId]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
@@ -40,6 +48,10 @@ export default function RootLayout() {
         <Stack.Screen name="viewer/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="player/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="share" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="shares/index" />
+        <Stack.Screen name="shares/sent" />
+        <Stack.Screen name="shares/[id]" />
+        <Stack.Screen name="my-code" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />

@@ -8,9 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isProCameraAvailable } from '../../modules/lens-camera';
 
-import { api, Session } from '@/lib/api';
+import { api, NotificationPrefs, Session } from '@/lib/api';
 import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
+import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
+import { askForNotifications } from '@/lib/push';
 import { formatBytes } from '@/lib/format';
 import {
   CELLULAR_OPTIONS,
@@ -316,6 +318,46 @@ function ComputersSection() {
         </>
       )}
     </>
+  );
+}
+
+/** Which notifications this account gets (server-side for pushes; "backup finished" is on-phone). */
+function NotificationsSection() {
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+  const [backup, setBackup] = useState(() => backupNotificationsEnabled());
+  useEffect(() => {
+    api.notificationPrefs().then(setPrefs, () => {});
+  }, []);
+  const change = (key: keyof NotificationPrefs, value: boolean) => {
+    setPrefs((p) => (p ? { ...p, [key]: value } : p));
+    if (value) void askForNotifications();
+    api.setNotificationPrefs({ [key]: value }).then(setPrefs, () => {});
+  };
+  const rows: [keyof NotificationPrefs, keyof typeof Ionicons.glyphMap, string, string][] = [
+    ['shares', 'people-outline', 'Shares', 'Someone wants to share with you, or accepted what you sent.'],
+    ['invites', 'gift-outline', 'Invites', 'A friend joined with your invite and you got more storage.'],
+    ['storage', 'cloud-outline', 'Storage', 'Your Lens storage is nearly full.'],
+  ];
+  return (
+    <Section title="Notifications" footer="Lens only notifies you about these. No marketing.">
+      {rows.map(([key, icon, label, hint]) => (
+        <View key={key}>
+          <SwitchRow icon={icon} label={label} hint={hint} value={prefs ? prefs[key] : true} onChange={(v) => change(key, v)} />
+          <View style={styles.divider} />
+        </View>
+      ))}
+      <SwitchRow
+        icon="checkmark-done-outline"
+        label="Backup finished"
+        hint="When a big backup completes while Lens is closed."
+        value={backup}
+        onChange={(v) => {
+          setBackup(v);
+          setBackupNotifications(v);
+          if (v) void askForNotifications();
+        }}
+      />
+    </Section>
   );
 }
 
@@ -629,6 +671,14 @@ export default function SettingsScreen() {
                   </Pressable>
                 </>
               )}
+            </Section>
+
+            {Platform.OS === 'android' && identity ? <NotificationsSection /> : null}
+
+            <Section title="Sharing" footer="Friends scan your code to share with exactly you. You accept each share before it reaches your Shared tab, and you can cancel or revoke what you send.">
+              <LinkRow icon="qr-code-outline" label="My Lens code" onPress={() => router.push('/my-code')} />
+              <View style={styles.divider} />
+              <LinkRow icon="swap-horizontal-outline" label="Requests and sent" onPress={() => router.push('/shares')} />
             </Section>
 
             <Section title="Computers" footer="Use Lens on any computer: open lens.instagrowapp.com, click Sign in and scan the QR code. Only approve codes on a screen in front of you.">

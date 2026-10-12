@@ -112,13 +112,53 @@ cmp -s <(curl -sS "$URL1") "$TMP/photo.jpg" && ok "downloaded bytes match"
 [[ $(call GET /media "$TA" | j .items.length) == 2 ]] && ok "list shows 2 items"
 ok "usedBytes=$(call GET /me "$TA" | j .usedBytes)"
 
-# --- search + share ---
-PREFIX=$(echo "$NB" | cut -d- -f1-2)
-call GET "/users?q=$PREFIX" "$TA" | j ".users.map(u=>u.name).join(',')" | grep -q "$NB" && ok "search '$PREFIX' finds $NB"
-R=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB\"]}"); [[ $(echo "$R" | j .shared) == 2 ]] && ok "shared 2 items with B"
+# --- search + share requests (docs/design/sharing-consent.md) ---
+IA=$(echo "$A" | j .id)
+[[ $(call GET "/users?q=$(echo "$NB" | cut -c1-2)" "$TA" | j .users.length) == 0 ]] && ok "2-letter search returns nothing (no name scraping)"
+R=$(call GET "/users?q=$NB" "$TA"); [[ $(echo "$R" | j '.users[0].name') == "$NB" && $(echo "$R" | j '.users[0].exact') == true ]] && ok "exact name comes first ($NB)"
+[[ $(call GET "/users/$IB" "$TA" | j .user.name) == "$NB" ]] && ok "QR lookup finds exactly $NB"
+inid() { call GET /shares/in "$TB" | j ".requests.find(r=>r.shareId==='$1').status"; }
+R=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB\"]}")
+S1=$(echo "$R" | j '.requests[0].shareId'); [[ $(echo "$R" | j '.requests[0].status') == pending ]] && ok "share to B starts as a request ($S1)"
+[[ $(call GET /shared "$TB" | j .items.length) == 0 ]] && ok "B can't see anything before accepting"
+R=$(call GET /shares/in "$TB"); [[ $(echo "$R" | j .pending) == 1 && $(echo "$R" | j '.requests[0].from.name') == "$NA" ]] && ok "B's inbox: 1 waiting from $NA"
+[[ $(echo "$R" | j '.requests[0].thumbs') == "" && $(echo "$R" | j '.requests[0].knownSender') == false ]] && ok "first-time sender: no thumbnails until asked"
+R=$(call GET "/shares/in/$S1?previews=1" "$TB"); [[ $(echo "$R" | j .thumbs.length) == 2 ]] && ok "Show previews: 2 thumbnails"
+[[ $(echo "$R" | j '.thumbs.every(t=>!t.url&&!t.previewUrl)') == true ]] && ok "previews never include the original or full preview"
+[[ $(call GET /shares/out "$TA" | j '.requests[0].to.name') == "$NB" ]] && ok "A's Sent list shows the request to $NB"
+[[ $(call POST "/shares/out/$S1/cancel" "$TA" | j .status) == cancelled ]] && ok "A cancels while pending"
+[[ $(inid "$S1") == cancelled ]] && ok "B sees it cancelled"
+[[ $(call POST "/shares/in/$S1/accept" "$TB" -o /dev/null -w '%{http_code}') == 409 ]] && ok "a cancelled share can't be accepted"
+S2=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+[[ $(call POST "/shares/in/$S2/accept" "$TB" | j .count) == 2 ]] && ok "B accepts 2 items"
 R=$(call GET /shared "$TB"); [[ $(echo "$R" | j .items.length) == 2 ]] && ok "B sees 2 shared items from $(echo "$R" | j '.items[0].ownerName')"
 SURL=$(echo "$R" | j '.items[0].url'); [[ $(curl -sS -o /dev/null -w '%{http_code}' "$SURL") == 200 ]] && ok "B can open shared media"
-[[ $(call GET /contacts "$TB" | j '.contacts[0].name') == "$NA" ]] && ok "B's history has A"
+[[ $(call GET /contacts "$TB" | j '.contacts[0].name') == "$NA" ]] && ok "B's history has A (after accepting)"
+[[ $(call GET /shares/out "$TA" | j ".requests.find(r=>r.shareId==='$S2').status") == accepted ]] && ok "A sees accepted"
+[[ $(call POST "/shares/out/$S2/cancel" "$TA" | j .status) == revoked ]] && ok "A revokes after acceptance"
+[[ $(call GET /shared "$TB" | j .items.length) == 0 ]] && ok "B's access ends at once"
+S3=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+call POST "/shares/in/$S3/accept" "$TB" -d '{"alwaysAccept":true}' >/dev/null
+[[ $(call GET /contacts "$TB" | j '.contacts[0].trusted') == true ]] && ok "B: always accept from A"
+R=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\"],\"to\":[\"$IB\"]}"); [[ $(echo "$R" | j '.requests[0].status') == accepted ]] && ok "next share from A arrives accepted"
+[[ $(call GET /shared "$TB" | j .items.length) == 2 ]] && ok "B still has the 2 items (no duplicates)"
+# Expiry (7 days): age a fresh request in the database, then try to accept it.
+call PUT "/contacts/$IA" "$TB" -d '{"trusted":false}' >/dev/null
+S4=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+for K in "D#$IB|IN#$S4" "D#$IA|OUT#$S4"; do
+  aws dynamodb update-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"${K%%|*}\"},\"sk\":{\"S\":\"${K##*|}\"}}" \
+    --update-expression 'SET expiresAt = :e' --expression-attribute-values '{":e":{"N":"1000"}}'
+done
+[[ $(inid "$S4") == expired ]] && ok "unanswered request shows expired"
+[[ $(call POST "/shares/in/$S4/accept" "$TB" -o /dev/null -w '%{http_code}') == 409 ]] && ok "an expired share can't be accepted"
+# Decline + block: a blocked sender's new shares never reach the inbox.
+S5=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+[[ $(call POST "/shares/in/$S5/decline" "$TB" -d '{"block":true}' | j .blocked) == true ]] && ok "B declines and blocks A"
+S6=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+[[ $(inid "$S6") == "" ]] && ok "blocked sender's share doesn't arrive"
+[[ $(call GET /shares/out "$TA" | j ".requests.find(r=>r.shareId==='$S6').status") == pending ]] && ok "A just sees it waiting (the block isn't revealed)"
+call DELETE "/blocks/$IA" "$TB" >/dev/null && ok "B unblocks A"
+[[ $(call GET /shared "$TB" | j .items.length) == 2 ]] && ok "accepted items stay through decline/block"
 
 # --- pairing (web sign-in) ---
 CODE=$(call POST /pairing "$TA" | j .code); ok "pairing code $CODE"
@@ -127,7 +167,6 @@ W=$(curl -sS -X POST "$API/pairing/claim" -H 'content-type: application/json' -d
 [[ $(curl -sS -X POST "$API/pairing/claim" -H 'content-type: application/json' -d "{\"code\":\"$CODE\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "code is single-use"
 
 # --- delete scope, Trash, Archive ---
-IA=$(echo "$A" | j .id)
 FN=$(node -p "require('./outputs.json').Lens.MaintenanceFunction")
 DAY=86400000
 maint() { aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out \
@@ -432,7 +471,8 @@ head -c 200000 /dev/urandom > "$TMP/del.jpg"; DMD5=$(md5b64 "$TMP/del.jpg")
 R=$(call POST /media "$TD" -d "{\"id\":\"$IDD\",\"contentType\":\"image/jpeg\",\"size\":200000,\"kind\":\"photo\",\"md5\":\"$DMD5\"}")
 curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $DMD5" --data-binary @"$TMP/del.jpg" -o /dev/null
 call POST "/media/$IDD/complete" "$TD" >/dev/null
-call POST /shares "$TD" -d "{\"mediaIds\":[\"$IDD\"],\"to\":[\"$IB\"]}" >/dev/null
+SD=$(call POST /shares "$TD" -d "{\"mediaIds\":[\"$IDD\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
+call POST "/shares/in/$SD/accept" "$TB" >/dev/null
 [[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == true ]] && ok "account to delete has a photo shared with B"
 [[ $(call DELETE /account "$TD" -o /dev/null -w '%{http_code}') == 400 ]] && ok "deletion needs an explicit confirmation"
 [[ $(call DELETE /account "$TD" -d '{"confirm":"DELETE"}' -o /dev/null -w '%{http_code}') == 202 ]] && ok "account deletion accepted"

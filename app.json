@@ -31,6 +31,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -116,7 +117,14 @@
       "./plugins/with-abi-splits.js",
       "./plugins/with-test-loop.js",
       "./plugins/with-release-signing.js",
-      "./plugins/with-mlkit-models"
+      "./plugins/with-mlkit-models",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FACC15"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { SharesStrip } from '@/components/SharesStrip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -493,6 +494,7 @@ export default function GalleryScreen() {
       </View>
 
       {tab === 'mine' && banner}
+      {tab === 'shared' && <SharesStrip />}
 
       {items.length === 0 ? (
         <View style={[styles.fill, styles.center, { padding: 32 }]}>
@@ -506,7 +508,7 @@ export default function GalleryScreen() {
               </Text>
               <Text style={styles.emptyBody}>
                 {tab === 'shared'
-                  ? `Friends can find you by your name${name ? `, ${name}` : ''}.`
+                  ? `Friends find you by your full name${name ? `, ${name}` : ''}, or by scanning Settings → My Lens code. You accept each share first.`
                   : isWeb
                     ? 'Photos and videos you take with Lens on your phone show up here.'
                     : 'Take your first shot. It goes straight to the cloud, and the roll never runs out.'}
