@@ -159,7 +159,11 @@ class CameraController(private val context: Context) {
   private var astro: Pair<Int, Long>? = null
   private var lens: LensOption? = null
   private var preview: Preview? = null
+  /** Cameras whose maker Night mode saves under half the full resolution: Lens Night instead. */
+  private val smallNightExtension = mutableSetOf<String>()
   private var imageCapture: ImageCapture? = null
+  /** The selector of the current binding (maker extension or plain), to swap the photo use case. */
+  private var boundSelector: CameraSelector? = null
   /** Output format the photo use case was bound with (JPEG, Ultra HDR or RAW). */
   private var photoFormat = ImageCapture.OUTPUT_FORMAT_JPEG
   private var videoCapture: VideoCapture<Recorder>? = null
@@ -319,7 +323,7 @@ class CameraController(private val context: Context) {
     var lastError: Exception? = null
     val baseSelector = cam.info.cameraSelector
     val ext = extensions
-    nightExtension = config.isNight && ext != null &&
+    nightExtension = config.isNight && ext != null && cam.id !in smallNightExtension &&
       runCatching { ext.isExtensionAvailable(baseSelector, ExtensionMode.NIGHT) }.getOrDefault(false)
     // Quality Lab: one of the maker's modes in Photo mode, when the phone has it.
     val labMode = DeviceProfile.EXTENSION_MODES.firstOrNull { it.first == config.extension }?.second
@@ -343,11 +347,21 @@ class CameraController(private val context: Context) {
         p.unbindAll()
         val group = buildUseCases(cam, attempt)
         camera = p.bindToLifecycle(o, selector, group)
+        boundSelector = selector
         bound = attempt
         bindAttempt = attemptIndex
         // Slow motion without high-speed video: 60 fps, re-timed to half speed after recording.
         if (config.isSlowMo) slowFactor = if (attempt.fps == 60 && videoFrameRate(cam, 60) != null) 2 else 1
         Log.i(TAG, "bound $attempt photo ${imageCapture?.resolutionInfo?.resolution} preview ${this.preview?.resolutionInfo?.resolution}")
+        // "Never below the original": a maker Night mode that saves far smaller photos than the
+        // camera can (Pixel 8a: 5 of 16 MP) loses to our own full-resolution Night merge.
+        val photo = imageCapture?.resolutionInfo?.resolution
+        val max = cam.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.getOutputSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }
+        if (nightExtension && !makerNightBigEnough(photo?.width ?: 0, photo?.height ?: 0, max?.width ?: 0, max?.height ?: 0)) {
+          Log.i(TAG, "maker Night saves $photo of $max: using Lens Night on camera ${cam.id}")
+          smallNightExtension += cam.id
+          return bind()
+        }
         applyLive()
         onReady?.invoke(capabilities())
         return
@@ -485,27 +499,51 @@ class CameraController(private val context: Context) {
       }
     } else {
       photoFormat = if (video.plainPhoto) ImageCapture.OUTPUT_FORMAT_JPEG else choosePhotoFormat(cam)
-      imageCapture = ImageCapture.Builder()
-        // Night bursts need quick successive shots; everything else, best quality.
-        .setCaptureMode(
-          if ((config.isNight && !nightExtension) || config.captureMode == "latency") ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-          else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY,
-        )
-        // 95 in every mode (CameraX would use 85 for quick captures, e.g. Night frames).
-        .setJpegQuality(95)
-        .setOutputFormat(photoFormat)
-        .setResolutionSelector(
-          ResolutionSelector.Builder()
-            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-            .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
-            .build(),
-        )
-        .setTargetRotation(targetRotation)
-        .build()
+      // Night bursts need quick successive shots; everything else, best quality.
+      imageCapture = stillCapture((config.isNight && !nightExtension) || config.captureMode == "latency", photoFormat)
         .also { group.addUseCase(it) }
       videoCapture = null
     }
     return group.build()
+  }
+
+  /** The photo use case: full resolution, 4:3, JPEG 95; [latency] = the phone's quick capture path. */
+  private fun stillCapture(latency: Boolean, format: Int): ImageCapture = ImageCapture.Builder()
+    .setCaptureMode(if (latency) ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+    // 95 in every mode (CameraX would use 85 for quick captures, e.g. Night frames).
+    .setJpegQuality(95)
+    .setOutputFormat(format)
+    .setResolutionSelector(
+      ResolutionSelector.Builder()
+        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+        .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+        .build(),
+    )
+    .setTargetRotation(targetRotation)
+    .build()
+
+  /**
+   * Replaces only the photo use case (the viewfinder keeps running): smart burst
+   * switches to the quick capture path and back. Main thread. Returns the new
+   * capture, or null when the camera can't (the old one stays bound).
+   */
+  private fun swapStill(latency: Boolean, format: Int): ImageCapture? {
+    val p = provider ?: return null
+    val o = owner ?: return null
+    val sel = boundSelector ?: return null
+    val old = imageCapture ?: return null
+    val next = stillCapture(latency, format)
+    return try {
+      p.unbind(old)
+      p.bindToLifecycle(o, sel, next)
+      imageCapture = next
+      next
+    } catch (e: Exception) {
+      Log.w(TAG, "photo use case swap failed (latency=$latency)", e)
+      runCatching { p.bindToLifecycle(o, sel, old) }
+      imageCapture = old
+      null
+    }
   }
 
   private fun photoFormats(cam: CameraFacts): Set<Int> =
@@ -1021,17 +1059,33 @@ class CameraController(private val context: Context) {
    * Then the best shot is picked off the main thread ([BurstPicker]).
    */
   fun startBurst(max: Int, onShot: (Int) -> Unit, done: (Result<Map<String, Any?>>) -> Unit) {
-    val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
+    if (imageCapture == null) return done(Result.failure(CameraException("The camera isn't ready for photos.")))
     if (bursting) return done(Result.failure(CameraException("Already taking a burst.")))
     if (photoFormat == ImageCapture.OUTPUT_FORMAT_RAW) return done(Result.failure(CameraException("Burst takes JPEG photos: turn RAW off.")))
+    // The quick capture path: 2.5–3× faster than best quality on every phone tested
+    // (Device Farm dev-68: 0.54–0.86 s vs 1.3–2.6 s per photo), so a 1.5 s hold
+    // gives several shots instead of one. Photo mode only (video stills and Night
+    // keep their own capture); best quality comes back when the burst ends.
+    val quick = config.mode == "photo" && !nightExtension && config.captureMode != "latency" &&
+      swapStill(latency = true, format = ImageCapture.OUTPUT_FORMAT_JPEG) != null
+    val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
     capture.flashMode = ImageCapture.FLASH_MODE_OFF
     bursting = true
     burstStop = false
     val dir = File(outputDir(), "burst-${UUID.randomUUID()}").apply { mkdirs() }
-    val files = mutableListOf<File>()
-    val sizes = mutableListOf<Pair<Int, Int>>()
+    // Shots are requested as soon as the previous one is captured (not saved):
+    // CameraX queues them, so saving overlaps the next capture.
+    val saved = sortedMapOf<Int, Pair<File, Pair<Int, Int>>>()
+    var requested = 0
+    var inFlight = 0
+    var finished = false
     fun finish() {
+      if (finished || inFlight > 0) return
+      finished = true
       bursting = false
+      if (quick) swapStill(latency = false, format = photoFormat)
+      val files = saved.values.map { it.first }
+      val sizes = saved.values.map { it.second }
       if (files.isEmpty()) {
         dir.deleteRecursively()
         return done(Result.failure(CameraException("No photos were taken.")))
@@ -1042,30 +1096,41 @@ class CameraController(private val context: Context) {
           mapOf("uri" to "file://${f.absolutePath}", "width" to sizes[i].first, "height" to sizes[i].second,
             "sharpness" to shots.getOrNull(i)?.sharpness, "faces" to shots.getOrNull(i)?.faces)
         }
-        main.execute { done(Result.success(mapOf("frames" to frames, "pick" to best))) }
+        main.execute { done(Result.success(mapOf("frames" to frames, "pick" to best, "quick" to quick))) }
       }
     }
     fun next() {
-      if (burstStop || files.size >= max) return finish()
-      val file = File(dir, "${files.size}.jpg")
+      if (burstStop || requested >= max) return finish()
+      val index = requested++
+      inFlight++
+      val file = File(dir, "$index.jpg")
       capture.takePicture(
         outputOptions(file),
         io,
         object : ImageCapture.OnImageSavedCallback {
-          override fun onCaptureStarted() = sounds.shutter()
+          override fun onCaptureStarted() {
+            sounds.shutter()
+            // At most two in flight: the one being saved and the next capture.
+            main.execute { if (!finished && inFlight < 2) next() }
+          }
 
           override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-            files += file
-            sizes += uprightSize(file)
+            val size = uprightSize(file)
             main.execute {
-              onShot(files.size)
-              next()
+              saved[index] = file to size
+              inFlight--
+              onShot(saved.size)
+              if (burstStop || requested >= max) finish() else if (inFlight == 0) next()
             }
           }
 
           override fun onError(exception: ImageCaptureException) {
             Log.w(TAG, "burst shot failed", exception)
-            main.execute { finish() }
+            main.execute {
+              inFlight--
+              burstStop = true
+              finish()
+            }
           }
         },
       )
@@ -1197,6 +1262,15 @@ class CameraController(private val context: Context) {
   }
 
   companion object {
+    /**
+     * Keep the maker's Night mode only if its photos are at least half the camera's
+     * largest JPEG (unknown sizes keep it). Below that, Lens Night (full size) wins.
+     */
+    fun makerNightBigEnough(photoW: Int, photoH: Int, maxW: Int, maxH: Int): Boolean {
+      if (photoW <= 0 || photoH <= 0 || maxW <= 0 || maxH <= 0) return true
+      return photoW.toLong() * photoH >= maxW.toLong() * maxH / 2
+    }
+
     /** [astroPlan]'s arithmetic (pure, unit-tested): auto exposure now → per-frame ISO/exposure and frame count. */
     fun planAstro(iso0: Int, ns0: Long, isoMin: Int, isoMax: Int, maxExposureNs: Long): Map<String, Any?>? {
       val longest = minOf(maxExposureNs, 4_000_000_000L)

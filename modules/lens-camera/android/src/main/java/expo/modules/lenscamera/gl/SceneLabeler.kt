@@ -70,6 +70,9 @@ class SceneLabeler {
   }
 
   private fun classify(rgba: ByteArray, width: Int, height: Int): String? {
+    // A black or featureless frame (lens covered, dark pocket, test rack) gets confident
+    // nonsense labels ("sky" → Vivid, seen on Device Farm): suggest nothing.
+    if (!recognisable(rgba)) return null
     val pixels = IntArray(width * height)
     for (y in 0 until height) {
       val src = (height - 1 - y) * width * 4
@@ -98,6 +101,29 @@ class SceneLabeler {
       "cinematic" to listOf("night", "neon", "city light", "concert", "fireworks"),
       "vivid" to listOf("flower", "plant", "garden", "beach", "sea", "lake", "mountain", "sky", "nature", "forest", "rainbow"),
     )
+
+    /** Darker than this mean brightness (0–255) or flatter than this spread: nothing to recognise. */
+    const val MIN_MEAN_LUMA = 18.0
+    const val MIN_LUMA_SPREAD = 6.0
+
+    /** Enough light and detail in the RGBA copy (every 4th pixel sampled) for a scene label to mean something. */
+    fun recognisable(rgba: ByteArray): Boolean {
+      var n = 0
+      var sum = 0.0
+      var sumSq = 0.0
+      var i = 0
+      while (i + 2 < rgba.size) {
+        val y = 0.299 * (rgba[i].toInt() and 0xFF) + 0.587 * (rgba[i + 1].toInt() and 0xFF) + 0.114 * (rgba[i + 2].toInt() and 0xFF)
+        sum += y
+        sumSq += y * y
+        n++
+        i += 16
+      }
+      if (n == 0) return false
+      val mean = sum / n
+      val spread = Math.sqrt(maxOf(0.0, sumSq / n - mean * mean))
+      return mean >= MIN_MEAN_LUMA && spread >= MIN_LUMA_SPREAD
+    }
 
     fun lookFor(labels: List<String>): String? {
       for ((look, words) in RULES) {
