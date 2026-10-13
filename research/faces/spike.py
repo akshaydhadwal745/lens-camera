@@ -119,6 +119,10 @@ def main():
             continue
         (same if label else diff).append(float(ea @ eb))
     secs = time.time() - t0
+    # SAVE_EMB=<file.npz>: keep every face's embedding + identity for the grouping simulation (cluster.py).
+    if os.environ.get('SAVE_EMB'):
+        keys = [k for k, v in cache.items() if v is not None]
+        np.savez(os.environ['SAVE_EMB'], emb=np.array([cache[k] for k in keys]), who=np.array([k.parent.name for k in keys]))
     same, diff = np.array(same), np.array(diff)
 
     print(f'pairs {len(pairs)}  faces {len(cache)}  no face found {missed}  {secs:.0f}s ({secs / max(len(cache), 1) * 1000:.0f} ms/face incl. detect, 2 threads)')

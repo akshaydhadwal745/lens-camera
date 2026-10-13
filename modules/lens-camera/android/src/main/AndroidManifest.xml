@@ -5,4 +5,11 @@
   <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
   <!-- ML Kit install-time models (subject segmentation, scene labels, faces) are declared in the
        app manifest by plugins/with-mlkit-models.js: expo-camera declares the same entry. -->
+  <application>
+    <!-- People: face grouping only while charging (docs/design/people.md). -->
+    <service
+      android:name="expo.modules.lenscamera.people.PeopleJob"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
+  </application>
 </manifest>

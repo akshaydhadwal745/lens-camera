@@ -342,9 +342,32 @@ export type PeopleBenchmark = {
   results?: { faces: number; skipped: number; detectMs: number; embedMs: number; sharpness: number[]; eyeDistance: number[]; embeddings: number[][] }[];
 };
 
+export type PeopleGroup = { id: number; name: string | null; contactId: string | null; hidden: boolean; photos: number; coverFaceId: number };
+export type PeopleStatus = { on: boolean; ownPhotos: number; photos?: number; faces?: number; groups?: number };
+export type PeoplePass = { scanned: number; faces: number; forgotten: number; merged: number; left: number; stoppedBy: string | null };
+
 type PeopleModule = {
   available(): boolean;
   benchmark(modelPath: string, photos: string[]): Promise<PeopleBenchmark>;
+  status(): Promise<PeopleStatus>;
+  /** Downloads the model (checked against sha256) and schedules the charging job. */
+  enable(url: string, sha256: string): Promise<boolean>;
+  ensureScheduled(): void;
+  /** Turns People off and deletes every bit of face data on the phone. */
+  disable(): Promise<boolean>;
+  scanNow(budgetSeconds: number): Promise<PeoplePass | null>;
+  groups(minPhotos: number, includeHidden: boolean): Promise<PeopleGroup[]>;
+  groupPhotos(groupId: number): Promise<{ photoId: string; faceId: number }[]>;
+  asks(limit: number): Promise<{ faceId: number; groupId: number; photoId: string }[]>;
+  faceThumb(faceId: number): Promise<string | null>;
+  rename(groupId: number, name: string | null): Promise<void>;
+  setContact(groupId: number, contactId: string | null): Promise<void>;
+  hide(groupId: number, hidden: boolean): Promise<void>;
+  merge(keep: number, other: number): Promise<void>;
+  notSame(a: number, b: number): Promise<void>;
+  notThis(faceId: number): Promise<number | null>;
+  confirm(faceId: number, groupId: number): Promise<void>;
+  reject(faceId: number, groupId: number): Promise<void>;
 };
 
 /** Null on iPhone, web and builds older than People. */

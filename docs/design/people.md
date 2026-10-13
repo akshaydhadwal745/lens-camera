@@ -76,6 +76,18 @@ $0.001 per user who opts in.
 - Settings → People: on/off, "Scanning: 1,240 of 3,100 photos (while
   charging)", **Delete all face data**.
 
+## Names (user question 2026-10-13: "Lens only gives random names")
+- **A group's name is a private label the user types** ("Mom", "Riya"), stored
+  only in the on-phone face database, like a phone contact name. Unnamed groups
+  just show the face.
+- **Lens account names stay random** (`quiet-tiger-8703`) and matter only for
+  sharing: "Link to a Lens friend" picks from people you already shared with,
+  scanned ("My Lens code") or saw nearby, so nobody types a random name. The
+  list shows "Riya · quiet-tiger-8703".
+- **Smart link (on the phone, from your own share history):** when a face group
+  appears in most photos you shared with one friend, ask once: "Is this
+  quiet-tiger-8703? Link to suggest shares." Never linked without a yes.
+
 ## Server (no face data)
 - `PUT /me` gains `suggestMe: boolean` (default off), set in Settings →
   Sharing "Let friends' Lens suggest me".

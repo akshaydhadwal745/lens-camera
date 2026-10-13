@@ -1,16 +1,20 @@
 package expo.modules.lenscamera.people
 
 import android.os.SystemClock
+import android.util.Base64
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
 
 /**
- * People (docs/design/people.md), Android only. Step 2: the face pipeline and a
- * benchmark the self-test runs on real phones (speed, heat, does LiteRT load).
+ * People (docs/design/people.md), Android only: turning it on/off, the charging
+ * job, the People screens and the user's corrections, plus the self-test benchmark.
  * Nothing here uploads anything; face data stays on the phone.
  */
 class LensPeopleModule : Module() {
@@ -65,5 +69,89 @@ class LensPeopleModule : Module() {
         "results" to results,
       )
     }
+
+    /** On = model present. [scanning]: a pass is running. Counts come from the on-phone database. */
+    AsyncFunction("status") {
+      val on = PeopleIndexer.modelFile(context).exists()
+      val counts = if (on) synchronized(PeopleIndexer) { FaceStore.open(context).let { s -> try { s.counts() } finally { s.close() } } } else emptyMap()
+      mapOf("on" to on, "ownPhotos" to if (on) PeopleIndexer.ownPhotos(context).size else 0) + counts
+    }
+
+    /**
+     * Turns People on: downloads the model ([url], ~10 MB) into the no-backup
+     * folder, checks its SHA-256, then schedules the charging job.
+     */
+    AsyncFunction("enable") { url: String, sha256: String ->
+      val model = PeopleIndexer.modelFile(context)
+      if (!model.exists()) {
+        model.parentFile?.mkdirs()
+        val tmp = File(model.parentFile, "${model.name}.part")
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 15000; conn.readTimeout = 30000
+        try {
+          if (conn.responseCode != 200) throw IllegalStateException("model download failed (${conn.responseCode})")
+          val digest = MessageDigest.getInstance("SHA-256")
+          conn.inputStream.use { input -> tmp.outputStream().use { out ->
+            val buf = ByteArray(64 * 1024)
+            while (true) { val n = input.read(buf); if (n < 0) break; digest.update(buf, 0, n); out.write(buf, 0, n) }
+          } }
+          val hex = digest.digest().joinToString("") { "%02x".format(it) }
+          if (!hex.equals(sha256, ignoreCase = true)) { tmp.delete(); throw IllegalStateException("model checksum mismatch") }
+          if (!tmp.renameTo(model)) throw IllegalStateException("could not save the model")
+        } finally {
+          conn.disconnect()
+        }
+      }
+      PeopleJob.schedule(context)
+      true
+    }
+
+    /** App start while People is on: make sure the charging job is scheduled. */
+    Function("ensureScheduled") { if (PeopleIndexer.modelFile(context).exists()) PeopleJob.schedule(context) }
+
+    /** Off / "Delete all face data": stop the job, delete the database and the model. */
+    AsyncFunction("disable") {
+      PeopleJob.cancel(context)
+      synchronized(PeopleIndexer) { FaceStore.deleteAll(context) }
+      true
+    }
+
+    /** One pass now, whatever the charger says (self-test and testing only). */
+    AsyncFunction("scanNow") { budgetSeconds: Int ->
+      val r = PeopleIndexer.run(context, budgetSeconds * 1000L) { false } ?: return@AsyncFunction null
+      mapOf("scanned" to r.scanned, "faces" to r.faces, "forgotten" to r.forgotten, "merged" to r.merged, "left" to r.left, "stoppedBy" to r.stoppedBy)
+    }
+
+    AsyncFunction("groups") { minPhotos: Int, includeHidden: Boolean ->
+      synchronized(PeopleIndexer) { FaceStore.open(context).let { s -> try { s.listGroups(minPhotos, includeHidden) } finally { s.close() } } }
+    }
+
+    AsyncFunction("groupPhotos") { groupId: Long ->
+      synchronized(PeopleIndexer) { FaceStore.open(context).let { s -> try { s.groupPhotos(groupId) } finally { s.close() } } }
+    }
+
+    AsyncFunction("asks") { limit: Int ->
+      synchronized(PeopleIndexer) { FaceStore.open(context).let { s -> try { s.asks(limit) } finally { s.close() } } }
+    }
+
+    /** The face crop as a data URI (small JPEG; never leaves the phone). */
+    AsyncFunction("faceThumb") { faceId: Long ->
+      val bytes = synchronized(PeopleIndexer) { FaceStore.open(context).let { s -> try { s.thumb(faceId) } finally { s.close() } } }
+      bytes?.let { "data:image/jpeg;base64," + Base64.encodeToString(it, Base64.NO_WRAP) }
+    }
+
+    AsyncFunction("rename") { groupId: Long, name: String? -> withStore { it.setName(groupId, name) } }
+    AsyncFunction("setContact") { groupId: Long, contactId: String? -> withStore { it.setContact(groupId, contactId) } }
+    AsyncFunction("hide") { groupId: Long, hidden: Boolean -> withStore { it.setHidden(groupId, hidden) } }
+    AsyncFunction("merge") { keep: Long, other: Long -> PeopleActions.merge(context, keep, other) }
+    AsyncFunction("notSame") { a: Long, b: Long -> PeopleActions.notSame(context, a, b) }
+    AsyncFunction("notThis") { faceId: Long -> PeopleActions.notThis(context, faceId) }
+    AsyncFunction("confirm") { faceId: Long, groupId: Long -> PeopleActions.confirm(context, faceId, groupId) }
+    AsyncFunction("reject") { faceId: Long, groupId: Long -> PeopleActions.reject(context, faceId, groupId) }
+  }
+
+  private fun withStore(block: (FaceStore) -> Unit) = synchronized(PeopleIndexer) {
+    val s = FaceStore.open(context)
+    try { block(s) } finally { s.close() }
   }
 }
