@@ -68,10 +68,15 @@ def ours(img, face):
     return cv2.warpAffine(img, similarity(pts[USE], REF[USE]), (112, 112), flags=cv2.INTER_LINEAR)
 
 
-def biggest_face(img):
+NFACES = {}
+
+
+def biggest_face(img, key=None):
     h, w = img.shape[:2]
     det.setInputSize((w, h))
     _, faces = det.detect(img)
+    if key is not None:
+        NFACES[key] = 0 if faces is None else len(faces)
     if faces is None:
         return None
     return max(faces, key=lambda f: f[2] * f[3])
@@ -97,7 +102,7 @@ def main():
     def emb(p):
         if p not in cache:
             img = cv2.imread(str(p))
-            f = biggest_face(img)
+            f = biggest_face(img, p)
             if f is None:
                 cache[p] = None
             else:
@@ -122,7 +127,8 @@ def main():
     # SAVE_EMB=<file.npz>: keep every face's embedding + identity for the grouping simulation (cluster.py).
     if os.environ.get('SAVE_EMB'):
         keys = [k for k, v in cache.items() if v is not None]
-        np.savez(os.environ['SAVE_EMB'], emb=np.array([cache[k] for k in keys]), who=np.array([k.parent.name for k in keys]))
+        np.savez(os.environ['SAVE_EMB'], emb=np.array([cache[k] for k in keys]), who=np.array([k.parent.name for k in keys]),
+                 nfaces=np.array([NFACES.get(k, 1) for k in keys]))
     same, diff = np.array(same), np.array(diff)
 
     print(f'pairs {len(pairs)}  faces {len(cache)}  no face found {missed}  {secs:.0f}s ({secs / max(len(cache), 1) * 1000:.0f} ms/face incl. detect, 2 threads)')

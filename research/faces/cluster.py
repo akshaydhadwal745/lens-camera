@@ -18,7 +18,10 @@ from collections import Counter, defaultdict
 
 import numpy as np
 
-MERGE, MATCH = 0.45, 0.363
+import os
+
+MERGE = float(os.environ.get('MERGE', 0.45))
+MATCH = 0.363
 
 
 def group(E, order):

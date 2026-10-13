@@ -157,11 +157,13 @@ class FaceStore private constructor(private val db: SQLiteDatabase) {
   fun thumb(faceId: Long): ByteArray? =
     db.rawQuery("SELECT thumb FROM faces WHERE id = ?", arrayOf(faceId.toString())).use { c -> if (c.moveToNext()) c.getBlob(0) else null }
 
-  /** Faces the app should ask about ("Is this Riya?"): close to a named person but not sure. */
+  /** Faces the app should ask about ("Is this Riya?"): close to a person the user named, but not sure. */
   fun asks(limit: Int): List<Map<String, Any?>> =
     db.rawQuery(
       "SELECT f.id, f.ask_group, f.photo_id FROM faces f JOIN groups g ON g.id = f.ask_group " +
-        "WHERE f.ask = 1 AND f.group_id != f.ask_group ORDER BY f.id DESC LIMIT ?",
+        // Only about people the user named or linked: never a flood of questions about strangers.
+        "WHERE f.ask = 1 AND f.group_id != f.ask_group AND (g.name IS NOT NULL OR g.contact_id IS NOT NULL) " +
+        "AND NOT EXISTS (SELECT 1 FROM not_in n WHERE n.face_id = f.id AND n.group_id = f.ask_group) ORDER BY f.id DESC LIMIT ?",
       arrayOf(limit.toString()),
     ).use { c ->
       ArrayList<Map<String, Any?>>().apply { while (c.moveToNext()) add(mapOf("faceId" to c.getLong(0), "groupId" to c.getLong(1), "photoId" to c.getString(2))) }
