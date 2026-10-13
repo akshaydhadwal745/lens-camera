@@ -49,7 +49,8 @@ class FaceGroups(private val dim: Int = FaceEmbedder.DIM) {
       val s = score(e, g)
       if (s > bestScore) { best = g; bestScore = s }
     }
-    if (best != null && bestScore >= MERGE) {
+    // A group of ONE face is a noisy reference: joining it needs more (research/faces/cluster.py).
+    if (best != null && bestScore >= need(best.count)) {
       for (i in 0 until dim) best.sum[i] += e[i]
       best.count++
       dirty.add(best.id)
@@ -75,14 +76,14 @@ class FaceGroups(private val dim: Int = FaceEmbedder.DIM) {
   fun consolidate(): List<Pair<Long, Long>> {
     val merges = ArrayList<Pair<Long, Long>>()
     while (true) {
-      var a: Group? = null; var b: Group? = null; var bestScore = MERGE
+      var a: Group? = null; var b: Group? = null; var bestScore = -1f
       val all = groups.values.toList()
       for (d in dirty.toList()) {
         val p = groups[d] ?: continue
         for (q in all) {
           if (q === p || q.id in p.notSame || p.id in q.notSame) continue
           val s = linkage(p, q)
-          if (s >= bestScore) { a = p; b = q; bestScore = s }
+          if (s >= need(minOf(p.count, q.count)) && s >= bestScore) { a = p; b = q; bestScore = s }
         }
       }
       if (a == null || b == null) {
@@ -138,6 +139,14 @@ class FaceGroups(private val dim: Int = FaceEmbedder.DIM) {
   companion object {
     /** LFW 6000 pairs, phone setup (int8, 4-point): 0 wrong merges at 0.45. */
     const val MERGE = 0.45f
+    /**
+     * Joining (or merging with) a one-face group. Grouping 6,391 clean LFW faces of
+     * thousands of people: wrong faces 1.97 % at 0.45 → 0.31 % at 0.55; a phone-like
+     * library (40 regulars + 300 strangers): 0 wrong either way.
+     */
+    const val SINGLE = 0.55f
+
+    fun need(smallerGroupCount: Int) = if (smallerGroupCount <= 1) SINGLE else MERGE
     /** OpenCV's same-person threshold: between this and MERGE the app asks. */
     const val MATCH = 0.363f
   }

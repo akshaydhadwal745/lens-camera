@@ -82,6 +82,11 @@ class LensPeopleModule : Module() {
      * folder, checks its SHA-256, then schedules the charging job.
      */
     AsyncFunction("enable") { url: String, sha256: String ->
+      // The face engine comes from Google Play services: get it first, so People never
+      // turns on without being able to run (Play services downloads it on first use).
+      if (!FaceEmbedder.prepare(context)) {
+        throw IllegalStateException("Google Play services couldn't set up the face engine right now. Try again on Wi-Fi in a few minutes.")
+      }
       val model = PeopleIndexer.modelFile(context)
       if (!model.exists()) {
         model.parentFile?.mkdirs()

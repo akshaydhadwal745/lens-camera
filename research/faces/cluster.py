@@ -22,6 +22,9 @@ import os
 
 MERGE = float(os.environ.get('MERGE', 0.45))
 MATCH = 0.363
+# Joining a group of ONE face (a noisy reference) needs this much; MARGIN: the best group must beat the runner-up by this.
+SINGLE = float(os.environ.get('SINGLE', 0.55))  # chosen 2026-10-13 (see docs/design/people.md)
+MARGIN = float(os.environ.get('MARGIN', 0))
 
 
 def group(E, order):
@@ -32,9 +35,11 @@ def group(E, order):
         if counts:
             scores = (sums / np.array(counts)[:, None]) @ E[i]
             g = int(scores.argmax()); score = float(scores[g])
+            second = float(np.partition(scores, -2)[-2]) if len(scores) > 1 else -1.0
         else:
-            score = -1.0
-        if score >= MERGE:
+            score, second = -1.0, -1.0
+        need = SINGLE if counts and counts[g] == 1 else MERGE
+        if score >= need and score - second >= MARGIN:
             sums[g] += E[i]; counts[g] += 1; members[g].append(i)
         else:
             if score >= MATCH:
@@ -42,11 +47,14 @@ def group(E, order):
             sums = np.vstack([sums, E[i]]); counts.append(1); members.append([i])
     # Consolidation: merge groups whose average linkage (mean . mean) >= MERGE, best pair first.
     while True:
-        means = sums / np.array(counts)[:, None]
+        c = np.array(counts)
+        means = sums / c[:, None]
         sim = means @ means.T
         np.fill_diagonal(sim, -1)
+        need = np.where((c[:, None] == 1) | (c[None, :] == 1), SINGLE, MERGE)
+        sim = np.where(sim >= need, sim, -1)
         a, b = np.unravel_index(sim.argmax(), sim.shape)
-        if sim[a, b] < MERGE:
+        if sim[a, b] < 0:
             break
         sums[a] += sums[b]; counts[a] += counts[b]; members[a] += members[b]
         sums = np.delete(sums, b, 0); del counts[b]; del members[b]
@@ -79,7 +87,28 @@ def main():
     for run in range(3):  # order matters a little: try three shooting orders
         order = rng.permutation(len(E))
         groups, asks = group(E, order)
-        report(groups, who, asks, f'order {run + 1}')
+        report(groups, who, asks, f'all LFW, order {run + 1}')
+    if 'nfaces' not in d:
+        return
+    # LFW labels are unreliable on photos with several people (the labelled person
+    # may not be the face we took): keep one-face photos only.
+    one = np.where(d['nfaces'] == 1)[0]
+    E1, who1 = E[one], who[one]
+    for run in range(3):
+        groups, asks = group(E1, rng.permutation(len(E1)))
+        report(groups, who1, asks, f'one-face photos, order {run + 1}')
+    # A phone-like library: the 40 people with the most photos (family, friends)
+    # plus 300 strangers seen once (bystanders), shuffled.
+    counts = Counter(who1)
+    regulars = {p for p, _ in counts.most_common(40)}
+    idx_reg = [i for i in range(len(E1)) if who1[i] in regulars]
+    strangers = [p for p, n in counts.items() if p not in regulars]
+    rng.shuffle(strangers)
+    idx_str = [next(i for i in range(len(E1)) if who1[i] == p) for p in strangers[:300]]
+    lib = np.array(idx_reg + idx_str)
+    for run in range(3):
+        groups, asks = group(E1[lib], rng.permutation(len(lib)))
+        report(groups, who1[lib], asks, f'phone-like library, order {run + 1}')
 
 
 if __name__ == '__main__':

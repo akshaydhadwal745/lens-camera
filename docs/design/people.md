@@ -122,6 +122,28 @@ $0.001 per user who opts in.
   **Phone setup (int8 + 4-point alignment, eyes + mouth corners):** 94.9 %
   found, still 0 / 3000 wrong at 0.45. Used because ML Kit's nose point is the
   nose base, not the template's nose tip.
+- **Grouping (research/faces/cluster.py, same algorithm as FaceGroups.kt;
+  parity test FaceGroupsParityTest = identical groups on 209 real faces):**
+
+  | Library | Rule | Wrong faces | In shown groups | Split people |
+  |---|---|---|---|---|
+  | Phone-like: 40 regulars + 300 strangers | 0.45 | 0.15–0.46 % | 0 | 7.5 % |
+  | Phone-like | **0.45 + one-face groups 0.55** | **0** | **0** | 7.5 % |
+  | Clean LFW, 6,391 faces of thousands of people | 0.45 | 1.97 % | 54 | 5.6 % |
+  | Clean LFW | **0.45 + one-face groups 0.55** | **0.31 %** | 14 | 13.7 % |
+
+  Many raw-LFW "errors" were LFW's own label noise (same person under two
+  names, two-person photos, twins). Chosen: **join/merge with a one-face group
+  only at ≥ 0.55** (a single photo is a noisy reference); a split person is one
+  tap to fix ("Same person as…"), a wrong face is the harmful error. Questions
+  only about people the user named (raw sim: thousands of asks otherwise).
+- **Real phones, Test Lab dev-82 self-test (People step):** Pixel 8a 17 ms/face
+  + 0.6 s detect/photo ✓; Motorola edge 50 25 ms + 1.1 s ✓; F01L (Android 8.1,
+  old) 359 ms + 4 s (slow but fine while charging, ~70 min per 1,000 photos) ✓
+  matches right everywhere; Galaxy A14: Play services LiteRT not on the phone and
+  Test Lab blocks Play module downloads ("Download of container feature
+  tflite_dynamite is disabled") → **enable() now gets the engine first (up to
+  2 min) and explains if it can't**; OPPO: Test Lab network timeout.
 - **TFLite conversion (onnx2tf):** fp32 and fp16 = ONNX (cosine 1.00000, 500
   faces). **Shipped: dynamic-range int8, 9.9 MB** (cosine ≥ 0.997 vs ONNX; LFW
   accuracy identical: 95.3 % / 0 wrong at 0.45).

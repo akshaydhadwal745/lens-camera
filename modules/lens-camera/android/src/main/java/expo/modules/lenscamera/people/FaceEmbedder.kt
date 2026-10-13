@@ -45,6 +45,13 @@ class FaceEmbedder private constructor(private val interpreter: InterpreterApi) 
     const val SIZE = FaceAlign.SIZE
     const val DIM = 128
 
+    /**
+     * Makes sure Play services has the LiteRT engine (it downloads it on first use;
+     * this can take a while on a slow network). False = not available right now.
+     */
+    fun prepare(context: Context, timeoutSec: Long = 120): Boolean =
+      runCatching { Tasks.await(TfLite.initialize(context), timeoutSec, TimeUnit.SECONDS); true }.getOrDefault(false)
+
     /** Null when Play services has no LiteRT (phone without Play services): People stays hidden there. */
     fun open(context: Context, model: File, threads: Int = 2): FaceEmbedder? = runCatching {
       Tasks.await(TfLite.initialize(context), 30, TimeUnit.SECONDS)

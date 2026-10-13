@@ -127,7 +127,14 @@ export default function PeopleScreen() {
             </View>
           ))}
           <Pressable style={[styles.primary, busy && { opacity: 0.6 }]} onPress={() => void turnOn()} disabled={busy} accessibilityRole="button">
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Turn on People</Text>}
+            {busy ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.primaryText}>Getting the face engine…</Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryText}>Turn on People</Text>
+            )}
           </Pressable>
           <Text style={styles.fine}>Downloads a {PEOPLE_MODEL.mb} MB face model once. Only your own Lens photos are grouped.</Text>
         </ScrollView>
