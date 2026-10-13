@@ -343,7 +343,8 @@ export type PeopleBenchmark = {
 };
 
 export type PeopleGroup = { id: number; name: string | null; contactId: string | null; hidden: boolean; photos: number; coverFaceId: number };
-export type PeopleStatus = { on: boolean; ownPhotos: number; photos?: number; faces?: number; groups?: number };
+/** waiting: on by default, the face model downloads at the next charge on Wi-Fi. */
+export type PeopleStatus = { on: boolean; waiting?: boolean; ownPhotos: number; photos?: number; faces?: number; groups?: number };
 export type PeoplePass = { scanned: number; faces: number; forgotten: number; merged: number; left: number; stoppedBy: string | null };
 
 type PeopleModule = {
@@ -355,6 +356,10 @@ type PeopleModule = {
   /** Downloads the model (checked against sha256) and schedules the charging job. */
   enable(url: string, sha256: string): Promise<boolean>;
   ensureScheduled(): void;
+  /** On by default: marks People on; the charging job downloads the model on Wi-Fi. */
+  autoEnable(url: string, sha256: string): void;
+  /** Two-letter country (SIM, network, language). */
+  country(): string;
   /** Turns People off and deletes every bit of face data on the phone. */
   disable(): Promise<boolean>;
   scanNow(budgetSeconds: number): Promise<PeoplePass | null>;

@@ -8,9 +8,6 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
 
 /**
  * People (docs/design/people.md), Android only: turning it on/off, the charging
@@ -106,9 +103,14 @@ class LensPeopleModule : Module() {
 
     /** On = model present. [scanning]: a pass is running. Counts come from the on-phone database. */
     AsyncFunction("status") {
-      val on = PeopleIndexer.modelFile(context).exists()
+      val on = PeopleModel.present(context)
       val counts = if (on) synchronized(PeopleIndexer) { FaceStore.open(context).let { s -> try { s.counts() } finally { s.close() } } } else emptyMap()
-      mapOf("on" to on, "ownPhotos" to if (on) PeopleIndexer.ownPhotos(context).size else 0) + counts
+      mapOf(
+        "on" to PeopleModel.isOn(context),
+        // On by default, model not here yet: it downloads at the next charge on Wi-Fi.
+        "waiting" to PeopleModel.waitingForWifi(context),
+        "ownPhotos" to if (PeopleModel.isOn(context)) PeopleIndexer.ownPhotos(context).size else 0,
+      ) + counts
     }
 
     /**
@@ -121,32 +123,25 @@ class LensPeopleModule : Module() {
       if (!FaceEmbedder.prepare(context)) {
         throw IllegalStateException("Google Play services couldn't set up the face engine right now. Try again on Wi-Fi in a few minutes.")
       }
-      val model = PeopleIndexer.modelFile(context)
-      if (!model.exists()) {
-        model.parentFile?.mkdirs()
-        val tmp = File(model.parentFile, "${model.name}.part")
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15000; conn.readTimeout = 30000
-        try {
-          if (conn.responseCode != 200) throw IllegalStateException("model download failed (${conn.responseCode})")
-          val digest = MessageDigest.getInstance("SHA-256")
-          conn.inputStream.use { input -> tmp.outputStream().use { out ->
-            val buf = ByteArray(64 * 1024)
-            while (true) { val n = input.read(buf); if (n < 0) break; digest.update(buf, 0, n); out.write(buf, 0, n) }
-          } }
-          val hex = digest.digest().joinToString("") { "%02x".format(it) }
-          if (!hex.equals(sha256, ignoreCase = true)) { tmp.delete(); throw IllegalStateException("model checksum mismatch") }
-          if (!tmp.renameTo(model)) throw IllegalStateException("could not save the model")
-        } finally {
-          conn.disconnect()
-        }
-      }
+      PeopleModel.download(context, url, sha256)
       PeopleJob.schedule(context)
       true
     }
 
     /** App start while People is on: make sure the charging job is scheduled. */
-    Function("ensureScheduled") { if (PeopleIndexer.modelFile(context).exists()) PeopleJob.schedule(context) }
+    Function("ensureScheduled") { if (PeopleModel.isOn(context)) PeopleJob.schedule(context) }
+
+    /**
+     * On by default (JS decides the country allows it and the user never turned
+     * People off): no download now; the charging job fetches the model on Wi-Fi.
+     */
+    Function("autoEnable") { url: String, sha256: String ->
+      if (!PeopleModel.isOn(context)) PeopleModel.markAuto(context, url, sha256)
+      PeopleJob.schedule(context)
+    }
+
+    /** Two-letter country (SIM, network, then language) for the on-by-default rule. */
+    Function("country") { PeopleModel.country(context) }
 
     /** Off / "Delete all face data": stop the job, delete the database and the model. */
     AsyncFunction("disable") {

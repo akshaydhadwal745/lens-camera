@@ -1,6 +1,7 @@
 // People: your own photos grouped by face, on this phone only
-// (docs/design/people.md). Off by default; this screen explains it and turns it
-// on. Grouping happens while the phone charges; names are private labels.
+// (docs/design/people.md). On by default where allowed; in the EU/UK/US (or after
+// the user turned it off) one tap turns it on. Grouping happens while the phone
+// charges; names are private labels. "Turn off" deletes all face data.
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -9,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { clearFaceThumbs, FaceThumb } from '@/components/FaceThumb';
 import { Text } from '@/components/ui/Text';
-import { PEOPLE_MODEL, peopleSupported, photoCount, turnPeopleOff, turnPeopleOn } from '@/lib/people';
+import { peopleSupported, photoCount, turnPeopleOff, turnPeopleOn } from '@/lib/people';
 import { font, palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 import { LensPeople, PeopleGroup, PeopleStatus } from '../../modules/lens-camera';
@@ -56,9 +57,9 @@ export default function PeopleScreen() {
 
   const deleteAll = async () => {
     const ok = await confirmDestructive(
-      'Delete all face data?',
-      'People turns off and every face group, name and the face model are deleted from this phone. Your photos stay.',
-      'Delete face data',
+      'Turn off People?',
+      'Every face group and name is deleted from this phone. Your photos stay.',
+      'Turn off',
     );
     if (!ok) return;
     await turnPeopleOff();
@@ -107,25 +108,14 @@ export default function PeopleScreen() {
       {status === null ? (
         <ActivityIndicator color={palette.text} style={{ marginTop: 40 }} />
       ) : !status.on ? (
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom + 32, width: Math.min(width, 560), alignSelf: 'center' }}>
+        <View style={{ padding: 24, width: Math.min(width, 560), alignSelf: 'center' }}>
           <View style={styles.empty}>
             <Ionicons name="people-outline" size={52} color={palette.surface3} />
             <Text style={styles.emptyTitle}>See your photos by person</Text>
+            <Text style={styles.cardBody}>
+              Lens groups faces in your photos on this phone while it charges. Face data is never uploaded, and you can turn it off anytime.
+            </Text>
           </View>
-          {[
-            ['phone-portrait-outline', 'Stays on this phone', 'Faces are matched on your phone. Face data is never uploaded, never backed up and never seen by us.'],
-            ['battery-charging-outline', 'Only while charging', 'Grouping runs when your phone is charging, so it never slows you down or warms your pocket.'],
-            ['people-outline', 'Includes other people', 'Everyone in your photos gets grouped, not just you. Names you add are private labels only you see.'],
-            ['trash-outline', 'Delete any time', 'Turning People off deletes every face group and name from this phone.'],
-          ].map(([icon, title, body]) => (
-            <View key={title} style={styles.point}>
-              <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={22} color={palette.text} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pointTitle}>{title}</Text>
-                <Text style={styles.pointBody}>{body}</Text>
-              </View>
-            </View>
-          ))}
           <Pressable style={[styles.primary, busy && { opacity: 0.6 }]} onPress={() => void turnOn()} disabled={busy} accessibilityRole="button">
             {busy ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -133,15 +123,16 @@ export default function PeopleScreen() {
                 <Text style={styles.primaryText}>Getting the face engine…</Text>
               </View>
             ) : (
-              <Text style={styles.primaryText}>Turn on People</Text>
+              <Text style={styles.primaryText}>Turn on</Text>
             )}
           </Pressable>
-          <Text style={styles.fine}>Downloads a {PEOPLE_MODEL.mb} MB face model once. Only your own Lens photos are grouped.</Text>
-        </ScrollView>
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, width: content, alignSelf: 'center' }}>
           <Text style={styles.statusLine}>
-            {(status.photos ?? 0) < status.ownPhotos
+            {status.waiting
+              ? 'STARTS AT THE NEXT CHARGE ON WI-FI'
+              : (status.photos ?? 0) < status.ownPhotos
               ? `GROUPING WHILE CHARGING · ${status.photos ?? 0} OF ${status.ownPhotos} PHOTOS`
               : `${status.ownPhotos} PHOTOS · ALL GROUPED`}
           </Text>
@@ -185,10 +176,11 @@ export default function PeopleScreen() {
             </View>
           )}
 
-          <Pressable style={styles.danger} onPress={() => void deleteAll()} accessibilityRole="button">
-            <Text style={styles.dangerText}>Delete all face data</Text>
+          <Pressable style={styles.footer} onPress={() => void deleteAll()} accessibilityRole="button" accessibilityLabel="Turn off People and delete face data">
+            <Text style={styles.fine}>
+              Grouped on this phone, never uploaded · <Text style={styles.footerLink}>Turn off</Text>
+            </Text>
           </Pressable>
-          <Text style={styles.fine}>Face groups and names stay on this phone and are never uploaded.</Text>
         </ScrollView>
       )}
     </View>
@@ -203,9 +195,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 32, gap: 10 },
   emptyTitle: { color: '#fff', fontSize: 22, fontWeight: '700', textAlign: 'center' },
   emptyBody: { color: '#86868B', fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 12, paddingVertical: 24 },
-  point: { flexDirection: 'row', gap: 14, paddingVertical: 12 },
-  pointTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  pointBody: { color: '#86868B', fontSize: 14, lineHeight: 20, marginTop: 2 },
   primary: { marginTop: 20, backgroundColor: colors.action, borderRadius: 980, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   fine: { color: '#86868B', fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 12 },
@@ -218,6 +207,7 @@ const styles = StyleSheet.create({
   name: { color: '#fff', fontSize: 14, fontWeight: '600', marginTop: 8 },
   unnamed: { color: colors.link },
   meta: { color: '#86868B', fontSize: 12, marginTop: 2 },
-  danger: { marginTop: 32, minHeight: 46, borderRadius: 980, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center' },
-  dangerText: { color: '#FF453A', fontSize: 15, fontWeight: '600' },
+  footer: { marginTop: 32, minHeight: 44, justifyContent: 'center' },
+  footerLink: { color: colors.link, fontSize: 12 },
+  cardBody: { color: '#86868B', fontSize: 15, lineHeight: 21, textAlign: 'center', paddingHorizontal: 8 },
 });

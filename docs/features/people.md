@@ -4,10 +4,12 @@ Your own Lens photos grouped by face, on the phone only. Design, decisions and
 measured results: `docs/design/people.md`.
 
 ## For the user
-- **Off by default.** Roll → **People** chip, or Settings → Sharing → People.
-  The screen explains it (stays on this phone, only while charging, includes
-  other people, delete any time) and has **Turn on People** (downloads the 10 MB
-  face model once).
+- **On by default** in most countries: nothing to do; the 10 MB face model
+  downloads at the first charge on Wi-Fi, then grouping starts. In the EU/UK,
+  Switzerland and the US (consent laws) the **People** chip / Settings → Sharing
+  → People shows one short card with **Turn on** (downloads the model now).
+- **Turn off** ("Grouped on this phone, never uploaded · Turn off" at the bottom
+  of People) deletes all face data and stays off.
 - **Grouping runs only while charging** (and battery not low), stops if the
   phone warms up, never while the camera is open. Status line: "GROUPING WHILE
   CHARGING · 120 OF 340 PHOTOS".
@@ -17,8 +19,6 @@ measured results: `docs/design/people.md`.
   joins that group again).
 - **"Is this Riya?"**: only about people you named, when a face is close but
   not certain (0.363–0.45). Yes moves just that face; No never asks again.
-- **Delete all face data** (People screen): turns People off and deletes the
-  database and the model.
 - Lens account names stay random; linking a person to a Lens friend for share
   suggestions comes with step 5.
 

@@ -185,5 +185,12 @@ iPhone later: same model via Core ML, Apple Vision for detection.
    converted model drifts from the ONNX original (cosine < 0.99): slim ONNX
    Runtime build, ~2–4 MB.) The bar is "without any issues".
 2. **Photos: only your own Lens photos** (not received shares, not imports).
-3. **Availability: everywhere, with the consent screen**; lawyer check before
-   US marketing (added to the launch list).
+3. **Availability: everywhere.** Updated 2026-10-13 (user: "should be easy and on by
+   default"): **on by default** (like Apple Photos / Samsung Gallery) except where the
+   law asks for consent first: EU/EEA, UK, Switzerland and the **US** (Illinois BIPA,
+   Texas, Washington; Apple was sued under BIPA for on-device default face grouping,
+   Hazlitt v. Apple). Country = SIM, then network, then phone language (no location);
+   unknown = ask. There one tap turns it on (short card, no long screen). On by
+   default = a marker only; the charging job downloads the 10 MB model **on Wi-Fi**.
+   "Turn off" deletes everything and is remembered (never auto-on again).
+   Lawyer check before launch marketing (launch list).

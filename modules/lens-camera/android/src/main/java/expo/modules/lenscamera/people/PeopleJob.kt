@@ -22,6 +22,8 @@ class PeopleJob : JobService() {
   override fun onStartJob(params: JobParameters): Boolean {
     stop.set(false)
     worker = Thread {
+      // On by default: the model arrives here, while charging on Wi-Fi.
+      if (!PeopleModel.present(applicationContext)) PeopleModel.downloadPending(applicationContext)
       val stats = runCatching { PeopleIndexer.run(applicationContext, BUDGET_MS) { stop.get() } }
         .onFailure { Log.w(TAG, "pass failed", it) }
         .getOrNull()
@@ -45,9 +47,18 @@ class PeopleJob : JobService() {
     /** Called when People is turned on and at every app start while it's on. */
     fun schedule(context: Context) {
       val scheduler = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
-      if (scheduler.getPendingJob(JOB_ID) != null) return
+      val needsWifi = !PeopleModel.present(context)
+      val pending = scheduler.getPendingJob(JOB_ID)
+      if (pending != null) {
+        // Model arrived since: drop the Wi-Fi requirement (grouping itself needs no network).
+        @Suppress("DEPRECATION")
+        if ((pending.networkType != JobInfo.NETWORK_TYPE_NONE) == needsWifi) return
+        scheduler.cancel(JOB_ID)
+      }
       val job = JobInfo.Builder(JOB_ID, ComponentName(context, PeopleJob::class.java))
         .setRequiresCharging(true)
+        // The model still has to download: only on Wi-Fi (unmetered), never mobile data.
+        .setRequiredNetworkType(if (needsWifi) JobInfo.NETWORK_TYPE_UNMETERED else JobInfo.NETWORK_TYPE_NONE)
         .setRequiresBatteryNotLow(true)
         .setPeriodic(PERIOD_MS)
         .build()
