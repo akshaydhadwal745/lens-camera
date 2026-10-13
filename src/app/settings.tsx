@@ -14,6 +14,7 @@ import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
 import { setSaveLocation as setSaveLocationPref } from '@/lib/location-pref';
 import { nearbySupported, nearbyVisibilityChanged } from '@/lib/nearby';
+import { peopleSupported } from '@/lib/people';
 import { askForNotifications } from '@/lib/push';
 import { formatBytes } from '@/lib/format';
 import {
@@ -688,6 +689,12 @@ export default function SettingsScreen() {
                       );
                     }}
                   />
+                </>
+              ) : null}
+              {peopleSupported ? (
+                <>
+                  <View style={styles.divider} />
+                  <LinkRow icon="people-outline" label="People" onPress={() => router.push('/people')} />
                 </>
               ) : null}
               <View style={styles.divider} />

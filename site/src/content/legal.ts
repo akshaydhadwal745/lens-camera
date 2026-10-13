@@ -14,7 +14,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '12 October 2026', hi: '12 अक्टूबर 2026' },
+  updated: { en: '13 October 2026', hi: '13 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -47,6 +47,7 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['Notification token (Android): an address Google gives this app on your phone so we can send you notifications (shares, invites, storage). Sent through Google Firebase Cloud Messaging', 'To notify you about things you asked for; you choose which in Settings → Notifications', 'Until you sign out on that phone, uninstall, or delete your account'],
             ['Places (only if you turn on "Save location"): the position saved in your photos, rounded to about 100 m, and the nearest city', 'To group your own photos by place. People you share with get photos without the location unless you choose to include it', 'Until you delete the photo or your account'],
             ['Nearby (only if you turn on "Visible to nearby Lens users"): a random code that changes every few minutes, announced on your Wi-Fi while Lens is open', 'So people on the same Wi-Fi who also turned it on can find you by your Lens name. Only the code travels the network; we turn it into your Lens name, never your location', 'Each code expires after 15 minutes'],
+            ['People (only if you turn it on): face groups of your own Lens photos and the names you give them', 'Made and kept only on your phone to show your photos by person. Never sent to us, never in backups; the only download is the face model itself', 'Until you turn People off or tap Delete all face data (uninstalling Lens deletes it too)'],
             ['Sharing: who you shared with and who shared with you, the status of each share (waiting, accepted, declined, cancelled, revoked, expired) and people you blocked', 'To let you accept or decline shares, cancel or revoke what you sent, and stop unwanted shares', 'Until you delete your account'],
             ['Approximate city (from your IP) when you request QR sign-in on the website', 'To show "who is asking" on your phone before you approve', 'At most 2 minutes'],
             ['Sign-in codes we email you', 'To verify you own the email address', '10 minutes; stored only as a hash'],
@@ -147,6 +148,7 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['नोटिफ़िकेशन टोकन (Android): एक पता जो Google आपके फ़ोन पर इस ऐप को देता है ताकि हम आपको नोटिफ़िकेशन भेज सकें (शेयर, इनवाइट, स्टोरेज)। Google Firebase Cloud Messaging के ज़रिए भेजा जाता है', 'आपको उन चीज़ों की सूचना देने के लिए जो आपने माँगी हैं; कौन-सी चाहिए यह आप Settings → Notifications में चुनते हैं', 'जब तक आप उस फ़ोन पर साइन आउट नहीं करते, ऐप हटाते नहीं, या अकाउंट नहीं हटाते'],
             ['प्लेसेज़ (सिर्फ़ अगर आप "Save location" चालू करते हैं): आपकी फ़ोटो में सेव की गई जगह, लगभग 100 मीटर तक गोल की हुई, और सबसे पास का शहर', 'आपकी अपनी फ़ोटो को जगह के हिसाब से दिखाने के लिए। जिनके साथ आप शेयर करते हैं उन्हें फ़ोटो बिना जगह के मिलती है, जब तक आप उसे शामिल करना न चुनें', 'जब तक आप फ़ोटो या अकाउंट नहीं हटाते'],
             ['नियरबाय (सिर्फ़ अगर आप "Visible to nearby Lens users" चालू करते हैं): एक रैंडम कोड जो हर कुछ मिनट में बदलता है, Lens खुला रहने तक आपके Wi-Fi पर बताया जाता है', 'ताकि उसी Wi-Fi पर जिन्होंने इसे चालू किया है वे आपको आपके Lens नाम से ढूँढ सकें। नेटवर्क पर सिर्फ़ कोड जाता है; उसे हम आपके Lens नाम में बदलते हैं, आपकी जगह कभी नहीं', 'हर कोड 15 मिनट में खत्म हो जाता है'],
+            ['पीपल (सिर्फ़ अगर आप इसे चालू करते हैं): आपकी अपनी Lens फ़ोटो के चेहरों के ग्रुप और उनके लिए आपके दिए नाम', 'सिर्फ़ आपके फ़ोन पर बनते और रहते हैं, ताकि फ़ोटो व्यक्ति के हिसाब से दिखें। हमें कभी नहीं भेजे जाते, बैकअप में नहीं जाते; सिर्फ़ फ़ेस मॉडल डाउनलोड होता है', 'जब तक आप पीपल बंद नहीं करते या Delete all face data नहीं दबाते (Lens हटाने पर भी मिट जाता है)'],
             ['शेयरिंग: आपने किसके साथ शेयर किया और किसने आपके साथ, हर शेयर की स्थिति (प्रतीक्षा में, स्वीकार, अस्वीकार, रद्द, वापस लिया, समाप्त) और जिन लोगों को आपने ब्लॉक किया', 'ताकि आप शेयर स्वीकार या अस्वीकार कर सकें, भेजा हुआ रद्द या वापस ले सकें, और अनचाहे शेयर रोक सकें', 'जब तक आप अकाउंट नहीं हटाते'],
             ['वेबसाइट पर QR साइन इन माँगने पर अनुमानित शहर (आपके IP से)', 'मंज़ूरी से पहले आपके फ़ोन पर "कौन माँग रहा है" दिखाने के लिए', 'ज़्यादा से ज़्यादा 2 मिनट'],
             ['हम जो साइन-इन कोड ईमेल करते हैं', 'यह जाँचने के लिए कि ईमेल आपका है', '10 मिनट; सिर्फ़ हैश के रूप में'],

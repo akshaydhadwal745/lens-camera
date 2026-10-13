@@ -10,6 +10,7 @@ import { BrandIntro } from '@/components/BrandIntro';
 import { ToastHost } from '@/components/Toast';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { identityChanged, startPush } from '@/lib/push';
+import { peopleAppStart } from '@/lib/people';
 import { boot, useStore } from '@/lib/store';
 import { fontFiles } from '@/lib/theme';
 
@@ -31,6 +32,8 @@ export default function RootLayout() {
     // Android: website installs don't get Play's install-time model download, so ask for the
     // scanner / scene / subject / face models now; they're ready before first use.
     LensImaging?.requestMlModules?.().catch(() => {});
+    // People on: keep its charging-only grouping job scheduled.
+    peopleAppStart();
     void startPush();
   }, []);
 

@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { AlbumPicker } from '@/components/AlbumPicker';
 import { useNearbyPeople } from '@/lib/nearby';
+import { peopleSupported } from '@/lib/people';
 import { api } from '@/lib/api';
 import { SharesStrip } from '@/components/SharesStrip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -492,6 +493,11 @@ export default function GalleryScreen() {
             {!isWeb ? (
               <Pressable onPress={() => router.push('/places')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Places">
                 <Text style={styles.filterText}>Places</Text>
+              </Pressable>
+            ) : null}
+            {peopleSupported ? (
+              <Pressable onPress={() => router.push('/people')} style={styles.filter} accessibilityRole="button" accessibilityLabel="People">
+                <Text style={styles.filterText}>People</Text>
               </Pressable>
             ) : null}
             {tab === 'mine' && indicator && (
