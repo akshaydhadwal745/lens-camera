@@ -72,3 +72,7 @@ research/quality/out/
 # Secrets: never commit anything under infra/keys/
 infra/keys/
 google-services.json
+
+# People spike: downloaded models + test faces (not ours to redistribute)
+research/faces/models/
+research/faces/data/

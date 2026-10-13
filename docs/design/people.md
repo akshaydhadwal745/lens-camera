@@ -1,6 +1,6 @@
 # People: on-device face grouping (step 4 of organise-and-share.md)
 
-Status: **proposed 2026-10-13, waiting for the user's OK. Nothing built.**
+Status: **design approved 2026-10-13** (decisions below). Building in the order at the end.
 
 ## Goal
 "Show me every photo of Riya" and "share the trip photos Riya is in with
@@ -95,9 +95,9 @@ $0.001 per user who opts in.
 - Phones without Play services: People is hidden (same as the document scanner).
 
 ## Build order (one feature at a time)
-1. **Spike, on the PC (light):** convert the model, compare TFLite vs ONNX
-   embeddings, pick the threshold on a small labelled set. Gate: same-person /
-   different-person split clean on ours.
+1. **Spike, on the PC (light, `nice`):** run SFace in Python onnxruntime with
+   the same 5-point alignment the phone will use; pick the thresholds on a
+   small labelled set. Gate: same-person / different-person split clean.
 2. **Native:** `lens-device` FaceIndex (detect → align → embed) + a self-test
    benchmark step. Test Lab: budget, 32-bit, S8-class, flagship (ms per face,
    temperature). Gate: < 150 ms/face on budget phones while charging.
@@ -108,9 +108,13 @@ $0.001 per user who opts in.
 
 iPhone later: same model via Core ML, Apple Vision for detection.
 
-## Open decisions for the user
-1. Model/runtime: **SFace + LiteRT (A)**, with B as fallback?
-2. Which photos: **only your own Lens photos** (recommended), or also photos
-   friends shared with you, or imported ones too?
-3. US availability: on everywhere with consent (recommended, plus a lawyer
-   check before US marketing), or hidden for US users until then?
+## Decisions (user, 2026-10-13)
+1. **Runtime: LiteRT from Google Play services (+0 MB APK)** with SFace
+   converted to TFLite; the model downloads only when People is turned on.
+   (The user first picked full ONNX Runtime, then switched on learning it adds
+   ~34 MB to every APK: "our app should feel not heavy". Fallback if the
+   converted model drifts from the ONNX original (cosine < 0.99): slim ONNX
+   Runtime build, ~2–4 MB.) The bar is "without any issues".
+2. **Photos: only your own Lens photos** (not received shares, not imports).
+3. **Availability: everywhere, with the consent screen**; lawyer check before
+   US marketing (added to the launch list).
