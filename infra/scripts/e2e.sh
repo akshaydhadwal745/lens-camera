@@ -226,6 +226,17 @@ call POST "/blocks/$IA" "$TB" >/dev/null
 [[ $(call POST /nearby/resolve "$TB" -d "{\"codes\":[\"$NCA\"]}" | j .people.length) == 0 ]] && ok "blocked people don't show as nearby"
 call DELETE "/blocks/$IA" "$TB" >/dev/null; call PUT /nearby "$TA" -d '{"visible":false}' >/dev/null
 
+# --- People share suggestions (the server keeps only a switch; faces stay on phones) ---
+[[ $(call GET /people/suggest "$TA" | j .suggestMe) == false ]] && ok "people suggestions: off by default"
+sug() { call GET /contacts "$TB" | j ".contacts.find(c=>c.id==='$IA')?.suggestMe"; }
+[[ $(sug) == false ]] && ok "B's friends list: A can't be suggested yet"
+call PUT /people/suggest "$TA" -d '{"suggestMe":true}' >/dev/null
+[[ $(call GET /people/suggest "$TA" | j .suggestMe) == true && $(sug) == true ]] && ok "A turned it on: B's phone may suggest sharing with A"
+call POST "/blocks/$IB" "$TA" >/dev/null
+[[ $(sug) == false ]] && ok "A blocked B: never suggested to B"
+call DELETE "/blocks/$IB" "$TA" >/dev/null; call PUT /people/suggest "$TA" -d '{"suggestMe":false}' >/dev/null
+[[ $(sug) == false ]] && ok "A turned it off again"
+
 # --- pairing (web sign-in) ---
 CODE=$(call POST /pairing "$TA" | j .code); ok "pairing code $CODE"
 W=$(curl -sS -X POST "$API/pairing/claim" -H 'content-type: application/json' -d "{\"code\":\"$CODE\"}"); TW=$(echo "$W" | j .token)

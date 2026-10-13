@@ -19,6 +19,7 @@ import {
   WEB_COOKIE,
   withCookies,
 } from './lib';
+import { suggestFlags } from './people';
 import { randomName } from './names';
 import { attribute } from './attribution';
 import { onAttributed, rewardsHook } from './referrals';
@@ -326,7 +327,9 @@ export async function contacts(identity: Identity): Promise<Res> {
     }))
     .sort((a, b) => b.lastSharedAt - a.lastSharedAt)
     .slice(0, 50);
-  return json(200, { contacts: list });
+  // People: which friends said their Lens friends' phones may suggest sharing with them.
+  const suggest = await suggestFlags(identity, list.map((c) => c.id));
+  return json(200, { contacts: list.map((c) => ({ ...c, suggestMe: suggest.has(c.id) })) });
 }
 
 // ---------- Pairing codes (current web sign-in) ----------
