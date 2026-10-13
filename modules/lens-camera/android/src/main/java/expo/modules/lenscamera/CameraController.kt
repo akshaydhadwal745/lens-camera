@@ -161,6 +161,12 @@ class CameraController(private val context: Context) {
   private var preview: Preview? = null
   /** Cameras whose maker Night mode saves under half the full resolution: Lens Night instead. */
   private val smallNightExtension = mutableSetOf<String>()
+  /**
+   * Cameras whose maker extension never finished a photo (Device Farm Pixel 6:
+   * maker Night hung the capture). Remembered on the phone: Lens Night from then on.
+   */
+  private val hungPrefs = context.getSharedPreferences("lens-camera", Context.MODE_PRIVATE)
+  private val hungExtension: MutableSet<String> = hungPrefs.getStringSet("hungExtension", emptySet())!!.toMutableSet()
   private var imageCapture: ImageCapture? = null
   /** The selector of the current binding (maker extension or plain), to swap the photo use case. */
   private var boundSelector: CameraSelector? = null
@@ -323,11 +329,11 @@ class CameraController(private val context: Context) {
     var lastError: Exception? = null
     val baseSelector = cam.info.cameraSelector
     val ext = extensions
-    nightExtension = config.isNight && ext != null && cam.id !in smallNightExtension &&
+    nightExtension = config.isNight && ext != null && cam.id !in smallNightExtension && cam.id !in hungExtension &&
       runCatching { ext.isExtensionAvailable(baseSelector, ExtensionMode.NIGHT) }.getOrDefault(false)
     // Quality Lab: one of the maker's modes in Photo mode, when the phone has it.
     val labMode = DeviceProfile.EXTENSION_MODES.firstOrNull { it.first == config.extension }?.second
-      ?.takeIf { config.mode == "photo" && ext != null && runCatching { ext.isExtensionAvailable(baseSelector, it) }.getOrDefault(false) }
+      ?.takeIf { config.mode == "photo" && ext != null && cam.id !in hungExtension && runCatching { ext.isExtensionAvailable(baseSelector, it) }.getOrDefault(false) }
     boundExtension = when {
       labMode != null -> config.extension
       nightExtension -> "night"
@@ -888,6 +894,27 @@ class CameraController(private val context: Context) {
     }
     val raw = photoFormat == ImageCapture.OUTPUT_FORMAT_RAW
     val file = File(outputDir(), "lens-${UUID.randomUUID()}.${if (raw) "dng" else "jpg"}")
+    // Watchdog: a capture that never answers (a maker extension hanging) must not freeze the
+    // shutter. Whoever comes first wins: the photo, its error, or the timeout.
+    val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+    val extension = boundExtension.takeIf { it != "none" }
+    val camId = facts?.id
+    val watchdog = Runnable {
+      if (!finished.compareAndSet(false, true)) return@Runnable
+      Log.w(TAG, "photo didn't finish in time (extension $extension, camera $camId)")
+      if (extension != null && camId != null) {
+        // Never again on this camera: rebind without the maker mode (Lens Night instead).
+        hungExtension += camId
+        hungPrefs.edit().putStringSet("hungExtension", hungExtension.toSet()).apply()
+        bind()
+      }
+      done(Result.failure(CameraException(
+        if (extension == "night") "Night took too long on this phone. Lens switched to its own Night: tap the shutter again."
+        else "The photo took too long. Tap the shutter again.",
+      )))
+    }
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    handler.postDelayed(watchdog, if (extension != null) EXTENSION_TIMEOUT_MS else PHOTO_TIMEOUT_MS)
     capture.takePicture(
       outputOptions(file),
       io,
@@ -896,6 +923,8 @@ class CameraController(private val context: Context) {
         override fun onCaptureStarted() = sounds.shutter()
 
         override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+          handler.removeCallbacks(watchdog)
+          if (!finished.compareAndSet(false, true)) { file.delete(); return }
           val (w, h) = uprightSize(file)
           // Portrait: find the person and keep the mask inside the photo.
           val depth = !raw && config.mode == "portrait" && Portrait.addMask(file)
@@ -903,6 +932,8 @@ class CameraController(private val context: Context) {
         }
 
         override fun onError(exception: ImageCaptureException) {
+          handler.removeCallbacks(watchdog)
+          if (!finished.compareAndSet(false, true)) return
           done(Result.failure(CameraException(exception.message ?: "Capture failed")))
         }
       },
@@ -1264,6 +1295,11 @@ class CameraController(private val context: Context) {
   }
 
   companion object {
+    /** A plain photo that hasn't finished after this is stuck (slowest seen: ~2 s with flash). */
+    const val PHOTO_TIMEOUT_MS = 15_000L
+    /** Maker extensions (Night merges frames itself, a few seconds normally). */
+    const val EXTENSION_TIMEOUT_MS = 25_000L
+
     /**
      * Keep the maker's Night mode only if its photos are at least half the camera's
      * largest JPEG (unknown sizes keep it). Below that, Lens Night (full size) wins.
