@@ -16,6 +16,12 @@
   off makes old codes resolve to nothing.
 - **Battery:** discovery runs only while the roll or share picker is on screen
   (stops when the app goes to the background); the code refreshes every 10 min.
+  Flipping the switch in Settings restarts the roll underneath at once
+  (`nearbyVisibilityChanged()`), so you're visible right away.
+- **Verified 2026-10-13 (dev-79, emulator):** switch on → logcat
+  `LensNearby: visible as <16-char code>`; another identity's
+  `POST /nearby/resolve` with that code returns the emulator's name, a made-up
+  code returns nothing. Two phones finding each other needs two real phones.
 - **Native:** `modules/lens-device` `NearbyDiscovery.kt` (`nearbyStart(code)`,
   `nearbyStop()`, event `onNearby {codes}`); JS `src/lib/nearby.ts`
   (`useNearbyPeople`). Needs the APK with this module (older APKs: hidden).

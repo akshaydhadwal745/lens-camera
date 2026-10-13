@@ -13,6 +13,13 @@ const CODE_REFRESH_MS = 10 * 60 * 1000;
 
 export const nearbySupported = Platform.OS === 'android' && !!nearbyDiscovery;
 
+// Screens below Settings stay mounted: tell them when "Visible to nearby" flips
+// so they start (or stop) announcing now, not at the next 10-minute refresh.
+const visibilityListeners = new Set<() => void>();
+export function nearbyVisibilityChanged() {
+  visibilityListeners.forEach((l) => l());
+}
+
 export function useNearbyPeople(active: boolean): Person[] {
   const [people, setPeople] = useState<Person[]>([]);
 
@@ -50,6 +57,8 @@ export function useNearbyPeople(active: boolean): Person[] {
 
     void restart();
     const refresh = setInterval(() => void restart(), CODE_REFRESH_MS);
+    const onVisibility = () => void restart();
+    visibilityListeners.add(onVisibility);
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') void restart();
       else {
@@ -60,6 +69,7 @@ export function useNearbyPeople(active: boolean): Person[] {
     return () => {
       alive = false;
       clearInterval(refresh);
+      visibilityListeners.delete(onVisibility);
       if (resolveTimer) clearTimeout(resolveTimer);
       sub.remove();
       stop?.();

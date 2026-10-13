@@ -13,7 +13,7 @@ import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
 import { setSaveLocation as setSaveLocationPref } from '@/lib/location-pref';
-import { nearbySupported } from '@/lib/nearby';
+import { nearbySupported, nearbyVisibilityChanged } from '@/lib/nearby';
 import { askForNotifications } from '@/lib/push';
 import { formatBytes } from '@/lib/format';
 import {
@@ -679,7 +679,13 @@ export default function SettingsScreen() {
                     value={nearbyVisible}
                     onChange={(v) => {
                       setNearbyVisible(v);
-                      api.setNearbyVisible(v).then((r) => setNearbyVisible(r.visible), () => setNearbyVisible(!v));
+                      api.setNearbyVisible(v).then(
+                        (r) => {
+                          setNearbyVisible(r.visible);
+                          nearbyVisibilityChanged();
+                        },
+                        () => setNearbyVisible(!v),
+                      );
                     }}
                   />
                 </>
