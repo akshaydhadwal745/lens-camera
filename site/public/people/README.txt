@@ -14,4 +14,10 @@ test/ (used only by the app's self-test)
   - biden-2013.jpg: "Joe Biden official portrait 2013"
   - obama-2012.jpg: "President Barack Obama" (Pete Souza, White House)
   - family-2011.jpg: "Barack Obama family portrait 2011" (Pete Souza, White House)
+  - family-green.jpg: "Obama family portrait in the Green Room" (White House)
+  - michelle-2013.jpg: "Michelle Obama 2013 official portrait" (White House)
+  - biden-2009.jpg: "Official portrait of Vice President Joe Biden"
+  - harris-vp.jpg: "Kamala Harris Vice Presidential Portrait"
+  - harris-photo.jpg: "Kamala Harris official photo"
+  - harris-senate.jpg: "Senator Harris official senate portrait"
   expected.json: results of research/faces/testphotos.py on a PC.

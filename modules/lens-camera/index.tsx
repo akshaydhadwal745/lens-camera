@@ -349,6 +349,8 @@ export type PeoplePass = { scanned: number; faces: number; forgotten: number; me
 type PeopleModule = {
   available(): boolean;
   benchmark(modelPath: string, photos: string[]): Promise<PeopleBenchmark>;
+  /** Self-test: real scanner + grouping in memory; groups = photo indexes per group. */
+  groupTest(modelPath: string, photos: string[]): Promise<{ ok: boolean; error?: string; faces?: number; ms?: number; groups?: number[][] }>;
   status(): Promise<PeopleStatus>;
   /** Downloads the model (checked against sha256) and schedules the charging job. */
   enable(url: string, sha256: string): Promise<boolean>;

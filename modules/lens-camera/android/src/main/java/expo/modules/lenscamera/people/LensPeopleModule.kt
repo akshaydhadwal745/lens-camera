@@ -70,6 +70,40 @@ class LensPeopleModule : Module() {
       )
     }
 
+    /**
+     * Self-test: the real scanner + grouping (same code as the charging job) on
+     * [photos], in memory only (never touches People's database). Returns, per
+     * group, the indexes of the photos it contains.
+     */
+    AsyncFunction("groupTest") { modelPath: String, photos: List<String> ->
+      val embedder = FaceEmbedder.open(context, File(modelPath.removePrefix("file://")))
+        ?: return@AsyncFunction mapOf("ok" to false, "error" to "LiteRT not available")
+      val groups = FaceGroups()
+      val faceGroup = ArrayList<Pair<Int, Long>>() // (photo index, group id)
+      var faces = 0
+      val t0 = SystemClock.elapsedRealtime()
+      embedder.use { e ->
+        FaceScanner(e).use { scanner ->
+          photos.forEachIndexed { i, path ->
+            for (f in scanner.scan(File(path.removePrefix("file://"))).faces) {
+              faceGroup.add(i to groups.add(f.embedding).groupId)
+              faces++
+            }
+          }
+        }
+      }
+      val owner = HashMap<Long, Long>()
+      for ((keep, gone) in groups.consolidate()) owner[gone] = keep
+      fun root(id: Long): Long { var r = id; while (owner.containsKey(r)) r = owner[r]!!; return r }
+      val byGroup = faceGroup.groupBy({ root(it.second) }, { it.first })
+      mapOf(
+        "ok" to true,
+        "faces" to faces,
+        "ms" to SystemClock.elapsedRealtime() - t0,
+        "groups" to byGroup.values.map { it.distinct().sorted() },
+      )
+    }
+
     /** On = model present. [scanning]: a pass is running. Counts come from the on-phone database. */
     AsyncFunction("status") {
       val on = PeopleIndexer.modelFile(context).exists()

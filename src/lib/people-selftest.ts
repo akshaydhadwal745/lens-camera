@@ -9,13 +9,15 @@ import { WEB_URL } from './api';
 
 const MODEL = { path: 'people/sface-v1.tflite', size: 9863952, md5: 'b1e69f79361fa65db3113dbccfcba0e5' };
 const PHOTOS = ['biden-2021', 'biden-2013', 'obama-2012', 'family-2011'] as const;
+/** The grouping check: 10 photos of 4 people (expected.json `groups`: people in >= 3 photos). */
+const GROUP_PHOTOS = ['biden-2009', 'biden-2013', 'biden-2021', 'family-2011', 'family-green', 'harris-photo', 'harris-senate', 'harris-vp', 'michelle-2013', 'obama-2012'] as const;
 /** Same-person thresholds (LFW 6000 pairs, research/faces/spike.py): auto-group / ask. */
 export const PEOPLE_MERGE = 0.45;
 export const PEOPLE_MATCH = 0.363;
 /** Embedding time per face above this on a phone = too slow for overnight grouping. */
 const SLOW_EMBED_MS = 150;
 
-type Expected = { embeddings: Record<string, number[][]> };
+type Expected = { embeddings: Record<string, number[][]>; groups?: string[][] };
 export type PeopleCheck = { status: 'pass' | 'warn' | 'fail' | 'skip'; message: string; details?: Record<string, unknown> };
 
 const dot = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * b[i], 0);
@@ -70,8 +72,20 @@ export async function peopleSelfTest(): Promise<PeopleCheck> {
   if ((famScores[0] ?? 0) < PEOPLE_MERGE) problems.push('Obama not found in the family photo');
   if ((famScores[1] ?? 0) >= PEOPLE_MATCH) problems.push('a family member was matched to Obama');
   if (pc < 0.9) problems.push(`phone and PC disagree (${pc.toFixed(2)})`);
+  // Full grouping (scanner + FaceGroups, same as the charging job) on 10 photos of 4 people.
+  if (LensPeople.groupTest && expected.groups) {
+    const files = await Promise.all(GROUP_PHOTOS.map((p) => fetchFile(dir, `people/test/${p}.jpg`, `${p}.jpg`)));
+    const g = await LensPeople.groupTest(model.uri, files.map((f) => f.uri));
+    if (!g.ok || !g.groups) problems.push(`grouping failed: ${g.error ?? '?'}`);
+    else {
+      const shown = g.groups.filter((x) => x.length >= 3).map((x) => x.map((i) => GROUP_PHOTOS[i]).sort().join(',')).sort();
+      const want = expected.groups.map((x) => [...x].sort().join(',')).sort();
+      Object.assign(details, { groups: shown, groupMs: g.ms, groupFaces: g.faces });
+      if (shown.join('|') !== want.join('|')) problems.push(`grouping: ${shown.length} people (${shown.join(' / ')}), expected ${want.length}`);
+    }
+  }
   const speed = `${r.embedMsPerFace} ms/face, ${r.detectMsPerPhoto} ms/photo detect`;
   if (problems.length) return { status: 'fail', message: `${problems.join('; ')} (${speed})`, details };
   const slow = (r.embedMsPerFace ?? 0) > SLOW_EMBED_MS;
-  return { status: slow ? 'warn' : 'pass', message: `matches right; ${speed}${slow ? ' (slow)' : ''}`, details };
+  return { status: slow ? 'warn' : 'pass', message: `matches right${details.groups ? ', 4 people grouped right' : ''}; ${speed}${slow ? ' (slow)' : ''}`, details };
 }
