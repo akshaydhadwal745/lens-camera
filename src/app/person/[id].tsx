@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FaceThumb } from '@/components/FaceThumb';
 import { MediaTile } from '@/components/MediaTile';
 import { Text, TextInput } from '@/components/ui/Text';
+import { api, Contact } from '@/lib/api';
 import { photoCount } from '@/lib/people';
 import { selectGallery, useStore } from '@/lib/store';
 import { palette } from '@/lib/theme';
@@ -28,6 +29,10 @@ export default function PersonScreen() {
   const [others, setOthers] = useState<PeopleGroup[]>([]);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [friends, setFriends] = useState<Contact[] | null>(null);
+  /** When the page loaded: "this week" is counted from here (not during render). */
+  const [loadedAt, setLoadedAt] = useState(0);
 
   const load = useCallback(async () => {
     if (!LensPeople) return;
@@ -36,6 +41,9 @@ export default function PersonScreen() {
     setGroup(me);
     setOthers(all.filter((g) => g.id !== id && !g.hidden && g.photos >= 2));
     setFaces(me ? await LensPeople.groupPhotos(id) : []);
+    // Lens friends (people you shared with): for "Link to Lens friend" and suggestions.
+    api.contacts().then((r) => setFriends(r.contacts), () => setFriends([]));
+    setLoadedAt(Date.now());
   }, [id]);
 
   useFocusEffect(
@@ -58,6 +66,15 @@ export default function PersonScreen() {
     }
     return out;
   }, [faces, gallery]);
+
+  const friend = group?.contactId ? friends?.find((f) => f.id === group.contactId) : undefined;
+  // "Share 8 photos with Riya?": their photos from the last 7 days that are in the cloud,
+  // only when Riya allows suggestions. Lens never sends anything without the confirm sheet.
+  const suggestion = useMemo(() => {
+    if (!friend?.suggestMe || !items || !loadedAt) return [];
+    const since = loadedAt - 7 * 24 * 3600 * 1000;
+    return items.filter((x) => x.item.createdAt >= since && x.item.sync === 'synced').map((x) => x.item.id);
+  }, [friend, items, loadedAt]);
 
   const run = async (fn: () => Promise<unknown>, failure: string) => {
     try {
@@ -127,6 +144,12 @@ export default function PersonScreen() {
                   <Ionicons name="pencil" size={15} color="#fff" />
                   <Text style={styles.actionText}>{group.name ? 'Rename' : 'Add name'}</Text>
                 </Pressable>
+                <Pressable style={styles.action} onPress={() => setLinking(true)} accessibilityRole="button">
+                  <Ionicons name="link-outline" size={15} color="#fff" />
+                  <Text style={styles.actionText} numberOfLines={1}>
+                    {friend ? friend.name : 'Link to Lens friend'}
+                  </Text>
+                </Pressable>
                 {others.length ? (
                   <Pressable style={styles.action} onPress={() => setMerging(true)} accessibilityRole="button">
                     <Ionicons name="git-merge-outline" size={15} color="#fff" />
@@ -138,6 +161,18 @@ export default function PersonScreen() {
                   <Text style={styles.actionText}>{group.hidden ? 'Show in People' : 'Hide'}</Text>
                 </Pressable>
               </View>
+              {suggestion.length && friend ? (
+                <Pressable
+                  style={styles.suggest}
+                  onPress={() => router.push({ pathname: '/share', params: { ids: suggestion.join(','), to: friend.id } })}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="paper-plane-outline" size={18} color="#fff" />
+                  <Text style={styles.suggestText}>
+                    Share {photoCount(suggestion.length)} from this week with {group.name ?? friend.name}?
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           }
           renderItem={({ item }) => (
@@ -167,6 +202,40 @@ export default function PersonScreen() {
                 <Text style={styles.sheetButtonText}>Save</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={linking} transparent animationType="fade" onRequestClose={() => setLinking(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setLinking(false)}>
+          <Pressable style={[styles.sheet, { maxHeight: '70%' }]} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Link to Lens friend</Text>
+            <Text style={styles.sheetHint}>So Lens can suggest sharing their photos with them (if they allow it). Only on this phone.</Text>
+            <ScrollView contentContainerStyle={{ gap: 6 }}>
+              {(friends ?? []).length === 0 ? (
+                <Text style={styles.sheetHint}>Share something with them first (or scan their Lens code); then they show up here.</Text>
+              ) : (
+                (friends ?? []).map((f) => (
+                  <Pressable
+                    key={f.id}
+                    style={styles.mergeRow}
+                    onPress={() => void run(async () => { await LensPeople?.setContact(id, f.id); setLinking(false); }, 'Could not link')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name={f.id === group?.contactId ? 'checkmark-circle' : 'person-circle-outline'} size={30} color={f.id === group?.contactId ? colors.action : '#86868B'} />
+                    <Text style={styles.mergeName} numberOfLines={1}>
+                      {f.name}
+                    </Text>
+                    {f.suggestMe ? <Text style={styles.meta}>suggestions on</Text> : null}
+                  </Pressable>
+                ))
+              )}
+              {group?.contactId ? (
+                <Pressable style={styles.mergeRow} onPress={() => void run(async () => { await LensPeople?.setContact(id, null); setLinking(false); }, 'Could not unlink')} accessibilityRole="button">
+                  <Text style={[styles.mergeName, { color: '#FF453A' }]}>Unlink</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -216,4 +285,6 @@ const styles = StyleSheet.create({
   mergeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 },
   mergeName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
   meta: { color: '#86868B', fontSize: 12 },
+  suggest: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6, marginHorizontal: 16, alignSelf: 'stretch', backgroundColor: colors.action, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 },
+  suggestText: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
 });

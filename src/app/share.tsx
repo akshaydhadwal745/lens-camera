@@ -35,7 +35,8 @@ function PersonFacts({ person }: { person: Person }) {
 export default function ShareScreen() {
   const insets = useSafeAreaInsets();
   // Picked items (?ids=) or a whole album (?album=&albumName=&albumCount=).
-  const { ids, album, albumName, albumCount } = useLocalSearchParams<{ ids?: string; album?: string; albumName?: string; albumCount?: string }>();
+  // to: a contact id to preselect (People's "Share 8 photos with Riya?" suggestion).
+  const { ids, album, albumName, albumCount, to } = useLocalSearchParams<{ ids?: string; album?: string; albumName?: string; albumCount?: string; to?: string }>();
   const gallery = useStore(selectGallery);
   const myName = useStore((s) => s.identity?.name);
 
@@ -59,15 +60,16 @@ export default function ShareScreen() {
     api
       .contacts()
       // Suggestions: who you share with most, then most recent.
-      .then((r) =>
-        setRecent(
-          [...r.contacts]
-            .sort((a, b) => (b.shares ?? 0) - (a.shares ?? 0) || b.lastSharedAt - a.lastSharedAt)
-            .map((c) => ({ ...c, sharedBefore: true })),
-        ),
-      )
+      .then((r) => {
+        const people = [...r.contacts]
+          .sort((a, b) => (b.shares ?? 0) - (a.shares ?? 0) || b.lastSharedAt - a.lastSharedAt)
+          .map((c) => ({ ...c, sharedBefore: true }));
+        setRecent(people);
+        const pre = to ? people.find((c) => c.id === to) : undefined;
+        if (pre) setChosen(new Map([[pre.id, pre]]));
+      })
       .catch(() => {});
-  }, []);
+  }, [to]);
 
   // A friend's scanned "My Lens code" (Scan code): exactly that person.
   useEffect(

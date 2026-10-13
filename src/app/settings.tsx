@@ -376,6 +376,11 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (nearbySupported) api.nearbySettings().then((r) => setNearbyVisible(r.visible), () => {});
   }, []);
+  // People: may friends' phones suggest sharing photos of me with me? (off by default)
+  const [suggestMe, setSuggestMe] = useState(false);
+  useEffect(() => {
+    if (!isWeb) api.peopleSuggest().then((r) => setSuggestMe(r.suggestMe), () => {});
+  }, []);
   /** Opt-in location: ask for permission when switched on; stay off if refused. */
   const onSaveLocation = async (on: boolean) => {
     setSaveLocation(await setSaveLocationPref(on));
@@ -695,6 +700,21 @@ export default function SettingsScreen() {
                 <>
                   <View style={styles.divider} />
                   <LinkRow icon="people-outline" label="People" onPress={() => router.push('/people')} />
+                </>
+              ) : null}
+              {!isWeb ? (
+                <>
+                  <View style={styles.divider} />
+                  <SwitchRow
+                    icon="sparkles-outline"
+                    label="Let friends' Lens suggest me"
+                    hint="Friends who use People can get a suggestion to share photos of you with you. They still pick what to send and you still accept. Lens never sees faces."
+                    value={suggestMe}
+                    onChange={(v) => {
+                      setSuggestMe(v);
+                      api.setPeopleSuggest(v).then((r) => setSuggestMe(r.suggestMe), () => setSuggestMe(!v));
+                    }}
+                  />
                 </>
               ) : null}
               <View style={styles.divider} />

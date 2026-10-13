@@ -124,7 +124,8 @@ export type UploadPlan = PlanExtras &
 export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
 /** Someone to share with: `account` = signed in (not a guest phone); `sharedBefore` = an accepted share before. */
 export type Person = { id: string; name: string; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
-export type Contact = Person & { lastSharedAt: number; trusted?: boolean; shares?: number };
+/** suggestMe: they let their friends' Lens suggest sharing with them (People). */
+export type Contact = Person & { lastSharedAt: number; trusted?: boolean; shares?: number; suggestMe?: boolean };
 export type ShareStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'revoked' | 'expired';
 export type ShareRequest = {
   shareId: string;
@@ -257,6 +258,8 @@ export const api = {
   placeItems: (key: string) => request<{ items: RemoteMedia[] }>('GET', `/places/items?key=${encodeURIComponent(key)}`),
   // Nearby on this Wi-Fi (step 3): opt-in, short-lived codes, names only from the server.
   nearbySettings: () => request<{ visible: boolean }>('GET', '/nearby'),
+  peopleSuggest: () => request<{ suggestMe: boolean }>('GET', '/people/suggest'),
+  setPeopleSuggest: (suggestMe: boolean) => request<{ suggestMe: boolean }>('PUT', '/people/suggest', { suggestMe }),
   setNearbyVisible: (visible: boolean) => request<{ visible: boolean }>('PUT', '/nearby', { visible }),
   nearbyCode: () => request<{ code: string | null; expiresAt?: number }>('POST', '/nearby/code'),
   nearbyResolve: (codes: string[]) => request<{ people: (Person & { nearby: true })[] }>('POST', '/nearby/resolve', { codes }),
