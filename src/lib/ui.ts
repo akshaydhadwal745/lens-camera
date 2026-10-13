@@ -64,7 +64,15 @@ export function chooseAction<T extends string>(
 }
 
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  // Native module errors arrive as "Call to function 'X.y' has been rejected.
+  // → Caused by: java.lang.IllegalStateException: <reason>": show only the reason.
+  const cause = message.split('Caused by:').pop();
+  if (cause !== undefined && cause !== message) {
+    const reason = cause.replace(/^\s*[\w.$]+(Exception|Error):\s*/, '').trim();
+    if (reason) return reason;
+  }
+  return message;
 }
 
 /** Older screens use these names; values follow the design language in theme.ts. */

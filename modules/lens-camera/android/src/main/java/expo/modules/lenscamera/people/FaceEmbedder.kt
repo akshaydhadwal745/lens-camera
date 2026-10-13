@@ -2,7 +2,11 @@ package expo.modules.lenscamera.people
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.SystemClock
+import com.google.android.gms.common.moduleinstall.ModuleInstall
+import com.google.android.gms.common.moduleinstall.ModuleInstallRequest
 import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.tflite.client.TfLiteInitializationOptions
 import com.google.android.gms.tflite.java.TfLite
 import org.tensorflow.lite.InterpreterApi
 import java.io.Closeable
@@ -45,16 +49,32 @@ class FaceEmbedder private constructor(private val interpreter: InterpreterApi) 
     const val SIZE = FaceAlign.SIZE
     const val DIM = 128
 
+    /** Let Play services fetch the engine itself when it's missing (off by default). */
+    private val INIT = TfLiteInitializationOptions.builder().setEnableAutomaticDownload(true).build()
+
     /**
-     * Makes sure Play services has the LiteRT engine (it downloads it on first use;
-     * this can take a while on a slow network). False = not available right now.
+     * Makes sure Play services has the LiteRT engine. It is an optional Play
+     * services module: ask its installer for it (same as the ML Kit models,
+     * MlModules), wait until it's there, then initialize. False = not available
+     * right now (no network, or Play services won't download it on this phone).
      */
-    fun prepare(context: Context, timeoutSec: Long = 120): Boolean =
-      runCatching { Tasks.await(TfLite.initialize(context), timeoutSec, TimeUnit.SECONDS); true }.getOrDefault(false)
+    fun prepare(context: Context, timeoutSec: Long = 120): Boolean = runCatching {
+      val deadline = SystemClock.elapsedRealtime() + timeoutSec * 1000
+      val installer = ModuleInstall.getClient(context)
+      val api = TfLite.getClient(context)
+      fun present() = runCatching { Tasks.await(installer.areModulesAvailable(api), 10, TimeUnit.SECONDS).areModulesAvailable() }.getOrDefault(false)
+      if (!present()) {
+        runCatching { Tasks.await(installer.installModules(ModuleInstallRequest.newBuilder().addApi(api).build()), 20, TimeUnit.SECONDS) }
+        while (!present() && SystemClock.elapsedRealtime() < deadline) Thread.sleep(1000)
+      }
+      val left = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(10_000)
+      Tasks.await(TfLite.initialize(context, INIT), left, TimeUnit.MILLISECONDS)
+      true
+    }.getOrDefault(false)
 
     /** Null when Play services has no LiteRT (phone without Play services): People stays hidden there. */
     fun open(context: Context, model: File, threads: Int = 2): FaceEmbedder? = runCatching {
-      Tasks.await(TfLite.initialize(context), 30, TimeUnit.SECONDS)
+      Tasks.await(TfLite.initialize(context, INIT), 30, TimeUnit.SECONDS)
       val options = InterpreterApi.Options()
         .setRuntime(InterpreterApi.Options.TfLiteRuntime.FROM_SYSTEM_ONLY)
         .setNumThreads(threads)
