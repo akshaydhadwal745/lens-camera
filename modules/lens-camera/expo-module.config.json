@@ -12,7 +12,8 @@
   "android": {
     "modules": [
       "expo.modules.lenscamera.LensCameraModule",
-      "expo.modules.lenscamera.imaging.LensImagingModule"
+      "expo.modules.lenscamera.imaging.LensImagingModule",
+      "expo.modules.lenscamera.people.LensPeopleModule"
     ]
   }
 }

@@ -12,6 +12,8 @@ Run: nice -n 19 research/.venv/bin/python research/faces/spike.py [pairs_limit]
 import sys, time
 from pathlib import Path
 
+import os
+
 import cv2
 import numpy as np
 
@@ -21,7 +23,6 @@ det = cv2.FaceDetectorYN.create(str(D / 'models/yunet.onnx'), '', (250, 250), 0.
 rec = cv2.FaceRecognizerSF.create(str(D / 'models/sface.onnx'), '')
 
 # SFACE_TFLITE=<model.tflite>: embed with that LiteRT model instead (what the phone runs).
-import os
 if os.environ.get('SFACE_TFLITE'):
     from ai_edge_litert.interpreter import Interpreter
     _it = Interpreter(model_path=os.environ['SFACE_TFLITE'])
@@ -57,9 +58,14 @@ def similarity(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     return np.hstack([scale * R, t[:, None]])
 
 
+# ALIGN_POINTS=4: eyes + mouth corners only (the phone's ML Kit nose point is the
+# nose base, not the template's nose tip). Default 5 = OpenCV's reference.
+USE = [0, 1, 3, 4] if os.environ.get('ALIGN_POINTS') == '4' else [0, 1, 2, 3, 4]
+
+
 def ours(img, face):
     pts = face[4:14].reshape(5, 2).astype(np.float64)
-    return cv2.warpAffine(img, similarity(pts, REF), (112, 112), flags=cv2.INTER_LINEAR)
+    return cv2.warpAffine(img, similarity(pts[USE], REF[USE]), (112, 112), flags=cv2.INTER_LINEAR)
 
 
 def biggest_face(img):

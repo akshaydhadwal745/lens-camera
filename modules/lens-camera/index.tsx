@@ -329,6 +329,27 @@ export const isImagingAvailable = imaging != null;
 
 export const LensImaging = imaging;
 
+/** People (docs/design/people.md): on-device face grouping, Android with Play services only. */
+export type PeopleBenchmark = {
+  ok: boolean;
+  error?: string;
+  initMs?: number;
+  photos?: number;
+  faces?: number;
+  skipped?: number;
+  detectMsPerPhoto?: number;
+  embedMsPerFace?: number;
+  results?: { faces: number; skipped: number; detectMs: number; embedMs: number; sharpness: number[]; eyeDistance: number[]; embeddings: number[][] }[];
+};
+
+type PeopleModule = {
+  available(): boolean;
+  benchmark(modelPath: string, photos: string[]): Promise<PeopleBenchmark>;
+};
+
+/** Null on iPhone, web and builds older than People. */
+export const LensPeople = Platform.OS === 'android' ? requireOptionalNativeModule<PeopleModule>('LensPeople') : null;
+
 export type LensEditViewProps = ViewProps & {
   uri: string;
   recipe: object | null;

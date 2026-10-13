@@ -94,6 +94,35 @@ $0.001 per user who opts in.
   face grouping was the subject of BIPA suits).
 - Phones without Play services: People is hidden (same as the document scanner).
 
+## Spike results (2026-10-13, research/faces/)
+- **Alignment:** our Umeyama 5-point maths = OpenCV `alignCrop` exactly (pixel
+  diff 0, embedding cosine 1.0000). Kotlin `FaceAlign` matches numpy to 2e-5
+  (`FaceAlignTest`, 5/5).
+- **Thresholds, LFW 6000 pairs (3000 same / 3000 different):**
+
+  | cosine ≥ | same person found | wrong person merged |
+  |---|---|---|
+  | 0.363 (OpenCV default) | 98.0 % | 0.10 % (3/3000) |
+  | 0.40 | 97.0 % | 0.03 % |
+  | **0.45 = auto-group** | **95.3 %** | **0 / 3000** |
+
+  Between 0.363 and 0.45 the app asks ("Is this Riya?") instead of grouping.
+  **Phone setup (int8 + 4-point alignment, eyes + mouth corners):** 94.9 %
+  found, still 0 / 3000 wrong at 0.45. Used because ML Kit's nose point is the
+  nose base, not the template's nose tip.
+- **TFLite conversion (onnx2tf):** fp32 and fp16 = ONNX (cosine 1.00000, 500
+  faces). **Shipped: dynamic-range int8, 9.9 MB** (cosine ≥ 0.997 vs ONNX; LFW
+  accuracy identical: 95.3 % / 0 wrong at 0.45).
+- **Test photos** (public domain, site/public/people/test): same person 0.70,
+  different people 0.10, family photo 4 faces and Obama found at 0.82: all
+  models and both 4/5-point alignments pass. The phone self-test repeats this.
+- **APK cost, measured:** the LiteRT Play services client brings a 0.58 MB
+  connector library (arm64; 0.36 MB on 32-bit), so **~0.6 MB**, not 0
+  (full ONNX Runtime would be 34 MB).
+- **Hosting:** `https://lens.instagrowapp.com/people/sface-v1.tflite` (deployed
+  with the website; SHA-256 `37cf4c81…52e3`), licence + credits in
+  `site/public/people/README.txt`.
+
 ## Build order (one feature at a time)
 1. **Spike, on the PC (light, `nice`):** run SFace in Python onnxruntime with
    the same 5-point alignment the phone will use; pick the thresholds on a

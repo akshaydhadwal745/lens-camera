@@ -41,6 +41,7 @@ export type SelfTestStep = {
   orientation?: Orientation;
   action:
     | 'photo'
+    | 'people'
     | 'night'
     | 'video'
     | 'upload'
@@ -135,6 +136,7 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   }
   steps.push({ id: 'edit-render', label: 'Editor: full-size edited photo', props: DEFAULT_PROPS, action: 'editRender', offline: true });
   steps.push({ id: 'ml-modules', label: 'Play services models (scanner, scenes, pets, faces)', props: DEFAULT_PROPS, action: 'mlModules', offline: true });
+  steps.push({ id: 'people', label: 'People: face grouping (speed + right matches)', props: DEFAULT_PROPS, action: 'people', offline: true });
   if (upload) steps.push({ id: 'upload', label: 'Upload a photo', props: DEFAULT_PROPS, action: 'upload' });
   steps.push({ id: 'heat', label: 'Heat after the test', props: DEFAULT_PROPS, action: 'heat', offline: true });
   return steps;

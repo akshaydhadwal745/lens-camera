@@ -32,6 +32,7 @@ import {
   StepOutcome,
   summarize,
 } from '@/lib/self-test';
+import { peopleSelfTest } from '@/lib/people-selftest';
 import { capture as saveCapture, getState, isHot } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
@@ -171,6 +172,10 @@ export default function SelfTestScreen() {
       });
       const states = names.map((n) => `${n} ${(r[n] as { state?: string } | undefined)?.state ?? '?'}`).join(', ');
       return done(bad.length ? 'warn' : 'pass', states, r);
+    }
+    if (step.action === 'people') {
+      const r = await peopleSelfTest();
+      return done(r.status, r.message, r.details);
     }
     if (step.action === 'heat') {
       const end = camera.current?.thermalStatus ? await camera.current.thermalStatus() : -1;
