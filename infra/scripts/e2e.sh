@@ -117,7 +117,7 @@ IA=$(echo "$A" | j .id)
 [[ $(call GET "/users?q=$(echo "$NB" | cut -c1-2)" "$TA" | j .users.length) == 0 ]] && ok "2-letter search returns nothing (no name scraping)"
 R=$(call GET "/users?q=$NB" "$TA"); [[ $(echo "$R" | j '.users[0].name') == "$NB" && $(echo "$R" | j '.users[0].exact') == true ]] && ok "exact name comes first ($NB)"
 [[ $(call GET "/users/$IB" "$TA" | j .user.name) == "$NB" ]] && ok "QR lookup finds exactly $NB"
-inid() { call GET /shares/in "$TB" | j ".requests.find(r=>r.shareId==='$1').status"; }
+inid() { call GET /shares/in "$TB" | j ".requests.find(r=>r.shareId==='$1')?.status"; }
 R=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID1\",\"$ID2\"],\"to\":[\"$IB\"]}")
 S1=$(echo "$R" | j '.requests[0].shareId'); [[ $(echo "$R" | j '.requests[0].status') == pending ]] && ok "share to B starts as a request ($S1)"
 [[ $(call GET /shared "$TB" | j .items.length) == 0 ]] && ok "B can't see anything before accepting"
