@@ -1,0 +1,116 @@
+# People: on-device face grouping (step 4 of organise-and-share.md)
+
+Status: **proposed 2026-10-13, waiting for the user's OK. Nothing built.**
+
+## Goal
+"Show me every photo of Riya" and "share the trip photos Riya is in with
+Riya", without any face data leaving the phone.
+
+## Rules (already agreed 2026-10-12)
+- Opt-in, **off by default**; explicit consent screen (faces are biometric data).
+- Face data never leaves the phone: no upload, no server copy, not in Android
+  cloud backup.
+- Group only while **charging**, on the previews already on the phone (no heat
+  while shooting or in the pocket).
+- The user names a group and can link it to a Lens contact. A share
+  suggestion appears only if that contact turned on "Let friends' Lens suggest
+  me". It always goes through the confirm sheet, and the recipient still accepts.
+- "Delete all face data" button; switching People off deletes everything.
+
+## Model choice (researched 2026-10-13)
+
+| Option | Licence | Size | Verdict |
+|---|---|---|---|
+| **OpenCV Zoo SFace** (MobileFaceNet trained with SFace loss, 128-d, 112×112 aligned input) | **Apache 2.0** (commercial OK) | int8 9.9 MB, fp32 38.7 MB (ONNX) | **Recommended** |
+| InsightFace ArcFace / buffalo_s (w600k_mbf) | code MIT, **weights non-commercial only** | ~13 MB | ✗ not allowed in a commercial app without a paid licence |
+| Other MobileFaceNet / GhostFaceNet / EdgeFace weights | mostly MS1M-trained → research-only data | 1–5 MB | ✗ licence risk |
+| Cloud (AWS Rekognition) | paid per image | n/a | ✗ biometric data in the cloud; against the agreed rule; ~$1 / 1,000 images |
+| Commercial SDKs | paid | varies | only if SFace fails quality tests |
+
+SFace accuracy (OpenCV's evaluation): 99.40 % fp32, 99.32 % int8. Same-person
+cosine threshold in OpenCV's FaceRecognizerSF is 0.363. We tune ours on real
+photos and set it stricter for automatic merging.
+
+**Detection + alignment:** ML Kit face detection is already in the app (Play
+services, unbundled). Its 5 landmarks (both eyes, nose base, mouth corners)
+give the same 5-point alignment SFace was trained with. YuNet is not needed.
+
+**Runtime:**
+- **A (recommended):** convert SFace ONNX to TFLite (int8/fp16) and run it on
+  LiteRT from Google Play services. Adds roughly nothing to the APK.
+- **B (fallback):** ONNX Runtime Mobile running the original ONNX file. No
+  conversion risk, but adds a few MB per ABI.
+
+Pick B only if A's embeddings drift from the ONNX originals (gate: cosine ≥ 0.99
+on the same aligned faces).
+
+**Delivery:** the model downloads once when the user turns People on (~10 MB,
+from our CloudFront, SHA-256 checked). It is not inside the APK. Cost is about
+$0.001 per user who opts in.
+
+## How it runs
+1. **Settings → People → Turn on** opens a consent screen: what it does, that
+   it stays on this phone, that it also groups other people in your photos, and
+   how to delete it. Then the model downloads.
+2. **Background job** (WorkManager, constraints: charging + battery not low):
+   - for each own photo not yet scanned: ML Kit detect on its 1024 px preview;
+   - skip faces < 64 px or turned away (euler angles > 35°) or blurry;
+   - align to 112×112 and embed (128 floats);
+   - stop at thermal "warm"; resume next charge.
+   - Old phones just take more nights. Nothing runs while the camera is open.
+3. **Store:** a small SQLite database in `noBackupFilesDir` (excluded from
+   Android backup and never uploaded). It holds photo id, face box, embedding,
+   cluster id and a tiny face crop for the People grid.
+4. **Grouping:** a new face joins the nearest group when cosine ≥ the strict
+   threshold. Otherwise it starts a new group. While charging, groups are
+   re-clustered (average linkage), and the user's merges and "Not this person"
+   corrections always win. Only groups with ≥ 3 photos are shown.
+
+## Screens
+- Roll chip **People** (next to Places): grid of faces with photo counts.
+- Person page: their photos; **Name** ("Riya"), **Link to a Lens contact**,
+  **Merge with…**, **Not this person** on a photo, **Hide**.
+- Suggestions: after a shoot, the roll strip says "8 new photos with Riya ·
+  Share?". This only appears if Riya is linked AND has "Let friends' Lens
+  suggest me" on. Tapping it opens the usual confirm sheet → share request.
+- Settings → People: on/off, "Scanning: 1,240 of 3,100 photos (while
+  charging)", **Delete all face data**.
+
+## Server (no face data)
+- `PUT /me` gains `suggestMe: boolean` (default off), set in Settings →
+  Sharing "Let friends' Lens suggest me".
+- Contacts / recent people responses include `suggestMe` so the phone knows
+  whom it may suggest.
+- e2e: flag default off, set/unset, visible only to people you've shared with
+  and never across a block.
+
+## Legal / store
+- Privacy policy (EN + HI): a People row ("processed only on your phone; never
+  sent to us; delete any time").
+- Play Data Safety: on-device-only processing isn't "collected". Declare the
+  `suggestMe` flag only.
+- US biometric laws (Illinois BIPA, Texas, Washington): consent screen + on
+  device + delete. **Get a lawyer's read before US marketing** (Google Photos
+  face grouping was the subject of BIPA suits).
+- Phones without Play services: People is hidden (same as the document scanner).
+
+## Build order (one feature at a time)
+1. **Spike, on the PC (light):** convert the model, compare TFLite vs ONNX
+   embeddings, pick the threshold on a small labelled set. Gate: same-person /
+   different-person split clean on ours.
+2. **Native:** `lens-device` FaceIndex (detect → align → embed) + a self-test
+   benchmark step. Test Lab: budget, 32-bit, S8-class, flagship (ms per face,
+   temperature). Gate: < 150 ms/face on budget phones while charging.
+3. Background job + SQLite store + clustering (Kotlin unit tests).
+4. UI: consent, People chip/grid/person page, name/merge/split, delete all.
+5. API `suggestMe` + suggestions strip + e2e.
+6. Docs (features/people.md), privacy policy, checklist rows, Data Safety notes.
+
+iPhone later: same model via Core ML, Apple Vision for detection.
+
+## Open decisions for the user
+1. Model/runtime: **SFace + LiteRT (A)**, with B as fallback?
+2. Which photos: **only your own Lens photos** (recommended), or also photos
+   friends shared with you, or imported ones too?
+3. US availability: on everywhere with consent (recommended, plus a lawyer
+   check before US marketing), or hidden for US users until then?
