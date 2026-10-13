@@ -144,6 +144,12 @@ $0.001 per user who opts in.
   Test Lab blocks Play module downloads ("Download of container feature
   tflite_dynamite is disabled") → **enable() now gets the engine first (up to
   2 min) and explains if it can't**; OPPO: Test Lab network timeout.
+- **Real phones, AWS Device Farm dev-85 (normal Play services):** Galaxy S9
+  (Android 9, S8 class) ✓ matches right, **48 ms/face, 1.2 s detect/photo**;
+  Galaxy A14 5G ✓ 38 ms/face, 1.4 s/photo (the A14 that failed on Test Lab:
+  there Play services may not download modules). ~20–25 min of charging per
+  1,000 photos on an S9-class phone. Emulator (google_apis image, no Play
+  Store) can't download the engine either: full UI walk on a Play Store image.
 - **TFLite conversion (onnx2tf):** fp32 and fp16 = ONNX (cosine 1.00000, 500
   faces). **Shipped: dynamic-range int8, 9.9 MB** (cosine ≥ 0.997 vs ONNX; LFW
   accuracy identical: 95.3 % / 0 wrong at 0.45).
