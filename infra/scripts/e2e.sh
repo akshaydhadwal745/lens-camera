@@ -227,15 +227,18 @@ call POST "/blocks/$IA" "$TB" >/dev/null
 call DELETE "/blocks/$IA" "$TB" >/dev/null; call PUT /nearby "$TA" -d '{"visible":false}' >/dev/null
 
 # --- People share suggestions (the server keeps only a switch; faces stay on phones) ---
-[[ $(call GET /people/suggest "$TA" | j .suggestMe) == false ]] && ok "people suggestions: off by default"
-sug() { call GET /contacts "$TB" | j ".contacts.find(c=>c.id==='$IA')?.suggestMe"; }
-[[ $(sug) == false ]] && ok "B's friends list: A can't be suggested yet"
-call PUT /people/suggest "$TA" -d '{"suggestMe":true}' >/dev/null
-[[ $(call GET /people/suggest "$TA" | j .suggestMe) == true && $(sug) == true ]] && ok "A turned it on: B's phone may suggest sharing with A"
-call POST "/blocks/$IB" "$TA" >/dev/null
-[[ $(sug) == false ]] && ok "A blocked B: never suggested to B"
-call DELETE "/blocks/$IB" "$TA" >/dev/null; call PUT /people/suggest "$TA" -d '{"suggestMe":false}' >/dev/null
-[[ $(sug) == false ]] && ok "A turned it off again"
+# A's friends list still has B here (B blocked A earlier, which only removed B's entry for A).
+[[ $(call GET /people/suggest "$TB" | j .suggestMe) == false ]] && ok "people suggestions: off by default"
+sug() { call GET /contacts "$TA" | j ".contacts.find(c=>c.id==='$IB')?.suggestMe"; }
+[[ $(sug) == false ]] && ok "A's friends list: B can't be suggested yet"
+call PUT /people/suggest "$TB" -d '{"suggestMe":true}' >/dev/null
+[[ $(call GET /people/suggest "$TB" | j .suggestMe) == true && $(sug) == true ]] && ok "B turned it on: A's phone may suggest sharing with B"
+call POST "/blocks/$IA" "$TB" >/dev/null
+[[ $(sug) == false ]] && ok "B blocked A: B is never suggested to A"
+call DELETE "/blocks/$IA" "$TB" >/dev/null
+[[ $(sug) == true ]] && ok "unblocked: suggestions come back"
+call PUT /people/suggest "$TB" -d '{"suggestMe":false}' >/dev/null
+[[ $(sug) == false ]] && ok "B turned it off again"
 
 # --- pairing (web sign-in) ---
 CODE=$(call POST /pairing "$TA" | j .code); ok "pairing code $CODE"
