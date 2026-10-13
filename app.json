@@ -117,6 +117,7 @@
       "./plugins/with-abi-splits.js",
       "./plugins/with-test-loop.js",
       "./plugins/with-release-signing.js",
+      "./plugins/with-quiet-deps.js",
       "./plugins/with-mlkit-models",
       [
         "expo-notifications",

@@ -159,7 +159,7 @@ jobs:
           retention-days: 14
 
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to Ubuntu 26 on 2026-10-19
     timeout-minutes: 60
     # Build label (Settings footer): this run's number = the dev-N release, and
     # the commit. LENS_BUILD also becomes the Android versionCode (app.config.js).
@@ -296,7 +296,7 @@ jobs:
   # native code (runtime version from app.config.js). Phones get it in ~2 minutes
   # without reinstalling; signed with our key (the app rejects anything else).
   ota:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to Ubuntu 26 on 2026-10-19
     timeout-minutes: 20
     env:
       EXPO_PUBLIC_BUILD: ${{ github.run_number }}
@@ -348,7 +348,7 @@ jobs:
     needs: [android]
     # Publish whatever built: the 64-bit Lens.apk is what almost every phone needs.
     if: ${{ always() && needs.android.result != 'cancelled' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to Ubuntu 26 on 2026-10-19
     permissions:
       contents: write
       id-token: write
@@ -423,7 +423,7 @@ jobs:
 
   ios-release:
     needs: [ios, release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to Ubuntu 26 on 2026-10-19
     permissions:
       contents: write
     steps:

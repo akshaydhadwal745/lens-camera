@@ -172,9 +172,9 @@ class FaceStore private constructor(private val db: SQLiteDatabase) {
   fun clearAsk(faceId: Long) = db.execSQL("UPDATE faces SET ask = 0 WHERE id = ?", arrayOf(faceId))
 
   fun setName(groupId: Long, name: String?) =
-    db.execSQL("UPDATE groups SET name = ? WHERE id = ?", arrayOf(name?.trim()?.takeIf { it.isNotEmpty() }, groupId))
+    db.execSQL("UPDATE groups SET name = ? WHERE id = ?", arrayOf<Any?>(name?.trim()?.takeIf { it.isNotEmpty() }, groupId))
 
-  fun setContact(groupId: Long, contactId: String?) = db.execSQL("UPDATE groups SET contact_id = ? WHERE id = ?", arrayOf(contactId, groupId))
+  fun setContact(groupId: Long, contactId: String?) = db.execSQL("UPDATE groups SET contact_id = ? WHERE id = ?", arrayOf<Any?>(contactId, groupId))
 
   fun setHidden(groupId: Long, hidden: Boolean) = db.execSQL("UPDATE groups SET hidden = ? WHERE id = ?", arrayOf(if (hidden) 1 else 0, groupId))
 

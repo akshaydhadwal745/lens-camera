@@ -837,18 +837,20 @@ class CameraController(private val context: Context) {
     val flags = if (af) FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE else FocusMeteringAction.FLAG_AE
     val builder = FocusMeteringAction.Builder(point, flags)
     if (lock) builder.disableAutoCancel() else builder.setAutoCancelDuration(5, TimeUnit.SECONDS)
-    val aeLock = lock && config.exposureMode != "manual" && f?.aeLockAvailable == true
+    // The camera facts to lock exposure with; null = no exposure lock (manual exposure or not supported).
+    val lockFacts = if (lock && config.exposureMode != "manual" && f?.aeLockAvailable == true) f else null
+    val aeLock = lockFacts != null
     if (aeLocked && !aeLock) {
       aeLocked = false
       f?.let { applyRequestOptions(cam, it) }
     }
     val future = runCatching { cam.cameraControl.startFocusAndMetering(builder.build()) }.getOrNull()
-    if (aeLock && f != null) {
+    if (lockFacts != null) {
       // Hold exposure once metering at the point has finished (else it would lock the old exposure).
       val apply = Runnable {
         if (camera === cam) {
           aeLocked = true
-          applyRequestOptions(cam, f)
+          applyRequestOptions(cam, lockFacts)
         }
       }
       if (future != null) future.addListener(apply, main) else apply.run()
