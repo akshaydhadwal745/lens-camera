@@ -91,6 +91,12 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private var previewView: PreviewView? = null
   private val handler = Handler(Looper.getMainLooper())
   private var running = false
+  /**
+   * Photos still being taken. Opening another screen detaches this view; the
+   * camera then waits for these to finish before it stops, so the gallery can
+   * open at once without losing the photo ("Camera is closed").
+   */
+  private var capturesInFlight = 0
 
   private val orientationListener = object : OrientationEventListener(context) {
     override fun onOrientationChanged(orientation: Int) {
@@ -283,7 +289,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       controller.start(owner!!, config)
       if (orientationListener.canDetectOrientation()) orientationListener.enable()
       handler.post(statsTick)
-    } else if (!shouldRun && running) {
+    } else if (!shouldRun && running && capturesInFlight == 0) {
       running = false
       controller.stop()
       orientationListener.disable()
@@ -293,7 +299,46 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   // ---------- Commands ----------
 
-  fun takePhoto(flash: String, promise: Promise) {
+  /**
+   * Marks a capture as running; call the returned function when it ends (any
+   * thread, safe to call twice). Capped at 30 s so a capture that never answers
+   * can't keep the camera on behind another screen.
+   */
+  private fun trackCapture(): () -> Unit {
+    var ended = false
+    val end = Runnable {
+      if (!ended) {
+        ended = true
+        capturesInFlight--
+        updateRunning()
+      }
+    }
+    capturesInFlight++
+    handler.postDelayed(end, 30_000)
+    return {
+      handler.removeCallbacks(end)
+      handler.post(end)
+    }
+  }
+
+  private fun Promise.tracked(): Promise {
+    val done = trackCapture()
+    val inner = this
+    return object : Promise {
+      override fun resolve(value: Any?) {
+        done()
+        inner.resolve(value)
+      }
+      override fun reject(code: String?, message: String?, cause: Throwable?) {
+        done()
+        inner.reject(code, message, cause)
+      }
+    }
+  }
+
+
+  fun takePhoto(flash: String, original: Promise) {
+    val promise = original.tracked()
     val gl = glPreview
     if (gl == null || !gl.motionPhoto) {
       controller.takePhoto(flash, screenFlash()) { result ->
@@ -350,19 +395,22 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   /** Astro (checklist 9.6): { iso, exposureNs, frames, seconds } if long exposures would work now, else null. */
   fun astroPlan(): Map<String, Any?>? = controller.astroPlan()
 
-  fun takeAstroPhoto(promise: Promise) {
+  fun takeAstroPhoto(original: Promise) {
+    val promise = original.tracked()
     controller.takeAstroPhoto { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }
   }
 
-  fun takeNightPhoto(frames: Int, promise: Promise) {
+  fun takeNightPhoto(frames: Int, original: Promise) {
+    val promise = original.tracked()
     controller.takeNightPhoto(frames, isHot()) { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }
   }
 
-  fun takeBurst(frames: Int, promise: Promise) {
+  fun takeBurst(frames: Int, original: Promise) {
+    val promise = original.tracked()
     controller.takeBurst(frames) { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }

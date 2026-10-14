@@ -145,9 +145,10 @@ ships inside expo and is resolved by `metro.config.js`, so no new APK was needed
 
 ### Leaving the camera mid-photo
 
-Tapping the gallery while a photo is still being taken doesn't lose it: Lens
-finishes saving the photo, then opens the gallery (leaving earlier would close
-the camera mid-capture). Time-lapse and hyperlapse upload while they record, like video (same
+Tapping the gallery while a photo is still being taken opens it at once and
+the photo still saves: the camera finishes the capture behind the gallery, then
+closes (at most 30 s later). The fallback camera (phones where the Lens camera
+can't start) opens the gallery once the photo is saved. Time-lapse and hyperlapse upload while they record, like video (same
 Wi-Fi / mobile-data setting).
 
 ### Shutter sound

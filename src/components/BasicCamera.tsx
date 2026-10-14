@@ -68,7 +68,8 @@ export function BasicCamera() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Gallery tapped while a photo is still being taken: open it once the photo is saved.
+  // Gallery tapped while a photo is still being taken: open it once the photo is saved
+  // (fallback camera = expo-camera; the main camera's native view finishes it on its own).
   // Leaving earlier detaches the camera view, which closes the camera mid-capture
   // ("Camera is closed", photo lost).
   const galleryAfterShot = useRef(false);

@@ -156,14 +156,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [sheet, setSheet] = useState<'none' | 'monitor' | 'presets'>('none');
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
   const [busy, setBusy] = useState(false);
-  // Gallery tapped while a photo is still being taken: open it once the photo is saved.
-  // Leaving earlier detaches the camera view, which closes the camera mid-capture
-  // ("Camera is closed", photo lost).
-  const galleryAfterShot = useRef(false);
-  const openGallery = () => {
-    if (busy) galleryAfterShot.current = true;
-    else router.push('/gallery');
-  };
   const [recording, setRecording] = useState(false);
   /** Id of the upload running while recording (null: uploads after you stop). */
   const [liveId, setLiveId] = useState<string | null>(null);
@@ -432,10 +424,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     } finally {
       setProcessing(null);
       setBusy(false);
-      if (galleryAfterShot.current) {
-        galleryAfterShot.current = false;
-        router.push('/gallery');
-      }
     }
   };
 
@@ -1206,7 +1194,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               <View style={styles.videoPhotoDot} />
             </Pressable>
           ) : (
-            <Pressable onPress={openGallery} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
+            <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
               {latest ? (
                 displayUri(latest) ? (
                   <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
