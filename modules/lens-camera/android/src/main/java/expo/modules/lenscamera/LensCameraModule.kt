@@ -52,7 +52,7 @@ class LensCameraModule : Module() {
     }
 
     View(LensCameraView::class) {
-      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot", "onCode", "onTimeLapse", "onMotionUnavailable", "onCaptureStarted")
+      Events("onReady", "onStats", "onAnalysis", "onError", "onDiagnostics", "onRecordingStarted", "onHardwareShutter", "onRecordingAudio", "onSceneLook", "onBurstShot", "onCode", "onTimeLapse", "onMotionUnavailable", "onCaptureStarted", "onDeviceOrientation")
 
       OnViewDidUpdateProps { view: LensCameraView -> view.applyProps() }
       OnViewDestroys { view: LensCameraView -> view.destroy() }

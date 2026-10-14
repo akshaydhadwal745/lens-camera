@@ -59,6 +59,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private val onBurstShot by EventDispatcher<Map<String, Any?>>()
   /** A photo's frame was just captured (it's still being processed and saved): the shutter can take the next one. */
   private val onCaptureStarted by EventDispatcher<Map<String, Any?>>()
+  /** How the phone is held: degrees turned clockwise (0, 90, 180, 270), for turning the icons. */
+  private val onDeviceOrientation by EventDispatcher<Map<String, Any?>>()
   private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
   /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
   var hardwareShutter = false
@@ -112,8 +114,21 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         else -> Surface.ROTATION_0
       }
       controller.setTargetRotation(rotation)
+      // The app is portrait-only: the UI turns its icons to stay upright (stock-camera style).
+      // Degrees the phone is turned clockwise, in 90° steps; sent only when it changes.
+      val degrees = when (rotation) {
+        Surface.ROTATION_270 -> 90
+        Surface.ROTATION_180 -> 180
+        Surface.ROTATION_90 -> 270
+        else -> 0
+      }
+      if (degrees != lastDeviceDegrees) {
+        lastDeviceDegrees = degrees
+        post { onDeviceOrientation(mapOf("degrees" to degrees)) }
+      }
     }
   }
+  private var lastDeviceDegrees = -1
 
   // Screen rotation. onSizeChanged alone misses a direct 180° turn
   // (landscape-left <-> landscape-right keeps the same size), which left the

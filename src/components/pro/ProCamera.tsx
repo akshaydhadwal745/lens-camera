@@ -23,6 +23,7 @@ import {
   ScannedCode,
 } from '../../../modules/lens-camera';
 import { exportVideoRetrying } from '@/lib/video-export';
+import { IconTurnProvider, Upright, useIconTurn } from './IconTurn';
 import { parseEventCode } from '@/lib/event-link';
 import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
@@ -72,17 +73,19 @@ function haptic(style = Haptics.ImpactFeedbackStyle.Medium) {
 function TopButton({ icon, label, caption, active, onPress }: { icon?: IconName; label?: string; caption?: string; active?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} hitSlop={6} style={styles.topButton} accessibilityRole="button" accessibilityLabel={[label, caption].filter(Boolean).join(' ') || icon}>
-      {icon ? (
-        <>
-          <Ionicons name={icon} size={18} color={active ? palette.accent : palette.text} />
-          {label ? <Text style={[styles.topLabel, active && styles.topLabelOn]}>{label}</Text> : null}
-        </>
-      ) : (
-        <>
-          <Text style={[styles.topValue, active && styles.topLabelOn]}>{label}</Text>
-          <Text style={[styles.topLabel, active && styles.topLabelOn]}>{caption ?? (active ? 'ON' : 'OFF')}</Text>
-        </>
-      )}
+      <Upright style={styles.upright}>
+        {icon ? (
+          <>
+            <Ionicons name={icon} size={18} color={active ? palette.accent : palette.text} />
+            {label ? <Text style={[styles.topLabel, active && styles.topLabelOn]}>{label}</Text> : null}
+          </>
+        ) : (
+          <>
+            <Text style={[styles.topValue, active && styles.topLabelOn]}>{label}</Text>
+            <Text style={[styles.topLabel, active && styles.topLabelOn]}>{caption ?? (active ? 'ON' : 'OFF')}</Text>
+          </>
+        )}
+      </Upright>
     </Pressable>
   );
 }
@@ -160,6 +163,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [sheet, setSheet] = useState<'none' | 'monitor' | 'presets'>('none');
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
   const [busy, setBusy] = useState(false);
+  // Portrait-only app: the icons turn to stay upright when the phone is turned (IconTurn.tsx).
+  const iconTurn = useIconTurn();
   /** Pipelined shutter: photos waiting for their frame to be captured, oldest first (frees the shutter). */
   const startWaiters = useRef<(() => void)[]>([]);
   /** The shutter is held by a single photo (presses meanwhile are queued, not dropped). */
@@ -817,6 +822,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   );
 
   return (
+    <IconTurnProvider turn={iconTurn.turn}>
     <View style={styles.fill} onTouchStart={keepAwakeTouch}>
       <GestureDetector gesture={gesture}>
         <View style={styles.fill} collapsable={false} onLayout={(e) => setPreviewSize(e.nativeEvent.layout)}>
@@ -840,6 +846,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onSceneLook={(e) => setSceneLook(e.nativeEvent.look)}
             onBurstShot={(e) => setBurstCount(e.nativeEvent.count)}
             onCaptureStarted={() => startWaiters.current.shift()?.()}
+            onDeviceOrientation={(e) => iconTurn.onDeviceOrientation(e.nativeEvent.degrees)}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
             frame={
@@ -1079,7 +1086,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               accessibilityRole="button"
               accessibilityLabel={stored.pro ? 'Pro controls on' : 'Pro controls off'}
             >
-              <Text style={[styles.proText, stored.pro && { color: palette.accent }]}>PRO</Text>
+              <Upright>
+                <Text style={[styles.proText, stored.pro && { color: palette.accent }]}>PRO</Text>
+              </Upright>
             </Pressable>
           </>
         )}
@@ -1117,7 +1126,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       )}
 
       <View style={[styles.zoomBadge, { top: insets.top + 72, left: insets.left + 16 }]} pointerEvents="none">
-        <Text style={styles.zoomText}>{(lensFactor * s.zoom).toFixed(1)}×</Text>
+        <Upright>
+          <Text style={styles.zoomText}>{(lensFactor * s.zoom).toFixed(1)}×</Text>
+        </Upright>
         {stats?.adjusting ? <ActivityIndicator size="small" color={palette.accent} style={{ marginLeft: 6 }} /> : null}
       </View>
 
@@ -1263,7 +1274,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
               {latest ? (
                 displayUri(latest) ? (
-                  <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
+                  <Upright>
+                    <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
+                  </Upright>
                 ) : (
                   <View style={[styles.thumbImage, styles.center, { backgroundColor: palette.surface2 }]}>
                     <Ionicons name="videocam" size={22} color="#fff" />
@@ -1313,7 +1326,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
               style={[styles.flip, recording && { opacity: 0.3 }]}
               accessibilityLabel="Switch camera"
             >
-              <Ionicons name="camera-reverse-outline" size={24} color={palette.text} />
+              <Upright>
+                <Ionicons name="camera-reverse-outline" size={24} color={palette.text} />
+              </Upright>
             </Pressable>
           )}
         </View>
@@ -1432,6 +1447,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         />
       )}
     </View>
+    </IconTurnProvider>
   );
 }
 
@@ -1600,6 +1616,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   zoomText: { color: palette.text, fontFamily: font.monoMedium, fontSize: 13 },
+  upright: { alignItems: 'center', justifyContent: 'center' },
 
   processing: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22 },
   processingText: { color: palette.text, fontFamily: font.medium },

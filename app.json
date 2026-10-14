@@ -4,7 +4,7 @@
     "slug": "camera-app",
     "scheme": "lens",
     "version": "1.0.0",
-    "orientation": "default",
+    "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B1020",

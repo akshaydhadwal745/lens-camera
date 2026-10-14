@@ -193,6 +193,8 @@ export type LensCameraProps = ViewProps & {
   onMotionUnavailable?: () => void;
   /** Android: a photo's frame was captured (still being saved): the shutter may take the next one. */
   onCaptureStarted?: () => void;
+  /** Android: how the phone is held, degrees turned clockwise (0/90/180/270). The app is portrait-only: icons turn instead. */
+  onDeviceOrientation?: (e: NativeSyntheticEvent<{ degrees: number }>) => void;
   /** Android: a burst shot was saved (`count` so far). */
   onBurstShot?: (e: NativeSyntheticEvent<{ count: number }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */

@@ -86,3 +86,14 @@ a face at the edge of the picture. Works on the phone (ML Kit face landmarks via
 Play services), no upload. Code: `imaging/GroupShot.kt`, `GroupShotMath.kt`;
 prototype and test: `research/groupshot/groupshot.py`.
 
+## Portrait only, icons turn (2026-10-14, user decision)
+
+Lens is portrait-only (`app.json` `orientation: portrait`), like the stock
+cameras: the layout never flips. When the phone is turned sideways or upside
+down, the camera's icons and labels (top buttons, PRO, zoom, gallery thumbnail,
+flip) turn to stay upright (`src/components/pro/IconTurn.tsx`, driven by the
+camera view's `onDeviceOrientation` event from the motion sensor). Photos and
+videos still come out upright however the phone is held: their rotation comes
+from the same sensor (`OrientationEventListener` → `setTargetRotation`), not the
+screen.
+
