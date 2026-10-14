@@ -4,6 +4,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -24,7 +25,7 @@ import { formatBytes, formatDate, formatDuration, formatEta, formatRate } from '
 import { hasEdit, useFullQuality, useMotionVideo, webCanShowOriginal } from '@/lib/full-view';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
-import { removeSharedItem, saveEdit, selectGallery, selectShared, useStore } from '@/lib/store';
+import { refreshShared, removeSharedItem, saveEdit, selectGallery, selectShared, useStore } from '@/lib/store';
 import { compact } from '@/lib/edits';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { keepOnly, prefetchVideo } from '@/lib/video-prefetch';
@@ -212,9 +213,56 @@ function Action({
   );
 }
 
+/**
+ * Opened straight from a link, a refresh or a new tab (web), the roll may not be
+ * loaded yet: wait for the item, then show the viewer (it positions itself on
+ * its first render). Never navigate before the app's navigator exists, which
+ * blanked the page ("Attempted to navigate before mounting the Root Layout").
+ */
 export default function ViewerScreen() {
   const { id, source } = useLocalSearchParams<{ id: string; source?: string }>();
   const shared = source === 'shared';
+  const insets = useSafeAreaInsets();
+  const items = useStore(shared ? selectShared : selectGallery);
+  const found = items.some((i) => i.id === id);
+  const booting = useStore((s) => s.status === 'booting');
+  const remoteFetched = useStore((s) => s.remoteFetchedAt > 0);
+  // The Shared list is only fetched on demand: fetch it if this item isn't there yet.
+  const [sharedChecked, setSharedChecked] = useState(!shared);
+  useEffect(() => {
+    if (!shared || found) return;
+    let live = true;
+    refreshShared()
+      .catch(() => {})
+      .finally(() => live && setSharedChecked(true));
+    return () => {
+      live = false;
+    };
+  }, [shared]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (found) return <ViewerBody id={id} shared={shared} />;
+  const loading = booting || (shared ? !sharedChecked : !remoteFetched);
+  return (
+    <View style={[styles.fill, styles.missing, { paddingTop: insets.top + 12 }]}>
+      {loading ? (
+        <ActivityIndicator color={palette.text} />
+      ) : (
+        <>
+          <Text style={styles.missingTitle}>This item isn’t here</Text>
+          <Text style={styles.missingText}>It may have been deleted, or it was shared with another account.</Text>
+          <Pressable
+            style={styles.missingButton}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/gallery'))}
+            accessibilityRole="button"
+          >
+            <Text style={styles.missingButtonText}>Go to the roll</Text>
+          </Pressable>
+        </>
+      )}
+    </View>
+  );
+}
+
+function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const items = useStore(shared ? selectShared : selectGallery);
@@ -249,8 +297,12 @@ export default function ViewerScreen() {
     prefetchVideo(prev, 'low');
   }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Everything here was deleted (e.g. the last item): leave. Opened from a link there's no history: the roll.
   useEffect(() => {
-    if (items.length === 0) router.back();
+    if (items.length === 0) {
+      if (router.canGoBack()) router.back();
+      else router.replace('/gallery');
+    }
   }, [items.length]);
 
   // Keep the current page aligned after rotation (width change).
@@ -342,7 +394,7 @@ export default function ViewerScreen() {
               }}
             />
           ) : (
-            <VideoPage item={item} width={width} height={height} source={source} onTap={() => setChrome((c) => !c)} />
+            <VideoPage item={item} width={width} height={height} source={shared ? 'shared' : 'mine'} onTap={() => setChrome((c) => !c)} />
           )
         }
       />
@@ -454,6 +506,11 @@ export default function ViewerScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: '#000' },
+  missing: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
+  missingTitle: { color: palette.text, fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  missingText: { color: '#86868B', fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  missingButton: { marginTop: 12, minHeight: 44, paddingHorizontal: 22, borderRadius: 980, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
+  missingButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   topBar: {
     position: 'absolute',
     top: 0,
