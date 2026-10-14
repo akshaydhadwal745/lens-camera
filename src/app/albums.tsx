@@ -88,7 +88,7 @@ export default function AlbumsScreen() {
             <>
               <Text style={styles.section}>Shared with you</Text>
               {shared.map((s) => (
-                <Pressable key={`${s.ownerId}-${s.id}`} style={styles.sharedRow} onPress={() => router.push({ pathname: '/album/[id]', params: { id: s.id, owner: s.ownerId, name: s.name, ownerName: s.ownerName } })}>
+                <Pressable key={`${s.ownerId}-${s.id}`} style={styles.sharedRow} onPress={() => router.push({ pathname: '/album/[id]', params: { id: s.id, owner: s.ownerId, name: s.name, ownerName: s.ownerName, ...(s.event ? { event: '1' } : {}) } })}>
                   <Ionicons name="people-outline" size={22} color="#86868B" />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.name} numberOfLines={1}>

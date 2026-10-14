@@ -1,12 +1,15 @@
 // One album: yours (share, rename, remove items, delete: the photos stay in the
-// roll) or one a friend shared with you (its items, Leave).
+// roll) or one a friend shared with you (its items, Leave). Event albums
+// (docs/design/switch-features.md §3): the owner shows a QR / link; everyone in
+// it adds their own photos, and the album refreshes while it's open.
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MediaTile } from '@/components/MediaTile';
+import { RollPicker } from '@/components/RollPicker';
 import { Text, TextInput } from '@/components/ui/Text';
 import { api } from '@/lib/api';
 import { refreshShared, selectGallery, selectShared, useStore } from '@/lib/store';
@@ -19,10 +22,15 @@ const GAP = 3;
 export default function AlbumScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ id: string; owner?: string; name?: string; ownerName?: string }>();
+  const params = useLocalSearchParams<{ id: string; owner?: string; name?: string; ownerName?: string; event?: string }>();
   const sharedWithMe = !!params.owner;
   const gallery = useStore(selectGallery);
   const shared = useStore(selectShared);
+  const myId = useStore((s) => s.identity?.id);
+  const [event, setEvent] = useState<{ code: string; url: string } | null>(null);
+  const [picking, setPicking] = useState(false);
+  // An event album: mine with the link on, or one I joined by link (I can add my photos).
+  const isEvent = sharedWithMe ? params.event === '1' : !!event;
 
   const [name, setName] = useState(params.name ?? '');
   const [ids, setIds] = useState<string[] | null>(null);
@@ -35,30 +43,56 @@ export default function AlbumScreen() {
   const load = useCallback(() => {
     if (sharedWithMe) {
       void refreshShared();
+      // Event album: which of its photos are mine (others' come through the Shared list).
+      if (isEvent) api.mySharedAlbumItems(params.owner!, params.id).then((r) => setIds(r.mine), () => {});
       return;
     }
+    void refreshShared(); // others' photos in my event album arrive through the Shared list
     api.album(params.id).then(
       (r) => {
         setName(r.album.name);
         setIds(r.items.map((m) => m.id));
         setMembers(r.members);
+        setEvent(r.album.event ?? null);
       },
       (error) => {
         setIds([]);
         notify('Could not load the album', errorMessage(error));
       },
     );
-  }, [params.id, sharedWithMe]);
+  }, [params.id, params.owner, sharedWithMe, isEvent]);
 
   useFocusEffect(load);
 
+  // Event albums fill up from everyone's phones: look again every 15 s while this screen is open.
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
+  useEffect(() => {
+    if (!isEvent || !focused) return;
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [isEvent, focused, load]);
+
   // Own album: the roll's items (local files, upload state) in the album's order. Shared: the Shared list's items of this album.
   const items = useMemo<GalleryItem[] | null>(() => {
-    if (sharedWithMe) return shared.filter((g) => g.albumId === params.id && g.ownerId === params.owner);
+    // Shared: this album's items from everyone (event albums hold several people's photos), plus my own in it.
+    if (sharedWithMe) {
+      const theirs = shared.filter((g) => g.albumId === params.id && (g.albumOwnerId ?? g.ownerId) === params.owner);
+      if (!isEvent || !ids) return theirs;
+      const mine = new Map(gallery.map((g) => [g.id, g]));
+      return [...theirs, ...ids.map((id) => mine.get(id)).filter((g): g is GalleryItem => !!g)].sort((a, b) => b.createdAt - a.createdAt);
+    }
     if (!ids) return null;
+    // Mine: my photos from the roll, and people's photos in my event album from the Shared list.
     const byId = new Map(gallery.map((g) => [g.id, g]));
+    for (const g of shared) if (g.albumId === params.id && g.albumOwnerId === myId && !byId.has(g.id)) byId.set(g.id, g);
     return ids.map((id) => byId.get(id)).filter((g): g is GalleryItem => !!g);
-  }, [sharedWithMe, shared, gallery, ids, params.id, params.owner]);
+  }, [sharedWithMe, shared, gallery, ids, params.id, params.owner, isEvent, myId]);
 
   const content = Math.min(width, 900);
   const cols = content >= 700 ? 5 : 3;
@@ -74,7 +108,33 @@ export default function AlbumScreen() {
 
   const onPress = (item: GalleryItem) => {
     if (selecting) return toggle(item.id);
-    router.push({ pathname: '/viewer/[id]', params: { id: item.id, source: sharedWithMe ? 'shared' : 'mine' } });
+    router.push({ pathname: '/viewer/[id]', params: { id: item.id, source: item.ownerId ? 'shared' : 'mine' } });
+  };
+
+  // What I may take out: anything in my album; in someone's event album, only my own photos.
+  const canRemove = (g: GalleryItem) => !sharedWithMe || (isEvent && !g.ownerId);
+
+  const startEvent = async () => {
+    const ok = await confirmDestructive(
+      'Invite with a QR code?',
+      'Anyone with the link or QR code can see this album and add their photos. You can turn the link off any time; you can remove any photo.',
+      'Make QR code',
+    );
+    if (!ok) return;
+    await run(async () => {
+      const r = await api.setEvent(params.id, true);
+      if (r.event) {
+        setEvent(r.event);
+        router.push({ pathname: '/event-code', params: { album: params.id, name, url: r.event.url } });
+      }
+    }, 'Could not make the link');
+  };
+
+  const addMine = async (chosen: string[]) => {
+    if (sharedWithMe) await api.addToSharedAlbum(params.owner!, params.id, chosen);
+    else await api.editAlbum(params.id, { add: chosen });
+    load();
+    notify('Added', `${chosen.length} ${chosen.length === 1 ? 'item' : 'items'} in “${name}”. Everyone in the album can see ${chosen.length === 1 ? 'it' : 'them'}.`);
   };
 
   const run = async (work: () => Promise<void>, failed: string) => {
@@ -90,7 +150,11 @@ export default function AlbumScreen() {
 
   const removeSelected = () =>
     run(async () => {
-      await api.editAlbum(params.id, { remove: [...selected] });
+      if (sharedWithMe) {
+        for (const id of selected) await api.removeFromSharedAlbum(params.owner!, params.id, id);
+      } else {
+        await api.editAlbum(params.id, { remove: [...selected] });
+      }
       setSelected(new Set());
       load();
     }, 'Could not remove them');
@@ -108,7 +172,9 @@ export default function AlbumScreen() {
     const ok = await confirmDestructive(
       sharedWithMe ? `Leave “${name}”?` : `Delete the album “${name}”?`,
       sharedWithMe
-        ? `Its photos leave your Shared tab. ${params.ownerName ?? 'The owner'} can share it with you again.`
+        ? isEvent
+          ? 'Its photos leave your Shared tab, and the photos you added leave the album.'
+          : `Its photos leave your Shared tab. ${params.ownerName ?? 'The owner'} can share it with you again.`
         : `Your photos stay in the roll.${members.length ? ` ${members.length} ${members.length === 1 ? 'person loses' : 'people lose'} access to this album.` : ''}`,
       sharedWithMe ? 'Leave' : 'Delete album',
     );
@@ -134,7 +200,7 @@ export default function AlbumScreen() {
           {!selecting ? (
             <Text style={styles.sub} numberOfLines={1}>
               {sharedWithMe
-                ? `Shared by ${params.ownerName ?? 'a friend'}`
+                ? `${isEvent ? 'Event by' : 'Shared by'} ${params.ownerName ?? 'a friend'}`
                 : members.length
                   ? `Shared with ${members.map((m) => m.name ?? 'someone').join(', ')}`
                   : `${items?.length ?? 0} item${items?.length === 1 ? '' : 's'}`}
@@ -152,10 +218,25 @@ export default function AlbumScreen() {
                 <Ionicons name="paper-plane-outline" size={16} color="#fff" />
                 <Text style={styles.actionPrimaryText}>Share album</Text>
               </Pressable>
+              <Pressable
+                style={styles.action}
+                onPress={() =>
+                  event ? router.push({ pathname: '/event-code', params: { album: params.id, name, url: event.url } }) : void startEvent()
+                }
+              >
+                <Ionicons name="qr-code-outline" size={16} color="#fff" />
+                <Text style={styles.actionText}>{event ? 'Event QR' : 'Invite with QR'}</Text>
+              </Pressable>
               <Pressable style={styles.action} onPress={() => setRenaming(name)}>
                 <Text style={styles.actionText}>Rename</Text>
               </Pressable>
             </>
+          ) : null}
+          {isEvent || !sharedWithMe ? (
+            <Pressable style={styles.action} onPress={() => setPicking(true)}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.actionText}>Add photos</Text>
+            </Pressable>
           ) : null}
           <Pressable style={styles.action} onPress={() => void remove()}>
             <Text style={[styles.actionText, { color: palette.danger }]}>{sharedWithMe ? 'Leave' : 'Delete'}</Text>
@@ -179,12 +260,12 @@ export default function AlbumScreen() {
             </Text>
           }
           renderItem={({ item }) => (
-            <MediaTile item={item} size={tile} selecting={selecting} selected={selected.has(item.id)} onPress={onPress} onLongPress={(g) => !sharedWithMe && toggle(g.id)} />
+            <MediaTile item={item} size={tile} selecting={selecting} selected={selected.has(item.id)} onPress={onPress} onLongPress={(g) => canRemove(g) && toggle(g.id)} />
           )}
         />
       )}
 
-      {selecting && !sharedWithMe ? (
+      {selecting && (!sharedWithMe || isEvent) ? (
         <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
           <Pressable style={styles.barButton} onPress={() => void removeSelected()} disabled={busy}>
             <Ionicons name="remove-circle-outline" size={22} color={palette.text} />
@@ -192,6 +273,14 @@ export default function AlbumScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <RollPicker
+        visible={picking}
+        exclude={new Set(items?.map((g) => g.id) ?? [])}
+        title={`Add to “${name || 'album'}”`}
+        onClose={() => setPicking(false)}
+        onPick={addMine}
+      />
 
       <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => setRenaming(null)}>
         <Pressable style={styles.backdrop} onPress={() => setRenaming(null)}>

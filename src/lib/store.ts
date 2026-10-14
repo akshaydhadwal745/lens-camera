@@ -348,6 +348,7 @@ export function selectShared(s: State): GalleryItem[] {
     ownerId: m.ownerId,
     ownerName: m.ownerName,
     albumId: m.albumId,
+    albumOwnerId: m.albumOwnerId,
   }));
   sharedMemo = { shared: s.shared, out };
   return out;

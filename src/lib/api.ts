@@ -148,9 +148,23 @@ type Page<T> = { items: T[]; cursor: string | null };
 export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
 export type Place = { city: string; region: string; country: string };
 export type PlaceGroup = Place & { key: string; count: number; first: number; last: number; cover: RemoteMedia };
-export type Album = { id: string; name: string; count: number; createdAt: number; updatedAt: number; cover: RemoteMedia | null };
-/** An album someone shared with me (its items are in the Shared list with this albumId). */
-export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; at: number };
+export type Album = {
+  id: string;
+  name: string;
+  count: number;
+  createdAt: number;
+  updatedAt: number;
+  cover: RemoteMedia | null;
+  /** Event album: its join link is on (anyone with it can join and add photos). */
+  event?: { code: string; url: string };
+};
+/** An album someone shared with me (its items are in the Shared list with this albumId). `event`: joined by link, I can add my photos. */
+export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; at: number; event?: boolean };
+/** What an event link shows (docs/design/switch-features.md §3). */
+export type EventInfo = {
+  event: { code: string; url: string; name: string; ownerName: string; count: number; people: number; joined: boolean; isOwner: boolean; albumId: string; ownerId: string };
+  items: { id: string; kind: 'photo' | 'video'; width?: number; height?: number; duration?: number; createdAt: number; thumbUrl?: string; previewUrl?: string; mine: boolean }[];
+};
 
 const q = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '');
 
@@ -250,6 +264,14 @@ export const api = {
   deleteAlbum: (id: string) => request<unknown>('DELETE', `/albums/${id}`),
   editAlbum: (id: string, change: { add?: string[]; remove?: string[] }) => request<{ id: string; count: number }>('POST', `/albums/${id}/items`, change),
   leaveAlbum: (ownerId: string, id: string) => request<unknown>('DELETE', `/shared-albums/${ownerId}/${id}`),
+  // Event albums: a join link / QR anyone can use; members add their own photos.
+  setEvent: (albumId: string, on: boolean) => request<{ event: { code: string; url: string } | null }>('POST', `/albums/${albumId}/event`, { on }),
+  eventInfo: (code: string) => request<EventInfo>('GET', `/events/${encodeURIComponent(code)}`),
+  joinEvent: (code: string) => request<{ joined: boolean; albumId: string; ownerId: string; name: string }>('POST', `/events/${encodeURIComponent(code)}/join`),
+  mySharedAlbumItems: (ownerId: string, albumId: string) => request<{ mine: string[] }>('GET', `/shared-albums/${ownerId}/${albumId}/mine`),
+  addToSharedAlbum: (ownerId: string, albumId: string, mediaIds: string[]) =>
+    request<{ added: number; count: number }>('POST', `/shared-albums/${ownerId}/${albumId}/items`, { mediaIds }),
+  removeFromSharedAlbum: (ownerId: string, albumId: string, mediaId: string) => request<unknown>('DELETE', `/shared-albums/${ownerId}/${albumId}/items/${mediaId}`),
   shareAlbum: (albumId: string, to: string[], includeLocation = false) =>
     request<{ shared: number; recipients: string[]; requests?: { id: string; name: string; shareId: string; status: ShareStatus }[] }>('POST', '/shares', { albumId, to, includeLocation }),
   // Places (step 2): positions for photos uploaded before, then the grouped view.

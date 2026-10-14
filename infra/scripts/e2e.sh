@@ -593,6 +593,7 @@ EE1="$(node -p "Date.now().toString(36).padStart(8,'0')")-eve1"; up "$TE" "$EE1"
 [[ $(call GET /shared "$TE" | j ".items.filter(i=>i.albumId==='$AE'&&i.albumOwnerId==='$IA').length") == 1 ]] && ok "E sees the owner's photo"
 [[ $(call POST "/shared-albums/$IA/$AE/items" "$TE" -d "{\"mediaIds\":[\"$EE1\"]}" | j .added) == 1 ]] && ok "E adds their own photo"
 [[ $(call POST "/shared-albums/$IA/$AE/items" "$TE" -d "{\"mediaIds\":[\"$EA1\"]}" -o /dev/null -w '%{http_code}') == 404 ]] && ok "nobody can add someone else's photo"
+[[ $(call GET "/shared-albums/$IA/$AE/mine" "$TE" | j '.mine[0]') == "$EE1" ]] && ok "E's own photos in the album are listed for E"
 R=$(call GET "/albums/$AE" "$TA")
 [[ $(echo "$R" | j .items.length) == 2 && $(echo "$R" | j ".items.find(i=>i.id==='$EE1').addedBy.id") == "$IE" ]] && ok "the owner sees E's photo, marked as E's"
 [[ $(call GET /shared "$TA" | j ".items.some(i=>i.id==='$EE1'&&i.albumId==='$AE')") == true ]] && ok "the owner can open/stream E's photo"

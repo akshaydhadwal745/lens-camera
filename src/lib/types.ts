@@ -84,6 +84,8 @@ export interface SharedMedia extends RemoteMedia {
   ownerName: string;
   /** Shared as part of this album (shared albums). */
   albumId?: string;
+  /** Whose album that is (event albums hold several people's photos). */
+  albumOwnerId?: string;
   sharedAt: number;
 }
 
@@ -181,6 +183,8 @@ export interface GalleryItem {
   ownerName?: string;
   /** Shared with me as part of this album. */
   albumId?: string;
+  /** Whose album that is (an event album holds several people's photos). */
+  albumOwnerId?: string;
   /** Nearest city (my own items with a saved location). */
   place?: { city: string; region: string; country: string };
   hasGps?: boolean;

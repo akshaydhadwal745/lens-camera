@@ -251,6 +251,13 @@ async function addItems(identity: Identity, ownerId: string, album: Album, req: 
   return json(200, { added: fresh.length, count });
 }
 
+/** GET /v1/shared-albums/:ownerId/:albumId/mine: a member's own photos in the album (others' come with GET /shared). */
+export async function mySharedAlbumItems(identity: Identity, ownerId: string, albumId: string): Promise<Res> {
+  if (!(await isMember(ownerId, albumId, identity.id))) throw new HttpError(404, 'Album not found');
+  const items = await albumItems(ownerId, albumId);
+  return json(200, { mine: items.filter((it) => it.by === identity.id).map((it) => it.mediaId) });
+}
+
 /** DELETE /v1/shared-albums/:ownerId/:albumId/items/:mediaId: whoever added it (or the owner) takes it out. */
 export async function removeEventItem(identity: Identity, ownerId: string, albumId: string, mediaId: string): Promise<Res> {
   const album = await getAlbum(ownerId, albumId);

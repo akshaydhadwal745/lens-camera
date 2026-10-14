@@ -23,6 +23,7 @@ import {
   ScannedCode,
 } from '../../../modules/lens-camera';
 import { exportVideoRetrying } from '@/lib/video-export';
+import { parseEventCode } from '@/lib/event-link';
 import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
 import { NamePrompt } from './NamePrompt';
@@ -1488,6 +1489,9 @@ export function codeLabel(code: ScannedCode): string {
 async function actOnCode(code: ScannedCode, say: (message: string) => void) {
   haptic(Haptics.ImpactFeedbackStyle.Light);
   const url = code.url ?? code.value;
+  // A Lens event album QR: open it in Lens (join and add photos) instead of the browser.
+  const eventCode = code.kind === 'url' ? parseEventCode(url) : null;
+  if (eventCode) return router.push({ pathname: '/e/[code]', params: { code: eventCode } });
   if (code.kind === 'url' && /^https?:\/\//i.test(url)) return Linking.openURL(url);
   if (code.kind === 'phone' && code.phone) return Linking.openURL(`tel:${code.phone}`);
   if (code.kind === 'email' && code.email) return Linking.openURL(`mailto:${code.email}`);

@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
+import { parseEventCode } from '@/lib/event-link';
 import { parsePersonCode, pickPerson } from '@/lib/person-code';
 import { colors, errorMessage } from '@/lib/ui';
 
@@ -45,6 +46,13 @@ export default function ScanScreen() {
           handled.current = false;
           setMessage(errorMessage(error));
         });
+      return;
+    }
+    // An event album's QR code (lens.instagrowapp.com/e/<code>): open it to join.
+    const eventCode = parseEventCode(result.data);
+    if (eventCode) {
+      handled.current = true;
+      router.replace({ pathname: '/e/[code]', params: { code: eventCode } });
       return;
     }
     const id = loginSessionFrom(result.data);
