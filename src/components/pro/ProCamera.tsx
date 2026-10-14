@@ -576,6 +576,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   /** Hold the shutter (Photo mode): burst until release; Lens picks the best shot, the rest stay one tap away. */
   const startBurst = () => {
     const cam = cameraRef.current;
+    // A tap while a photo holds the shutter can arrive as a long press when the JS thread is busy
+    // (press in/out handled > 350 ms apart): count it as a queued shot, don't drop it.
+    if (busy && pipelinedBusy.current) {
+      queuedPresses.current = Math.min(queuedPresses.current + 1, MAX_QUEUED_PRESSES);
+      return;
+    }
     if (!cam?.startBurst || s.mode !== 'photo' || autoNight || busy) return;
     haptic(Haptics.ImpactFeedbackStyle.Heavy);
     setBurstCount(0);

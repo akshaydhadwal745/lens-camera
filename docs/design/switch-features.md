@@ -31,6 +31,17 @@ one photo per path as a Quality Lab set (`analyze.py report <setId>`). ProCamera
 shutter on capture start (Night/Astro/baked looks stay locked). Next: Device Farm numbers →
 milestone 3 (default path per capability).
 
+**Device Farm dev-97 (2026-10-14):** Galaxy S9: best quality lag 2005 ms / saved 2211 ms / 3 rapid
+4.4 s; quick 1042 / 1241 / 2.7 s; ZSL 923 / 1090 / 1.7 s; all rapid presses saved. **ZSL photo on
+the S9 was completely black** (dark rack scene: quality and quick show the same faint scene,
+ZSL 242 KB flat black) → ZSL is not trusted from `isZslSupported` alone; needs a runtime check
+(photo vs preview brightness) before it can be a default. Quick looks identical to best quality
+in that scene, but it's too dark to compare detail/noise: needs a lit scene (S8 Quality Lab).
+Pixel 6: app crashed in the Maker NIGHT step (CameraX closing the extension session after a
+camera HAL error, `CameraAccessException` on a CXCP thread); re-running to see if it repeats.
+Emulator: taps during the hold arrived as long presses on a busy JS thread and were dropped →
+long press while held also queues a shot.
+
 **Goal:** the photo is taken the moment the shutter is pressed, and the next press is
 accepted at once, with no loss in image quality.
 
