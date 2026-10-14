@@ -408,6 +408,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     const pipelined = !(astro && astroCandidate) && s.mode !== 'night' && !autoNight && !(s.bakeLooks && LensImaging);
     pipelinedBusy.current = pipelined;
     setPhotoHold(pipelined);
+    showNotice(`DEBUG start pipelined=${pipelined}`);
     const release = () => {
       if (released) return;
       released = true;
@@ -621,7 +622,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   const onShutter = () => {
     console.log('[shutter] onShutter', s.mode);
-    if (busy) showNotice(`DEBUG onShutter busy mode=${s.mode} hold=${photoHold}`);
+    showNotice(`DEBUG onShutter busy=${busy} hold=${photoHold} astro=${!!(astro && astroCandidate)} night=${autoNight} bake=${s.bakeLooks}`);
     if (s.mode === 'video' || s.mode === 'slowmo') return toggleRecording();
     if (s.mode === 'timelapse') return toggleTimeLapse();
     if (countdown !== null) {
