@@ -391,8 +391,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const hasTools = stored.pro || nightCandidate || !recordMode || ((s.mode === 'video' || s.mode === 'slowmo') && caps?.torch !== false);
 
   const takePhoto = async () => {
-    console.log('[shutter] takePhoto', JSON.stringify({ busy, held: pipelinedBusy.current, queued: queuedPresses.current }));
-    if (busy) showNotice(`DEBUG busy=${busy} held=${pipelinedBusy.current} q=${queuedPresses.current}`);
     if (!cameraRef.current) return;
     if (busy) {
       // Pressed while the previous photo's frame is still being captured: take it next, like the
@@ -408,11 +406,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     const pipelined = !(astro && astroCandidate) && s.mode !== 'night' && !autoNight && !(s.bakeLooks && LensImaging);
     pipelinedBusy.current = pipelined;
     setPhotoHold(pipelined);
-    showNotice(`DEBUG start pipelined=${pipelined}`);
     const release = () => {
       if (released) return;
       released = true;
-      console.log('[shutter] release', queuedPresses.current);
       pipelinedBusy.current = false;
       setPhotoHold(false);
       setBusy(false);
@@ -582,7 +578,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     const cam = cameraRef.current;
     // A tap while a photo holds the shutter can arrive as a long press when the JS thread is busy
     // (press in/out handled > 350 ms apart): count it as a queued shot, don't drop it.
-    console.log('[shutter] longPress', busy, pipelinedBusy.current);
     if (busy && pipelinedBusy.current) {
       queuedPresses.current = Math.min(queuedPresses.current + 1, MAX_QUEUED_PRESSES);
       return;
@@ -621,8 +616,6 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   };
 
   const onShutter = () => {
-    console.log('[shutter] onShutter', s.mode);
-    showNotice(`DEBUG onShutter busy=${busy} hold=${photoHold} astro=${!!(astro && astroCandidate)} night=${autoNight} bake=${s.bakeLooks}`);
     if (s.mode === 'video' || s.mode === 'slowmo') return toggleRecording();
     if (s.mode === 'timelapse') return toggleTimeLapse();
     if (countdown !== null) {
@@ -837,10 +830,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             sceneSuggest={!stored.pro && !s.look}
             onSceneLook={(e) => setSceneLook(e.nativeEvent.look)}
             onBurstShot={(e) => setBurstCount(e.nativeEvent.count)}
-            onCaptureStarted={() => {
-              console.log('[shutter] captureStarted', startWaiters.current.length);
-              startWaiters.current.shift()?.();
-            }}
+            onCaptureStarted={() => startWaiters.current.shift()?.()}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
             frame={
