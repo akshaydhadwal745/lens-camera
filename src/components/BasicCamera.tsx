@@ -31,6 +31,7 @@ import { IconButton } from '@/components/IconButton';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { reportBasicPhoto } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/format';
+import { useKeepAwakeWhile } from '@/lib/keep-awake';
 import { capture as saveCapture, finishLiveUpload, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
 import { displayUri, newId } from '@/lib/types';
 
@@ -72,6 +73,8 @@ export function BasicCamera() {
   const [liveId, setLiveId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [muted, setMuted] = useState(false);
+  // Screen stays on while recording, like the stock camera.
+  useKeepAwakeWhile(recording, 'recording');
 
   const elapsedRef = useRef(0);
   const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);

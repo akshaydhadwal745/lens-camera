@@ -5,6 +5,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "expo-keep-awake": [
+        "./node_modules/expo/node_modules/expo-keep-awake"
       ]
     }
   },

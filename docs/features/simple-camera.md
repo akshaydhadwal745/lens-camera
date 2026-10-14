@@ -133,6 +133,14 @@ While a video records, the flip button turns into **pause**. Paused time isn't
 recorded (one file, no gap), the REC pill shows `PAUSED` and the timer stops;
 tap ⏺ to continue.
 
+### Screen stays on while recording
+
+Like the stock camera, the screen doesn't time out while a video (or
+hyperlapse) records, in the simple and PRO camera. The phone's normal screen
+timeout comes back as soon as recording stops (`src/lib/keep-awake.ts`, using
+expo-keep-awake, which ships inside expo and is resolved by `metro.config.js`,
+so no new APK was needed).
+
 ### Shutter sound
 
 Settings → Camera → **Shutter sound** (on by default): the phone's own camera

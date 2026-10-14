@@ -53,6 +53,7 @@ import {
 } from '@/lib/pro-camera';
 import { capture, finishLiveUpload, isHot, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
 import { font, glass, palette, radius } from '@/lib/theme';
+import { useKeepAwakeWhile } from '@/lib/keep-awake';
 import { displayUri, newId } from '@/lib/types';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -167,6 +168,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [recLive, setRecLive] = useState(false);
   // Paused mid-recording (one file; paused time isn't recorded).
   const [paused, setPaused] = useState(false);
+  // Screen stays on while recording, like the stock camera.
+  useKeepAwakeWhile(recording, 'recording');
   // Recording sound: problem ('silenced' / 'error') or an external mic in use; null = fine/unknown.
   // Auto-straighten (checklist 7.4): the phone's small tilt from level at the moment of the shot.
   // Astro (checklist 9.6) also needs to know the phone is held still (tripod / propped up).
