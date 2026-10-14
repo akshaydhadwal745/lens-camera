@@ -1274,7 +1274,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             <Pressable onPress={() => router.push('/gallery')} disabled={recording} style={styles.thumb} accessibilityLabel="Open gallery">
               {latest ? (
                 displayUri(latest) ? (
-                  <Upright>
+                  <Upright style={styles.thumbImage}>
+                    {/* The wrapper takes the thumbnail's size: a % size inside an unsized view collapses to nothing. */}
                     <Image source={{ uri: displayUri(latest) }} style={styles.thumbImage} contentFit="cover" />
                   </Upright>
                 ) : (
