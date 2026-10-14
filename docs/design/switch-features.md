@@ -84,7 +84,7 @@ Success criteria:
 
 ## 2. Free up space
 
-Status 2026-10-14: built (needs a phone check). Decision taken while the user was away
+Status 2026-10-14: built and **verified end to end on the Android 14 emulator (dev-109)**: 3 gallery photos imported → uploaded → Settings showed "Remove 3 backed-up from phone gallery (474 KB)" → Lens's confirm → Android's photos permission (asked only then) → MD5 check passed → Android's "Allow Lens to delete 3 photos?" listing exactly those files → gallery 3 → 0, roll still 17 frames ALL SAFE. Still to check on a phone: Android 9 (S8, direct delete path). Decision taken while the user was away
 (they said not to wait): use the media permission, asked only when the user taps the
 Remove button; Play declaration before a Play release. See docs/features/cloud-and-storage.md.
 
