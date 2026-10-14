@@ -9,7 +9,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView, LensImaging, MediaInfo } from '../../modules/lens-camera';
+import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView, LensImaging, MediaInfo, PhotoResult } from '../../modules/lens-camera';
 import { exportVideoRetrying } from '@/lib/video-export';
 import { selfTestHooks } from '../../modules/lens-device';
 import { buildInfo, buildLabel } from '@/lib/build-info';
@@ -34,6 +34,7 @@ import {
   summarize,
 } from '@/lib/self-test';
 import { peopleSelfTest } from '@/lib/people-selftest';
+import { deleteSet, keepFile, newSet, uploadSet } from '@/lib/quality-lab';
 import { capture as saveCapture, getState, isHot } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
@@ -72,7 +73,7 @@ export default function SelfTestScreen() {
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
   /** Files kept for the later checks (editor render, trim export), deleted at the end. */
-  const kept = useRef<{ photo?: string; portrait?: string; video?: string }>({});
+  const kept = useRef<{ photo?: string; portrait?: string; video?: string; shutter?: Record<string, string> }>({});
   /** Viewfinder fps of the plain back camera, to compare the live readers / motion buffer with. */
   const plainFps = useRef<number | null>(null);
   const motionOff = useRef(false);
@@ -143,6 +144,25 @@ export default function SelfTestScreen() {
       const details = { exportMs: Date.now() - t0, file: info };
       if (info && Math.abs(info.duration - 1.5) > 0.4) return done('fail', `exported ${info.duration.toFixed(2)} s, expected 1.5 s`, details);
       return done('pass', `1.5 s clip exported in ${((Date.now() - t0) / 1000).toFixed(1)} s`, details);
+    }
+    if (step.action === 'shutterQuality') {
+      // Same scene, one photo per capture path → a Quality Lab set (analyze.py: noise + detail vs best quality).
+      const shots = kept.current.shutter ?? {};
+      const names: Record<string, string> = { 'shutter-jpeg': 'single', 'shutter-latency': 'quick', 'shutter-zsl': 'zsl' };
+      const present = Object.keys(names).filter((id) => shots[id]);
+      if (!shots['shutter-jpeg'] || present.length < 2) return done('skip', 'not enough shutter samples');
+      const set = newSet('selftest-shutter', `self-test ${buildLabel()}`);
+      for (const id of present) {
+        await keepFile(set, shots[id], `${names[id]}.jpg`);
+        set.steps.push({ id: names[id], label: id, files: [{ name: `${names[id]}.jpg` }], durationMs: 0, thermalBefore: -1, thermalAfter: -1 });
+      }
+      kept.current.shutter = {};
+      try {
+        const setId = await uploadSet(set, (await cameraDeviceReport()) as Record<string, unknown>, () => {});
+        return done('pass', `set ${setId} (${present.map((id) => names[id]).join(', ')})`, { setId, files: present.map((id) => names[id]) });
+      } finally {
+        deleteSet(set.localId);
+      }
     }
     if (step.action === 'editRender') {
       const source = kept.current.photo;
@@ -227,20 +247,55 @@ export default function SelfTestScreen() {
         };
 
         if (step.action === 'shutter') {
+          // One at a time: press → saved (captureMs) and press → frame captured (lagMs, shutter lag).
           const times: number[] = [];
+          const lags: (number | null)[] = [];
+          let mode: string | null = null;
           for (let i = 0; i < 3; i++) {
             const s0 = Date.now();
             const p = await cam.takePhoto({ raw: false, flash: 'off' });
             times.push(Date.now() - s0);
-            deleteFile(p.uri);
+            lags.push(p.lagMs ?? null);
+            mode = p.captureMode ?? mode;
+            // The first plain-JPEG photo of each path is kept for the quality comparison.
+            if (i === 0 && step.id !== 'shutter-uhdr') kept.current.shutter = { ...kept.current.shutter, [step.id]: p.uri };
+            else deleteFile(p.uri);
             await wait(300);
           }
+          // Rapid: 3 presses 150 ms apart without waiting for saves (the pipelined shutter): all must arrive, in order.
+          const r0 = Date.now();
+          const rapid = await Promise.allSettled(
+            [0, 1, 2].map(async (i) => {
+              await wait(i * 150);
+              return cam.takePhoto({ raw: false, flash: 'off' });
+            }),
+          );
+          const rapidMs = Date.now() - r0;
+          const rapidOk = rapid.filter((r): r is PromiseFulfilledResult<PhotoResult> => r.status === 'fulfilled');
+          for (const r of rapidOk) deleteFile(r.value.uri);
           const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-          const details = { captureMs: times, avgMs: avg, format: caps.photoFormat ?? null };
+          const lagValues = lags.filter((l): l is number => l !== null);
+          const lagAvg = lagValues.length ? Math.round(lagValues.reduce((a, b) => a + b, 0) / lagValues.length) : null;
+          const details = {
+            captureMs: times,
+            avgMs: avg,
+            lagMs: lags,
+            lagAvgMs: lagAvg,
+            rapidSaved: rapidOk.length,
+            rapidMs,
+            rapidLagMs: rapidOk.map((r) => r.value.lagMs ?? null),
+            captureMode: mode,
+            format: caps.photoFormat ?? null,
+          };
           // Only the path users get by default is judged; the others are measurements.
           const isDefault = step.id === 'shutter-uhdr' || (step.id === 'shutter-jpeg' && !caps.ultraHdr);
-          const status = isDefault && avg > MAX_SHUTTER_MS ? 'warn' : 'pass';
-          return { ...base, status, ms: Date.now() - t0, message: `${avg} ms per photo (${times.join(', ')})`, details };
+          const lost = rapidOk.length < 3;
+          const status = lost ? 'fail' : isDefault && avg > MAX_SHUTTER_MS ? 'warn' : 'pass';
+          const lagText = lagAvg !== null ? `lag ${lagAvg} ms, ` : '';
+          const message = lost
+            ? `rapid presses: only ${rapidOk.length} of 3 photos saved (${rapid.find((r) => r.status === 'rejected') ? errorMessage((rapid.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason) : ''})`
+            : `${mode ?? '?'}: ${lagText}saved ${avg} ms (${times.join(', ')}), 3 rapid in ${rapidMs} ms`;
+          return { ...base, status, ms: Date.now() - t0, message, details };
         }
 
         if (step.action === 'video') {

@@ -1,0 +1,137 @@
+# Five features that make people pick Lens over the stock camera
+
+Status: plan agreed by the user 2026-10-14 (order 1 → 5). Audit of what exists first,
+then milestones, success criteria and tests per feature. Update the status lines as
+milestones land.
+
+The idea behind the order: stock cameras win on capture (years of tuning), so Lens must
+first stop losing there (1), then win on what happens after the shot (2–4), then add a
+capture feature stock cameras on most phones don't have (5).
+
+## Audit (2026-10-14)
+
+| Area | What exists | Gap |
+|---|---|---|
+| Capture pipeline | CameraX 1.6, `stillCapture(latency)` = MAXIMIZE_QUALITY by default, MINIMIZE_LATENCY for Night frames / burst / `captureMode: 'latency'`; JPEG 95; Ultra HDR; RAW; maker extensions with watchdog; captures finish behind other screens (`capturesInFlight`, dev-95) | Shutter is blocked until the file is saved; no ZSL; no per-capability mode choice; only press→saved is measured |
+| Shutter measurements | Self-test steps `shutter-uhdr / -jpeg / -latency`, press→saved, 3 shots | Missing press→capture-start (the moment the photo is taken) and shot-to-shot |
+| Measured (press→saved, ms) | best quality: Pixel 6 1400–2000, Pixel 8a 1400, A14 1750, Xiaomi 1750, OPPO 2080, Moto 1400, S9 1800–2100, S25 Ultra (Ultra HDR) 2500 · quick: Pixel 6 600, Pixel 8a 545, A14 545, Xiaomi 553, S25 Ultra 855, S9 1230 | Quality cost of quick capture not measured yet |
+| Free up space | `guardSpace` (keep N GB free), retention days, Settings → **Free up space now** (`freeUpSpace`), only originals verified in the cloud (`offloadable`, MD5 on every upload), previews kept, "spaceFreed" banner | Only Lens's own files. Gallery imports (and photos the user saved to Photos) stay in the phone gallery: no MediaStore delete, no "freed X GB" for them, no per-item failure reporting |
+| Albums / sharing | Albums (`albums.ts`: AL#/AI#/AM#/SA#), shared album = share request with consent, access per item, Nearby, People link to friends, web viewer for shares | Members can't **add**; no join link / QR; no guests; web has no upload |
+| Places / People / best shot | Places (on-device reverse geocode, server places.ts), People (on-device face grouping), burst `BurstPicker` (sharpness + eyes open + smile per frame, ML Kit) | No trips/events grouping, no recap album or video, no cloud renderer for photos |
+| Video rendering | Transcoder (ffmpeg on Graviton Spot via S3→SQS→Batch) for HLS | Could render recap videos with the same pipeline |
+| Known issue | S9-class phones: video export right after a 4K recording fails (codec capacity: camera keeps a 4K encoder for the next recording + export needs 4K decode + encode). Self-test dev-95 2/2, passed dev-68/85/90 | Fix before bake-looks/4K is promoted further (pause the camera's video use case during export, or export at the source's codec budget) |
+
+## 1. Fast shutter (in progress)
+
+Status 2026-10-14: milestones 1 + 2 built (commit after b9f66cf): native `lagMs` / `savedMs` /
+`captureMode` on every photo, `captureMode: 'zsl'` (ZSL where `isZslSupported`, JPEG, no
+extension; else quick), `onCaptureStarted` event; self-test steps `shutter-*` record lag,
+press→saved and 3 rapid presses (all must save), `shutter-zsl`, and `shutter-quality` uploads
+one photo per path as a Quality Lab set (`analyze.py report <setId>`). ProCamera frees the
+shutter on capture start (Night/Astro/baked looks stay locked). Next: Device Farm numbers →
+milestone 3 (default path per capability).
+
+**Goal:** the photo is taken the moment the shutter is pressed, and the next press is
+accepted at once, with no loss in image quality.
+
+Two different delays, both felt as "lag":
+- **Shutter lag**: press → the frame is captured. Fixed by the capture mode: ZSL
+  (zero shutter lag: a ring buffer of recent frames, reprocessed at full quality)
+  where `CameraInfo.isZslSupported`, else MINIMIZE_LATENCY, else best quality.
+- **Shot-to-shot**: press → shutter accepts the next press. Today the shutter stays
+  locked until the JPEG is written (1.4–2.5 s). Fix: unlock on capture start
+  (`onCaptureStarted`), let saves finish in the background (CameraX queues requests),
+  each save lands in the roll when ready. Night, Astro, burst and timer keep locking.
+
+Milestones:
+1. **Measure the right things** (native + self-test): every photo reports
+   `lagMs` (press → capture started) and `savedMs` (press → file saved); new self-test
+   steps per mode (best quality, quick, ZSL where supported) record lag, shot-to-shot over
+   3 rapid presses, and keep one photo per mode for quality comparison
+   (`research/analyze.py` sharpness + noise on the same scene).
+2. **Pipelined shutter** in ProCamera photo / portrait modes: unlock on capture start,
+   several captures in flight, gallery tap still safe (`capturesInFlight`).
+3. **Pick the mode per capability from the numbers**: ZSL where supported and not worse
+   in quality; quick capture where its quality is within the threshold; best quality +
+   pipelining otherwise. No per-model tables (docs/research/camera-quality.md: decide by capability, from measurements).
+4. Validate: Device Farm Pixel 6 + S9 (+ Test Lab A14 / OPPO / Pixel 8a), S8 by hand.
+
+Success criteria:
+- Shutter lag p50 ≤ 250 ms on mid/flagship phones, ≤ 400 ms on S8/S9-class.
+- Shot-to-shot ≤ 600 ms (3 rapid presses all saved, in order, none lost).
+- Quality: lab sharpness ≥ 95 % and noise ≤ 105 % of today's best-quality path on the
+  same scene, same phone; otherwise that phone keeps best quality + pipelining.
+- No new self-test failures; gallery-right-after-shutter still saves every photo.
+
+## 2. Free up space
+
+Lens's own originals are already offloaded safely. Missing: the **phone gallery**.
+- After an import (or for photos also saved to Photos) is verified in the cloud, offer
+  "Remove N photos from your phone gallery · frees X GB".
+- Android 11+: `MediaStore.createDeleteRequest` (one system confirmation for the batch,
+  items go to the system trash). Android 10: per-item `RecoverableSecurityException`
+  flow. Android 9 and older (S8): `WRITE_EXTERNAL_STORAGE` + ContentResolver delete
+  with our own confirmation.
+- Never delete unless: the cloud copy exists, its MD5 matches the local file at delete
+  time (re-hash just before), and the user approved this batch. Partial failures are
+  listed and kept.
+- Show freed bytes from the file sizes actually deleted (`StatFs` before/after as a check).
+- Optional later: scan the gallery for items already in Lens (MD5 dedup) and offer to
+  remove those.
+
+Success: 0 deletions without a verified cloud copy (unit tests on the decision function
++ e2e with a corrupted upload); works on Android 9, 11, 14 (emulator + S8); freed bytes
+within 1 % of StatFs difference.
+
+## 3. Shared event albums (QR / link)
+
+Builds on albums + shares + Nearby + People.
+- Album gets an **event mode**: `contributors: true`, a join code (random, revocable,
+  optional expiry), QR + `lens.instagrowapp.com/e/<code>` link.
+- Joining (app): one tap, the album appears under Albums; contributors can add their
+  own photos (they stay in the contributor's storage and quota; the album holds
+  references, like today's AI# records but with an `addedBy`).
+- Web guests: open the link, see the album, add photos with a guest name (no account):
+  per-guest and per-album caps (count/size/day), rate limits, type/size checks,
+  EXIF location stripped by default, owner can remove items and kick guests. Guests are
+  offered "keep these photos: get Lens / sign in".
+- Near-real-time: polling every 10–15 s while open (existing pattern), push to members on
+  new items (FCM exists), batched.
+- Privacy: the owner chooses who can see (members only), links can be turned off,
+  leaving an album removes your items from it.
+
+Success: guest upload on a phone browser in ≤ 3 taps; new items visible to others
+≤ 15 s; e2e for join/add/remove/revoke/limits; abuse limits tested.
+
+## 4. Automatic trip and event recaps
+
+- Detect trips/events on the server from metadata already uploaded: time gaps + place
+  (places.ts) + distance from home; People adds who was there (on device).
+- Curate: drop near-duplicates (perceptual hash of thumbnails), pick best shots
+  (sharpness/faces scores computed on device at capture/import, sent as metadata).
+- Recap = a suggested album + a 30–60 s video rendered in the cloud from 2048 px previews
+  (not originals) with the existing Batch/ffmpeg pipeline: cheap, phone stays cool.
+- Preview and approve before anything is shared; nothing auto-shared.
+
+Success: a recap ready ≤ 10 min after a trip ends (when online); cost ≤ $0.01 per recap;
+no duplicates; user can edit/approve.
+
+## 5. Best group photo
+
+- Input: a burst (already captured with `BurstPicker` scores per frame and face).
+- Pick a base frame (sharpest, most eyes open), then for each person whose eyes are closed
+  or expression is worse, take the face region from the best frame for that person,
+  align (face landmarks + homography on the face region), color/lighting match, blend
+  with a feathered mask (Poisson/multiband), reject when motion/occlusion is too large.
+- On device first (ML Kit landmarks exist; OpenCV-style blending in Kotlin/RenderScript
+  replacement via GL), cloud fallback for low-end phones only with consent.
+- Research and a quality bar before release (artifacts are worse than a blink).
+
+Success: on a test set of group bursts, ≥ 80 % of outputs rated better than the best
+single frame by blind A/B, < 5 % with visible artifacts; ≤ 3 s on mid phones.
+
+## Other high-value ideas found during the audit
+
+- **Shot-to-shot speed is half of "fast shutter"**: the shutter waits for the JPEG write;
+  fixing that helps every phone, even where ZSL isn't supported.
+- **4K export codec-capacity bug** (above): fix with 1 or soon after.

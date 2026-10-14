@@ -86,3 +86,12 @@ Native hooks (lens-device): `testLoop()`, `writeTestResult(uri, text)`,
 - **dev-37, 2026-10-10** (emulators Android 14/15/16): all **11 pass, 0 fail**
   (1 warning each: portrait without a person). The Android 14 180° step that
   failed on dev-36 now passes. Real phones next.
+
+### Shutter speed (switch-features §1)
+
+`shutter-uhdr` / `shutter-jpeg` / `shutter-latency` / `shutter-zsl`: 3 photos one at a time
+(press → frame captured = `lagMs`, press → saved), then 3 presses 150 ms apart without
+waiting (all 3 must save, else fail). `captureMode` in the details is what the camera really
+bound (`zsl` only where supported). `shutter-quality` (when the phone can upload) sends the
+first plain JPEG of each path as a Quality Lab set: `research/.venv/bin/python
+research/quality/analyze.py sync && … report <setId>` compares noise and detail against best quality.

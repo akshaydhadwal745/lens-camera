@@ -166,8 +166,11 @@ export type LensCameraProps = ViewProps & {
   autoLowLight?: boolean;
   /** Android, Quality Lab only: bind a phone-maker extension mode in Photo mode. */
   extension?: LabExtension;
-  /** Android, Quality Lab only: photo capture tuned for quality (default) or speed. */
-  captureMode?: 'quality' | 'latency';
+  /**
+   * Android: photo capture path: best quality (default), the phone's quick path, or zero
+   * shutter lag where supported (else quick). docs/design/switch-features.md §1.
+   */
+  captureMode?: 'quality' | 'latency' | 'zsl';
   analysis: AnalysisSettings;
   onReady?: (e: NativeSyntheticEvent<Capabilities>) => void;
   onStats?: (e: NativeSyntheticEvent<CameraStats>) => void;
@@ -188,6 +191,8 @@ export type LensCameraProps = ViewProps & {
   onTimeLapse?: (e: NativeSyntheticEvent<{ hyperlapse: boolean }>) => void;
   /** Android: this phone's encoder can't keep up with motion photos (they were turned off). */
   onMotionUnavailable?: () => void;
+  /** Android: a photo's frame was captured (still being saved): the shutter may take the next one. */
+  onCaptureStarted?: () => void;
   /** Android: a burst shot was saved (`count` so far). */
   onBurstShot?: (e: NativeSyntheticEvent<{ count: number }>) => void;
   /** Android: volume keys / camera key / selfie remote take the shot while this camera is on screen. */
@@ -209,6 +214,12 @@ export type PhotoResult = {
   motion?: boolean;
   /** Android Portrait: what was separated: 'person', or 'subject' (pet/object, no person found). */
   depthKind?: 'person' | 'subject' | null;
+  /** Android: ms from the press until the frame was captured (shutter lag). */
+  lagMs?: number | null;
+  /** Android: ms from the press until the file was saved. */
+  savedMs?: number;
+  /** Android: the capture path used ('zsl' only where the camera supports it). */
+  captureMode?: 'quality' | 'latency' | 'zsl';
 };
 export type VideoResult = {
   uri: string;

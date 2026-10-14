@@ -103,7 +103,11 @@ data class CameraConfig(
    * in Photo mode, or "none".
    */
   val extension: String = "none",
-  /** Quality Lab only: "quality" (default) or "latency" photo capture. */
+  /**
+   * Photo capture path: "quality" (default, CameraX best quality), "latency" (the
+   * phone's quick capture path) or "zsl" (zero shutter lag: a ring buffer of recent
+   * frames, where the camera supports it; else "latency"). docs/design/switch-features.md §1.
+   */
   val captureMode: String = "quality",
 ) {
   /** Video and slow motion record with VideoCapture. */
@@ -172,6 +176,8 @@ class CameraController(private val context: Context) {
   private var boundSelector: CameraSelector? = null
   /** Output format the photo use case was bound with (JPEG, Ultra HDR or RAW). */
   private var photoFormat = ImageCapture.OUTPUT_FORMAT_JPEG
+  /** The capture path the photo use case was bound with: "quality", "latency" or "zsl". */
+  private var boundCaptureMode = "quality"
   private var videoCapture: VideoCapture<Recorder>? = null
   private var recording: Recording? = null
   private var config = CameraConfig()
@@ -506,16 +512,29 @@ class CameraController(private val context: Context) {
     } else {
       photoFormat = if (video.plainPhoto) ImageCapture.OUTPUT_FORMAT_JPEG else choosePhotoFormat(cam)
       // Night bursts need quick successive shots; everything else, best quality.
-      imageCapture = stillCapture((config.isNight && !nightExtension) || config.captureMode == "latency", photoFormat)
-        .also { group.addUseCase(it) }
+      val zsl = config.captureMode == "zsl" && !config.isNight && photoFormat == ImageCapture.OUTPUT_FORMAT_JPEG &&
+        boundExtension == "none" && runCatching { cam.info.isZslSupported }.getOrDefault(false)
+      val latency = (config.isNight && !nightExtension) || config.captureMode == "latency" || (config.captureMode == "zsl" && !zsl)
+      boundCaptureMode = when {
+        zsl -> "zsl"
+        latency -> "latency"
+        else -> "quality"
+      }
+      imageCapture = stillCapture(latency, photoFormat, zsl).also { group.addUseCase(it) }
       videoCapture = null
     }
     return group.build()
   }
 
   /** The photo use case: full resolution, 4:3, JPEG 95; [latency] = the phone's quick capture path. */
-  private fun stillCapture(latency: Boolean, format: Int): ImageCapture = ImageCapture.Builder()
-    .setCaptureMode(if (latency) ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY else ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+  private fun stillCapture(latency: Boolean, format: Int, zsl: Boolean = false): ImageCapture = ImageCapture.Builder()
+    .setCaptureMode(
+      when {
+        zsl -> ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG
+        latency -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+        else -> ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
+      },
+    )
     // 95 in every mode (CameraX would use 85 for quick captures, e.g. Night frames).
     .setJpegQuality(95)
     .setOutputFormat(format)
@@ -877,8 +896,16 @@ class CameraController(private val context: Context) {
    * screen instead (white screen at full brightness, like the phone's own
    * camera). "on" always, "auto" only in low light.
    */
-  fun takePhoto(flash: String, screenFlash: ImageCapture.ScreenFlash? = null, done: (Result<Map<String, Any?>>) -> Unit) {
+  fun takePhoto(
+    flash: String,
+    screenFlash: ImageCapture.ScreenFlash? = null,
+    onStarted: (() -> Unit)? = null,
+    done: (Result<Map<String, Any?>>) -> Unit,
+  ) {
     val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
+    // Shutter timing (switch-features §1): press → capture started (shutter lag) and press → saved.
+    val pressedAt = SystemClock.elapsedRealtime()
+    val startedAt = java.util.concurrent.atomic.AtomicLong(0L)
     val f = facts
     val useScreen = screenFlash != null && f != null && f.facingFront && !f.hasFlash &&
       (flash == "on" || (flash == "auto" && isDark()))
@@ -920,7 +947,11 @@ class CameraController(private val context: Context) {
       io,
       object : ImageCapture.OnImageSavedCallback {
         // The click when the photo really starts, not on the press.
-        override fun onCaptureStarted() = sounds.shutter()
+        override fun onCaptureStarted() {
+          startedAt.set(SystemClock.elapsedRealtime())
+          sounds.shutter()
+          onStarted?.invoke()
+        }
 
         override fun onImageSaved(output: ImageCapture.OutputFileResults) {
           handler.removeCallbacks(watchdog)
@@ -928,7 +959,12 @@ class CameraController(private val context: Context) {
           val (w, h) = uprightSize(file)
           // Portrait: find the person and keep the mask inside the photo.
           val depth = !raw && config.mode == "portrait" && Portrait.addMask(file)
-          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to raw, "depth" to depth, "depthKind" to if (depth) Portrait.lastKind else null, "autoAperture" to if (depth) PortraitStyle.autoAperture(Portrait.lastCoverage) else null)))
+          val timing = mapOf(
+            "lagMs" to startedAt.get().takeIf { it > 0 }?.let { it - pressedAt },
+            "savedMs" to SystemClock.elapsedRealtime() - pressedAt,
+            "captureMode" to boundCaptureMode,
+          )
+          done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "width" to w, "height" to h, "raw" to raw, "depth" to depth, "depthKind" to if (depth) Portrait.lastKind else null, "autoAperture" to if (depth) PortraitStyle.autoAperture(Portrait.lastCoverage) else null) + timing))
         }
 
         override fun onError(exception: ImageCaptureException) {
@@ -952,7 +988,7 @@ class CameraController(private val context: Context) {
    * itself). Otherwise a burst of [frames] shots merged by [NightMerge].
    */
   fun takeNightPhoto(frames: Int, hot: Boolean, done: (Result<Map<String, Any?>>) -> Unit) {
-    if (nightExtension) return takePhoto("off", null, done)
+    if (nightExtension) return takePhoto("off", null, done = done)
     // A hot phone does less work: fewer frames.
     mergedShots((if (hot) minOf(frames, 3) else frames).coerceIn(1, 8), emptyMap(), done)
   }

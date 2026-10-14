@@ -157,6 +157,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [sheet, setSheet] = useState<'none' | 'monitor' | 'presets'>('none');
   const [presets, setPresets] = useState<Preset[]>(loadPresets);
   const [busy, setBusy] = useState(false);
+  /** Pipelined shutter: photos waiting for their frame to be captured, oldest first (frees the shutter). */
+  const startWaiters = useRef<(() => void)[]>([]);
   const [recording, setRecording] = useState(false);
   /** Id of the upload running while recording (null: uploads after you stop). */
   const [liveId, setLiveId] = useState<string | null>(null);
@@ -382,6 +384,17 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const takePhoto = async () => {
     if (!cameraRef.current || busy) return;
     setBusy(true);
+    // Pipelined shutter (docs/design/switch-features.md §1): a single photo frees the shutter as soon
+    // as its frame is captured (onCaptureStarted); saving finishes in the background. Night, Astro and
+    // baked looks keep it locked until done. Without the event (iOS), it frees when the photo is saved.
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      setBusy(false);
+    };
+    const pipelined = !(astro && astroCandidate) && s.mode !== 'night' && !autoNight && !(s.bakeLooks && LensImaging);
+    if (pipelined) startWaiters.current.push(release);
     haptic();
     flash.setValue(1);
     Animated.timing(flash, { toValue: 0, duration: 220, useNativeDriver: true }).start();
@@ -423,8 +436,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     } catch (error) {
       Alert.alert('Could not take photo', error instanceof Error ? error.message : String(error));
     } finally {
+      startWaiters.current = startWaiters.current.filter((w) => w !== release);
       setProcessing(null);
-      setBusy(false);
+      release();
     }
   };
 
@@ -775,6 +789,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             sceneSuggest={!stored.pro && !s.look}
             onSceneLook={(e) => setSceneLook(e.nativeEvent.look)}
             onBurstShot={(e) => setBurstCount(e.nativeEvent.count)}
+            onCaptureStarted={() => startWaiters.current.shift()?.()}
             nightPreview={s.mode === 'night' || autoNight}
             portraitStyle={s.portraitStyle}
             frame={

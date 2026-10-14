@@ -57,6 +57,8 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
   private val onBurstShot by EventDispatcher<Map<String, Any?>>()
+  /** A photo's frame was just captured (it's still being processed and saved): the shutter can take the next one. */
+  private val onCaptureStarted by EventDispatcher<Map<String, Any?>>()
   private val onHardwareShutter by EventDispatcher<Map<String, Any?>>()
   /** Volume keys / selfie remote take the shot (only the main camera screen turns this on). */
   var hardwareShutter = false
@@ -299,6 +301,10 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   // ---------- Commands ----------
 
+  private fun captureStarted() {
+    post { onCaptureStarted(emptyMap()) }
+  }
+
   /**
    * Marks a capture as running; call the returned function when it ends (any
    * thread, safe to call twice). Capped at 30 s so a capture that never answers
@@ -341,7 +347,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     val promise = original.tracked()
     val gl = glPreview
     if (gl == null || !gl.motionPhoto) {
-      controller.takePhoto(flash, screenFlash()) { result ->
+      controller.takePhoto(flash, screenFlash(), onStarted = ::captureStarted) { result ->
         result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
       }
       return
@@ -368,7 +374,7 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     gl.motionClip(java.io.File(dir, "motion-${java.util.UUID.randomUUID()}.mp4")) { r ->
       Thread { synchronized(lock) { clip = r; finish() } }.start()
     }
-    controller.takePhoto(flash, screenFlash()) { r -> synchronized(lock) { photo = r; finish() } }
+    controller.takePhoto(flash, screenFlash(), onStarted = ::captureStarted) { r -> synchronized(lock) { photo = r; finish() } }
   }
 
   /**
