@@ -32,7 +32,7 @@ photos' 2048 px previews. Each photo gets a slow push-in, photos crossfade
 (2.6 s each), the title sits on the first shot; photos shaped against the frame
 (landscape in a vertical film) are shown whole over a blurred copy instead of
 cropped. Vertical 1080×1920 when most photos are portrait, else 1920×1080; H.264,
-30 fps. About 1 minute; 30 photos ≈ 60 s of film, ≈ 15 MB, counted in your Lens
+30 fps. About 2–3 minutes (≈ 30 s waiting for a Spot machine + ≈ 2 min rendering: 22 photos → a 44.6 s 1080×1920 film, 13.6 MB, measured 2026-10-14), counted in your Lens
 storage. It lands in the roll right after the trip's photos as a normal video.
 
 Cost: a 30-photo film is ~1 vCPU-minute on Spot (~$0.001) plus a few MB of storage.

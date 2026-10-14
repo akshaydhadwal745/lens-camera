@@ -1,6 +1,6 @@
 // One recap: preview every photo Lens picked, untick any you don't want, then
 // save it as an album and/or make a film (rendered in the cloud from the
-// photos' previews: about a minute, no heat on the phone). Nothing is shared.
+// photos' previews: a couple of minutes, no heat on the phone). Nothing is shared.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -81,7 +81,7 @@ export default function RecapScreen() {
   const makeFilm = () =>
     run(async () => {
       await api.recapFilm(key, keptFilm);
-      notify('Making your film', 'About a minute. It appears in your roll, next to these photos.');
+      notify('Making your film', 'A couple of minutes. It appears in your roll, next to these photos.');
       load();
     }, 'Could not start the film');
 
