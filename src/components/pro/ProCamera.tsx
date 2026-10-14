@@ -392,6 +392,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   const takePhoto = async () => {
     console.log('[shutter] takePhoto', JSON.stringify({ busy, held: pipelinedBusy.current, queued: queuedPresses.current }));
+    if (busy) showNotice(`DEBUG busy=${busy} held=${pipelinedBusy.current} q=${queuedPresses.current}`);
     if (!cameraRef.current) return;
     if (busy) {
       // Pressed while the previous photo's frame is still being captured: take it next, like the
@@ -620,6 +621,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
 
   const onShutter = () => {
     console.log('[shutter] onShutter', s.mode);
+    if (busy) showNotice(`DEBUG onShutter busy mode=${s.mode} hold=${photoHold}`);
     if (s.mode === 'video' || s.mode === 'slowmo') return toggleRecording();
     if (s.mode === 'timelapse') return toggleTimeLapse();
     if (countdown !== null) {
