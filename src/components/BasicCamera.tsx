@@ -68,6 +68,14 @@ export function BasicCamera() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Gallery tapped while a photo is still being taken: open it once the photo is saved.
+  // Leaving earlier detaches the camera view, which closes the camera mid-capture
+  // ("Camera is closed", photo lost).
+  const galleryAfterShot = useRef(false);
+  const openGallery = () => {
+    if (busy) galleryAfterShot.current = true;
+    else router.push('/gallery');
+  };
   const [recording, setRecording] = useState(false);
   /** Id of the upload running while recording (null: uploads after you stop). */
   const [liveId, setLiveId] = useState<string | null>(null);
@@ -153,6 +161,10 @@ export function BasicCamera() {
       Alert.alert('Could not take photo', String(error));
     } finally {
       setBusy(false);
+      if (galleryAfterShot.current) {
+        galleryAfterShot.current = false;
+        router.push('/gallery');
+      }
     }
   };
 
@@ -287,7 +299,7 @@ export function BasicCamera() {
 
   const thumbnail = (
     <Pressable
-      onPress={() => router.push('/gallery')}
+      onPress={openGallery}
       disabled={recording}
       accessibilityRole="button"
       accessibilityLabel="Open gallery"
@@ -384,9 +396,7 @@ export function BasicCamera() {
               zoom={zoom}
               mode={mode}
               mute={muted}
-              // A photo still being taken finishes before the camera closes (opening the
-              // gallery right after the shutter used to fail with "Camera is closed").
-              active={isFocused || busy}
+              active={isFocused}
               mirror={facing === 'front'}
               onCameraReady={() => setReady(true)}
               onMountError={(e) => Alert.alert('Camera error', e.message)}

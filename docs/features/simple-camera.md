@@ -145,9 +145,9 @@ ships inside expo and is resolved by `metro.config.js`, so no new APK was needed
 
 ### Leaving the camera mid-photo
 
-Opening the gallery (or any screen) right after the shutter doesn't lose the
-photo: the camera stays open until the capture in progress is saved, then
-closes. Time-lapse and hyperlapse upload while they record, like video (same
+Tapping the gallery while a photo is still being taken doesn't lose it: Lens
+finishes saving the photo, then opens the gallery (leaving earlier would close
+the camera mid-capture). Time-lapse and hyperlapse upload while they record, like video (same
 Wi-Fi / mobile-data setting).
 
 ### Shutter sound
