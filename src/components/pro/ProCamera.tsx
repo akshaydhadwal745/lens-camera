@@ -993,6 +993,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         ) : (
           <>
             <View style={hasTools ? styles.glassPill : null}>
+              {/* Many tools (PRO + Photo: 7) don't fit next to PRO: they scroll inside the pill, never under PRO. */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolRow} style={styles.toolScroll}>
               {s.mode === 'photo' || s.mode === 'portrait' ? (
                 (caps?.flash !== false || caps?.screenFlash) && (
                   <TopButton
@@ -1073,6 +1075,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   </Text>
                 </Pressable>
               )}
+              </ScrollView>
             </View>
             <Pressable
               onPress={() => {
@@ -1582,7 +1585,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   // Floating glass pills over the viewfinder (design B).
-  glassPill: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 2, padding: 4, borderRadius: 24, flexShrink: 1 },
+  glassPill: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 2, padding: 4, borderRadius: 24, flexShrink: 1, overflow: 'hidden' },
+  toolScroll: { flexGrow: 0, flexShrink: 1 },
+  toolRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   topButton: { alignItems: 'center', minWidth: 40, minHeight: 40, justifyContent: 'center', paddingHorizontal: 2 },
   topLabel: { color: palette.text, fontSize: 9, fontFamily: font.monoMedium, marginTop: 1, letterSpacing: 0.6 },
   topValue: { color: palette.text, fontSize: 13, lineHeight: 18, fontFamily: font.monoSemibold },
