@@ -96,6 +96,10 @@ decodes with `ImageDecoder` / `BitmapRegionDecoder` and renders in **overlapping
 so 200 MP works on a 3 GB phone. It writes JPEG (or HEIC via `HeifWriter` where a hardware
 encoder exists) and copies the EXIF. `exportVideo` uses **Media3 Transformer** with our
 GL shader as an effect (handles codec quirks and HDR).
+JS calls it through `exportVideoRetrying` (`src/lib/video-export.ts`): a "Codec exception"
+is retried once after 1.5 s. Right after a 4K recording CameraX holds the recording's encoder
+for about a second, and phones with room for only two 4K codecs (Galaxy S9: export decoder +
+encoder) fail the export started in that window (self-test dev-95, "fail to checkCodecCapacity").
 
 **Video and live upload:** the CameraX `Recorder` writes MP4 through MediaMuxer to a path
 we choose. That's the same append-only behaviour `LiveUpload` relies on, so live upload

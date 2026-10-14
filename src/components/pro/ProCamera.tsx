@@ -22,6 +22,7 @@ import {
   PhotoResult,
   ScannedCode,
 } from '../../../modules/lens-camera';
+import { exportVideoRetrying } from '@/lib/video-export';
 import { Framing, Histogram, LevelIndicator } from './Monitors';
 import { Choice, Sheet, Toggle } from './Sheet';
 import { NamePrompt } from './NamePrompt';
@@ -452,7 +453,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           // Baking a look into video re-encodes it (takes a while, uses battery).
           setProcessing('Applying look to video…');
           try {
-            const exported = await LensImaging!.exportVideo(video.uri, recipe!);
+            const exported = await exportVideoRetrying(video.uri, recipe!);
             capture({ kind: 'video', sourceUri: exported.uri, duration: video.duration });
             return;
           } finally {

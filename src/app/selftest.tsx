@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView, LensImaging, MediaInfo } from '../../modules/lens-camera';
+import { exportVideoRetrying } from '@/lib/video-export';
 import { selfTestHooks } from '../../modules/lens-device';
 import { buildInfo, buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, sendSelfTest } from '@/lib/diagnostics';
@@ -136,7 +137,7 @@ export default function SelfTestScreen() {
       const source = kept.current.video;
       if (!source || !LensImaging) return done('skip', 'no video from the video step');
       // Trim 0.5–2.0 s with a look: Media3 export (6.2 trim, 5.2 looks on Save/Share).
-      const out = await LensImaging.exportVideo(source, { v: 1, look: 'warm', intensity: 1, trim: { start: 0.5, end: 2 } });
+      const out = await exportVideoRetrying(source, { v: 1, look: 'warm', intensity: 1, trim: { start: 0.5, end: 2 } });
       const info = await videoInfo(out.uri);
       deleteFile(out.uri);
       const details = { exportMs: Date.now() - t0, file: info };

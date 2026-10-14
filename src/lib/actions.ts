@@ -4,6 +4,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 
 import { LensImaging } from '../../modules/lens-camera';
+import { exportVideoRetrying } from './video-export';
 import { isNeutral } from './edits';
 import { asFileUri } from './content-file';
 import { downloadFromStorage } from './storage';
@@ -35,7 +36,7 @@ async function localFileUri(item: GalleryItem): Promise<string> {
 async function outputFileUri(item: GalleryItem): Promise<string> {
   const original = await localFileUri(item);
   if (isNeutral(item.edit) || !LensImaging) return original;
-  if (item.kind === 'video') return (await LensImaging.exportVideo(original, item.edit!)).uri;
+  if (item.kind === 'video') return (await exportVideoRetrying(original, item.edit!)).uri;
   return (await LensImaging.renderImage(original, item.edit!, { format: 'heic', quality: 0.95 })).uri;
 }
 
