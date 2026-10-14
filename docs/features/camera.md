@@ -70,3 +70,19 @@ The camera also remembers its last settings.
 
 Expo Go / Android: photo and video, flash, pinch zoom, grid, 3/10 s timer, front/back.
 Uses `expo-camera`; photos are JPEG.
+
+## Best group photo (blinks fixed automatically)
+
+Hold the shutter for a burst with two or more people in it. If someone blinked
+in the best shot but had their eyes open in another frame, Lens takes their face
+from that frame into the best shot: aligned to the pixel, colour-matched to the
+light around it and blended without a seam. Everyone else, the background and
+every original frame stay untouched (the burst keeps them one tap away). The
+notice says "Burst of 8 · a blink fixed in the best shot".
+
+It refuses rather than risk an odd result: the head turned or tilted (more than
+10° / 8°), something in front of or around the face, no frame with open eyes,
+a face at the edge of the picture. Works on the phone (ML Kit face landmarks via
+Play services), no upload. Code: `imaging/GroupShot.kt`, `GroupShotMath.kt`;
+prototype and test: `research/groupshot/groupshot.py`.
+

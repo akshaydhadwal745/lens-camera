@@ -160,6 +160,18 @@ no duplicates; user can edit/approve.
 
 ## 5. Best group photo
 
+Status 2026-10-14: v1 built. Prototype `research/groupshot/groupshot.py` (family photo, eyes
+painted shut, donor shifted 11/6 px + turned 1° + 8 % brighter): face PSNR 29.5 → 41.1 dB vs the
+original, seam error 1.75/255, occluded donor refused. On the phone: `imaging/GroupShot.kt` (ML
+Kit landmarks + eyes-open, pairing by nose after the frames' median offset, pose guard ±10° yaw /
+±8° roll) + `GroupShotMath.kt` (dense rotation × translation search without the eye band, Lab
+colour match on the ring, feathered ellipse, 4-level Laplacian blend, ring-NCC guard ≥ 0.6),
+4 JVM unit tests. Runs automatically after a hold-to-burst with 2+ faces when the pick has a
+blink (eyes < 0.4) and another frame has them open (≥ 0.75): the fixed photo becomes the burst's
+pick, every original frame stays in the burst. Not yet seen on real group bursts (needs people:
+S8 walk-through). Next: smiles (not just blinks), more than eyes (mouth), on-device timing on
+S8/A14, a blind A/B set.
+
 - Input: a burst (already captured with `BurstPicker` scores per frame and face).
 - Pick a base frame (sharpest, most eyes open), then for each person whose eyes are closed
   or expression is worse, take the face region from the best frame for that person,

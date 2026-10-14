@@ -252,7 +252,15 @@ export type LensCameraHandle = {
   /** Android: pause/resume the current recording (one file; paused time isn't recorded). */
   pauseRecording?(): Promise<boolean>;
   /** Android, Photo mode: hold-the-shutter burst; resolves after stopBurst() with the shots and the best one. */
-  startBurst?(max: number): Promise<{ frames: { uri: string; width: number; height: number }[]; pick: number }>;
+  /**
+   * `group`: the best shot with blinks fixed from other frames (2+ people, someone's eyes shut
+   * in the pick, open in another frame; docs/design/switch-features.md §5). Absent when not needed.
+   */
+  startBurst?(max: number): Promise<{
+    frames: { uri: string; width: number; height: number }[];
+    pick: number;
+    group?: { uri: string; width: number; height: number; fixed: number };
+  }>;
   stopBurst?(): Promise<void>;
   /** Android, while recording: a photo (full resolution where supported, else the video frame: `fromVideo`). */
   takeVideoPhoto?(): Promise<PhotoResult & { fromVideo?: boolean }>;

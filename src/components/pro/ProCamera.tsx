@@ -590,13 +590,21 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     const id = newId();
     cam
       .startBurst(20)
-      .then(({ frames, pick }) => {
+      .then(({ frames, pick, group }) => {
         setProcessing(null);
+        // A fixed group photo (someone's blink replaced from another frame) is the burst's pick;
+        // every original frame stays in the burst, one tap away.
+        const count = frames.length + (group ? 1 : 0);
         frames.forEach((f, i) => {
-          const burst = { id, pick: i === pick, count: frames.length };
+          const burst = { id, pick: !group && i === pick, count };
           capture({ kind: 'photo', sourceUri: f.uri, width: f.width, height: f.height, edit: compact({ ...(recipe ?? {}), burst }) ?? undefined });
         });
-        if (frames.length > 1) showNotice(`Burst of ${frames.length} · best shot in your roll`);
+        if (group) {
+          const burst = { id, pick: true, count };
+          capture({ kind: 'photo', sourceUri: group.uri, width: group.width, height: group.height, edit: compact({ ...(recipe ?? {}), burst }) ?? undefined });
+        }
+        if (group) showNotice(`Burst of ${frames.length} · ${group.fixed === 1 ? 'a blink' : `${group.fixed} blinks`} fixed in the best shot`);
+        else if (frames.length > 1) showNotice(`Burst of ${frames.length} · best shot in your roll`);
       })
       .catch((error) => Alert.alert('Burst', error instanceof Error ? error.message : String(error)))
       .finally(() => setBurstCount(null));

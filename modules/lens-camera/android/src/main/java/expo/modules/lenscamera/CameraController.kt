@@ -1165,7 +1165,18 @@ class CameraController(private val context: Context) {
           mapOf("uri" to "file://${f.absolutePath}", "width" to sizes[i].first, "height" to sizes[i].second,
             "sharpness" to shots.getOrNull(i)?.sharpness, "faces" to shots.getOrNull(i)?.faces)
         }
-        main.execute { done(Result.success(mapOf("frames" to frames, "pick" to best, "quick" to quick))) }
+        // Best group photo (switch-features §5): someone blinked in the best shot but not in
+        // another frame → their face from that frame. Only with 2+ people; refuses when unnatural.
+        val group = if (files.size >= 2 && (shots.getOrNull(best)?.faces ?: 0) >= 2) {
+          runCatching { expo.modules.lenscamera.imaging.GroupShot.fix(files, best, File(dir, "group.jpg")) }
+            .onFailure { Log.w(TAG, "group photo failed", it) }
+            .getOrNull()
+        } else null
+        val result = mutableMapOf<String, Any?>("frames" to frames, "pick" to best, "quick" to quick)
+        if (group != null) {
+          result["group"] = mapOf("uri" to "file://${group.file.absolutePath}", "width" to sizes[best].first, "height" to sizes[best].second, "fixed" to group.fixed)
+        }
+        main.execute { done(Result.success(result)) }
       }
     }
     fun next() {

@@ -249,7 +249,7 @@ object NightMerge {
     return (kotlin.math.ln(0.35) / kotlin.math.ln(median)).coerceIn(0.6, 1.0)
   }
 
-  private fun copyExif(from: File, to: File) {
+  internal fun copyExif(from: File, to: File) {
     runCatching {
       val src = ExifInterface(from)
       val dst = ExifInterface(to)
