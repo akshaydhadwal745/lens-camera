@@ -31,7 +31,7 @@ import { IconButton } from '@/components/IconButton';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { reportBasicPhoto } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/format';
-import { useKeepAwakeWhile } from '@/lib/keep-awake';
+import { useCameraKeepAwake } from '@/lib/keep-awake';
 import { capture as saveCapture, finishLiveUpload, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
 import { displayUri, newId } from '@/lib/types';
 
@@ -73,8 +73,8 @@ export function BasicCamera() {
   const [liveId, setLiveId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [muted, setMuted] = useState(false);
-  // Screen stays on while recording, like the stock camera.
-  useKeepAwakeWhile(recording, 'recording');
+  // Screen stays on in the camera (2 min without a touch releases it) and always while recording, like the stock camera.
+  const keepAwakeTouch = useCameraKeepAwake(isFocused, recording);
 
   const elapsedRef = useRef(0);
   const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -371,7 +371,7 @@ export function BasicCamera() {
   );
 
   return (
-    <View style={styles.fill}>
+    <View style={styles.fill} onTouchStart={keepAwakeTouch}>
       <GestureDetector gesture={gesture}>
         <View style={styles.fill} collapsable={false}>
           {showCamera && (
