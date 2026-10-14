@@ -164,6 +164,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   /** The shutter is held by a single photo (presses meanwhile are queued, not dropped). */
   const pipelinedBusy = useRef(false);
   const queuedPresses = useRef(0);
+  /** Same as pipelinedBusy, for rendering: the shutter stays pressable so presses can queue. */
+  const [photoHold, setPhotoHold] = useState(false);
   /** Bumped when a queued press should fire (handled in an effect, after busy is false). */
   const [queuedShot, setQueuedShot] = useState(0);
   const [recording, setRecording] = useState(false);
@@ -403,10 +405,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     let released = false;
     const pipelined = !(astro && astroCandidate) && s.mode !== 'night' && !autoNight && !(s.bakeLooks && LensImaging);
     pipelinedBusy.current = pipelined;
+    setPhotoHold(pipelined);
     const release = () => {
       if (released) return;
       released = true;
       pipelinedBusy.current = false;
+      setPhotoHold(false);
       setBusy(false);
       if (queuedPresses.current > 0) {
         queuedPresses.current--;
@@ -1268,7 +1272,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onLongPress={s.mode === 'photo' && Platform.OS === 'android' ? startBurst : undefined}
             delayLongPress={350}
             onPressOut={endBurst}
-            disabled={busy || !caps}
+            disabled={(busy && !photoHold) || !caps}
             style={({ pressed }) => [styles.shutter, (autoNight || s.mode === 'night') && styles.shutterNight, pressed && { transform: [{ scale: 0.94 }] }]}
             accessibilityLabel={recordMode ? (recording ? 'Stop recording' : 'Record') : 'Take photo, hold for a burst'}
           >
