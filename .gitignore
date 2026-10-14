@@ -76,3 +76,4 @@ google-services.json
 # People spike: downloaded models + test faces (not ours to redistribute)
 research/faces/models/
 research/faces/data/
+research/groupshot/out/
