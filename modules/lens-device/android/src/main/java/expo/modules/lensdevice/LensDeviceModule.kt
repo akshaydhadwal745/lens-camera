@@ -103,8 +103,12 @@ class LensDeviceModule : Module() {
 
     // Import from the phone's gallery: the user picks; we get links (no copies, no permission).
     lateinit var pickerLauncher: AppContextActivityResultLauncher<PickMediaInput, List<PickedMedia>>
+    // Free up space: the system's delete confirmation (Android 11+).
+    lateinit var deleteLauncher: AppContextActivityResultLauncher<GalleryDeleteInput, Boolean>
+    // One block for every contract: a module keeps only its last RegisterActivityContracts.
     RegisterActivityContracts {
       pickerLauncher = registerForActivityResult(MediaPickerContract(this@LensDeviceModule))
+      deleteLauncher = registerForActivityResult(GalleryDeleteContract(this@LensDeviceModule))
     }
     AsyncFunction("pickMedia") Coroutine { max: Int ->
       pickerLauncher.launch(PickMediaInput(max)).map {
@@ -142,10 +146,6 @@ class LensDeviceModule : Module() {
     }
     // Deletes gallery items (Android 11+: one system confirmation, items go to the system trash).
     // Returns the uris that are really gone afterwards.
-    lateinit var deleteLauncher: AppContextActivityResultLauncher<GalleryDeleteInput, Boolean>
-    RegisterActivityContracts {
-      deleteLauncher = registerForActivityResult(GalleryDeleteContract(this@LensDeviceModule))
-    }
     AsyncFunction("deleteGalleryItems") Coroutine { uris: List<String> ->
       val resolver = appContext.reactContext?.contentResolver ?: throw IllegalStateException("No context")
       if (uris.isNotEmpty()) {
