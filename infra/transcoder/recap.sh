@@ -10,6 +10,8 @@
 # ({ size, duration, width, height }). Safe to re-run (Spot interruption).
 # LOCAL_DIR: test mode without AWS (manifest.json + the images' files by basename).
 set -euo pipefail
+# The recap build of ffmpeg (has drawtext for titles) when the image has it; else the one on PATH.
+if [[ -x /opt/ffmpeg-recap/ffmpeg ]]; then export PATH="/opt/ffmpeg-recap:$PATH"; fi
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 
@@ -57,7 +59,9 @@ for i in $(seq 1 $((N - 1))); do
   PREV="[x$i]"
 done
 FONT=$(fc-match -f '%{file}' 'DejaVu Sans:bold' 2>/dev/null || true)
-if [[ -n $TITLE && -n $FONT ]]; then
+# No title rather than no film: without drawtext (an ffmpeg without freetype) the film goes untitled.
+HAS_DRAWTEXT=$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c ' drawtext ' || true)
+if [[ -n $TITLE && -n $FONT && $HAS_DRAWTEXT -gt 0 ]]; then
   printf '%s' "$TITLE" > title.txt
   SIZE=$(( W / 16 ))
   FILTER+="${PREV}drawtext=fontfile=${FONT}:textfile=title.txt:fontsize=${SIZE}:fontcolor=white:shadowcolor=black@0.6:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.78:enable='lt(t,${DUR})'[out]"
