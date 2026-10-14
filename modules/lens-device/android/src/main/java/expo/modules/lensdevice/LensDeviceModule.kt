@@ -12,6 +12,7 @@ import android.os.PowerManager
 import com.android.installreferrer.api.InstallReferrerClient
 import com.android.installreferrer.api.InstallReferrerStateListener
 import expo.modules.kotlin.Promise
+import expo.modules.interfaces.permissions.Permissions
 import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
@@ -118,6 +119,43 @@ class LensDeviceModule : Module() {
           "duration" to it.durationMs?.let { ms -> ms / 1000.0 },
         )
       }
+    }
+
+    // Free up space: remove backed-up originals from the phone gallery (switch-features §2, GalleryCleanup).
+    AsyncFunction("galleryAccess") { promise: Promise ->
+      Permissions.getPermissionsWithPermissionsManager(appContext.permissions ?: throw IllegalStateException("No permissions"), promise, *GalleryCleanup.permissions())
+    }
+    AsyncFunction("requestGalleryAccess") { promise: Promise ->
+      Permissions.askForPermissionsWithPermissionsManager(appContext.permissions ?: throw IllegalStateException("No permissions"), promise, *GalleryCleanup.permissions())
+    }
+    // Candidate gallery uris for an imported item (the caller confirms each with its MD5).
+    AsyncFunction("findGalleryItem") Coroutine { hint: String, size: Double, dateTaken: Double? ->
+      val resolver = appContext.reactContext?.contentResolver ?: throw IllegalStateException("No context")
+      kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        GalleryCleanup.find(resolver, hint, size.toLong(), dateTaken?.toLong())
+      }
+    }
+    // MD5 (hex) of a content:// item's bytes, or null if it can't be read.
+    AsyncFunction("md5OfContent") Coroutine { uri: String ->
+      val resolver = appContext.reactContext?.contentResolver ?: throw IllegalStateException("No context")
+      kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { GalleryCleanup.md5(resolver, uri) }
+    }
+    // Deletes gallery items (Android 11+: one system confirmation, items go to the system trash).
+    // Returns the uris that are really gone afterwards.
+    lateinit var deleteLauncher: AppContextActivityResultLauncher<GalleryDeleteInput, Boolean>
+    RegisterActivityContracts {
+      deleteLauncher = registerForActivityResult(GalleryDeleteContract(this@LensDeviceModule))
+    }
+    AsyncFunction("deleteGalleryItems") Coroutine { uris: List<String> ->
+      val resolver = appContext.reactContext?.contentResolver ?: throw IllegalStateException("No context")
+      if (uris.isNotEmpty()) {
+        if (Build.VERSION.SDK_INT >= 30) {
+          deleteLauncher.launch(GalleryDeleteInput(ArrayList(uris)))
+        } else {
+          kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { GalleryCleanup.deleteDirect(resolver, uris) }
+        }
+      }
+      kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { uris.filter { !GalleryCleanup.exists(resolver, it) } }
     }
 
     // Copies a picked gallery item into the app's own file (exact bytes) just before it uploads.

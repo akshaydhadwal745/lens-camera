@@ -100,6 +100,31 @@ The original is removed from the phone when **any** of these is true:
 | Free space below "Always keep free on phone" | First deletes re-downloadable cached files (shared/saved/edited cloud originals), then removes the **oldest** verified originals until there's enough room. **Shots from the last 24 h are kept**, unless the phone is nearly full (under 1 GB free): then recent ones go too, oldest first, only until 1 GB is free |
 | You tap "Free up space now" | Removes every verified original |
 
+### Removing backed-up photos from the phone gallery (Android)
+
+Photos and videos **imported from the gallery** stay in the gallery after Lens
+backs them up. Settings → Phone storage → **Remove N backed-up from phone
+gallery (X GB)** removes those gallery originals, safely:
+
+1. Lens asks for access to photos and videos (only now, never at start).
+2. For each imported item it finds the gallery file (the picker's id, else same
+   size and taken within 2 s) and hashes it (MD5, streamed natively).
+3. It goes only if the cloud provably holds those exact bytes: the server has a
+   ready, not-deleted item with that MD5 + size (`POST /media/check`), or the
+   bytes match what this phone copied and uploaded (`importMd5`) and the item is
+   in the cloud list. Anything else stays and is reported as "kept".
+4. Android 11+ shows its own "move to trash" confirmation for the whole batch
+   (items stay in the system trash for a while); Android 9–10 delete directly
+   after Lens's confirmation.
+5. The result says how much was freed (sizes of the files really gone, checked
+   by querying the gallery after the delete).
+
+Permissions: READ_MEDIA_IMAGES/VIDEO (Android 13+), READ_EXTERNAL_STORAGE (≤ 12),
+WRITE_EXTERNAL_STORAGE (≤ 12; used for deleting on ≤ 10), legacy storage on
+Android 10 (`plugins/with-gallery-cleanup.js`). Code: `GalleryCleanup.kt`,
+`removeFromGallery` in `src/lib/store.ts`. Play: needs the Photo and Video
+Permissions declaration (Lens backs up the gallery) before a Play release.
+
 When the guardian checks free space: app start, every return to the app, after
 every capture, after every original finishes uploading, and when Settings opens.
 

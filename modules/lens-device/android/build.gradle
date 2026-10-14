@@ -17,4 +17,6 @@ android {
 dependencies {
   // Google Play Install Referrer: which invite/affiliate link brought this install.
   implementation 'com.android.installreferrer:installreferrer:2.2'
+  // Free up space: the system delete confirmation (IntentSenderRequest); the app already ships a newer androidx.activity.
+  implementation 'androidx.activity:activity:1.8.0'
 }

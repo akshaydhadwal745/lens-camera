@@ -84,6 +84,10 @@ Success criteria:
 
 ## 2. Free up space
 
+Status 2026-10-14: built (needs a phone check). Decision taken while the user was away
+(they said not to wait): use the media permission, asked only when the user taps the
+Remove button; Play declaration before a Play release. See docs/features/cloud-and-storage.md.
+
 Lens's own originals are already offloaded safely. Missing: the **phone gallery**.
 - After an import (or for photos also saved to Photos) is verified in the cloud, offer
   "Remove N photos from your phone gallery · frees X GB".

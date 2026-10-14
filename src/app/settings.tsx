@@ -21,6 +21,9 @@ import {
   CELLULAR_OPTIONS,
   deleteAccount,
   freeUpSpace,
+  canRemoveFromGallery,
+  galleryCleanupCandidates,
+  removeFromGallery,
   guardSpace,
   logOut,
   KEEP_FREE_OPTIONS,
@@ -410,6 +413,38 @@ export default function SettingsScreen() {
     if (!isWeb) guardSpace();
   }, []);
 
+  // Gallery originals of imported items that are safe in Lens (Android).
+  const galleryCount = useStore((s) => galleryCleanupCandidates(s).length);
+  const galleryBytes = useStore((s) => galleryCleanupCandidates(s).reduce((n, e) => n + e.size, 0));
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const onRemoveFromGallery = async () => {
+    if (!galleryCount || galleryBusy) return;
+    const ok = await confirmDestructive(
+      'Remove from phone gallery?',
+      `${galleryCount} imported photo${galleryCount === 1 ? '' : 's'} and video${galleryCount === 1 ? '' : 's'} (${formatBytes(galleryBytes)}) are backed up in Lens. Each one is checked against its copy in Lens first; anything that doesn't match exactly stays. Android will ask you to confirm, and keeps them in its trash for a while.`,
+      'Check and remove',
+    );
+    if (!ok) return;
+    setGalleryBusy(true);
+    try {
+      const r = await removeFromGallery();
+      if (r.declined === 'permission') {
+        notify('Gallery access needed', 'Lens needs access to your photos and videos to find and remove the backed-up ones. Nothing was removed.');
+        return;
+      }
+      if (r.declined === 'confirm') {
+        notify('Nothing removed', 'You kept them in your gallery.');
+        return;
+      }
+      const kept = r.unverified ? ` ${r.unverified} kept: they didn't match their copy in Lens exactly.` : '';
+      notify(r.removed ? `Freed ${formatBytes(r.bytes)}` : 'Nothing to remove', r.removed ? `Removed ${r.removed} from your gallery.${kept}` : `Nothing in your gallery needed removing.${kept}`);
+    } catch (error) {
+      notify('Couldn’t remove', errorMessage(error));
+    } finally {
+      setGalleryBusy(false);
+    }
+  };
+
   const onFreeUp = async () => {
     if (!local.freeableCount) return;
     const ok = await confirmDestructive(
@@ -553,6 +588,16 @@ export default function SettingsScreen() {
                   Free up space now{local.freeableCount ? ` (${formatBytes(local.freeable)})` : ''}
                 </Text>
               </Pressable>
+              {canRemoveFromGallery && galleryCount > 0 && (
+                <>
+                  <View style={styles.divider} />
+                  <Pressable style={styles.rowButton} onPress={onRemoveFromGallery} disabled={galleryBusy}>
+                    <Text style={[styles.rowButtonText, galleryBusy && { color: '#636366' }]}>
+                      {galleryBusy ? 'Checking against Lens…' : `Remove ${galleryCount} backed-up from phone gallery (${formatBytes(galleryBytes)})`}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </Section>
 
             {Platform.OS === 'android' && isProCameraAvailable && (

@@ -119,6 +119,10 @@ export interface LocalEntry {
    * copy once it's safe in the cloud; the gallery original is never touched.
    */
   importUri?: string;
+  /** MD5 (hex) of the exact bytes copied from the gallery and uploaded (Free up space checks the gallery file against it). */
+  importMd5?: string;
+  /** The gallery original was removed by Free up space (verified in the cloud first). */
+  galleryRemovedAt?: number;
   /** Imported but not copied yet (waits for its turn, and for free space). */
   awaitingCopy?: boolean;
   /** Resumable upload state in the user's own storage (e.g. a Drive session URL). */

@@ -28,6 +28,11 @@ type LensDeviceNative = {
   pickMedia(max: number): Promise<PickedMedia[]>;
   canRead(uri: string): boolean;
   copyMedia(uri: string, destination: string): Promise<number>;
+  galleryAccess?(): Promise<{ granted: boolean; canAskAgain?: boolean; status?: string }>;
+  requestGalleryAccess?(): Promise<{ granted: boolean; canAskAgain?: boolean; status?: string }>;
+  findGalleryItem?(hint: string, size: number, dateTaken: number | null): Promise<string[]>;
+  md5OfContent?(uri: string): Promise<string | null>;
+  deleteGalleryItems?(uris: string[]): Promise<string[]>;
   addListener(event: 'onThermalChange', listener: (e: { level: ThermalLevel }) => void): { remove(): void };
   addListener(event: 'onNearby', listener: (e: { codes: string[] }) => void): { remove(): void };
   nearbyStart?(code: string | null): boolean;
@@ -116,6 +121,27 @@ export const mediaPicker = native?.pickMedia
       },
     }
   : null;
+
+/**
+ * Android: remove backed-up originals from the phone's gallery (docs/design/switch-features.md §2).
+ * Needs the gallery permission (asked only when the user chooses to free space). Null where unavailable.
+ */
+export const galleryCleanup =
+  native?.deleteGalleryItems && native.findGalleryItem && native.md5OfContent && native.galleryAccess && native.requestGalleryAccess
+    ? {
+        access: async (): Promise<boolean> => (await native.galleryAccess!()).granted,
+        requestAccess: async (): Promise<{ granted: boolean; canAskAgain: boolean }> => {
+          const r = await native.requestGalleryAccess!();
+          return { granted: r.granted, canAskAgain: r.canAskAgain !== false };
+        },
+        /** Gallery uris that may be this item (same size, taken within 2 s, or the picker's id). */
+        find: (hint: string, size: number, dateTaken: number | null): Promise<string[]> => native.findGalleryItem!(hint, size, dateTaken),
+        /** MD5 (lowercase hex) of the gallery file, or null if unreadable. */
+        md5: (uri: string): Promise<string | null> => native.md5OfContent!(uri),
+        /** Deletes (system confirmation on Android 11+); resolves with the uris really gone. */
+        remove: (uris: string[]): Promise<string[]> => native.deleteGalleryItems!(uris),
+      }
+    : null;
 
 /**
  * Self-test hooks (Android). `launch`: set when Firebase Test Lab started the

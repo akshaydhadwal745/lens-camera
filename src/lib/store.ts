@@ -42,7 +42,7 @@ import {
 import { makeDerivatives } from './derivatives';
 import { renderCloudDerivatives } from './edit-remote';
 import { compact, EditRecipe, forPaste } from './edits';
-import { md5Of, pushEdit, UploadCancelled, uploadEntry } from './uploader';
+import { md5HexToBase64, md5Of, pushEdit, UploadCancelled, uploadEntry } from './uploader';
 import { gpsOfFile } from './exif-gps';
 import { notify } from './ui';
 import { authForLocation, authorizeInBrowser, checkStorage, chooseDestination, storageAction } from './storage';
@@ -50,7 +50,7 @@ import { FileTooLarge, SignedOut, StorageFull } from './storage/types';
 import { LiveUpload } from './live-upload';
 import { setPrefetchContext } from './video-prefetch';
 import { registerBackgroundBackup } from './background';
-import { backupService, mediaPicker, onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
+import { backupService, galleryCleanup, mediaPicker, onThermalChange, ThermalLevel, thermalLevel } from '../../modules/lens-device';
 
 const isWeb = Platform.OS === 'web';
 const DAY = 24 * 3600 * 1000;
@@ -1138,6 +1138,8 @@ const IMPORT_MARGIN = 500 * 1024 * 1024;
 const IMPORT_SPACE_RETRY_MS = 10 * 60 * 1000;
 
 export const canImport = !isWeb && !!mediaPicker;
+/** Android: Free up space can also remove backed-up originals from the phone gallery. */
+export const canRemoveFromGallery = !isWeb && !!galleryCleanup;
 
 /**
  * The user picks photos/videos from their gallery (Android's picker: no
@@ -1174,6 +1176,10 @@ async function copyImport(entry: LocalEntry): Promise<boolean> {
   set({ importWaitingForSpace: false });
   try {
     const size = await mediaPicker.copy(entry.importUri, captureFile(entry.fileName).uri);
+    // What was copied is what gets uploaded (every part MD5-checked by the cloud): remember its hash,
+    // so Free up space can prove the gallery file is the same before removing it.
+    // Streamed natively off the JS thread (videos can be gigabytes).
+    const importMd5 = (await galleryCleanup?.md5(captureFile(entry.fileName).uri).catch(() => null)) ?? undefined;
     // Already in Lens (the same bytes imported before)? Skip it. Photos-sized files only: their
     // checksum is what the server indexed (single uploads ≤ 16 MB).
     if (size <= 16 * 1024 * 1024 && state.identity) {
@@ -1189,7 +1195,7 @@ async function copyImport(entry: LocalEntry): Promise<boolean> {
         // Offline or older server: just upload it.
       }
     }
-    updateEntry(entry.id, { awaitingCopy: undefined, size });
+    updateEntry(entry.id, { awaitingCopy: undefined, size, importMd5 });
     return true;
   } catch {
     const gone = !mediaPicker.canRead(entry.importUri);
@@ -1522,6 +1528,93 @@ export function runCleanup(): Freed {
   }
   const bySpace = guardSpace();
   return { count: byAge.count + bySpace.count, bytes: byAge.bytes + bySpace.bytes };
+}
+
+// ---------- Free up space: the phone gallery (docs/design/switch-features.md §2) ----------
+
+/** Imported items whose gallery original could go: in the cloud, not removed yet. */
+export function galleryCleanupCandidates(s: State = state): LocalEntry[] {
+  return s.entries.filter((e) => !!e.importUri && !!e.uploadedAt && !e.error && !e.galleryRemovedAt && !e.awaitingCopy);
+}
+
+export type GalleryCleanupResult = {
+  /** Removed from the gallery (verified in the cloud first, then really gone). */
+  removed: number;
+  bytes: number;
+  /** In the gallery but couldn't be proven identical to the cloud copy: kept. */
+  unverified: number;
+  /** Not found in the gallery (already deleted there, or not readable): nothing to do. */
+  notFound: number;
+  /** The user said no to the gallery permission or to Android's delete confirmation. */
+  declined: 'permission' | 'confirm' | null;
+};
+
+/**
+ * Removes gallery originals of imported items that are safe in Lens. An item
+ * goes only if the gallery file's MD5 + size are proven to be in the cloud:
+ * the server holds a ready, not-deleted item with exactly those bytes, or the
+ * bytes match what this phone copied and uploaded (importMd5) and the item is
+ * in the cloud list. Anything else stays. Android asks for confirmation.
+ */
+export async function removeFromGallery(onProgress?: (done: number, total: number) => void): Promise<GalleryCleanupResult> {
+  const result: GalleryCleanupResult = { removed: 0, bytes: 0, unverified: 0, notFound: 0, declined: null };
+  if (!galleryCleanup) return result;
+  if (!(await galleryCleanup.access())) {
+    const asked = await galleryCleanup.requestAccess();
+    if (!asked.granted) return { ...result, declined: 'permission' };
+  }
+  await refreshRemote().catch(() => {});
+  const inCloud = new Set(state.remote.filter((m) => m.originalReady).map((m) => m.id));
+  const candidates = galleryCleanupCandidates();
+  const verified: { entry: LocalEntry; uri: string }[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    onProgress?.(i, candidates.length);
+    const entry = candidates[i];
+    const uris = await galleryCleanup.find(entry.importUri!, entry.size, entry.createdAt || null).catch(() => [] as string[]);
+    let match: string | null = null;
+    let seen = false;
+    for (const uri of uris) {
+      const md5 = await galleryCleanup.md5(uri).catch(() => null);
+      if (!md5) continue;
+      seen = true;
+      if (await provenInCloud(entry, md5, inCloud)) {
+        match = uri;
+        break;
+      }
+    }
+    if (match) verified.push({ entry, uri: match });
+    else if (seen) result.unverified += 1;
+    else {
+      result.notFound += 1;
+      // Nothing of it left in the gallery: don't offer it again.
+      updateEntry(entry.id, { galleryRemovedAt: Date.now() });
+    }
+  }
+  onProgress?.(candidates.length, candidates.length);
+  if (!verified.length) return result;
+  const gone = new Set(await galleryCleanup.remove(verified.map((v) => v.uri)));
+  if (!gone.size) return { ...result, declined: 'confirm', unverified: result.unverified };
+  const now = Date.now();
+  for (const v of verified) {
+    if (!gone.has(v.uri)) continue;
+    result.removed += 1;
+    result.bytes += v.entry.size;
+    updateEntry(v.entry.id, { galleryRemovedAt: now });
+  }
+  set({ freeBytes: freeDiskBytes() });
+  return result;
+}
+
+/** Is a file with this MD5 (hex) and the entry's size safely in Lens? */
+async function provenInCloud(entry: LocalEntry, md5Hex: string, inCloud: Set<string>): Promise<boolean> {
+  if (entry.importMd5 && entry.importMd5.toLowerCase() === md5Hex.toLowerCase() && inCloud.has(entry.id)) return true;
+  // The server's exact-bytes index (single uploads up to 16 MB): ready, not deleted, not hidden.
+  try {
+    const { duplicate } = await api.checkDuplicate(md5HexToBase64(md5Hex), entry.size);
+    return !!duplicate;
+  } catch {
+    return false;
+  }
 }
 
 /** Removes every local original that is already safe in the cloud (previews stay). */
