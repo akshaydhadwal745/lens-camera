@@ -160,6 +160,21 @@ export type Album = {
 };
 /** An album someone shared with me (its items are in the Shared list with this albumId). `event`: joined by link, I can add my photos. */
 export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; at: number; event?: boolean };
+/** A trip or event Lens found (docs/design/switch-features.md §4); `items`/`filmIds` only in the detail. */
+export type Recap = {
+  key: string;
+  kind: 'trip' | 'event';
+  title: string;
+  start: number;
+  end: number;
+  count: number;
+  photos: number;
+  cover: RemoteMedia | null;
+  albumId: string | null;
+  film: { status: 'none' | 'rendering' | 'failed' } | { status: 'ready'; media: RemoteMedia };
+  items?: (RemoteMedia | null)[];
+  filmIds?: string[];
+};
 /** What an event link shows (docs/design/switch-features.md §3). */
 export type EventInfo = {
   event: { code: string; url: string; name: string; ownerName: string; count: number; people: number; joined: boolean; isOwner: boolean; albumId: string; ownerId: string };
@@ -265,6 +280,12 @@ export const api = {
   editAlbum: (id: string, change: { add?: string[]; remove?: string[] }) => request<{ id: string; count: number }>('POST', `/albums/${id}/items`, change),
   leaveAlbum: (ownerId: string, id: string) => request<unknown>('DELETE', `/shared-albums/${ownerId}/${id}`),
   // Event albums: a join link / QR anyone can use; members add their own photos.
+  // Recaps: trips and events found automatically; nothing is saved or shared until you choose.
+  recaps: () => request<{ recaps: Recap[] }>('GET', `/recaps?tz=${-new Date().getTimezoneOffset()}`),
+  recap: (key: string) => request<{ recap: Recap }>('GET', `/recaps/${key}?tz=${-new Date().getTimezoneOffset()}`),
+  recapAlbum: (key: string, ids: string[]) => request<{ albumId: string }>('POST', `/recaps/${key}/album?tz=${-new Date().getTimezoneOffset()}`, { ids }),
+  recapFilm: (key: string, ids: string[]) => request<{ status: string }>('POST', `/recaps/${key}/film?tz=${-new Date().getTimezoneOffset()}`, { ids }),
+  dismissRecap: (key: string) => request<unknown>('POST', `/recaps/${key}/dismiss`),
   setEvent: (albumId: string, on: boolean) => request<{ event: { code: string; url: string } | null }>('POST', `/albums/${albumId}/event`, { on }),
   eventInfo: (code: string) => request<EventInfo>('GET', `/events/${encodeURIComponent(code)}`),
   joinEvent: (code: string) => request<{ joined: boolean; albumId: string; ownerId: string; name: string }>('POST', `/events/${encodeURIComponent(code)}/join`),

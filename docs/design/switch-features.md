@@ -142,6 +142,11 @@ Success: guest upload on a phone browser in ≤ 3 taps; new items visible to oth
 
 ## 4. Automatic trip and event recaps
 
+Status 2026-10-14: v1 built (detection + 8 unit tests, API, cloud film renderer tested locally,
+app screens), not deployed (needs the infra deploy: Lambda + transcoder image + job role).
+docs/features/recaps.md. Next: People in titles/picks ("with Asha"), best-shot scores from the
+phone for picks, a push when a recap is ready, music.
+
 - Detect trips/events on the server from metadata already uploaded: time gaps + place
   (places.ts) + distance from home; People adds who was there (on device).
 - Curate: drop near-duplicates (perceptual hash of thumbnails), pick best shots

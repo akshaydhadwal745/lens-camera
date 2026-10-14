@@ -490,6 +490,9 @@ export default function GalleryScreen() {
             <Pressable onPress={() => router.push('/albums')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Albums">
               <Text style={styles.filterText}>Albums</Text>
             </Pressable>
+            <Pressable onPress={() => router.push('/recaps')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Recaps">
+              <Text style={styles.filterText}>Recaps</Text>
+            </Pressable>
             {!isWeb ? (
               <Pressable onPress={() => router.push('/places')} style={styles.filter} accessibilityRole="button" accessibilityLabel="Places">
                 <Text style={styles.filterText}>Places</Text>
