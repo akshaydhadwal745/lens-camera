@@ -165,6 +165,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [busy, setBusy] = useState(false);
   // Portrait-only app: the icons turn to stay upright when the phone is turned (IconTurn.tsx).
   const iconTurn = useIconTurn();
+  // The tools pill may use the top bar's width minus the PRO pill, its padding and the gap
+  // (a pill sized by its content ran under PRO on 1080 px phones: MONITOR, PRESETS).
+  const [proWidth, setProWidth] = useState(76);
+  const toolsMaxWidth = width - (insets.left + 16) - (insets.right + 16) - 8 - proWidth;
   /** Pipelined shutter: photos waiting for their frame to be captured, oldest first (frees the shutter). */
   const startWaiters = useRef<(() => void)[]>([]);
   /** The shutter is held by a single photo (presses meanwhile are queued, not dropped). */
@@ -992,7 +996,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           </View>
         ) : (
           <>
-            <View style={hasTools ? styles.glassPill : null}>
+            <View style={hasTools ? [styles.glassPill, { maxWidth: toolsMaxWidth }] : null}>
               {/* Many tools (PRO + Photo: 7) don't fit next to PRO: they scroll inside the pill, never under PRO. */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolRow} style={styles.toolScroll}>
               {s.mode === 'photo' || s.mode === 'portrait' ? (
@@ -1086,6 +1090,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 update({ pro: !stored.pro });
               }}
               style={styles.proPill}
+              onLayout={(e) => setProWidth(e.nativeEvent.layout.width)}
               accessibilityRole="button"
               accessibilityLabel={stored.pro ? 'Pro controls on' : 'Pro controls off'}
             >
