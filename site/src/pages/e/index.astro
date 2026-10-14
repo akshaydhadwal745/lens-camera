@@ -1,0 +1,97 @@
+---
+// /e/<code>/: an event album link (QR code at a wedding, trip or party). With
+// Lens installed, Android opens the app (App Links) to join and add photos;
+// otherwise this page shows the album and how to join (docs/design/switch-features.md §3).
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout lang="en" path="e" title="Event album" description="See the photos everyone added, and add yours with Lens." noindex>
+  <section class="block event" id="event">
+    <div class="narrow">
+      <p class="kicker">Event album</p>
+      <h1 id="event-name">Loading…</h1>
+      <p class="lead" id="event-meta"></p>
+      <div class="actions">
+        <a class="btn btn-primary" id="open-app" href="/download/">Open in Lens</a>
+        <a class="btn" href="/download/">Get Lens, free</a>
+      </div>
+      <p class="note" id="event-note">
+        Join in the Lens app to see every photo in full quality and add yours. Your photos stay yours: remove them, or leave, any time.
+      </p>
+    </div>
+    <div class="event-grid" id="event-grid" aria-live="polite"></div>
+    <p class="note event-empty" id="event-empty" hidden>No photos yet. Be the first to add some in Lens.</p>
+  </section>
+</Layout>
+
+<style>
+  .kicker {
+    color: var(--accent, #facc15);
+    font: 600 12px/1 var(--mono, ui-monospace, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .event-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 3px;
+    max-width: 960px;
+    margin: 32px auto 0;
+    padding: 0 16px;
+  }
+  .event-grid img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+    background: #1c1c1e;
+  }
+  .event-empty {
+    text-align: center;
+  }
+</style>
+
+<script>
+  // The code is the path segment after /e/. Only public data comes back (album
+  // name, who made it, small previews); joining happens in the app.
+  type EventInfo = {
+    event: { name: string; ownerName: string; count: number; people: number };
+    items: { id: string; kind: string; thumbUrl?: string }[];
+  };
+  const code = location.pathname.split('/')[2] ?? '';
+  const valid = /^[A-Za-z0-9_-]{10,16}$/.test(code);
+  const $ = (id: string) => document.getElementById(id)!;
+  const button = $('open-app') as HTMLAnchorElement;
+  if (valid) {
+    button.href = /Android/i.test(navigator.userAgent)
+      ? `intent://e/${code}#Intent;scheme=lens;package=com.akshay.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
+      : `lens://e/${code}`;
+  }
+  const fail = () => {
+    $('event-name').textContent = 'This link doesn’t work';
+    $('event-meta').textContent = 'It may have been turned off. Ask whoever shared it for a new one.';
+    button.hidden = true;
+  };
+  if (!valid) fail();
+  else
+    fetch(`/api/v1/events/${code}`, { credentials: 'same-origin' })
+      .then((r) => (r.ok ? (r.json() as Promise<EventInfo>) : Promise.reject(new Error(String(r.status)))))
+      .then((info) => {
+        const e = info.event;
+        document.title = `${e.name} · Lens`;
+        $('event-name').textContent = e.name;
+        $('event-meta').textContent = `By ${e.ownerName} · ${e.count} ${e.count === 1 ? 'item' : 'items'} · ${e.people} ${e.people === 1 ? 'person' : 'people'}`;
+        const grid = $('event-grid');
+        for (const item of info.items) {
+          if (!item.thumbUrl) continue;
+          const img = document.createElement('img');
+          img.src = item.thumbUrl;
+          img.alt = item.kind === 'video' ? 'Video' : 'Photo';
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          grid.appendChild(img);
+        }
+        $('event-empty').hidden = info.items.length > 0;
+      })
+      .catch(fail);
+</script>

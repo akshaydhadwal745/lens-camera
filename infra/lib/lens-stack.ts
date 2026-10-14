@@ -179,6 +179,11 @@ function handler(event) {
     req.uri = '/l/index.html';
     return req;
   }
+  // Event album links (QR codes at events): one page reads the code from the path.
+  if (uri.indexOf('/e/') === 0) {
+    req.uri = '/e/index.html';
+    return req;
+  }
   if (uri.charAt(uri.length - 1) === '/') {
     req.uri = uri + 'index.html';
     return req;
