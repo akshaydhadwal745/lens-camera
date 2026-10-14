@@ -431,6 +431,8 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
       ownerName: s.ownerName,
       sharedAt: s.sharedAt,
       albumId: s.albumId,
+      // Event albums hold several people's photos: whose album it is.
+      albumOwnerId: s.albumOwnerId ?? (s.albumId ? s.ownerId : undefined),
     })),
   );
   return json(200, { items, cursor: encodeCursor(result.LastEvaluatedKey) });

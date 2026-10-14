@@ -28,6 +28,7 @@ import { listPlaces, placeItems, setPlaces } from './places';
 import { nearbyCode, nearbyResolve, nearbySettings } from './nearby';
 import { suggestSettings } from './people';
 import { albumDetail, createAlbum, deleteAlbum, editAlbumItems, leaveAlbum, listAlbums, renameAlbum } from './albums';
+import { addEventItems, addSharedAlbumItems, eventInfo, joinEvent, leaveEvent, removeEventItem, setEvent } from './events';
 import { deleteForever, deleteMedia, listTrash, restoreMedia } from './trash';
 import { deleteStorage, getStorage, putStorage, requestProvider } from './storage';
 import { requestStream } from './stream';
@@ -89,6 +90,13 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /web/auth/google/start') return await webStartGoogle(req);
     if (route === 'POST /web/auth/google') return await webVerifyGoogle(req);
     if (route === 'DELETE /web-sessions/current') return await signOutCurrent(req);
+
+    // Event album links (lens.instagrowapp.com/e/<code>): anyone with the link can look; signed-in
+    // (or guest) people also learn whether they're already in.
+    if (seg[1] === 'events' && seg.length === 3 && method === 'GET') {
+      const viewer = await authenticate(req).catch(() => null);
+      return await eventInfo(seg[2], viewer, req);
+    }
 
     const identity = await authenticate(req);
 
@@ -162,6 +170,13 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[1] === 'albums' && seg.length === 3 && method === 'DELETE') return await deleteAlbum(identity, seg[2]);
     if (seg[1] === 'albums' && seg.length === 4 && seg[3] === 'items' && method === 'POST') return await editAlbumItems(identity, seg[2], req);
     if (seg[1] === 'shared-albums' && seg.length === 4 && method === 'DELETE') return await leaveAlbum(identity, seg[2], seg[3]);
+    // Event albums (docs/design/switch-features.md §3).
+    if (seg[1] === 'albums' && seg.length === 4 && seg[3] === 'event' && method === 'POST') return await setEvent(identity, seg[2], req);
+    if (seg[1] === 'events' && seg.length === 4 && seg[3] === 'join' && method === 'POST') return await joinEvent(identity, seg[2]);
+    if (seg[1] === 'events' && seg.length === 4 && seg[3] === 'items' && method === 'POST') return await addEventItems(identity, seg[2], req);
+    if (seg[1] === 'events' && seg.length === 5 && seg[3] === 'members' && seg[4] === 'me' && method === 'DELETE') return await leaveEvent(identity, seg[2]);
+    if (seg[1] === 'shared-albums' && seg.length === 5 && seg[4] === 'items' && method === 'POST') return await addSharedAlbumItems(identity, seg[2], seg[3], req);
+    if (seg[1] === 'shared-albums' && seg.length === 6 && seg[4] === 'items' && method === 'DELETE') return await removeEventItem(identity, seg[2], seg[3], seg[5]);
     if (seg[1] === 'media' && seg.length === 3 && method === 'DELETE') return await deleteMedia(identity, seg[2], req);
     if (route === 'GET /trash') return await listTrash(identity, req);
     if (seg[1] === 'media' && seg.length === 4) {

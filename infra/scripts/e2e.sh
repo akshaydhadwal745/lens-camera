@@ -568,4 +568,43 @@ N=$(curl -sS -X POST "$API/devices"); TN=$(echo "$N" | j .token)
 call POST /auth/email/start "$TN" -d "{\"email\":\"$MAILD\"}" >/dev/null
 R=$(call POST /auth/email/verify "$TN" -d "{\"email\":\"$MAILD\",\"code\":\"$(otp "$MAILD")\"}")
 [[ $(echo "$R" | j .id) != "$ID_D" && $(echo "$R" | j .moved) == 0 ]] && ok "the same email starts a fresh, empty account"
+
+# --- event albums: link/QR join, everyone adds (docs/design/switch-features.md §3) ---
+up() { local t=$1 id=$2 m r
+  head -c 200000 /dev/urandom > "$TMP/ev.jpg"; m=$(md5b64 "$TMP/ev.jpg")
+  r=$(call POST /media "$t" -d "{\"id\":\"$id\",\"contentType\":\"image/jpeg\",\"size\":200000,\"kind\":\"photo\",\"md5\":\"$m\"}")
+  curl -sS -X PUT "$(echo "$r" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $m" --data-binary @"$TMP/ev.jpg" -o /dev/null
+  call POST "/media/$id/complete" "$t" >/dev/null; }
+E=$(curl -sS -X POST "$API/devices"); TE=$(echo "$E" | j .token); IE=$(echo "$E" | j .id)
+F=$(curl -sS -X POST "$API/devices"); TF=$(echo "$F" | j .token)
+EA1="$(node -p "Date.now().toString(36).padStart(8,'0')")-eva1"; up "$TA" "$EA1"
+AE=$(call POST /albums "$TA" -d "{\"name\":\"Wedding\",\"mediaIds\":[\"$EA1\"]}" | j .album.id)
+R=$(call POST "/albums/$AE/event" "$TA" -d '{"on":true}'); CODE=$(echo "$R" | j .event.code)
+[[ -n "$CODE" && $(echo "$R" | j .event.url) == *"/e/$CODE" ]] && ok "event link made ($CODE)" || fail "no event link"
+[[ $(call GET /albums "$TA" | j ".albums.find(a=>a.id==='$AE').event.code") == "$CODE" ]] && ok "the owner's album shows its link"
+R=$(curl -sS "$API/events/$CODE")
+[[ $(echo "$R" | j .event.name) == Wedding && $(echo "$R" | j .items.length) == 1 && $(echo "$R" | j '.items[0].url') == "" ]] && ok "anyone with the link sees the event (previews only, no originals)"
+[[ $(curl -sS "$API/events/nope-nope-nope" -o /dev/null -w '%{http_code}') == 404 ]] && ok "a wrong code finds nothing"
+[[ $(call GET "/events/$CODE" "$TE" | j .event.joined) == false ]] && ok "E isn't in yet"
+EE1="$(node -p "Date.now().toString(36).padStart(8,'0')")-eve1"; up "$TE" "$EE1"
+[[ $(call POST "/events/$CODE/items" "$TE" -d "{\"mediaIds\":[\"$EE1\"]}" -o /dev/null -w '%{http_code}') == 403 ]] && ok "adding before joining is refused"
+[[ $(call POST "/events/$CODE/join" "$TE" | j .joined) == true ]] && ok "E joins with the link"
+[[ $(call GET /albums "$TE" | j ".shared.find(a=>a.id==='$AE').event") == true ]] && ok "the event is in E's Albums"
+[[ $(call GET /shared "$TE" | j ".items.filter(i=>i.albumId==='$AE'&&i.albumOwnerId==='$IA').length") == 1 ]] && ok "E sees the owner's photo"
+[[ $(call POST "/shared-albums/$IA/$AE/items" "$TE" -d "{\"mediaIds\":[\"$EE1\"]}" | j .added) == 1 ]] && ok "E adds their own photo"
+[[ $(call POST "/shared-albums/$IA/$AE/items" "$TE" -d "{\"mediaIds\":[\"$EA1\"]}" -o /dev/null -w '%{http_code}') == 404 ]] && ok "nobody can add someone else's photo"
+R=$(call GET "/albums/$AE" "$TA")
+[[ $(echo "$R" | j .items.length) == 2 && $(echo "$R" | j ".items.find(i=>i.id==='$EE1').addedBy.id") == "$IE" ]] && ok "the owner sees E's photo, marked as E's"
+[[ $(call GET /shared "$TA" | j ".items.some(i=>i.id==='$EE1'&&i.albumId==='$AE')") == true ]] && ok "the owner can open/stream E's photo"
+call POST "/events/$CODE/join" "$TF" >/dev/null
+[[ $(call GET /shared "$TF" | j ".items.filter(i=>i.albumId==='$AE').length") == 2 ]] && ok "F joins later and sees both people's photos"
+[[ $(call DELETE "/shared-albums/$IA/$AE/items/$EE1" "$TF" -o /dev/null -w '%{http_code}') == 403 ]] && ok "F can't remove E's photo"
+[[ $(call DELETE "/events/$CODE/members/me" "$TE" | j .left) == "$AE" ]] && ok "E leaves"
+[[ $(call GET /shared "$TF" | j ".items.some(i=>i.id==='$EE1')") == false && $(call GET "/albums/$AE" "$TA" | j .items.length) == 1 ]] && ok "E's photo leaves with them (F and the owner lose it)"
+[[ $(call GET /albums "$TE" | j ".shared.some(a=>a.id==='$AE')") == false ]] && ok "the event is gone from E's Albums"
+call POST "/albums/$AE/event" "$TA" -d '{"on":false}' >/dev/null
+[[ $(curl -sS "$API/events/$CODE" -o /dev/null -w '%{http_code}') == 404 ]] && ok "link off: the code stops working"
+[[ $(call GET /shared "$TF" | j ".items.filter(i=>i.albumId==='$AE').length") == 1 ]] && ok "people already in keep the album"
+call DELETE "/albums/$AE" "$TA" >/dev/null
+[[ $(call GET /shared "$TF" | j ".items.some(i=>i.albumId==='$AE')") == false ]] && ok "album deleted: members lose it"
 echo "ALL PASSED"
