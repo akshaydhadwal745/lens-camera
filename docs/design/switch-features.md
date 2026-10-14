@@ -39,8 +39,16 @@ ZSL 242 KB flat black) → ZSL is not trusted from `isZslSupported` alone; needs
 in that scene, but it's too dark to compare detail/noise: needs a lit scene (S8 Quality Lab).
 Pixel 6: app crashed in the Maker NIGHT step (CameraX closing the extension session after a
 camera HAL error, `CameraAccessException` on a CXCP thread); re-running to see if it repeats.
-Emulator: taps during the hold arrived as long presses on a busy JS thread and were dropped →
-long press while held also queues a shot.
+Pixel 6 re-run: no crash (Maker NIGHT hung → watchdog, as in dev-90/95), so the crash was a
+one-off HAL error, still worth guarding. Pixel 6: quality lag 1401 / saved 1422 / 3 rapid 2.8 s;
+quick 599 / 615 / 1.0 s; ZSL not supported (bound quick). Device Farm racks are dark (all
+samples near black) → quality needs a lit scene: Test Lab run on dev-97, or the S8 self-test.
+Emulator: every tap arrives as a long press (software GPU, slow JS thread) → the burst path
+takes the photo, so the tap path can't be tested there (a long press while a photo holds the
+shutter now queues a shot, which helps slow phones too). Volume keys also queue.
+**Decision so far:** ZSL stays a lab-only mode until a runtime check (photo vs preview
+brightness) exists. Candidate default: quick capture + pipelined shutter, pending the
+lit-scene quality comparison.
 
 **Goal:** the photo is taken the moment the shutter is pressed, and the next press is
 accepted at once, with no loss in image quality.
