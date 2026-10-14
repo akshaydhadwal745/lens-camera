@@ -17,6 +17,7 @@ import {
   searchUsers,
   lookupUser,
   signOutCurrent,
+  webGuest,
 } from './identity';
 import { HttpError, json, parseEvent, Res } from './lib';
 import { createSet, saveDiagnostics, saveProbe } from './lab';
@@ -90,6 +91,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /web/auth/google/start') return await webStartGoogle(req);
     if (route === 'POST /web/auth/google') return await webVerifyGoogle(req);
     if (route === 'DELETE /web-sessions/current') return await signOutCurrent(req);
+    if (route === 'POST /web/guest') return await webGuest(req);
 
     // Event album links (lens.instagrowapp.com/e/<code>): anyone with the link can look; signed-in
     // (or guest) people also learn whether they're already in.

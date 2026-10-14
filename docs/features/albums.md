@@ -38,8 +38,14 @@ and add their photos. The Event QR screen shows the code, the link
 - Who added a photo, or the owner, can remove it; leaving takes your photos with you.
 - The album refreshes every 15 s while open; everyone in it gets one notification
   per batch ("Asha added 12 photos").
-- Without Lens, the link opens a web page with the album's previews and "Open in
-  Lens" / "Get Lens". Adding from the browser comes next.
+- Without Lens, the link opens a web page (`site/src/pages/e`, `scripts/event.ts`)
+  with the album's previews, **Add your photos** and Open in Lens. Adding from the
+  browser: the page gets a guest session (`POST /web/guest`: a guest identity like a
+  new phone's, in the HttpOnly cookie; per-network registration limits), joins, and
+  uploads each photo like the app (400 px thumbnail + 2048 px preview made in the
+  browser, MD5 of every file checked by the cloud). Photos only (JPEG/PNG/WebP/HEIC,
+  up to 16 MB, 50 at a time); videos need the app. Guests are offered Get Lens /
+  Sign in to keep them.
 - Limits: 500 people per event, 500 items per person, 2,000 items per album,
   rate limits on views (per network), joins and adds.
 

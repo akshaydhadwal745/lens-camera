@@ -118,9 +118,9 @@ within 1 % of StatFs difference.
 
 Status 2026-10-14: v1 built (backend `infra/lambda/api/events.ts` + albums.ts changes, app
 screens, website `/e/<code>` page, CloudFront `/e/` rule), **not deployed yet** (the deploy needs
-the user). e2e has 21 event checks. Web guests can view; **adding photos from the browser
-(no app) is the next milestone** (guest identity via POST /devices, browser-made thumb/preview,
-per-guest caps).
+the user). e2e has 21 event checks. Web guests can view and **add photos from the browser** (POST /web/guest cookie session,
+browser-made thumb/preview, MD5-checked, photos ≤ 16 MB, 50 per batch). Next: video from the
+browser, guest → account merge on web sign-in.
 
 Builds on albums + shares + Nearby + People.
 - Album gets an **event mode**: `contributors: true`, a join code (random, revocable,

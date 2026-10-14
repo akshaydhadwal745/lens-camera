@@ -111,6 +111,22 @@ export async function createIdentity(): Promise<{ id: string; name: string }> {
   throw new HttpError(503, 'Could not allocate a name, try again');
 }
 
+/**
+ * POST /v1/web/guest: a browser without an account gets a guest identity (like a
+ * new phone), in the HttpOnly session cookie. Used by event album links so people
+ * without Lens can add their photos (docs/design/switch-features.md §3). Guest limits
+ * apply (5 GB, registrations per network per hour).
+ */
+export async function webGuest(req: Req): Promise<Res> {
+  if (req.headers['x-lens-web'] !== '1') throw new HttpError(403, 'Missing request header');
+  const created = await register({ ...req, body: { device: 'Web guest' } });
+  if (created.statusCode !== 201) return created;
+  const { id, token } = JSON.parse(created.body as string) as { id: string; token: string };
+  // The device token register() made isn't needed in a browser: only the cookie session.
+  await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `D#${id}`, sk: `T#${token.split('.')[1]}` } }));
+  return webSignIn(id, req, { guest: true });
+}
+
 /** Signs a browser in: a web session token in the HttpOnly cookie (never in the body). */
 export async function webSignIn(accountId: string, req: Req, extra: Record<string, unknown> = {}): Promise<Res> {
   const profile = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${accountId}`, sk: 'PROFILE' } }))).Item;

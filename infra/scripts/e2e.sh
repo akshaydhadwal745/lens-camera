@@ -600,12 +600,25 @@ R=$(call GET "/albums/$AE" "$TA")
 call POST "/events/$CODE/join" "$TF" >/dev/null
 [[ $(call GET /shared "$TF" | j ".items.filter(i=>i.albumId==='$AE').length") == 2 ]] && ok "F joins later and sees both people's photos"
 [[ $(call DELETE "/shared-albums/$IA/$AE/items/$EE1" "$TF" -o /dev/null -w '%{http_code}') == 403 ]] && ok "F can't remove E's photo"
+# A browser without Lens: guest session in the HttpOnly cookie, then join and add like the app.
+CJ="$TMP/guest.cookies"
+[[ $(curl -sS -X POST "$API/web/guest" -o /dev/null -w '%{http_code}') == 403 ]] && ok "web guest needs the site's own header"
+[[ $(curl -sS -X POST "$API/web/guest" -H 'x-lens-web: 1' -c "$CJ" | j .guest) == true ]] && ok "a browser without Lens gets a guest session"
+wcall() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$API$p" -b "$CJ" -H 'x-lens-web: 1' -H 'content-type: application/json' "$@"; }
+[[ $(wcall POST "/events/$CODE/join" | j .joined) == true ]] && ok "the browser guest joins the event"
+EW1="$(node -p "Date.now().toString(36).padStart(8,'0')")-evw1"
+head -c 150000 /dev/urandom > "$TMP/web.jpg"; WM=$(md5b64 "$TMP/web.jpg")
+R=$(wcall POST /media -d "{\"id\":\"$EW1\",\"contentType\":\"image/jpeg\",\"size\":150000,\"kind\":\"photo\",\"md5\":\"$WM\"}")
+curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $WM" --data-binary @"$TMP/web.jpg" -o /dev/null
+wcall POST "/media/$EW1/complete" >/dev/null
+[[ $(wcall POST "/events/$CODE/items" -d "{\"mediaIds\":[\"$EW1\"]}" | j .added) == 1 ]] && ok "the browser guest adds a photo to the event"
+[[ $(call GET /shared "$TF" | j ".items.some(i=>i.id==='$EW1')") == true ]] && ok "members see the browser guest's photo"
 [[ $(call DELETE "/events/$CODE/members/me" "$TE" | j .left) == "$AE" ]] && ok "E leaves"
-[[ $(call GET /shared "$TF" | j ".items.some(i=>i.id==='$EE1')") == false && $(call GET "/albums/$AE" "$TA" | j .items.length) == 1 ]] && ok "E's photo leaves with them (F and the owner lose it)"
+[[ $(call GET /shared "$TF" | j ".items.some(i=>i.id==='$EE1')") == false && $(call GET "/albums/$AE" "$TA" | j .items.length) == 2 ]] && ok "E's photo leaves with them (F and the owner lose it)"
 [[ $(call GET /albums "$TE" | j ".shared.some(a=>a.id==='$AE')") == false ]] && ok "the event is gone from E's Albums"
 call POST "/albums/$AE/event" "$TA" -d '{"on":false}' >/dev/null
 [[ $(curl -sS "$API/events/$CODE" -o /dev/null -w '%{http_code}') == 404 ]] && ok "link off: the code stops working"
-[[ $(call GET /shared "$TF" | j ".items.filter(i=>i.albumId==='$AE').length") == 1 ]] && ok "people already in keep the album"
+[[ $(call GET /shared "$TF" | j ".items.filter(i=>i.albumId==='$AE').length") == 2 ]] && ok "people already in keep the album"
 call DELETE "/albums/$AE" "$TA" >/dev/null
 [[ $(call GET /shared "$TF" | j ".items.some(i=>i.albumId==='$AE')") == false ]] && ok "album deleted: members lose it"
 echo "ALL PASSED"

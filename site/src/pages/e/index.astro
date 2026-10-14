@@ -1,26 +1,33 @@
 ---
 // /e/<code>/: an event album link (QR code at a wedding, trip or party). With
 // Lens installed, Android opens the app (App Links) to join and add photos;
-// otherwise this page shows the album and how to join (docs/design/switch-features.md §3).
+// without it, this page shows the album and lets people add photos from the
+// browser as a guest (docs/design/switch-features.md §3, scripts/event.ts).
 import Layout from '../../layouts/Layout.astro';
 ---
 
-<Layout lang="en" path="e" title="Event album" description="See the photos everyone added, and add yours with Lens." noindex>
+<Layout lang="en" path="e" title="Event album" description="See the photos everyone added, and add yours." noindex>
   <section class="block event" id="event">
     <div class="narrow">
       <p class="kicker">Event album</p>
       <h1 id="event-name">Loading…</h1>
       <p class="lead" id="event-meta"></p>
-      <div class="actions">
-        <a class="btn btn-primary" id="open-app" href="/download/">Open in Lens</a>
-        <a class="btn" href="/download/">Get Lens, free</a>
+      <div class="actions" id="event-actions">
+        <label class="btn btn-primary" id="event-add" for="event-files">Add your photos</label>
+        <input id="event-files" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
+        <a class="btn" id="open-app" href="/download/">Open in Lens</a>
       </div>
+      <p class="note status" id="event-status" role="status" hidden></p>
+      <p class="note" id="event-keep" hidden>
+        You added them as a guest on this browser. To keep them with you and see everything in full quality, <a href="/download/">get Lens</a>
+        or <a href="/signin/">sign in</a>.
+      </p>
       <p class="note" id="event-note">
-        Join in the Lens app to see every photo in full quality and add yours. Your photos stay yours: remove them, or leave, any time.
+        Anyone with this link can see the album and add photos. Your photos stay yours: in the Lens app you can remove them, or leave, any time.
       </p>
     </div>
     <div class="event-grid" id="event-grid" aria-live="polite"></div>
-    <p class="note event-empty" id="event-empty" hidden>No photos yet. Be the first to add some in Lens.</p>
+    <p class="note event-empty" id="event-empty" hidden>No photos yet. Be the first to add some.</p>
   </section>
 </Layout>
 
@@ -30,6 +37,16 @@ import Layout from '../../layouts/Layout.astro';
     font: 600 12px/1 var(--mono, ui-monospace, monospace);
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+  #event-add {
+    cursor: pointer;
+  }
+  #event-add.busy {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .status.error {
+    color: #ff453a;
   }
   .event-grid {
     display: grid;
@@ -52,46 +69,5 @@ import Layout from '../../layouts/Layout.astro';
 </style>
 
 <script>
-  // The code is the path segment after /e/. Only public data comes back (album
-  // name, who made it, small previews); joining happens in the app.
-  type EventInfo = {
-    event: { name: string; ownerName: string; count: number; people: number };
-    items: { id: string; kind: string; thumbUrl?: string }[];
-  };
-  const code = location.pathname.split('/')[2] ?? '';
-  const valid = /^[A-Za-z0-9_-]{10,16}$/.test(code);
-  const $ = (id: string) => document.getElementById(id)!;
-  const button = $('open-app') as HTMLAnchorElement;
-  if (valid) {
-    button.href = /Android/i.test(navigator.userAgent)
-      ? `intent://e/${code}#Intent;scheme=lens;package=com.akshay.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
-      : `lens://e/${code}`;
-  }
-  const fail = () => {
-    $('event-name').textContent = 'This link doesn’t work';
-    $('event-meta').textContent = 'It may have been turned off. Ask whoever shared it for a new one.';
-    button.hidden = true;
-  };
-  if (!valid) fail();
-  else
-    fetch(`/api/v1/events/${code}`, { credentials: 'same-origin' })
-      .then((r) => (r.ok ? (r.json() as Promise<EventInfo>) : Promise.reject(new Error(String(r.status)))))
-      .then((info) => {
-        const e = info.event;
-        document.title = `${e.name} · Lens`;
-        $('event-name').textContent = e.name;
-        $('event-meta').textContent = `By ${e.ownerName} · ${e.count} ${e.count === 1 ? 'item' : 'items'} · ${e.people} ${e.people === 1 ? 'person' : 'people'}`;
-        const grid = $('event-grid');
-        for (const item of info.items) {
-          if (!item.thumbUrl) continue;
-          const img = document.createElement('img');
-          img.src = item.thumbUrl;
-          img.alt = item.kind === 'video' ? 'Video' : 'Photo';
-          img.loading = 'lazy';
-          img.decoding = 'async';
-          grid.appendChild(img);
-        }
-        $('event-empty').hidden = info.items.length > 0;
-      })
-      .catch(fail);
+  import '../../scripts/event.ts';
 </script>
