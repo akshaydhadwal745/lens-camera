@@ -35,7 +35,7 @@ const MAX_PARTS = 10_000;
 const PRESIGN_SECONDS = 3600;
 /** Originals are written once and read rarely: let S3 move them to cheaper
  * instant-access tiers automatically (no retrieval fees, millisecond access). */
-const ORIGINAL_STORAGE_CLASS = 'INTELLIGENT_TIERING' as const;
+export const ORIGINAL_STORAGE_CLASS = 'INTELLIGENT_TIERING' as const;
 const MD5_BASE64 = /^[A-Za-z0-9+/]{22}==$/;
 
 /** Part size for a file: at least 8 MiB, whole MiB, and never more than ~9,000 parts. */

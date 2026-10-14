@@ -3,6 +3,8 @@
 # Safe to re-run (Spot interruption → Batch retries): works in a temp folder,
 # uploads, and only then marks the video's stream ready.
 set -euo pipefail
+# Recap films (docs/design/switch-features.md §4) run in the same container.
+if [[ ${MODE:-} == recap ]]; then exec /usr/local/bin/recap.sh; fi
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 

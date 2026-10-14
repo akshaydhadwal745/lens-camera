@@ -318,6 +318,9 @@ function handler(event) {
     });
     mediaBucket.grantRead(transcodeRole, 'm/*');
     mediaBucket.grantPut(transcodeRole, 'h/*');
+    // Recap films: read the photos' previews, write the film to a staging folder (the API adds it to the roll).
+    mediaBucket.grantRead(transcodeRole, 'd/*');
+    mediaBucket.grantReadWrite(transcodeRole, 'r/*');
     table.grantWriteData(transcodeRole);
     const transcodeJob = new batch.EcsJobDefinition(this, 'TranscodeJob', {
       container: new batch.EcsFargateContainerDefinition(this, 'TranscodeContainer', {

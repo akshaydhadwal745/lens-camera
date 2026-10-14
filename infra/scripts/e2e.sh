@@ -621,4 +621,26 @@ call POST "/albums/$AE/event" "$TA" -d '{"on":false}' >/dev/null
 [[ $(call GET /shared "$TF" | j ".items.filter(i=>i.albumId==='$AE').length") == 2 ]] && ok "people already in keep the album"
 call DELETE "/albums/$AE" "$TA" >/dev/null
 [[ $(call GET /shared "$TF" | j ".items.some(i=>i.albumId==='$AE')") == false ]] && ok "album deleted: members lose it"
+
+# --- recaps: an event (many photos within hours) is suggested, saved as an album, dismissed (§4) ---
+G=$(curl -sS -X POST "$API/devices"); TG=$(echo "$G" | j .token)
+head -c 60000 /dev/urandom > "$TMP/rc.jpg"; RM=$(md5b64 "$TMP/rc.jpg")
+head -c 9000 /dev/urandom > "$TMP/rct.jpg"; RTM=$(md5b64 "$TMP/rct.jpg")
+T0=$(( $(date +%s) * 1000 - 2 * 86400 * 1000 ))
+for k in $(seq 1 22); do
+  RID="$(node -p "Date.now().toString(36).padStart(8,'0')")-rc$k"
+  R=$(call POST /media "$TG" -d "{\"id\":\"$RID\",\"contentType\":\"image/jpeg\",\"size\":60000,\"kind\":\"photo\",\"md5\":\"$RM\",\"width\":3000,\"height\":4000,\"createdAt\":$(( T0 + k * 600000 )),\"derivatives\":{\"thumb\":{\"md5\":\"$RTM\",\"size\":9000},\"preview\":{\"md5\":\"$RTM\",\"size\":9000}}}")
+  for d in thumb preview; do curl -sS -X PUT "$(echo "$R" | j ".derivativeUrls.$d")" -H 'content-type: image/jpeg' -H "content-md5: $RTM" --data-binary @"$TMP/rct.jpg" -o /dev/null; done
+  call POST "/media/$RID/previews" "$TG" >/dev/null
+  curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $RM" --data-binary @"$TMP/rc.jpg" -o /dev/null
+  call POST "/media/$RID/complete" "$TG" >/dev/null
+done
+R=$(call GET "/recaps?tz=330" "$TG"); RK=$(echo "$R" | j '.recaps[0].key')
+[[ $(echo "$R" | j '.recaps[0].kind') == event && $(echo "$R" | j '.recaps[0].count') == 22 && -n $(echo "$R" | j '.recaps[0].cover.thumbUrl') ]] && ok "22 photos in an afternoon → an event recap with a cover" || fail "no recap: $R"
+[[ $(call GET "/recaps/$RK?tz=330" "$TG" | j '.recap.items.length') == 22 ]] && ok "the recap preview lists every photo"
+RA=$(call POST "/recaps/$RK/album" "$TG" -d '{}' | j .albumId)
+[[ $(call GET "/albums/$RA" "$TG" | j .items.length) == 22 ]] && ok "saved as an album with all 22"
+[[ $(call POST "/recaps/$RK/album" "$TG" -d '{}' | j .albumId) == "$RA" ]] && ok "saving twice keeps one album"
+call POST "/recaps/$RK/dismiss" "$TG" >/dev/null
+[[ $(call GET "/recaps?tz=330" "$TG" | j .recaps.length) == 0 ]] && ok "dismissed recaps aren't suggested again"
 echo "ALL PASSED"

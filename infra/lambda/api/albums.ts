@@ -215,6 +215,17 @@ export async function createAlbum(identity: Identity, req: Req): Promise<Res> {
   return json(200, { album: await view(identity, (await getAlbum(identity.id, albumId))!) });
 }
 
+/** Makes an album with these items (recaps.ts: "Save as album"). Returns its id. */
+export async function createAlbumWith(identity: Identity, rawName: string, mediaIds: string[]): Promise<string> {
+  const name = cleanName(rawName.slice(0, 60));
+  if ((await queryAll(`D#${identity.id}`, 'AL#', MAX_ALBUMS + 1)).length >= MAX_ALBUMS) throw new HttpError(400, `You can have up to ${MAX_ALBUMS} albums`);
+  const albumId = `${Date.now().toString(36).padStart(9, '0')}-${randomId(6).slice(0, 6)}`;
+  const now = Date.now();
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `D#${identity.id}`, sk: `AL#${albumId}`, albumId, name, createdAt: now, updatedAt: now, count: 0 } }));
+  for (let i = 0; i < mediaIds.length; i += MAX_CHANGE) await changeItems(identity, albumId, mediaIds.slice(i, i + MAX_CHANGE), []);
+  return albumId;
+}
+
 /** PUT /v1/albums/:id {name}. */
 export async function renameAlbum(identity: Identity, albumId: string, req: Req): Promise<Res> {
   checkId(albumId);
