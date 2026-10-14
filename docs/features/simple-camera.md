@@ -143,6 +143,13 @@ this: the roll, viewer and settings follow the phone's timeout.
 (`useCameraKeepAwake` in `src/lib/keep-awake.ts`, using expo-keep-awake, which
 ships inside expo and is resolved by `metro.config.js`, so no new APK was needed.)
 
+### Leaving the camera mid-photo
+
+Opening the gallery (or any screen) right after the shutter doesn't lose the
+photo: the camera stays open until the capture in progress is saved, then
+closes. Time-lapse and hyperlapse upload while they record, like video (same
+Wi-Fi / mobile-data setting).
+
 ### Shutter sound
 
 Settings → Camera → **Shutter sound** (on by default): the phone's own camera

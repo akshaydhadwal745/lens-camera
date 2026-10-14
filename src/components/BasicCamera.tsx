@@ -384,7 +384,9 @@ export function BasicCamera() {
               zoom={zoom}
               mode={mode}
               mute={muted}
-              active={isFocused}
+              // A photo still being taken finishes before the camera closes (opening the
+              // gallery right after the shutter used to fail with "Camera is closed").
+              active={isFocused || busy}
               mirror={facing === 'front'}
               onCameraReady={() => setReady(true)}
               onMountError={(e) => Alert.alert('Camera error', e.message)}

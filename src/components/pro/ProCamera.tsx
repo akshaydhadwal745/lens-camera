@@ -489,12 +489,21 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     setHyperSeconds(0);
     setRecLive(true);
     const recipe = captureRecipe(false, 'video');
+    // Uploads while it records, like video: the clip grows in the same Camera folder
+    // and its header is rewritten at the end, which LiveUpload already handles.
+    const id = newId();
+    const live = startLiveUpload(id);
+    setLiveId(live ? id : null);
     cam
       .startTimeLapse()
       .then((clip) => {
-        capture({ kind: 'video', sourceUri: clip.uri, duration: clip.duration, edit: recipe });
+        const entry = capture({ kind: 'video', sourceUri: clip.uri, duration: clip.duration, edit: recipe, id, live: !!live });
+        if (live) void finishLiveUpload(live, entry);
       })
-      .catch((error) => Alert.alert('Time-lapse', error instanceof Error ? error.message : String(error)))
+      .catch((error) => {
+        live?.cancel();
+        Alert.alert('Time-lapse', error instanceof Error ? error.message : String(error));
+      })
       .finally(() => {
         setRecording(false);
         setRecLive(false);
@@ -749,7 +758,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           <LensCameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
-            active={isFocused}
+            // A photo still being taken finishes before the camera closes (opening the
+            // gallery right after the shutter used to fail with "Camera is closed").
+            active={isFocused || busy}
             facing={s.position}
             lens={s.position === 'front' || s.mode === 'portrait' ? 'wide' : s.lens}
             mode={s.mode}
