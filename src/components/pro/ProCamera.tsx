@@ -60,6 +60,8 @@ import { displayUri, newId } from '@/lib/types';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const INTENSITY = Array.from({ length: 21 }, (_, i) => i / 20);
+/** Shutter presses remembered while a photo's frame is being captured (pipelined shutter). */
+const MAX_QUEUED_PRESSES = 5;
 
 function haptic(style = Haptics.ImpactFeedbackStyle.Medium) {
   Haptics.impactAsync(style).catch(() => {});
@@ -159,6 +161,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const [busy, setBusy] = useState(false);
   /** Pipelined shutter: photos waiting for their frame to be captured, oldest first (frees the shutter). */
   const startWaiters = useRef<(() => void)[]>([]);
+  /** The shutter is held by a single photo (presses meanwhile are queued, not dropped). */
+  const pipelinedBusy = useRef(false);
+  const queuedPresses = useRef(0);
+  /** Bumped when a queued press should fire (handled in an effect, after busy is false). */
+  const [queuedShot, setQueuedShot] = useState(0);
   const [recording, setRecording] = useState(false);
   /** Id of the upload running while recording (null: uploads after you stop). */
   const [liveId, setLiveId] = useState<string | null>(null);
@@ -382,18 +389,31 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   const hasTools = stored.pro || nightCandidate || !recordMode || ((s.mode === 'video' || s.mode === 'slowmo') && caps?.torch !== false);
 
   const takePhoto = async () => {
-    if (!cameraRef.current || busy) return;
+    if (!cameraRef.current) return;
+    if (busy) {
+      // Pressed while the previous photo's frame is still being captured: take it next, like the
+      // stock camera (never drop a press). Only while a single photo holds the shutter.
+      if (pipelinedBusy.current) queuedPresses.current = Math.min(queuedPresses.current + 1, MAX_QUEUED_PRESSES);
+      return;
+    }
     setBusy(true);
     // Pipelined shutter (docs/design/switch-features.md §1): a single photo frees the shutter as soon
     // as its frame is captured (onCaptureStarted); saving finishes in the background. Night, Astro and
     // baked looks keep it locked until done. Without the event (iOS), it frees when the photo is saved.
     let released = false;
+    const pipelined = !(astro && astroCandidate) && s.mode !== 'night' && !autoNight && !(s.bakeLooks && LensImaging);
+    pipelinedBusy.current = pipelined;
     const release = () => {
       if (released) return;
       released = true;
+      pipelinedBusy.current = false;
       setBusy(false);
+      if (queuedPresses.current > 0) {
+        queuedPresses.current--;
+        // Next render has busy = false: take the queued photo then.
+        setQueuedShot((n) => n + 1);
+      }
     };
-    const pipelined = !(astro && astroCandidate) && s.mode !== 'night' && !autoNight && !(s.bakeLooks && LensImaging);
     if (pipelined) startWaiters.current.push(release);
     haptic();
     flash.setValue(1);
@@ -441,6 +461,17 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       release();
     }
   };
+
+  // A press queued while the shutter was held: take it once the shutter is free (latest takePhoto).
+  const takePhotoRef = useRef(takePhoto);
+  useEffect(() => {
+    takePhotoRef.current = takePhoto;
+  });
+  useEffect(() => {
+    if (queuedShot === 0) return;
+    const t = setTimeout(() => void takePhotoRef.current(), 0);
+    return () => clearTimeout(t);
+  }, [queuedShot]);
 
   const toggleRecording = () => {
     if (!cameraRef.current) return;

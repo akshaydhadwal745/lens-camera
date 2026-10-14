@@ -79,6 +79,14 @@ Lens's own originals are already offloaded safely. Missing: the **phone gallery*
 - Optional later: scan the gallery for items already in Lens (MD5 dedup) and offer to
   remove those.
 
+**Decision needed before building (user):** imports use Android's photo picker (no
+permission, `MediaPickerContract`); picker URIs (`content://media/picker/…`) can't be passed
+to `MediaStore.createDeleteRequest`, and `READ_MEDIA_*` are in app.json `blockedPermissions`.
+Deleting from the gallery needs the media permission (Android 13+: READ_MEDIA_IMAGES/VIDEO;
+≤ 12: READ_EXTERNAL_STORAGE; ≤ 9 delete also WRITE_EXTERNAL_STORAGE). Play's Photo and Video
+Permissions policy allows it for photo backup apps with a Play Console declaration. It also
+unlocks gallery dedup ("already in Lens") and a real "free X GB" scan.
+
 Success: 0 deletions without a verified cloud copy (unit tests on the decision function
 + e2e with a corrupted upload); works on Android 9, 11, 14 (emulator + S8); freed bytes
 within 1 % of StatFs difference.
