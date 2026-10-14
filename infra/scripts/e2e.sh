@@ -628,7 +628,7 @@ head -c 60000 /dev/urandom > "$TMP/rc.jpg"; RM=$(md5b64 "$TMP/rc.jpg")
 head -c 9000 /dev/urandom > "$TMP/rct.jpg"; RTM=$(md5b64 "$TMP/rct.jpg")
 T0=$(( $(date +%s) * 1000 - 2 * 86400 * 1000 ))
 for k in $(seq 1 22); do
-  RID="$(node -p "Date.now().toString(36).padStart(8,'0')")-rc$k"
+  RID="$(node -p "Date.now().toString(36).padStart(8,'0')")-rcap$k"
   R=$(call POST /media "$TG" -d "{\"id\":\"$RID\",\"contentType\":\"image/jpeg\",\"size\":60000,\"kind\":\"photo\",\"md5\":\"$RM\",\"width\":3000,\"height\":4000,\"createdAt\":$(( T0 + k * 600000 )),\"derivatives\":{\"thumb\":{\"md5\":\"$RTM\",\"size\":9000},\"preview\":{\"md5\":\"$RTM\",\"size\":9000}}}")
   for d in thumb preview; do curl -sS -X PUT "$(echo "$R" | j ".derivativeUrls.$d")" -H 'content-type: image/jpeg' -H "content-md5: $RTM" --data-binary @"$TMP/rct.jpg" -o /dev/null; done
   call POST "/media/$RID/previews" "$TG" >/dev/null
