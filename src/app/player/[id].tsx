@@ -200,6 +200,20 @@ export default function PlayerScreen() {
   // ---------- Scrubber ----------
   const [trackWidth, setTrackWidth] = useState(1);
   const fractionAt = (x: number) => Math.min(1, Math.max(0, x / trackWidth));
+  // Declared before the gesture below: its handlers' variables are captured when it's built
+  // (a later const is in the temporal dead zone → 'Cannot access … before initialization').
+  /** Trim editor: the nearer handle follows the finger (≥ 0.5 s apart) and the frame there is shown. */
+  const moveTrimHandle = (x: number) => {
+    if (!trimming || duration <= 0) return;
+    const t = fractionAt(x) * duration;
+    const startSide = Math.abs(t - trimming.start) <= Math.abs(t - trimming.end);
+    const next = startSide
+      ? { start: Math.max(0, Math.min(t, trimming.end - 0.5)), end: trimming.end }
+      : { start: trimming.start, end: Math.min(duration, Math.max(t, trimming.start + 0.5)) };
+    setTrimming(next);
+    player.pause();
+    seekTo(player, startSide ? next.start : next.end);
+  };
   const scrub = Gesture.Pan()
     .runOnJS(true)
     .minDistance(0)
@@ -216,18 +230,6 @@ export default function PlayerScreen() {
       }
       setScrubbing(null);
     });
-  /** Trim editor: the nearer handle follows the finger (≥ 0.5 s apart) and the frame there is shown. */
-  const moveTrimHandle = (x: number) => {
-    if (!trimming || duration <= 0) return;
-    const t = fractionAt(x) * duration;
-    const startSide = Math.abs(t - trimming.start) <= Math.abs(t - trimming.end);
-    const next = startSide
-      ? { start: Math.max(0, Math.min(t, trimming.end - 0.5)), end: trimming.end }
-      : { start: trimming.start, end: Math.min(duration, Math.max(t, trimming.start + 0.5)) };
-    setTrimming(next);
-    player.pause();
-    seekTo(player, startSide ? next.start : next.end);
-  };
   const shownTime = scrubbing ?? currentTime;
   const progress = duration > 0 ? Math.min(1, shownTime / duration) : 0;
 
