@@ -554,6 +554,12 @@ call POST "/media/$IDD/complete" "$TD" >/dev/null
 SD=$(call POST /shares "$TD" -d "{\"mediaIds\":[\"$IDD\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
 call POST "/shares/in/$SD/accept" "$TB" >/dev/null
 [[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == true ]] && ok "account to delete has a photo shared with B"
+# It also uploaded a Quality Lab set (Settings → Camera info): that must go with the account.
+LABF="$TMP/lab.jpg"; head -c 1000 /dev/urandom > "$LABF"; LMD5=$(md5b64 "$LABF")
+R=$(call POST /lab/sets "$TD" -d "{\"files\":[{\"name\":\"single.jpg\",\"bytes\":1000,\"md5\":\"$LMD5\"}],\"meta\":{\"e2e\":true}}")
+LSET=$(echo "$R" | j .setId)
+curl -sS -X PUT "$(echo "$R" | j '.urls["single.jpg"]')" -H 'content-type: image/jpeg' -H "content-md5: $LMD5" --data-binary @"$LABF" -o /dev/null
+[[ -n "$LSET" && $(vcount "lab/sets/$LSET/") -ge 2 ]] && ok "account to delete has a Quality Lab set ($LSET)"
 [[ $(call DELETE /account "$TD" -o /dev/null -w '%{http_code}') == 400 ]] && ok "deletion needs an explicit confirmation"
 [[ $(call DELETE /account "$TD" -d '{"confirm":"DELETE"}' -o /dev/null -w '%{http_code}') == 202 ]] && ok "account deletion accepted"
 [[ $(call GET /me "$TD" -o /dev/null -w '%{http_code}') == 401 ]] && ok "its sessions stop working at once"
@@ -562,7 +568,8 @@ for _ in $(seq 1 30); do
   [[ "$GONE" == None ]] && break; sleep 2
 done
 [[ "$GONE" == None ]] && ok "account removed in the background" || fail "account still there"
-[[ $(vcount "m/$ID_D/") == 0 && $(vcount "d/$ID_D/") == 0 ]] && ok "every stored file and version deleted"
+[[ $(vcount "m/$ID_D/") == 0 && $(vcount "d/$ID_D/") == 0 && $(vcount "r/$ID_D/") == 0 ]] && ok "every stored file and version deleted"
+[[ $(vcount "lab/sets/$LSET/") == 0 ]] && ok "its Quality Lab set deleted too"
 [[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == false ]] && ok "friends lose access to what it shared"
 N=$(curl -sS -X POST "$API/devices"); TN=$(echo "$N" | j .token)
 call POST /auth/email/start "$TN" -d "{\"email\":\"$MAILD\"}" >/dev/null

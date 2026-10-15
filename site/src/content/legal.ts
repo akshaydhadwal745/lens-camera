@@ -1,5 +1,6 @@
 // Privacy policy, terms and account deletion, English + Hindi.
-// Facts here must match the product (checked against the code 2026-10-09):
+// Facts here must match the product (checked against the code 2026-10-09, re-audited 2026-10-15
+// for the Play Data safety form: docs/launch/play-store.md):
 // AWS ap-south-1, S3 versioning (deleted versions kept 30 days), DynamoDB
 // point-in-time recovery (35 days), API logs 7 days, no CloudFront/S3 access
 // logs, Google scope openid+email+profile (only sub + email stored).
@@ -14,7 +15,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '13 October 2026', hi: '13 अक्टूबर 2026' },
+  updated: { en: '15 October 2026', hi: '15 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -45,13 +46,14 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['A one-way hash of your phone’s app ID', 'To give a reinstalled phone its free guest storage back instead of creating new free storage (abuse prevention)', 'Until you delete your account'],
             ['IP address', 'To limit abuse (counting requests per network for one hour)', 'About 2 hours'],
             ['Notification token (Android): an address Google gives this app on your phone so we can send you notifications (shares, invites, storage). Sent through Google Firebase Cloud Messaging', 'To notify you about things you asked for; you choose which in Settings → Notifications', 'Until you sign out on that phone, uninstall, or delete your account'],
-            ['Places (only if you turn on "Save location"): the position saved in your photos, rounded to about 100 m, and the nearest city', 'To group your own photos by place. People you share with get photos without the location unless you choose to include it', 'Until you delete the photo or your account'],
+            ['Places (only if you turn on "Save location"): the exact position is saved inside each photo file (like any camera; it stays in your backed-up originals), and for the Places view we keep it rounded to about 100 m with the nearest city', 'To group your own photos by place. People you share with get photos without the location unless you choose to include it', 'Until you delete the photo or your account'],
             ['Nearby (only if you turn on "Visible to nearby Lens users"): a random code that changes every few minutes, announced on your Wi-Fi while Lens is open', 'So people on the same Wi-Fi who also turned it on can find you by your Lens name. Only the code travels the network; we turn it into your Lens name, never your location', 'Each code expires after 15 minutes'],
             ['People (on by default in most countries; in the EU, UK and US only after you turn it on): face groups of your own Lens photos and the names you give them', 'Made and kept only on your phone to show your photos by person. Never sent to us, never in backups; the only download is the face model itself', 'Until you turn People off, which deletes it (uninstalling Lens deletes it too)'],
             ['Sharing: who you shared with and who shared with you, the status of each share (waiting, accepted, declined, cancelled, revoked, expired) and people you blocked', 'To let you accept or decline shares, cancel or revoke what you sent, and stop unwanted shares', 'Until you delete your account'],
             ['Approximate city (from your IP) when you request QR sign-in on the website', 'To show "who is asking" on your phone before you approve', 'At most 2 minutes'],
             ['Sign-in codes we email you', 'To verify you own the email address', '10 minutes; stored only as a hash'],
-            ['Requests you send us (for example "add a storage provider", or the contact form: name, email, message)', 'To reply and improve Lens', 'Up to 2 years'],
+            ['Requests you send us (for example "add a storage provider", or the contact form: name, email, message, and a one-way hash of your IP address and browser to stop spam)', 'To reply and improve Lens', 'Up to 2 years'],
+            ['Quality Lab (only if you use Settings → Camera info → Quality Lab): the test photos you choose to send, with your phone model', 'To compare and improve photo quality on your kind of phone', 'Until you delete your account'],
             ['Invites: which invite or affiliate link or code brought you (from the Google Play install referrer, a website cookie, or a code you type), and whether your phone is an emulator', 'To give your friend their storage reward or the affiliate their commission, and to stop fake sign-ups', 'Until you delete your account'],
             ['Clicks on invite and affiliate links: time, browser type and a one-way hash of the IP address', 'Fraud checks and the inviter’s statistics (counts only, never who clicked)', 'Raw clicks 30 days; daily counts for the life of the link'],
             ['Affiliates only: name, channels, PAN and UPI ID (encrypted), commissions and payouts', 'To run the program, pay you and meet tax law (TDS, Form 16A)', '8 years after the financial year (Indian tax and accounting law)'],
@@ -59,12 +61,12 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['Anonymous camera diagnostics (Android): phone model and Android version, app build, how the camera started (photo and preview size, camera features used, errors), and once per app version a list of what the phone’s cameras support (lenses, resolutions, frame rates, video and photo features). No photos, no location, not linked to your account. You can turn it off in Settings → Camera → Share camera diagnostics', 'To find and fix camera problems on phone models we cannot test ourselves, and to choose the best camera settings for each kind of phone', '1 year'],
           ],
         },
-        p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics or crash-reporting in the app today. The only usage data Lens sends is its own anonymous camera diagnostics (in the table above). If we add analytics, we will update this policy first.'],
+        p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics or crash-reporting in the app today. The only usage data Lens sends is its own anonymous camera diagnostics (in the table above). Google’s on-device ML Kit (document scanner, scene labels, face detection; part of Google Play services) sends Google its own usage and performance statistics, never your photos; and Firebase gives the app an installation ID to deliver notifications. If we add analytics, we will update this policy first.'],
       },
       {
         h2: '2. Your own storage (Google Drive, OneDrive, Dropbox, Box, S3, WebDAV)',
         p: [
-          'If you connect your own storage, your photos and videos are uploaded directly from your phone to that provider. You sign in to the provider on its own page. On the free plan, the access keys stay on your phone; our servers help exchange the sign-in code but do not keep the keys. We keep only small previews in Lens so your gallery is fast. Your provider’s own privacy policy applies to the files stored there.',
+          'If you connect your own storage, your photos and videos are uploaded directly from your phone to that provider. You sign in to the provider on its own page. On the free plan, the access keys stay on your phone; our servers help exchange the sign-in code but do not keep the keys. We keep the name of the connected account (its email address, or the server and user name for S3/WebDAV) so you can see which storage is connected. We keep only small previews in Lens so your gallery is fast. Your provider’s own privacy policy applies to the files stored there.',
         ],
       },
       {
@@ -146,13 +148,14 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['आपके फ़ोन की ऐप ID का वन-वे हैश', 'दोबारा इंस्टॉल करने पर नया मुफ़्त स्टोरेज बनाने के बजाय वही गेस्ट स्टोरेज लौटाने के लिए (दुरुपयोग रोकना)', 'अकाउंट डिलीट करने तक'],
             ['IP एड्रेस', 'दुरुपयोग सीमित करने के लिए (एक घंटे तक नेटवर्क के हिसाब से रिक्वेस्ट गिनना)', 'लगभग 2 घंटे'],
             ['नोटिफ़िकेशन टोकन (Android): एक पता जो Google आपके फ़ोन पर इस ऐप को देता है ताकि हम आपको नोटिफ़िकेशन भेज सकें (शेयर, इनवाइट, स्टोरेज)। Google Firebase Cloud Messaging के ज़रिए भेजा जाता है', 'आपको उन चीज़ों की सूचना देने के लिए जो आपने माँगी हैं; कौन-सी चाहिए यह आप Settings → Notifications में चुनते हैं', 'जब तक आप उस फ़ोन पर साइन आउट नहीं करते, ऐप हटाते नहीं, या अकाउंट नहीं हटाते'],
-            ['प्लेसेज़ (सिर्फ़ अगर आप "Save location" चालू करते हैं): आपकी फ़ोटो में सेव की गई जगह, लगभग 100 मीटर तक गोल की हुई, और सबसे पास का शहर', 'आपकी अपनी फ़ोटो को जगह के हिसाब से दिखाने के लिए। जिनके साथ आप शेयर करते हैं उन्हें फ़ोटो बिना जगह के मिलती है, जब तक आप उसे शामिल करना न चुनें', 'जब तक आप फ़ोटो या अकाउंट नहीं हटाते'],
+            ['प्लेसेज़ (सिर्फ़ अगर आप "Save location" चालू करते हैं): सही जगह हर फ़ोटो फ़ाइल के अंदर सेव होती है (किसी भी कैमरे की तरह; यह आपकी बैकअप की गई ओरिजिनल फ़ाइलों में रहती है), और प्लेसेज़ व्यू के लिए हम इसे लगभग 100 मीटर तक गोल करके सबसे पास के शहर के साथ रखते हैं', 'आपकी अपनी फ़ोटो को जगह के हिसाब से दिखाने के लिए। जिनके साथ आप शेयर करते हैं उन्हें फ़ोटो बिना जगह के मिलती है, जब तक आप उसे शामिल करना न चुनें', 'जब तक आप फ़ोटो या अकाउंट नहीं हटाते'],
             ['नियरबाय (सिर्फ़ अगर आप "Visible to nearby Lens users" चालू करते हैं): एक रैंडम कोड जो हर कुछ मिनट में बदलता है, Lens खुला रहने तक आपके Wi-Fi पर बताया जाता है', 'ताकि उसी Wi-Fi पर जिन्होंने इसे चालू किया है वे आपको आपके Lens नाम से ढूँढ सकें। नेटवर्क पर सिर्फ़ कोड जाता है; उसे हम आपके Lens नाम में बदलते हैं, आपकी जगह कभी नहीं', 'हर कोड 15 मिनट में खत्म हो जाता है'],
             ['पीपल (ज़्यादातर देशों में अपने-आप चालू; EU, UK और US में सिर्फ़ आपके चालू करने पर): आपकी अपनी Lens फ़ोटो के चेहरों के ग्रुप और उनके लिए आपके दिए नाम', 'सिर्फ़ आपके फ़ोन पर बनते और रहते हैं, ताकि फ़ोटो व्यक्ति के हिसाब से दिखें। हमें कभी नहीं भेजे जाते, बैकअप में नहीं जाते; सिर्फ़ फ़ेस मॉडल डाउनलोड होता है', 'जब तक आप पीपल बंद नहीं करते, जिससे यह मिट जाता है (Lens हटाने पर भी मिट जाता है)'],
             ['शेयरिंग: आपने किसके साथ शेयर किया और किसने आपके साथ, हर शेयर की स्थिति (प्रतीक्षा में, स्वीकार, अस्वीकार, रद्द, वापस लिया, समाप्त) और जिन लोगों को आपने ब्लॉक किया', 'ताकि आप शेयर स्वीकार या अस्वीकार कर सकें, भेजा हुआ रद्द या वापस ले सकें, और अनचाहे शेयर रोक सकें', 'जब तक आप अकाउंट नहीं हटाते'],
             ['वेबसाइट पर QR साइन इन माँगने पर अनुमानित शहर (आपके IP से)', 'मंज़ूरी से पहले आपके फ़ोन पर "कौन माँग रहा है" दिखाने के लिए', 'ज़्यादा से ज़्यादा 2 मिनट'],
             ['हम जो साइन-इन कोड ईमेल करते हैं', 'यह जाँचने के लिए कि ईमेल आपका है', '10 मिनट; सिर्फ़ हैश के रूप में'],
-            ['आपकी भेजी रिक्वेस्ट (जैसे "स्टोरेज प्रोवाइडर जोड़ें", या संपर्क फ़ॉर्म: नाम, ईमेल, संदेश)', 'जवाब देने और Lens बेहतर करने के लिए', '2 साल तक'],
+            ['आपकी भेजी रिक्वेस्ट (जैसे "स्टोरेज प्रोवाइडर जोड़ें", या संपर्क फ़ॉर्म: नाम, ईमेल, संदेश, और स्पैम रोकने के लिए आपके IP पते और ब्राउज़र का वन-वे हैश)', 'जवाब देने और Lens बेहतर करने के लिए', '2 साल तक'],
+            ['क्वालिटी लैब (सिर्फ़ अगर आप Settings → Camera info → Quality Lab इस्तेमाल करते हैं): आपकी चुनी हुई टेस्ट फ़ोटो, आपके फ़ोन मॉडल के साथ', 'आपके तरह के फ़ोन पर फ़ोटो क्वालिटी की तुलना करने और सुधारने के लिए', 'जब तक आप अकाउंट नहीं हटाते'],
             ['इनवाइट: कौन-सा इनवाइट या एफ़िलिएट लिंक या कोड आपको लाया (Google Play इंस्टॉल रेफ़रर, वेबसाइट कुकी या आपके टाइप किए कोड से), और क्या आपका फ़ोन एम्युलेटर है', 'आपके दोस्त को स्टोरेज इनाम या एफ़िलिएट को कमीशन देने और नकली साइन-अप रोकने के लिए', 'अकाउंट डिलीट करने तक'],
             ['इनवाइट और एफ़िलिएट लिंक पर क्लिक: समय, ब्राउज़र का प्रकार और IP एड्रेस का वन-वे हैश', 'धोखाधड़ी की जाँच और इनवाइट करने वाले के आँकड़े (सिर्फ़ गिनती, कभी नहीं कि किसने क्लिक किया)', 'क्लिक 30 दिन; रोज़ की गिनती लिंक रहने तक'],
             ['सिर्फ़ एफ़िलिएट: नाम, चैनल, PAN और UPI ID (एन्क्रिप्टेड), कमीशन और भुगतान', 'प्रोग्राम चलाने, आपको भुगतान करने और टैक्स क़ानून (TDS, Form 16A) के पालन के लिए', 'वित्त वर्ष के 8 साल बाद तक (भारतीय टैक्स और अकाउंटिंग क़ानून)'],
@@ -160,11 +163,11 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['गुमनाम कैमरा डायग्नोस्टिक्स (Android): फ़ोन मॉडल और Android वर्शन, ऐप बिल्ड, कैमरा कैसे शुरू हुआ (फ़ोटो और प्रीव्यू साइज़, इस्तेमाल हुए कैमरा फ़ीचर, एरर), और हर ऐप वर्शन में एक बार यह सूची कि फ़ोन के कैमरे क्या-क्या सपोर्ट करते हैं (लेंस, रेज़ोल्यूशन, फ़्रेम रेट, वीडियो और फ़ोटो फ़ीचर)। कोई फ़ोटो नहीं, कोई लोकेशन नहीं, आपके अकाउंट से जुड़ा नहीं। इसे आप Settings → Camera → Share camera diagnostics में बंद कर सकते हैं', 'उन फ़ोन मॉडल पर कैमरा की समस्याएँ ढूँढने और ठीक करने के लिए जिन्हें हम ख़ुद टेस्ट नहीं कर सकते, और हर तरह के फ़ोन के लिए सबसे अच्छी कैमरा सेटिंग चुनने के लिए', '1 साल'],
           ],
         },
-        p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और आज ऐप में किसी थर्ड-पार्टी एनालिटिक्स या क्रैश रिपोर्टिंग का इस्तेमाल नहीं करते। Lens सिर्फ़ अपने गुमनाम कैमरा डायग्नोस्टिक्स भेजता है (ऊपर टेबल में)। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
+        p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और आज ऐप में किसी थर्ड-पार्टी एनालिटिक्स या क्रैश रिपोर्टिंग का इस्तेमाल नहीं करते। Lens सिर्फ़ अपने गुमनाम कैमरा डायग्नोस्टिक्स भेजता है (ऊपर टेबल में)। Google का ऑन-डिवाइस ML Kit (डॉक्यूमेंट स्कैनर, सीन लेबल, चेहरा पहचान; Google Play सर्विसेज़ का हिस्सा) Google को अपने इस्तेमाल और परफ़ॉर्मेंस के आँकड़े भेजता है, आपकी फ़ोटो कभी नहीं; और Firebase नोटिफ़िकेशन पहुँचाने के लिए ऐप को एक इंस्टॉलेशन ID देता है। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
       },
       {
         h2: '2. आपका अपना स्टोरेज (Google Drive, OneDrive, Dropbox, Box, S3, WebDAV)',
-        p: ['अगर आप अपना स्टोरेज जोड़ते हैं, तो फ़ोटो और वीडियो सीधे आपके फ़ोन से उस प्रोवाइडर पर अपलोड होते हैं। आप प्रोवाइडर के अपने पेज पर साइन इन करते हैं। फ़्री प्लान में एक्सेस कीज़ आपके फ़ोन पर रहती हैं; हमारे सर्वर साइन-इन कोड बदलने में मदद करते हैं पर कीज़ नहीं रखते। गैलरी तेज़ रखने के लिए हम Lens में सिर्फ़ छोटे प्रीव्यू रखते हैं। वहाँ रखी फ़ाइलों पर प्रोवाइडर की अपनी प्राइवेसी पॉलिसी लागू होती है।'],
+        p: ['अगर आप अपना स्टोरेज जोड़ते हैं, तो फ़ोटो और वीडियो सीधे आपके फ़ोन से उस प्रोवाइडर पर अपलोड होते हैं। आप प्रोवाइडर के अपने पेज पर साइन इन करते हैं। फ़्री प्लान में एक्सेस कीज़ आपके फ़ोन पर रहती हैं; हमारे सर्वर साइन-इन कोड बदलने में मदद करते हैं पर कीज़ नहीं रखते। जुड़े हुए अकाउंट का नाम (उसका ईमेल, या S3/WebDAV के लिए सर्वर और यूज़र नेम) हम रखते हैं ताकि आप देख सकें कौन-सा स्टोरेज जुड़ा है। गैलरी तेज़ रखने के लिए हम Lens में सिर्फ़ छोटे प्रीव्यू रखते हैं। वहाँ रखी फ़ाइलों पर प्रोवाइडर की अपनी प्राइवेसी पॉलिसी लागू होती है।'],
       },
       {
         h2: '3. आपका डेटा कहाँ स्टोर होता है और कौन प्रोसेस करता है',
@@ -292,7 +295,7 @@ export const deletion: Record<Lang, LegalDoc> = {
       {
         h2: 'What is deleted',
         ul: [
-          'All photos and videos stored in Lens, with their previews, edits and streaming copies',
+          'All photos and videos stored in Lens, with their previews, edits, streaming copies and recap films, and any Quality Lab test photos you sent',
           'Items in Trash and Archive',
           'Your shares (friends lose access to what you shared) and your Lens name',
           'Your email and Google sign-ins, devices and browser sessions',
@@ -326,7 +329,7 @@ export const deletion: Record<Lang, LegalDoc> = {
       {
         h2: 'क्या डिलीट होता है',
         ul: [
-          'Lens में रखी सारी फ़ोटो और वीडियो, उनके प्रीव्यू, एडिट और स्ट्रीमिंग कॉपी समेत',
+          'Lens में रखी सारी फ़ोटो और वीडियो, उनके प्रीव्यू, एडिट, स्ट्रीमिंग कॉपी और रीकैप फ़िल्मों समेत, और आपकी भेजी कोई भी क्वालिटी लैब टेस्ट फ़ोटो',
           'ट्रैश और आर्काइव की चीज़ें',
           'आपके शेयर (दोस्तों को आपकी शेयर की गई चीज़ों तक पहुँच नहीं रहती) और आपका Lens नाम',
           'आपके ईमेल और Google साइन-इन, डिवाइस और ब्राउज़र सेशन',

@@ -137,8 +137,10 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
     await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: media.pk, sk: media.sk } }));
   }
 
-  // Every stored object and old version: originals, previews, streaming copies.
-  for (const prefix of [`m/${id}/`, `d/${id}/`, `h/${id}/`]) {
+  // Every stored object and old version: originals, previews, streaming copies, recap films,
+  // and the Quality Lab sets this account uploaded (recorded as LAB# rows since 2026-10-15).
+  const labSets = (await partitionItems(id, 'LAB#')).map((i) => `lab/sets/${(i.sk as string).slice(4)}/`);
+  for (const prefix of [`m/${id}/`, `d/${id}/`, `h/${id}/`, `r/${id}/`, ...labSets]) {
     if (Date.now() > deadline) return false;
     await deleteAllVersions(prefix);
   }

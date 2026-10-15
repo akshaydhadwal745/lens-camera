@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 
 import { Identity } from './identity';
-import { env, HttpError, json, randomId, rateLimit, Req, Res, s3 } from './lib';
+import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res, s3 } from './lib';
 
 /**
  * Camera quality R&D (docs/research/camera-quality.md).
@@ -87,6 +88,8 @@ export async function createSet(identity: Identity, req: Req): Promise<Res> {
 
   const setId = `${new Date().toISOString().slice(0, 10)}-${randomId(6)}`;
   const prefix = `lab/sets/${setId}`;
+  // On the account, so deleting the account deletes its Quality Lab sets too (account.ts).
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `D#${identity.id}`, sk: `LAB#${setId}`, createdAt: Date.now() } }));
   await s3.send(
     new PutObjectCommand({ Bucket: env.bucket, Key: `${prefix}/meta.json`, Body: metaBody, ContentType: 'application/json' }),
   );
