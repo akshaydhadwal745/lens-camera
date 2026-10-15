@@ -58,7 +58,7 @@ if ! skip website; then
       [ "$code" = 200 ] && echo "✔ $p 200" || echo "✘ $p $code"
     done
     latest=$(curl -s "$SITE/downloads/android/latest.json")
-    echo "latest.json: $latest"
+    echo "latest.json: $(echo "$latest" | tr -d "\n " | cut -c1-160)"
     for apk in $(echo "$latest" | python3 -c 'import sys,json; [print(f["url"]) for f in json.load(sys.stdin)["files"].values()]' 2>/dev/null); do
       code=$(curl -sI -o /dev/null -w '%{http_code}' "$apk")
       [ "$code" = 200 ] && echo "✔ public APK downloads ($apk)" || echo "✘ public APK $code ($apk)"
