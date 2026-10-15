@@ -57,6 +57,8 @@ export type SelfTestStep = {
     | 'heat'
     | 'shutter'
     | 'shutterQuality';
+  /** burstPick: false = burst without the switch to the quick capture path. */
+  burstQuick?: boolean;
   /** Works on files already captured (or the phone itself): no camera change needed. */
   offline?: boolean;
   /** Photo with the flash forced on (phones with a flash). */
@@ -132,6 +134,9 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   if (upload) steps.push({ id: 'shutter-quality', label: 'Shutter paths: quality samples uploaded', props: DEFAULT_PROPS, action: 'shutterQuality', offline: true });
   // Hold-shutter smart burst (7.3): shots until release, then the best-shot pick on the phone.
   steps.push({ id: 'burst-pick', label: 'Smart burst + best-shot pick', props: DEFAULT_PROPS, action: 'burstPick' });
+  // The same burst without switching to the quick path (that switch rebuilds the camera session):
+  // which gives more shots in a short hold on this phone?
+  steps.push({ id: 'burst-stay', label: 'Smart burst on the best-quality path', props: DEFAULT_PROPS, action: 'burstPick', burstQuick: false });
   if (back.raw) steps.push({ id: 'raw', label: 'RAW photo', props: { ...DEFAULT_PROPS, raw: true }, action: 'photo' });
   if (!back.ultraHdr) steps.push({ id: 'plain-jpeg', label: 'Plain JPEG photo', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'photo' });
   for (const ext of ['auto', 'hdr', 'night'] as const) {

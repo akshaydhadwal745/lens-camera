@@ -1127,7 +1127,7 @@ class CameraController(private val context: Context) {
    * like a normal photo (mirror, location, sound). [onShot] gets the running count.
    * Then the best shot is picked off the main thread ([BurstPicker]).
    */
-  fun startBurst(max: Int, onShot: (Int) -> Unit, done: (Result<Map<String, Any?>>) -> Unit) {
+  fun startBurst(max: Int, onShot: (Int) -> Unit, quickPath: Boolean? = null, done: (Result<Map<String, Any?>>) -> Unit) {
     if (imageCapture == null) return done(Result.failure(CameraException("The camera isn't ready for photos.")))
     if (bursting) return done(Result.failure(CameraException("Already taking a burst.")))
     if (photoFormat == ImageCapture.OUTPUT_FORMAT_RAW) return done(Result.failure(CameraException("Burst takes JPEG photos: turn RAW off.")))
@@ -1135,8 +1135,14 @@ class CameraController(private val context: Context) {
     // (Device Farm dev-68: 0.54–0.86 s vs 1.3–2.6 s per photo), so a 1.5 s hold
     // gives several shots instead of one. Photo mode only (video stills and Night
     // keep their own capture); best quality comes back when the burst ends.
-    val quick = config.mode == "photo" && !nightExtension && config.captureMode != "latency" &&
+    // [quickPath] false = stay on the bound capture (self-test compares both: the swap
+    // rebuilds the camera session, which can cost more than it saves on short holds).
+    val t0 = SystemClock.elapsedRealtime()
+    val quick = quickPath != false && config.mode == "photo" && !nightExtension && config.captureMode != "latency" &&
       swapStill(latency = true, format = ImageCapture.OUTPUT_FORMAT_JPEG) != null
+    val swapMs = SystemClock.elapsedRealtime() - t0
+    val startsMs = mutableListOf<Long>()
+    val savedMs = mutableListOf<Long>()
     val capture = imageCapture ?: return done(Result.failure(CameraException("The camera isn't ready for photos.")))
     capture.flashMode = ImageCapture.FLASH_MODE_OFF
     bursting = true
@@ -1172,7 +1178,11 @@ class CameraController(private val context: Context) {
             .onFailure { Log.w(TAG, "group photo failed", it) }
             .getOrNull()
         } else null
-        val result = mutableMapOf<String, Any?>("frames" to frames, "pick" to best, "quick" to quick)
+        val result = mutableMapOf<String, Any?>(
+          "frames" to frames, "pick" to best, "quick" to quick,
+          // Timing (ms from the burst start) for the self-test.
+          "swapMs" to swapMs, "startsMs" to startsMs.toList(), "savedMs" to savedMs.toList(),
+        )
         if (group != null) {
           result["group"] = mapOf("uri" to "file://${group.file.absolutePath}", "width" to sizes[best].first, "height" to sizes[best].second, "fixed" to group.fixed)
         }
@@ -1190,13 +1200,17 @@ class CameraController(private val context: Context) {
         object : ImageCapture.OnImageSavedCallback {
           override fun onCaptureStarted() {
             sounds.shutter()
+            val at = SystemClock.elapsedRealtime() - t0
+            main.execute { startsMs.add(at) }
             // At most two in flight: the one being saved and the next capture.
             main.execute { if (!finished && inFlight < 2) next() }
           }
 
           override fun onImageSaved(output: ImageCapture.OutputFileResults) {
             val size = uprightSize(file)
+            val at = SystemClock.elapsedRealtime() - t0
             main.execute {
+              savedMs.add(at)
               saved[index] = file to size
               inFlight--
               onShot(saved.size)

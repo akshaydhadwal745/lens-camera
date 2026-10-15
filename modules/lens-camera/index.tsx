@@ -258,10 +258,16 @@ export type LensCameraHandle = {
    * `group`: the best shot with blinks fixed from other frames (2+ people, someone's eyes shut
    * in the pick, open in another frame; docs/design/switch-features.md §5). Absent when not needed.
    */
-  startBurst?(max: number): Promise<{
+  /** `quick`: false keeps the bound capture instead of switching to the quick path (self-test comparison). */
+  startBurst?(max: number, quick?: boolean): Promise<{
     frames: { uri: string; width: number; height: number }[];
     pick: number;
     group?: { uri: string; width: number; height: number; fixed: number };
+    /** Whether the burst ran on the quick capture path; timing in ms from the burst start. */
+    quick?: boolean;
+    swapMs?: number;
+    startsMs?: number[];
+    savedMs?: number[];
   }>;
   stopBurst?(): Promise<void>;
   /** Android, while recording: a photo (full resolution where supported, else the video frame: `fromVideo`). */

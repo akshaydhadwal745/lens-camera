@@ -400,7 +400,7 @@ export default function SelfTestScreen() {
 
         if (step.action === 'burstPick') {
           if (!cam.startBurst || !cam.stopBurst) return { ...base, status: 'skip', ms: Date.now() - t0, message: 'smart burst not available' };
-          const done = cam.startBurst(20);
+          const done = step.burstQuick === false ? cam.startBurst(20, false) : cam.startBurst(20);
           await wait(1500);
           const released = Date.now();
           await cam.stopBurst();
@@ -408,7 +408,10 @@ export default function SelfTestScreen() {
           const pickMs = Date.now() - released;
           for (const f of burst.frames) deleteFile(f.uri);
           const shots = burst.frames.length;
-          const details = { shots, pick: burst.pick, pickMs, perSecond: Math.round((shots / 1.5) * 10) / 10 };
+          const details = {
+            shots, pick: burst.pick, pickMs, perSecond: Math.round((shots / 1.5) * 10) / 10,
+            quick: burst.quick, swapMs: burst.swapMs, startsMs: burst.startsMs, savedMs: burst.savedMs,
+          };
           if (shots < 2 || burst.pick < 0 || burst.pick >= shots) return { ...base, status: 'fail', ms: Date.now() - t0, message: `${shots} shots, pick ${burst.pick}`, details };
           return { ...base, status: pickMs > 4000 ? 'warn' : 'pass', ms: Date.now() - t0, message: `${shots} shots in 1.5 s, best shot picked in ${(pickMs / 1000).toFixed(1)} s`, details };
         }

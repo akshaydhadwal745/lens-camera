@@ -148,8 +148,8 @@ class LensCameraModule : Module() {
         view.focus(x, y, lock = true)
       }.runOnQueue(Queues.MAIN)
 
-      AsyncFunction("startBurst") { view: LensCameraView, max: Int, promise: Promise ->
-        view.startBurst(max, promise)
+      AsyncFunction("startBurst") { view: LensCameraView, max: Int, quick: Boolean?, promise: Promise ->
+        view.startBurst(max, quick, promise)
       }.runOnQueue(Queues.MAIN)
 
       AsyncFunction("stopBurst") { view: LensCameraView ->

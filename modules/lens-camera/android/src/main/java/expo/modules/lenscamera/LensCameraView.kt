@@ -404,9 +404,9 @@ class LensCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     gl.snapshot(java.io.File(dir, "frame-${java.util.UUID.randomUUID()}.jpg")) { r -> post { reply(r) } }
   }
 
-  /** Smart burst: resolves { frames: [{ uri, width, height, … }], pick } after [stopBurst]. */
-  fun startBurst(max: Int, promise: Promise) {
-    controller.startBurst(max.coerceIn(2, 30), { count -> onBurstShot(mapOf("count" to count)) }) { result ->
+  /** Smart burst: resolves { frames: [{ uri, width, height, … }], pick } after [stopBurst]. [quick] null = default path. */
+  fun startBurst(max: Int, quick: Boolean?, promise: Promise) {
+    controller.startBurst(max.coerceIn(2, 30), { count -> onBurstShot(mapOf("count" to count)) }, quick) { result ->
       result.fold({ promise.resolve(it) }, { promise.reject("ERR_CAPTURE", it.message, it) })
     }
   }
