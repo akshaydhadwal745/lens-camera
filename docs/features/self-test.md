@@ -114,3 +114,11 @@ pick other models. Uses 5 of the 5 free physical Test Lab runs a day (resets 12:
 `smart burst on the best-quality path` (`burst-stay`) runs the hold-shutter burst without the
 switch to the quick capture path; both burst steps report `swapMs` and each shot's start/save
 time, to decide the faster-burst fix (checklist 7.3).
+
+**Phones on this PC:** `LOCAL="<adb serial> …" PIN=<screen PIN> scripts/test-all.sh N` also runs the
+self-test on phones connected by USB or Wi-Fi adb (`scripts/phone-selftest.sh N <serial>`: installs
+dev-N if needed, unlocks, starts the TEST_LOOP intent with a result file in the app's own folder,
+pulls it + the logcat into `test-results/dev-N/phones/<model>-<android>-local/`). Free, no quota;
+the phone needs internet (office Wi-Fi: log in at the portal first). When the daily Test Lab
+physical quota is used up, `PHONES="MediumPhone.arm/35 SmallPhone.arm/33"` runs the self-test on
+virtual phones instead.

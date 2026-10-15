@@ -9,9 +9,12 @@
 #   4. api       infra/scripts/e2e.sh against the live API (accounts, uploads,
 #                sharing, events, recaps, referrals, trash, storage …)
 #   5. website   the live site's key pages, downloads/latest.json, update API
+#   + LOCAL="<adb serial> …": the same self-test on phones connected to this PC
+#     (scripts/phone-selftest.sh; free, no quota), reported with the Test Lab phones
 #
 # Usage: scripts/test-all.sh <build number>
 #   SKIP="robo api" scripts/test-all.sh 124      # leave parts out
+#   LOCAL=192.180.2.204:5555 PIN=8866 scripts/test-all.sh 125   # + the S8 on Wi-Fi adb
 #   PHONES="a14xm/34 akita/34" ROBO="MediumPhone.arm/35" scripts/test-all.sh 124
 # Free Test Lab plan: 5 physical + 10 virtual phones a day; the day resets at
 # midnight Pacific (12:30 IST), TEST_QUOTA_EXCEEDED until then.
@@ -67,6 +70,13 @@ if ! skip website; then
   } > "$OUT/website.log" 2>&1
   grep -q '^✘' "$OUT/website.log" && status website fail || status website pass
 fi
+
+for serial in ${LOCAL:-}; do
+  echo "· self-test on local phone $serial"
+  PIN=${PIN:-} "$ROOT/scripts/phone-selftest.sh" "$N" "$serial" "$OUT/phones" > "$OUT/local-$serial.log" 2>&1 || echo "  local phone $serial: see $OUT/local-$serial.log"
+done
+
+[ -n "${LOCAL:-}" ] && skip phones && status phones done
 
 echo "· waiting for Test Lab (phones + robo)…"
 wait
