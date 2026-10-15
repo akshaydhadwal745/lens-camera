@@ -50,6 +50,18 @@ shutter now queues a shot, which helps slow phones too). Volume keys also queue.
 brightness) exists. Candidate default: quick capture + pipelined shutter, pending the
 lit-scene quality comparison.
 
+**Lit-scene comparison + automatic path (2026-10-15, dev-124 → dev-125):** the user's Galaxy S8 in
+office light (Quality Lab set 2026-10-15-33o3ZY7Y): quick = best quality (noise 4.11 vs 4.07,
+detail 2.41 vs 2.47, ZSL same as quick), and quick is faster (saved 0.84 s vs 1.14 s, 3 rapid
+1.5 s vs 2.4 s). The burst's switch to the quick path costs 0.9–1.5 s before the first shot
+(the camera session rebuilds), so on the S8 a 1.5 s hold gave 1 shot. **Now automatic
+(`captureMode: 'auto'`, the default):** Photo mode with plain JPEG binds the quick path in
+normal light and moves to best quality when the scene stays dim (`isDark()`: ISO ≥ 800, or
+≥ 1/20 s at ISO ≥ 400) for 2 s; back to quick when bright (ISO ≤ 400, ≤ 1/30 s) for 2 s. The
+switch waits until no photo, burst or recording is in progress. Smart burst on the quick path
+needs no switch. Ultra HDR, RAW, maker modes, Portrait and Night keep their own paths. No
+setting (feedback: automatic, not options). Self-test: `shutter-auto`, `burst-auto`.
+
 **Goal:** the photo is taken the moment the shutter is pressed, and the next press is
 accepted at once, with no loss in image quality.
 

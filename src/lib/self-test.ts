@@ -23,7 +23,7 @@ export type SelfTestProps = {
   /** The Normal camera's always-on frame readers: QR codes (9.3) + scene labels (5.3). No camera rebind. */
   live?: boolean;
   /** Photo capture: best quality (default) or the phone's quick path (shutter-speed comparison). */
-  captureMode?: 'quality' | 'latency' | 'zsl';
+  captureMode?: 'auto' | 'quality' | 'latency' | 'zsl';
 };
 
 export const DEFAULT_PROPS: SelfTestProps = { facing: 'back', lens: 'wide', mode: 'photo', raw: false, hdrPhoto: true, extension: 'none' };
@@ -125,8 +125,10 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   steps.push({ id: 'burst', label: 'Burst speed (5 shots)', props: DEFAULT_PROPS, action: 'burst' });
   // Shutter speed (press → photo saved), 3 photos per capture path: what users get (Ultra HDR where the
   // phone has it, best quality), plain JPEG, and the quick path — evidence for choosing per capability.
-  if (back.ultraHdr) steps.push({ id: 'shutter-uhdr', label: 'Shutter speed: Ultra HDR', props: DEFAULT_PROPS, action: 'shutter' });
-  steps.push({ id: 'shutter-jpeg', label: 'Shutter speed: plain JPEG', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'shutter' });
+  if (back.ultraHdr) steps.push({ id: 'shutter-uhdr', label: 'Shutter speed: Ultra HDR', props: { ...DEFAULT_PROPS, captureMode: 'quality' }, action: 'shutter' });
+  steps.push({ id: 'shutter-jpeg', label: 'Shutter speed: plain JPEG', props: { ...DEFAULT_PROPS, hdrPhoto: false, captureMode: 'quality' }, action: 'shutter' });
+  // What a plain-JPEG phone gets by default: the auto path (quick in normal light, best quality when dim).
+  steps.push({ id: 'shutter-auto', label: 'Shutter speed: auto path', props: { ...DEFAULT_PROPS, hdrPhoto: false, captureMode: 'auto' }, action: 'shutter' });
   steps.push({ id: 'shutter-latency', label: 'Shutter speed: quick capture', props: { ...DEFAULT_PROPS, hdrPhoto: false, captureMode: 'latency' }, action: 'shutter' });
   // Zero shutter lag where the camera supports it (else the native side binds quick capture and says so).
   steps.push({ id: 'shutter-zsl', label: 'Shutter speed: zero shutter lag', props: { ...DEFAULT_PROPS, hdrPhoto: false, captureMode: 'zsl' }, action: 'shutter' });
@@ -134,9 +136,8 @@ export function planSelfTest(back: Capabilities, extensions: string[], upload: b
   if (upload) steps.push({ id: 'shutter-quality', label: 'Shutter paths: quality samples uploaded', props: DEFAULT_PROPS, action: 'shutterQuality', offline: true });
   // Hold-shutter smart burst (7.3): shots until release, then the best-shot pick on the phone.
   steps.push({ id: 'burst-pick', label: 'Smart burst + best-shot pick', props: DEFAULT_PROPS, action: 'burstPick' });
-  // The same burst without switching to the quick path (that switch rebuilds the camera session):
-  // which gives more shots in a short hold on this phone?
-  steps.push({ id: 'burst-stay', label: 'Smart burst on the best-quality path', props: DEFAULT_PROPS, action: 'burstPick', burstQuick: false });
+  // Plain JPEG on the auto path: in normal light the burst runs on the quick path with no switch.
+  steps.push({ id: 'burst-auto', label: 'Smart burst, auto path (plain JPEG)', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'burstPick' });
   if (back.raw) steps.push({ id: 'raw', label: 'RAW photo', props: { ...DEFAULT_PROPS, raw: true }, action: 'photo' });
   if (!back.ultraHdr) steps.push({ id: 'plain-jpeg', label: 'Plain JPEG photo', props: { ...DEFAULT_PROPS, hdrPhoto: false }, action: 'photo' });
   for (const ext of ['auto', 'hdr', 'night'] as const) {

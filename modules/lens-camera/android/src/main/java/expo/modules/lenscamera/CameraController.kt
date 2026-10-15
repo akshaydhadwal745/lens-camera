@@ -104,11 +104,13 @@ data class CameraConfig(
    */
   val extension: String = "none",
   /**
-   * Photo capture path: "quality" (default, CameraX best quality), "latency" (the
-   * phone's quick capture path) or "zsl" (zero shutter lag: a ring buffer of recent
-   * frames, where the camera supports it; else "latency"). docs/design/switch-features.md §1.
+   * Photo capture path: "auto" (default: Photo mode takes plain JPEGs on the quick path in
+   * normal light and switches to best quality when the scene stays dim), "quality" (CameraX
+   * best quality), "latency" (the phone's quick capture path) or "zsl" (zero shutter lag: a
+   * ring buffer of recent frames, where the camera supports it; else "latency").
+   * docs/design/switch-features.md §1.
    */
-  val captureMode: String = "quality",
+  val captureMode: String = "auto",
 ) {
   /** Video and slow motion record with VideoCapture. */
   val isVideo get() = mode == "video" || mode == "slowmo"
@@ -209,6 +211,12 @@ class CameraController(private val context: Context) {
 
   // Latest per-frame metadata from the camera, for the HUD and manual WB anchoring.
   @Volatile private var lastIso: Int? = null
+  /** Auto capture path: the scene has been dim (true) / bright (false) for [AUTO_STEADY_MS]. */
+  @Volatile private var sceneDim = false
+  private var dimSince = 0L
+  private var brightSince = 0L
+  /** Photos between the press and their file (the auto path never switches under them). */
+  private val photosInFlight = java.util.concurrent.atomic.AtomicInteger(0)
   @Volatile private var lastExposureNs: Long? = null
   @Volatile private var lastFocusDiopters: Float? = null
   @Volatile private var lastGains: RggbChannelVector? = null
@@ -514,7 +522,8 @@ class CameraController(private val context: Context) {
       // Night bursts need quick successive shots; everything else, best quality.
       val zsl = config.captureMode == "zsl" && !config.isNight && photoFormat == ImageCapture.OUTPUT_FORMAT_JPEG &&
         boundExtension == "none" && runCatching { cam.info.isZslSupported }.getOrDefault(false)
-      val latency = (config.isNight && !nightExtension) || config.captureMode == "latency" || (config.captureMode == "zsl" && !zsl)
+      val latency = (config.isNight && !nightExtension) || config.captureMode == "latency" || (config.captureMode == "zsl" && !zsl) ||
+        (autoPath() && !sceneDim)
       boundCaptureMode = when {
         zsl -> "zsl"
         latency -> "latency"
@@ -524,6 +533,23 @@ class CameraController(private val context: Context) {
       videoCapture = null
     }
     return group.build()
+  }
+
+  /**
+   * Whether the auto capture path applies: Photo mode, plain JPEG (Ultra HDR and RAW keep best
+   * quality), no maker mode. In normal light the quick path matched best quality on the S8
+   * (Quality Lab set 2026-10-15-33o3ZY7Y: noise 4.11 vs 4.07, detail 2.41 vs 2.47) and was
+   * faster; smart burst then needs no switch. Dim scenes go to best quality.
+   */
+  private fun autoPath() = config.captureMode == "auto" && config.mode == "photo" &&
+    photoFormat == ImageCapture.OUTPUT_FORMAT_JPEG && boundExtension == "none"
+
+  /** Main thread: moves the photo use case to the path the light asks for, when nothing is being captured. */
+  private fun applyAutoPath() {
+    if (!autoPath() || bursting || recording != null || photosInFlight.get() > 0) return
+    val want = if (sceneDim) "quality" else "latency"
+    if (boundCaptureMode == want) return
+    if (swapStill(latency = want == "latency", format = photoFormat) != null) boundCaptureMode = want
   }
 
   /** The photo use case: full resolution, 4:3, JPEG 95; [latency] = the phone's quick capture path. */
@@ -734,6 +760,7 @@ class CameraController(private val context: Context) {
     override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
       lastIso = result.get(CaptureResult.SENSOR_SENSITIVITY)
       lastExposureNs = result.get(CaptureResult.SENSOR_EXPOSURE_TIME)
+      trackLight()
       lastFocusDiopters = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
       val awbMode = result.get(CaptureResult.CONTROL_AWB_MODE)
       if (awbMode == CaptureResult.CONTROL_AWB_MODE_AUTO) {
@@ -942,6 +969,11 @@ class CameraController(private val context: Context) {
     }
     val handler = android.os.Handler(android.os.Looper.getMainLooper())
     handler.postDelayed(watchdog, if (extension != null) EXTENSION_TIMEOUT_MS else PHOTO_TIMEOUT_MS)
+    photosInFlight.incrementAndGet()
+    // The light may have changed while this photo was being taken: follow it afterwards.
+    val settled = java.util.concurrent.atomic.AtomicBoolean(false)
+    fun settle() { if (settled.compareAndSet(false, true) && photosInFlight.decrementAndGet() == 0) main.execute { applyAutoPath() } }
+    handler.postDelayed({ settle() }, (if (extension != null) EXTENSION_TIMEOUT_MS else PHOTO_TIMEOUT_MS) + 1_000L)
     capture.takePicture(
       outputOptions(file),
       io,
@@ -955,6 +987,7 @@ class CameraController(private val context: Context) {
 
         override fun onImageSaved(output: ImageCapture.OutputFileResults) {
           handler.removeCallbacks(watchdog)
+          settle()
           if (!finished.compareAndSet(false, true)) { file.delete(); return }
           val (w, h) = uprightSize(file)
           // Portrait: find the person and keep the mask inside the photo.
@@ -969,11 +1002,30 @@ class CameraController(private val context: Context) {
 
         override fun onError(exception: ImageCaptureException) {
           handler.removeCallbacks(watchdog)
+          settle()
           if (!finished.compareAndSet(false, true)) return
           done(Result.failure(CameraException(exception.message ?: "Capture failed")))
         }
       },
     )
+  }
+
+  /** Camera thread: dim/bright with hysteresis, steady for [AUTO_STEADY_MS] before the auto path follows. */
+  private fun trackLight() {
+    val iso = lastIso ?: return
+    val ns = lastExposureNs ?: 0L
+    val now = SystemClock.elapsedRealtime()
+    val dark = isDark()
+    val bright = iso <= 400 && ns <= 33_000_000L
+    dimSince = if (dark) (dimSince.takeIf { it > 0 } ?: now) else 0L
+    brightSince = if (bright) (brightSince.takeIf { it > 0 } ?: now) else 0L
+    val next = when {
+      !sceneDim && dimSince > 0 && now - dimSince >= AUTO_STEADY_MS -> true
+      sceneDim && brightSince > 0 && now - brightSince >= AUTO_STEADY_MS -> false
+      else -> return
+    }
+    sceneDim = next
+    main.execute { applyAutoPath() }
   }
 
   /** Low light, from what auto exposure is doing right now (same idea as the app's Night badge). */
@@ -1138,7 +1190,8 @@ class CameraController(private val context: Context) {
     // [quickPath] false = stay on the bound capture (self-test compares both: the swap
     // rebuilds the camera session, which can cost more than it saves on short holds).
     val t0 = SystemClock.elapsedRealtime()
-    val quick = quickPath != false && config.mode == "photo" && !nightExtension && config.captureMode != "latency" &&
+    // Already on the quick path (auto in normal light, or "latency"): no switch at all.
+    val quick = quickPath != false && config.mode == "photo" && !nightExtension && boundCaptureMode == "quality" &&
       swapStill(latency = true, format = ImageCapture.OUTPUT_FORMAT_JPEG) != null
     val swapMs = SystemClock.elapsedRealtime() - t0
     val startsMs = mutableListOf<Long>()
@@ -1159,6 +1212,7 @@ class CameraController(private val context: Context) {
       finished = true
       bursting = false
       if (quick) swapStill(latency = false, format = photoFormat)
+      main.execute { applyAutoPath() }
       val files = saved.values.map { it.first }
       val sizes = saved.values.map { it.second }
       if (files.isEmpty()) {
@@ -1358,6 +1412,8 @@ class CameraController(private val context: Context) {
   companion object {
     /** A plain photo that hasn't finished after this is stuck (slowest seen: ~2 s with flash). */
     const val PHOTO_TIMEOUT_MS = 15_000L
+    /** Auto capture path: how long the light must stay dim/bright before the photo path follows. */
+    const val AUTO_STEADY_MS = 2_000L
     /** Maker extensions (Night merges frames itself, a few seconds normally). */
     const val EXTENSION_TIMEOUT_MS = 25_000L
 

@@ -148,7 +148,7 @@ export default function SelfTestScreen() {
     if (step.action === 'shutterQuality') {
       // Same scene, one photo per capture path → a Quality Lab set (analyze.py: noise + detail vs best quality).
       const shots = kept.current.shutter ?? {};
-      const names: Record<string, string> = { 'shutter-jpeg': 'single', 'shutter-latency': 'quick', 'shutter-zsl': 'zsl' };
+      const names: Record<string, string> = { 'shutter-jpeg': 'single', 'shutter-auto': 'auto', 'shutter-latency': 'quick', 'shutter-zsl': 'zsl' };
       const present = Object.keys(names).filter((id) => shots[id]);
       if (!shots['shutter-jpeg'] || present.length < 2) return done('skip', 'not enough shutter samples');
       const set = newSet('selftest-shutter', `self-test ${buildLabel()}`);
@@ -599,7 +599,7 @@ export default function SelfTestScreen() {
           raw={props.raw}
           hdrPhoto={props.hdrPhoto}
           extension={props.extension}
-          captureMode={props.captureMode ?? 'quality'}
+          captureMode={props.captureMode ?? 'auto'}
           analysis={ANALYSIS}
           onReady={(e) => onReady(e.nativeEvent)}
           onDiagnostics={(e) => onDiagnostics(e.nativeEvent)}

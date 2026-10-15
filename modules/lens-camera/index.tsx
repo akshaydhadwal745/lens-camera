@@ -167,10 +167,11 @@ export type LensCameraProps = ViewProps & {
   /** Android, Quality Lab only: bind a phone-maker extension mode in Photo mode. */
   extension?: LabExtension;
   /**
-   * Android: photo capture path: best quality (default), the phone's quick path, or zero
-   * shutter lag where supported (else quick). docs/design/switch-features.md §1.
+   * Android: photo capture path: auto (default: quick path in normal light, best quality when
+   * dim; Photo mode, plain JPEG), best quality, the phone's quick path, or zero shutter lag
+   * where supported (else quick). docs/design/switch-features.md §1.
    */
-  captureMode?: 'quality' | 'latency' | 'zsl';
+  captureMode?: 'auto' | 'quality' | 'latency' | 'zsl';
   analysis: AnalysisSettings;
   onReady?: (e: NativeSyntheticEvent<Capabilities>) => void;
   onStats?: (e: NativeSyntheticEvent<CameraStats>) => void;
