@@ -168,6 +168,9 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   // The tools pill may use the top bar's width minus the PRO pill, its padding and the gap
   // (a pill sized by its content ran under PRO on 1080 px phones: MONITOR, PRESETS).
   const [proWidth, setProWidth] = useState(76);
+  const [toolsView, setToolsView] = useState(0);
+  const [toolsContent, setToolsContent] = useState(0);
+  const [toolsScrolled, setToolsScrolled] = useState(0);
   const toolsMaxWidth = width - (insets.left + 16) - (insets.right + 16) - 8 - proWidth;
   /** Pipelined shutter: photos waiting for their frame to be captured, oldest first (frees the shutter). */
   const startWaiters = useRef<(() => void)[]>([]);
@@ -998,7 +1001,16 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
           <>
             <View style={hasTools ? [styles.glassPill, { maxWidth: toolsMaxWidth }] : null}>
               {/* Many tools (PRO + Photo: 7) don't fit next to PRO: they scroll inside the pill, never under PRO. */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolRow} style={styles.toolScroll}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.toolRow}
+                style={styles.toolScroll}
+                onLayout={(e) => setToolsView(e.nativeEvent.layout.width)}
+                onContentSizeChange={(w) => setToolsContent(w)}
+                onScroll={(e) => setToolsScrolled(e.nativeEvent.contentOffset.x)}
+                scrollEventThrottle={32}
+              >
               {s.mode === 'photo' || s.mode === 'portrait' ? (
                 (caps?.flash !== false || caps?.screenFlash) && (
                   <TopButton
@@ -1080,6 +1092,12 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                 </Pressable>
               )}
               </ScrollView>
+              {/* More tools than fit: a › says the row scrolls (instead of a word cut off at the edge). */}
+              {toolsContent - toolsScrolled > toolsView + 4 ? (
+                <View style={styles.toolsMore} pointerEvents="none">
+                  <Ionicons name="chevron-forward" size={14} color={palette.text} />
+                </View>
+              ) : null}
             </View>
             <Pressable
               onPress={() => {
@@ -1593,6 +1611,7 @@ const styles = StyleSheet.create({
   glassPill: { ...glass, flexDirection: 'row', alignItems: 'center', gap: 2, padding: 4, borderRadius: 24, flexShrink: 1, overflow: 'hidden' },
   toolScroll: { flexGrow: 0, flexShrink: 1 },
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  toolsMore: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(22,22,24,0.92)' },
   topButton: { alignItems: 'center', minWidth: 40, minHeight: 40, justifyContent: 'center', paddingHorizontal: 2 },
   topLabel: { color: palette.text, fontSize: 9, fontFamily: font.monoMedium, marginTop: 1, letterSpacing: 0.6 },
   topValue: { color: palette.text, fontSize: 13, lineHeight: 18, fontFamily: font.monoSemibold },
