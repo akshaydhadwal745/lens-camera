@@ -38,6 +38,9 @@ updates (dev-26…28).
   `OTA_PRIVATE_KEY`, local copy `infra/keys/ota/private-key.pem` (gitignored).
 - The app embeds `certs/certificate.pem` (valid to 2046) and rejects any
   manifest not signed with the matching key. Assets are checked by SHA-256.
+- Every asset, the JS bundle included, gets a content-hash `key`. The phone reuses any stored
+  asset with the same key, so a fixed key (we used `bundle` until 2026-10-15) makes phones keep
+  running the first update they downloaded.
 - Rotating the key needs a new APK (new certificate).
 
 ## Cost
