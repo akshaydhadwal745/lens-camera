@@ -1,0 +1,136 @@
+# Google Play bundle (.aab) for a dev-N build: the same commit and versionCode as
+# dev-N's APKs, with 64-bit and 32-bit code in one bundle (Play serves each phone
+# its own part), signed with Lens's release key. Manual: Actions → Play bundle →
+# Run workflow → build = N. The .aab lands as the artifact "Lens-play-dev-N" and
+# is uploaded to Play Console by hand (docs/launch/play-store.md).
+name: Play bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'dev-N build number to bundle (e.g. 125)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LENS_BUILD: ${{ inputs.build }}
+      EXPO_PUBLIC_BUILD: ${{ inputs.build }}
+    steps:
+      # The commit dev-N was built from (its release says "Builds from <sha>").
+      - name: Find dev-N commit
+        id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ inputs.build }}
+        run: |
+          test -n "$BUILD" && [ "$BUILD" -eq "$BUILD" ] 2>/dev/null || { echo "build must be a number"; exit 1; }
+          SHA=$(gh api "repos/${{ github.repository }}/releases/tags/dev-$BUILD" --jq .body | grep -o 'Builds from [0-9a-f]*' | head -1 | awk '{print $3}')
+          test -n "$SHA" || { echo "release dev-$BUILD not found or has no commit"; exit 1; }
+          SHA=$(gh api "repos/${{ github.repository }}/commits/$SHA" --jq .sha)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "dev-$BUILD was built from $SHA"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.commit.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Full commit id
+        run: echo "EXPO_PUBLIC_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Restore Gradle cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-bundle-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            gradle-bundle-
+            gradle-arm64-v8a-
+            gradle-
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Install NDK
+        run: |
+          NDK=$(sed -n 's/^ndkVersion = "\(.*\)"/\1/p' node_modules/react-native/gradle/libs.versions.toml)
+          for i in 1 2 3; do
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK" > /tmp/ndk.log 2>&1 && break
+            echo "NDK $NDK install attempt $i failed; retrying"; tail -3 /tmp/ndk.log
+            rm -rf "$ANDROID_HOME/ndk/$NDK"; sleep 10
+          done
+          test -f "$ANDROID_HOME/ndk/$NDK/source.properties"
+
+      - name: Firebase config
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json && test -s google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+
+      - name: Generate native project
+        run: npx expo prebuild --platform android --clean --no-install
+        env:
+          CI: 1
+
+      - name: Release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "ANDROID_KEYSTORE_BASE64 secret missing"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/lens-release.jks"
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          echo "LENS_KEYSTORE=$RUNNER_TEMP/lens-release.jks" >> "$GITHUB_ENV"
+          echo "LENS_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build bundle
+        working-directory: android
+        run: >
+          ./gradlew bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+          "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8"
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+
+      # Same checks as the APKs: Lens's release certificate (never the debug key),
+      # versionCode = N, the runtime the OTA updates for dev-N target, both CPU types.
+      - name: Check bundle
+        run: |
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          GOT=$(keytool -printcert -jarfile "$AAB" | grep -m1 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "certificate SHA-256: $GOT"
+          test "$GOT" = "bdd57ba599935d960364566e1bcbe99b920f52563172c1495dd801b39d28093b"
+          curl -sfL -o "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.1/bundletool-all-1.18.1.jar
+          CODE=$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle "$AAB" --xpath /manifest/@android:versionCode)
+          echo "versionCode: $CODE"
+          test "$CODE" = "${{ inputs.build }}"
+          unzip -l "$AAB" | grep -q 'base/lib/arm64-v8a/' && unzip -l "$AAB" | grep -q 'base/lib/armeabi-v7a/'
+          RUNTIME=$(npx expo config --json --type public | jq -r .runtimeVersion)
+          echo "runtime: $RUNTIME"
+          cp "$AAB" "Lens-play-dev-${{ inputs.build }}.aab"
+          ls -lh Lens-play-dev-*.aab
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lens-play-dev-${{ inputs.build }}
+          path: Lens-play-dev-${{ inputs.build }}.aab
+          retention-days: 90
