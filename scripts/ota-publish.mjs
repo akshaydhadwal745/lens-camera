@@ -55,7 +55,9 @@ function asset(path, ext, contentType, key) {
   };
 }
 
-const launchAsset = asset(meta.bundle, 'bundle', 'application/javascript', 'bundle');
+// Content-hash key, never a fixed one: expo-updates reuses any stored asset with the same key, so a
+// fixed 'bundle' key made every phone keep running the first update it ever downloaded.
+const launchAsset = asset(meta.bundle, 'bundle', 'application/javascript');
 delete launchAsset.fileExtension; // ignored for the launch asset
 const assets = meta.assets.map((a) => asset(a.path, a.ext, TYPES[a.ext] ?? 'application/octet-stream'));
 
