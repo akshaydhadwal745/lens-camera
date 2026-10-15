@@ -95,3 +95,22 @@ waiting (all 3 must save, else fail). `captureMode` in the details is what the c
 bound (`zsl` only where supported). `shutter-quality` (when the phone can upload) sends the
 first plain JPEG of each path as a Quality Lab set: `research/.venv/bin/python
 research/quality/analyze.py sync && … report <setId>` compares noise and detail against best quality.
+
+## Test everything for a build: `scripts/test-all.sh N`
+
+One command, one report (`test-results/dev-N/REPORT.md`, also printed):
+
+| Part | What runs | Where |
+|---|---|---|
+| Release | `scripts/verify-release.sh N` (APK, OTA publish, signed update API, runtime) | here |
+| Real phones | this self-test on 5 physical phones: Galaxy A14, OPPO A79, Pixel 8a, Galaxy S22 Ultra, Fujitsu F-01L (Android 8.1), + logcat crashes/freezes | Firebase Test Lab |
+| Screens | Robo crawl of the real app on 2 virtual phones (crashes, freezes, screenshots) | Firebase Test Lab |
+| API | `infra/scripts/e2e.sh` against the live API | here |
+| Website | key pages, `latest.json` + public APKs, `assetlinks.json` | live site |
+
+The report starts with one verdict per part, then every failure and warning with its phone,
+then each phone's full step list. `SKIP="robo api"` leaves parts out; `PHONES=` / `ROBO=`
+pick other models. Uses 5 of the 5 free physical Test Lab runs a day (resets 12:30 IST).
+`smart burst on the best-quality path` (`burst-stay`) runs the hold-shutter burst without the
+switch to the quick capture path; both burst steps report `swapMs` and each shot's start/save
+time, to decide the faster-burst fix (checklist 7.3).
