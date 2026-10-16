@@ -3,7 +3,7 @@
 // Every action here is recorded in the audit log.
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,6 +12,9 @@ import { rupees } from '@/lib/format';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 type Tab = 'inbox' | 'affiliates' | 'referrals' | 'payouts';
+/** Affiliate approvals and payouts are managed on the website only (lens.instagrowapp.com/app/admin). */
+const WEB_TOOLS = Platform.OS === 'web';
+const TABS: Tab[] = WEB_TOOLS ? ['inbox', 'affiliates', 'referrals', 'payouts'] : ['inbox', 'referrals'];
 
 function lastMonth(): string {
   const d = new Date();
@@ -272,7 +275,7 @@ export default function AdminScreen() {
         </Pressable>
       </View>
       <View style={styles.chips}>
-        {(['inbox', 'affiliates', 'referrals', 'payouts'] as Tab[]).map((t) => (
+        {TABS.map((t) => (
           <Pressable key={t} style={[styles.chip, t === tab && styles.chipOn]} onPress={() => setTab(t)}>
             <Text style={[styles.chipText, t === tab && { color: '#000' }]}>{t}</Text>
           </Pressable>
@@ -280,9 +283,14 @@ export default function AdminScreen() {
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, gap: 10 }} keyboardShouldPersistTaps="handled">
         {tab === 'inbox' && <Inbox />}
-        {tab === 'affiliates' && <Affiliates />}
+        {tab === 'affiliates' && WEB_TOOLS && <Affiliates />}
         {tab === 'referrals' && <Referrals />}
-        {tab === 'payouts' && <Payouts />}
+        {tab === 'payouts' && WEB_TOOLS && <Payouts />}
+        {!WEB_TOOLS && tab === 'inbox' && (
+          <Pressable onPress={() => void Linking.openURL('https://lens.instagrowapp.com/app/admin')}>
+            <Text style={styles.done}>Affiliate approvals and payouts: open admin on the web ›</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </View>
   );

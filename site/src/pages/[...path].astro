@@ -35,7 +35,10 @@ export function getStaticPaths() {
 }
 
 const { lang, path, route } = Astro.props as { lang: Lang; path: string; route: Route };
-const affiliateLinks: [string, string][] = lang === 'en' ? [['Affiliate terms', 'affiliate-terms']] : [['एफ़िलिएट शर्तें', 'affiliate-terms']];
+// The whole affiliate program lives on the web (apply, dashboard, links, payouts): /app/partners.
+const affiliateLinks: [string, string][] = lang === 'en'
+  ? [['Apply or open your dashboard', '/app/partners'], ['Affiliate terms', 'affiliate-terms']]
+  : [['आवेदन करें या डैशबोर्ड खोलें', '/app/partners'], ['एफ़िलिएट शर्तें', 'affiliate-terms']];
 const securityLinks: [string, string][] = lang === 'en' ? [['Privacy policy', 'privacy'], ['Delete your account', 'delete-account']] : [['प्राइवेसी पॉलिसी', 'privacy'], ['अकाउंट डिलीट करें', 'delete-account']];
 ---
 

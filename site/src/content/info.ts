@@ -83,7 +83,7 @@ export const infoPages: InfoPage[] = [
         sections: [
           {
             h2: 'How it works',
-            body: ['Apply in the Lens app (Settings → Affiliate program). We review applications within a few days. Once approved, you get tracking links for each platform or campaign and a dashboard with clicks, sign-ups, paying users and earnings.'],
+            body: ['Apply on this website: sign in with your Lens account and fill in the short form (link below). We review applications within a few days. Once approved, you get tracking links for each platform or campaign and a dashboard with clicks, sign-ups, paying users and earnings.'],
             bullets: [
               '50% of net revenue: what we receive after GST and Google Play’s fee',
               'Recurring for the lifetime of each user you bring',
@@ -111,7 +111,7 @@ export const infoPages: InfoPage[] = [
         ],
         faq: [
           { q: 'Do I need to pay anything?', a: 'No. Joining is free.' },
-          { q: 'How is tax handled?', a: 'Under Indian law we deduct TDS (2% once your commission in a financial year passes ₹20,000; 20% if you have not given a PAN) and issue Form 16A. Add your PAN and UPI in the app before your first payout.' },
+          { q: 'How is tax handled?', a: 'Under Indian law we deduct TDS (2% once your commission in a financial year passes ₹20,000; 20% if you have not given a PAN) and issue Form 16A. Add your PAN and UPI in your affiliate dashboard on this website before your first payout.' },
           { q: 'What if a user asks for a refund?', a: 'The commission for that payment is cancelled. If it was already paid, it is deducted from your next payout.' },
           { q: 'Is this the same as inviting friends?', a: 'No. Every Lens user can invite friends and earn +10 GB of storage per friend. The affiliate program is a separate, approved program that pays money.' },
         ],
@@ -124,7 +124,7 @@ export const infoPages: InfoPage[] = [
         sections: [
           {
             h2: 'कैसे काम करता है',
-            body: ['Lens ऐप में आवेदन करें (Settings → Affiliate program)। हम कुछ दिनों में आवेदन देखते हैं। मंज़ूरी के बाद आपको हर प्लेटफ़ॉर्म या कैंपेन के लिए ट्रैकिंग लिंक और क्लिक, साइन-अप, पेड यूज़र और कमाई वाला डैशबोर्ड मिलता है।'],
+            body: ['इसी वेबसाइट पर आवेदन करें: अपने Lens अकाउंट से साइन इन करें और छोटा फ़ॉर्म भरें (नीचे लिंक)। हम कुछ दिनों में आवेदन देखते हैं। मंज़ूरी के बाद आपको हर प्लेटफ़ॉर्म या कैंपेन के लिए ट्रैकिंग लिंक और क्लिक, साइन-अप, पेड यूज़र और कमाई वाला डैशबोर्ड मिलता है।'],
             bullets: [
               'नेट कमाई का 50%: GST और Google Play फ़ीस के बाद जो हमें मिलता है',
               'आपके लाए हर यूज़र के पूरे समय तक रिकरिंग',
@@ -143,7 +143,7 @@ export const infoPages: InfoPage[] = [
         ],
         faq: [
           { q: 'क्या कुछ भुगतान करना होगा?', a: 'नहीं। जुड़ना मुफ़्त है।' },
-          { q: 'टैक्स कैसे संभाला जाता है?', a: 'भारतीय क़ानून के अनुसार हम TDS काटते हैं (वित्त वर्ष में कमीशन ₹20,000 से ज़्यादा होने पर 2%; PAN न देने पर 20%) और Form 16A देते हैं। पहले भुगतान से पहले ऐप में PAN और UPI जोड़ें।' },
+          { q: 'टैक्स कैसे संभाला जाता है?', a: 'भारतीय क़ानून के अनुसार हम TDS काटते हैं (वित्त वर्ष में कमीशन ₹20,000 से ज़्यादा होने पर 2%; PAN न देने पर 20%) और Form 16A देते हैं। पहले भुगतान से पहले इस वेबसाइट पर अपने एफ़िलिएट डैशबोर्ड में PAN और UPI जोड़ें।' },
           { q: 'अगर यूज़र रिफ़ंड माँगे तो?', a: 'उस भुगतान का कमीशन रद्द हो जाता है। अगर पहले ही भुगतान हो चुका हो, तो अगले भुगतान से काटा जाता है।' },
           { q: 'क्या यह दोस्तों को इनवाइट करने जैसा है?', a: 'नहीं। हर Lens यूज़र दोस्तों को इनवाइट करके हर दोस्त पर +10 GB स्टोरेज पा सकता है। एफ़िलिएट प्रोग्राम अलग, मंज़ूरी वाला प्रोग्राम है जिसमें पैसे मिलते हैं।' },
         ],

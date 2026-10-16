@@ -46,7 +46,7 @@ const t = ui[lang];
       links.length > 0 && (
         <nav class="pg-links" aria-label={name}>
           {links.map(([label, p]) => (
-            <a href={href(lang, p)}>{label} ›</a>
+            <a href={p.startsWith('/') ? p : href(lang, p)}>{label} ›</a>
           ))}
         </nav>
       )

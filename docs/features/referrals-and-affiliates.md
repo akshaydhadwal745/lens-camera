@@ -7,7 +7,7 @@ Two separate programs. Design and decisions: [design/referrals-and-affiliates.md
 | Who | Every signed-in user | Approved partners |
 | Reward | +10 GB Lens storage per friend (`REFERRAL_BONUS_GB`) | 50% of net revenue, lifetime (`AFFILIATE_RATE_BPS` = 5000) |
 | Link | `/r/<code>` | `/go/<code>` (one per campaign, up to 20) |
-| App | Settings → Invite & earn → Invite friends (`src/app/invite.tsx`) | Settings → Invite & earn → Affiliate program (`src/app/partners.tsx`) |
+| App | Settings → Invite & earn → Invite friends (`src/app/invite.tsx`) | **Web only.** The app's Settings → Invite & earn → Affiliate program row just opens lens.instagrowapp.com/affiliates/ in the browser. Apply, dashboard, links and PAN/UPI live at lens.instagrowapp.com/app/partners (`src/app/partners.tsx`, rendered on web only; guests are asked to sign in) |
 | Server | `infra/lambda/api/referrals.ts` | `infra/lambda/api/affiliates.ts` |
 
 Shared: `attribution.ts` (codes, links, click tracking, who brought a user) and `audit.ts` (audit log).
@@ -49,6 +49,8 @@ Grant: ledger item `BN#<time>` (+bytes) and `PROFILE.bonusBytes` (quota = base +
 Later: Play Billing + Real-time developer notifications → the same two functions.
 
 ## Admin
+
+Affiliate approvals and payouts are on the web admin only (`/app/admin`); the app's Admin screen keeps Inbox and Referrals.
 
 `src/app/admin.tsx` (Settings shows it to admins only). API under `/v1/admin/*` answers 404 to everyone else. Admins: emails in the CDK context `adminEmails` (`ADMIN_EMAILS`), or `admin: true` set directly on a profile in DynamoDB (the e2e test does this for a throwaway account).
 

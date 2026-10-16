@@ -1,16 +1,19 @@
 // Affiliate program (creators, photographers, bloggers): apply, then share
 // tracking links and earn 50% of the net revenue from the users you bring.
+// Web only (lens.instagrowapp.com/app/partners): the native app just opens the
+// website, so registration, dashboard and payout details never live in the app.
 // Payments aren't live yet, so earnings stay at ₹0 until Play Billing ships.
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AffiliateDashboard, api, WEB_URL } from '@/lib/api';
 import { rupees } from '@/lib/format';
+import { useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
 
 const WEB = WEB_URL || 'https://lens.instagrowapp.com';
@@ -239,7 +242,53 @@ function Approved({ data, reload }: { data: AffiliateDashboard; reload: () => vo
   );
 }
 
+/** The affiliate program lives on the website only; the app just opens it. */
 export default function PartnersScreen() {
+  if (Platform.OS !== 'web') return <OpenOnWeb />;
+  return <PartnersWeb />;
+}
+
+function OpenOnWeb() {
+  const insets = useSafeAreaInsets();
+  useEffect(() => {
+    void Linking.openURL(`${WEB}/affiliates/`);
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }, []);
+  return <View style={[styles.fill, { paddingTop: insets.top }]} />;
+}
+
+function PartnersWeb() {
+  const signedIn = useStore((st) => !!st.identity?.email);
+  if (!signedIn) return <SignInFirst />;
+  return <PartnersDashboard />;
+}
+
+function SignInFirst() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.fill, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Affiliate program</Text>
+      </View>
+      <View style={styles.hero}>
+        <Ionicons name="trending-up-outline" size={40} color={colors.link} />
+        <Text style={styles.heroTitle}>Sign in to apply</Text>
+        <Text style={[styles.muted, { textAlign: 'center' }]}>
+          Use the same account as in the Lens app. After signing in you can apply, get your tracking links and see your earnings here.
+        </Text>
+        <Pressable style={styles.signIn} onPress={() => router.push('/signin')} accessibilityRole="button">
+          <Text style={styles.signInText}>Sign in</Text>
+        </Pressable>
+        <Pressable onPress={() => void Linking.openURL(`${WEB}/affiliates/`)}>
+          <Text style={styles.done}>How the program works</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function PartnersDashboard() {
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<AffiliateDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -297,6 +346,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, minHeight: 56 },
   title: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: -1 },
   done: { color: colors.link, fontSize: 17, fontWeight: '600' },
+  signIn: { backgroundColor: colors.link, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40, marginTop: 8 },
+  signInText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   hero: { alignItems: 'center', gap: 10, padding: 24 },
   heroTitle: { color: '#fff', fontSize: 21, fontWeight: '800', textAlign: 'center' },
   muted: { color: colors.muted, fontSize: 14, lineHeight: 20 },

@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Href, router } from 'expo-router';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isProCameraAvailable } from '../../modules/lens-camera';
 
-import { api, NotificationPrefs, Session } from '@/lib/api';
+import { api, NotificationPrefs, Session, WEB_URL } from '@/lib/api';
 import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
@@ -103,19 +103,22 @@ function LinkRow({
   value,
   valueColor,
   onPress,
+  external,
 }: {
   icon?: keyof typeof Ionicons.glyphMap;
   label: string;
   value?: string;
   valueColor?: string;
   onPress: () => void;
+  /** Opens the website (browser) instead of a screen. */
+  external?: boolean;
 }) {
   return (
     <Pressable style={({ pressed }) => [styles.rowButton, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
       {icon ? <Ionicons name={icon} size={18} color={palette.muted} /> : null}
       <Text style={[styles.rowLabel, { flex: 1 }]}>{label}</Text>
       {value ? <Text style={[styles.rowValue, valueColor ? { color: valueColor } : null]}>{value}</Text> : null}
-      <Ionicons name="chevron-forward" size={16} color="#636366" />
+      <Ionicons name={external ? 'open-outline' : 'chevron-forward'} size={16} color="#636366" />
     </Pressable>
   );
 }
@@ -243,7 +246,8 @@ function EarnSection({ signedIn }: { signedIn: boolean }) {
   }, [signedIn]);
   const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; to: '/invite' | '/partners' | '/admin' }[] = [
     { icon: 'gift-outline', label: 'Invite friends', value: '+10 GB each', to: '/invite' },
-    { icon: 'trending-up-outline', label: 'Affiliate program', value: '50%', to: '/partners' },
+    // Native: only an entry that opens the website, where the whole program lives (apply, dashboard, payouts).
+    { icon: 'trending-up-outline', label: 'Affiliate program', value: Platform.OS === 'web' ? '50%' : undefined, to: '/partners' },
     ...(admin ? [{ icon: 'shield-checkmark-outline' as const, label: 'Admin', to: '/admin' as const }] : []),
   ];
   return (
@@ -251,7 +255,13 @@ function EarnSection({ signedIn }: { signedIn: boolean }) {
       {rows.map((r, i) => (
         <View key={r.to}>
           {i > 0 && <View style={styles.divider} />}
-          <LinkRow icon={r.icon} label={r.label} value={r.value} valueColor={palette.accent} onPress={() => router.push((signedIn ? r.to : '/signin') as Href)} />
+          <LinkRow icon={r.icon} label={r.label} value={r.value} valueColor={palette.accent} onPress={() =>
+              r.to === '/partners' && Platform.OS !== 'web'
+                ? void Linking.openURL(`${WEB_URL || 'https://lens.instagrowapp.com'}/affiliates/`)
+                : router.push((signedIn ? r.to : '/signin') as Href)
+            }
+            external={r.to === '/partners' && Platform.OS !== 'web'}
+          />
         </View>
       ))}
     </Section>
