@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Capabilities, CameraDiagnostics, cameraDeviceReport, LensCameraHandle, LensCameraView, LensImaging, MediaInfo, PhotoResult } from '../../modules/lens-camera';
 import { exportVideoRetrying } from '@/lib/video-export';
+import { useKeepAwakeWhile } from '@/lib/keep-awake';
 import { selfTestHooks } from '../../modules/lens-device';
 import { buildInfo, buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, sendSelfTest } from '@/lib/diagnostics';
@@ -72,6 +73,9 @@ export default function SelfTestScreen() {
   const [report, setReport] = useState<SelfTestReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
+  const [running, setRunning] = useState(false);
+  // A run takes minutes: the phone's screen timeout would pause the camera mid-step (S8, dev-125).
+  useKeepAwakeWhile(running, 'selftest');
   /** Files kept for the later checks (editor render, trim export), deleted at the end. */
   const kept = useRef<{ photo?: string; portrait?: string; video?: string; shutter?: Record<string, string> }>({});
   /** Viewfinder fps of the plain back camera, to compare the live readers / motion buffer with. */
@@ -502,6 +506,7 @@ export default function SelfTestScreen() {
   const run = useCallback(async () => {
     if (started.current) return;
     started.current = true;
+    setRunning(true);
     setSteps([]);
     setReport(null);
     setError(null);
@@ -546,6 +551,7 @@ export default function SelfTestScreen() {
         selfTestHooks.finish();
       }
       started.current = false;
+      setRunning(false);
     }
   }, [applyProps, runStep, launch]);
 
