@@ -20,8 +20,17 @@
   block wiped: byte edits only, same pixels, same size (`exif-strip.ts`, made
   once at `d/<owner>/<id>/nogps.jpg (next to its previews)`, deleted with the account). Phone-made previews
   carry no metadata at all.
-- **Limits:** photos only (videos keep the position in the file's own metadata;
-  Lens doesn't read or wipe it yet); photos in the user's own storage get no copy
+- **Videos (2026-10-16):** the phone reads the position from the video's `moov`
+  box (`src/lib/mp4-location.ts`: Android `©xyz`, iPhone
+  `com.apple.quicktime.location.ISO6709`, 3GPP `loci`); live uploads send it
+  once the recording is finished; the backfill (`places-backfilled-v2`) also
+  covers videos. Shared without location, the recipient's video is a copy whose
+  location boxes are zero-filled `free` boxes (same size, same audio/video;
+  `infra/lambda/api/video-strip.ts`: only the bytes around them pass through the
+  Lambda, the rest is copied inside S3), made once at `d/<owner>/<id>/nogps.mp4`
+  and reused by every recipient. Streams never carry location
+  (`transcode.sh -map_metadata -1`). A video we can't read: stream/preview only.
+- **Limits:** photos in the user's own storage get no copy
   (recipients see the preview only, as before); HEIC/RAW originals with a position
   shared without location: preview only.
 

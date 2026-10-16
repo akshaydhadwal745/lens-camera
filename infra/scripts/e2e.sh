@@ -157,7 +157,11 @@ S5=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID2\"],\"to\":[\"$IB\"]}" | j
 S6=$(call POST /shares "$TA" -d "{\"mediaIds\":[\"$ID2\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId')
 [[ $(inid "$S6") == "" ]] && ok "blocked sender's share doesn't arrive"
 [[ $(call GET /shares/out "$TA" | j ".requests.find(r=>r.shareId==='$S6').status") == pending ]] && ok "A just sees it waiting (the block isn't revealed)"
+[[ $(call GET /shares/out "$TA" | j ".requests.find(r=>r.shareId==='$S6').mediaIds.length") -ge 1 ]] && ok "A's Sent list carries A's own item ids (People smart link)"
+[[ $(call GET /shares/in "$TB" | j ".requests.every(r=>r.mediaIds===undefined)") == true ]] && ok "… the inbox doesn't"
+[[ $(call GET /blocks "$TB" | j ".blocked.length===1 && o.blocked[0].id==='$IA' && !!o.blocked[0].name") == true ]] && ok "B's blocked list shows A by name"
 call DELETE "/blocks/$IA" "$TB" >/dev/null && ok "B unblocks A"
+[[ $(call GET /blocks "$TB" | j .blocked.length) == 0 ]] && ok "blocked list is empty again"
 [[ $(call GET /shared "$TB" | j .items.length) == 2 ]] && ok "accepted items stay through decline/block"
 
 # --- albums, shared albums, duplicate check (docs/design/organise-and-share.md) ---
@@ -212,6 +216,20 @@ SG2=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDG\"],\"to\":[\"$IB\"],\"in
 curl -sS -o "$TMP/shared-gps2.jpg" "$(call GET /shared "$TB" | j ".items.find(i=>i.id==='$IDG').url")"
 cmp -s "$TMP/shared-gps2.jpg" "$GPSF" && ok "with \"include location\" the recipient gets the original"
 call POST "/shares/out/$SG2/cancel" "$TC" >/dev/null
+# Videos: the position lives in the moov box (fixtures/gps.mp4: Chandigarh, 3GPP loci); shared without location = zeroed copy.
+GVF="$(dirname "$0")/fixtures/gps.mp4"; GVSIZE=$(stat -c %s "$GVF"); GVMD5=$(md5b64 "$GVF")
+IDV="$(node -p "Date.now().toString(36).padStart(8,'0')")-gpsvideo"
+R=$(call POST /media "$TC" -d "{\"id\":\"$IDV\",\"contentType\":\"video/mp4\",\"size\":$GVSIZE,\"kind\":\"video\",\"md5\":\"$GVMD5\",\"gps\":{\"lat\":30.7333,\"lng\":76.7794}}")
+curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: video/mp4' -H "content-md5: $GVMD5" --data-binary @"$GVF" -o /dev/null
+R=$(call POST "/media/$IDV/complete" "$TC"); [[ $(echo "$R" | j .media.place.city) == Chandigarh ]] && ok "video with a position gets its place"
+SV=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDV\"],\"to\":[\"$IB\"]}" | j '.requests[0].shareId'); call POST "/shares/in/$SV/accept" "$TB" >/dev/null
+curl -sS -o "$TMP/shared-gps.mp4" "$(call GET /shared "$TB" | j ".items.find(i=>i.id==='$IDV').url")"
+node -e "const b=require('fs').readFileSync('$TMP/shared-gps.mp4');process.exit(b.includes('loci')||b.length!==$GVSIZE||!b.includes('moov')?1:0)" && ok "recipient's video copy has the location zeroed (same size)" || fail "recipient video copy not location-free"
+call POST "/shares/out/$SV/cancel" "$TC" >/dev/null
+SV2=$(call POST /shares "$TC" -d "{\"mediaIds\":[\"$IDV\"],\"to\":[\"$IB\"],\"includeLocation\":true}" | j '.requests[0].shareId'); call POST "/shares/in/$SV2/accept" "$TB" >/dev/null
+curl -sS -o "$TMP/shared-gps2.mp4" "$(call GET /shared "$TB" | j ".items.find(i=>i.id==='$IDV').url")"
+cmp -s "$TMP/shared-gps2.mp4" "$GVF" && ok "with \"include location\" the recipient gets the original video"
+call POST "/shares/out/$SV2/cancel" "$TC" >/dev/null
 
 # --- Nearby on this Wi-Fi (step 3): codes only, names only for people who opted in ---
 [[ $(call POST /nearby/code "$TA" | j .code) == "" ]] && ok "not visible: no code to announce"

@@ -14,7 +14,7 @@ export default defineConfig({
   integrations: [
     sitemap({
       // Sign-in and the app are private; the 404 isn't a page.
-      filter: (page) => !/\/(signin|l|e|app)\//.test(page) && !page.endsWith('/404/'),
+      filter: (page) => !/\/(signin|l|e|u|app)\//.test(page) && !page.endsWith('/404/'),
       i18n: { defaultLocale: 'en', locales: { en: 'en-IN', hi: 'hi-IN' } },
     }),
   ],

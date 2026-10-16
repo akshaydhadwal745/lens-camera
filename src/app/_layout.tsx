@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LensImaging } from '../../modules/lens-camera';
 import { BrandIntro } from '@/components/BrandIntro';
+import { ConfirmHost } from '@/components/ConfirmSheet';
 import { ToastHost } from '@/components/Toast';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { identityChanged, startPush } from '@/lib/push';
@@ -65,6 +66,7 @@ export default function RootLayout() {
         <Stack.Screen name="place/[key]" />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="blocked" />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />
         <Stack.Screen name="camera-info" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lab" />
@@ -75,6 +77,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="l/[id]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="u/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="signin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="oauth" options={{ animation: 'none' }} />
         <Stack.Screen name="link" />
@@ -82,6 +85,7 @@ export default function RootLayout() {
       </Stack>
       <UpdateBanner />
       <ToastHost />
+      <ConfirmHost />
       {introVisible && <BrandIntro done={status !== 'booting'} onFinished={() => setIntroVisible(false)} />}
     </GestureHandlerRootView>
   );

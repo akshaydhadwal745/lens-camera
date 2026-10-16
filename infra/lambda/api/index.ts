@@ -23,7 +23,7 @@ import { HttpError, json, parseEvent, Res } from './lib';
 import { createSet, saveDiagnostics, saveProbe } from './lab';
 import { checkDuplicate, completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
-import { accept, cancel, decline, inbox, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
+import { accept, cancel, decline, inbox, listBlocked, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
 import { notificationPrefs, registerPush, unregisterPush } from './push';
 import { listPlaces, placeItems, setPlaces } from './places';
 import { nearbyCode, nearbyResolve, nearbySettings } from './nearby';
@@ -228,6 +228,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[1] === 'shares' && seg[2] === 'in' && seg.length === 5 && method === 'POST' && seg[4] === 'accept') return await accept(identity, seg[3], req);
     if (seg[1] === 'shares' && seg[2] === 'in' && seg.length === 5 && method === 'POST' && seg[4] === 'decline') return await decline(identity, seg[3], req);
     if (seg[1] === 'shares' && seg[2] === 'out' && seg.length === 5 && method === 'POST' && seg[4] === 'cancel') return await cancel(identity, seg[3]);
+    if (route === 'GET /blocks') return await listBlocked(identity);
     if (seg[1] === 'blocks' && seg.length === 3 && (method === 'POST' || method === 'DELETE')) return await setBlocked(identity, seg[2], method === 'POST');
     if (seg[1] === 'contacts' && seg.length === 3 && method === 'PUT') return await setTrusted(identity, seg[2], req);
     if (route === 'PUT /push') return await registerPush(identity, req);

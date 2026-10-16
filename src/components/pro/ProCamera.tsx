@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useIsFocused } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Accelerometer } from 'expo-sensors';
@@ -33,6 +33,7 @@ import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { reportCameraError, reportCameraReady, reportPreview } from '@/lib/diagnostics';
 import { centeredCrop, compact, EditRecipe, LOOKS, PORTRAIT_STYLES } from '@/lib/edits';
 import { formatDuration } from '@/lib/format';
+import { confirmDestructive, errorMessage, notify } from '@/lib/ui';
 import {
   AUTO_NIGHT_FRAMES,
   BUILT_IN_PRESETS,
@@ -471,7 +472,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         capture({ kind: 'photo', sourceUri: photo.uri, width: photo.width, height: photo.height, edit: recipe });
       }
     } catch (error) {
-      Alert.alert('Could not take photo', error instanceof Error ? error.message : String(error));
+      notify('Could not take photo', errorMessage(error), 'problem');
     } finally {
       startWaiters.current = startWaiters.current.filter((w) => w !== release);
       setProcessing(null);
@@ -527,7 +528,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       })
       .catch((error) => {
         live?.cancel();
-        Alert.alert('Recording failed', error instanceof Error ? error.message : String(error));
+        notify('Recording failed', errorMessage(error), 'problem');
       })
       .finally(() => {
         setRecording(false);
@@ -565,7 +566,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       })
       .catch((error) => {
         live?.cancel();
-        Alert.alert('Time-lapse', error instanceof Error ? error.message : String(error));
+        notify('Time-lapse', errorMessage(error), 'problem');
       })
       .finally(() => {
         setRecording(false);
@@ -583,7 +584,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     cam
       .takeVideoPhoto()
       .then((photo) => capture({ kind: 'photo', sourceUri: photo.uri, width: photo.width, height: photo.height, edit: captureRecipe(false) }))
-      .catch((error) => Alert.alert('Could not take photo', error instanceof Error ? error.message : String(error)));
+      .catch((error) => notify('Could not take photo', errorMessage(error), 'problem'));
   };
 
   /** Hold the shutter (Photo mode): burst until release; Lens picks the best shot, the rest stay one tap away. */
@@ -618,7 +619,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
         if (group) showNotice(`Burst of ${frames.length} · ${group.fixed === 1 ? 'a blink' : `${group.fixed} blinks`} fixed in the best shot`);
         else if (frames.length > 1) showNotice(`Burst of ${frames.length} · best shot in your roll`);
       })
-      .catch((error) => Alert.alert('Burst', error instanceof Error ? error.message : String(error)))
+      .catch((error) => notify('Burst', errorMessage(error), 'problem'))
       .finally(() => setBurstCount(null));
   };
   const endBurst = () => {
@@ -670,7 +671,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       for (const page of pages) capture({ kind: 'photo', sourceUri: page.uri, width: page.width, height: page.height });
       if (pages.length) showNotice(pages.length === 1 ? 'Scan saved' : `${pages.length} pages saved`);
     } catch (error) {
-      Alert.alert('Could not scan', error instanceof Error ? error.message : String(error));
+      notify('Could not scan', errorMessage(error), 'problem');
     }
   };
 
@@ -775,19 +776,11 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
     setNaming(false);
   };
 
-  const deletePreset = (preset: Preset) => {
-    Alert.alert(`Delete “${preset.name}”?`, undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          const next = presets.filter((p) => p.id !== preset.id);
-          setPresets(next);
-          savePresets(next);
-        },
-      },
-    ]);
+  const deletePreset = async (preset: Preset) => {
+    if (!(await confirmDestructive(`Delete “${preset.name}”?`, 'Your photos aren’t touched.'))) return;
+    const next = presets.filter((p) => p.id !== preset.id);
+    setPresets(next);
+    savePresets(next);
   };
 
   // ---------- Permissions ----------
@@ -910,7 +903,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
             onError={(e) => {
               reportCameraError(e.nativeEvent.fatal ? 'fallbackBasic' : 'cameraError', e.nativeEvent.message);
               if (e.nativeEvent.fatal && onUnavailable) onUnavailable(e.nativeEvent.message);
-              else Alert.alert('Camera', e.nativeEvent.message);
+              else notify('Camera', e.nativeEvent.message, 'problem');
             }}
             onDiagnostics={(e) => reportPreview(e.nativeEvent, s.position)}
             onRecordingAudio={(e) => setRecAudio(e.nativeEvent)}

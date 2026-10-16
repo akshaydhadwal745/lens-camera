@@ -1,9 +1,10 @@
 import { BatchGetCommand, BatchWriteCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 
 import { stripGps } from './exif-strip';
+import { stripVideoLocation } from './video-strip';
 import { ddb, decodeCursor, encodeCursor, env, HttpError, json, randomId, Req, Res, s3, signMediaUrl } from './lib';
 import { addMember, albumMediaIds, getAlbum, removeMember } from './albums';
 import { derivativeKey, MediaRecord, mediaKey, toClient } from './media';
@@ -282,11 +283,15 @@ export async function inbox(identity: Identity, req: Req): Promise<Res> {
   return json(200, { requests: out, pending: out.filter((r) => r.status === 'pending').length, cursor });
 }
 
-/** GET /v1/shares/out: what I shared, with each person's status. */
+/**
+ * GET /v1/shares/out: what I shared, with each person's status. My own item ids come
+ * along (not for albums: event albums hold other people's photos) so People on the
+ * phone can spot whose face fills the photos I send someone (smart link).
+ */
 export async function sent(identity: Identity, req: Req): Promise<Res> {
   const { items, cursor } = await list(identity, 'OUT#', req);
   const now = Date.now();
-  return json(200, { requests: items.map((r) => view(r, now)), cursor });
+  return json(200, { requests: items.map((r) => ({ ...view(r, now), mediaIds: r.albumId ? undefined : r.mediaIds })), cursor });
 }
 
 async function load(pk: string, sk: string): Promise<ShareRequest | undefined> {
@@ -389,6 +394,34 @@ export async function setBlocked(identity: Identity, userId: string, blocked: bo
   return json(200, { blocked });
 }
 
+/** GET /v1/blocks: people this identity blocked, newest first (Settings → Sharing → Blocked). */
+export async function listBlocked(identity: Identity): Promise<Res> {
+  const items: Record<string, any>[] = [];
+  let start: Record<string, any> | undefined;
+  do {
+    const page = await ddb.send(
+      new QueryCommand({
+        TableName: env.table,
+        KeyConditionExpression: 'pk = :p AND begins_with(sk, :b)',
+        ExpressionAttributeValues: { ':p': `D#${identity.id}`, ':b': 'B#' },
+        ExclusiveStartKey: start,
+      }),
+    );
+    items.push(...(page.Items ?? []));
+    start = page.LastEvaluatedKey;
+  } while (start);
+  // Blocks made with POST /blocks/:id carry no name: read it from the profile (gone = deleted account).
+  const unnamed = items.filter((x) => !x.name).map((x) => ({ pk: `D#${(x.sk as string).slice(2)}`, sk: 'PROFILE' }));
+  const names = new Map((await batchGet(unnamed)).map((p) => [(p.pk as string).slice(2), p.name as string]));
+  const blocked = items
+    .map((x) => {
+      const id = (x.sk as string).slice(2);
+      return { id, name: (x.name as string | undefined) ?? names.get(id) ?? null, at: (x.at as number | undefined) ?? 0 };
+    })
+    .sort((a, b) => b.at - a.at);
+  return json(200, { blocked });
+}
+
 /** PUT /v1/contacts/:userId {trusted}: "always accept from this person" on or off. */
 export async function setTrusted(identity: Identity, userId: string, req: Req): Promise<Res> {
   const contact = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${identity.id}`, sk: `C#${userId}` } }))).Item;
@@ -439,12 +472,13 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
 }
 
 /**
- * Location is private by default: a photo with a GPS position, shared without
+ * Location is private by default: a photo or video with a GPS position, shared without
  * "include location", reaches the recipient as a copy with the GPS block wiped
  * (same pixels, byte edits only; made once, next to its previews: d/<owner>/<id>/nogps.jpg).
  */
 async function withoutLocation<T extends { url?: string }>(s: Record<string, any>, owner: MediaRecord, client: T): Promise<T> {
   if (!owner.gps || s.withLocation || !client.url) return client;
+  if (owner.kind === 'video' && VIDEO_TYPES.has(owner.contentType)) return videoWithoutLocation(s, owner, client);
   if (owner.contentType !== 'image/jpeg') return { ...client, url: undefined }; // can't wipe it safely: preview only
   let key = s.strippedKey as string | undefined;
   if (!key) {
@@ -453,6 +487,30 @@ async function withoutLocation<T extends { url?: string }>(s: Record<string, any
     const bytes = new Uint8Array(await original.Body!.transformToByteArray());
     await s3.send(new PutObjectCommand({ Bucket: env.bucket, Key: key, Body: stripGps(bytes).bytes, ContentType: 'image/jpeg' }));
     await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: s.pk, sk: s.sk }, UpdateExpression: 'SET strippedKey = :k', ExpressionAttributeValues: { ':k': key } }));
+  }
+  return { ...client, url: await signMediaUrl(key) };
+}
+
+const VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime']);
+
+/**
+ * Videos: a copy with the location boxes zeroed (video-strip.ts), one per video
+ * (d/<owner>/<id>/nogps.<ext>, next to its previews), shared by every recipient.
+ * The stream never carries location (transcode.sh drops metadata).
+ */
+async function videoWithoutLocation<T extends { url?: string }>(s: Record<string, any>, owner: MediaRecord, client: T): Promise<T> {
+  let key = s.strippedKey as string | undefined;
+  if (key === 'none') return client; // checked before: the file itself has no location
+  if (!key) {
+    const candidate = `d/${s.ownerId}/${s.mediaId}/nogps.${owner.contentType === 'video/quicktime' ? 'mov' : 'mp4'}`;
+    const exists = await s3
+      .send(new HeadObjectCommand({ Bucket: env.bucket, Key: candidate }))
+      .then(() => true, () => false);
+    const result = exists ? 'copied' : await stripVideoLocation(env.bucket, owner.key, candidate, owner.size, owner.contentType);
+    if (result === 'unreadable') return { ...client, url: undefined }; // can't wipe it safely: stream/preview only
+    key = result === 'none' ? 'none' : candidate;
+    await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: s.pk, sk: s.sk }, UpdateExpression: 'SET strippedKey = :k', ExpressionAttributeValues: { ':k': key } }));
+    if (key === 'none') return client;
   }
   return { ...client, url: await signMediaUrl(key) };
 }

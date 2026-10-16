@@ -25,7 +25,8 @@ before; the server can't fetch those originals.
 ## What's made
 
 HLS with fMP4 segments of 4 s (keyframe every 2 s), H.264 High + AAC 128k
-(plays on every Android phone):
+(plays on every Android phone), with no metadata (no location; the owner's
+position is in Places):
 
 Up to the original's own resolution, never upscaled. The player picks the
 best version the connection carries; a slow connection drops to a lower one

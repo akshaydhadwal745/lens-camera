@@ -67,6 +67,8 @@ export default function ShareScreen() {
         setRecent(people);
         const pre = to ? people.find((c) => c.id === to) : undefined;
         if (pre) setChosen(new Map([[pre.id, pre]]));
+        // Not a contact yet (a "My Lens code" opened with the phone's camera, /u/<id>): exactly that person.
+        else if (to) api.lookupUser(to).then(({ user }) => setChosen(new Map([[user.id, user]])), () => {});
       })
       .catch(() => {});
   }, [to]);

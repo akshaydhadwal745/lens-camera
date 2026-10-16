@@ -13,7 +13,6 @@ import { router, useIsFocused } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Linking,
   Platform,
@@ -31,6 +30,7 @@ import { IconButton } from '@/components/IconButton';
 import { LiveUploadPill } from '@/components/LiveUploadPill';
 import { reportBasicPhoto } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/format';
+import { errorMessage, notify } from '@/lib/ui';
 import { useCameraKeepAwake } from '@/lib/keep-awake';
 import { capture as saveCapture, finishLiveUpload, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
 import { displayUri, newId } from '@/lib/types';
@@ -159,7 +159,7 @@ export function BasicCamera() {
         reportBasicPhoto(photo.width, photo.height);
       }
     } catch (error) {
-      Alert.alert('Could not take photo', String(error));
+      notify('Could not take photo', errorMessage(error), 'problem');
     } finally {
       setBusy(false);
       if (galleryAfterShot.current) {
@@ -192,7 +192,7 @@ export function BasicCamera() {
       }
     } catch (error) {
       live?.cancel();
-      Alert.alert('Recording failed', String(error));
+      notify('Recording failed', errorMessage(error), 'problem');
     } finally {
       setRecording(false);
     }
@@ -400,7 +400,7 @@ export function BasicCamera() {
               active={isFocused}
               mirror={facing === 'front'}
               onCameraReady={() => setReady(true)}
-              onMountError={(e) => Alert.alert('Camera error', e.message)}
+              onMountError={(e) => notify('Camera error', e.message, 'problem')}
             />
           )}
 

@@ -1,7 +1,10 @@
 // The GPS position a photo carries in its EXIF (written by the camera when
-// "Save location" is on), read from the first 128 KB of the JPEG. For Places
+// "Save location" is on), read from the first 128 KB of the JPEG; videos: the
+// moov box's location (src/lib/mp4-location.ts). For Places
 // (docs/design/organise-and-share.md, step 2). Null when there is none.
 import { File, FileMode } from 'expo-file-system';
+
+import { readMp4Location } from './mp4-location';
 
 const HEAD = 128 * 1024;
 
@@ -70,4 +73,30 @@ export function gpsOfFile(file: File): { lat: number; lng: number } | null {
   } catch {
     return null;
   }
+}
+
+/** GPS of a local MP4/MOV (the position "Save location" writes into a video), or null. */
+export async function gpsOfVideoFile(file: File): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const handle = file.open(FileMode.ReadOnly);
+    try {
+      const size = handle.size ?? file.size ?? 0;
+      const read = (offset: number, length: number) => {
+        handle.offset = offset;
+        return handle.readBytes(Math.max(0, Math.min(length, size - offset)));
+      };
+      return (await readMp4Location(read, size))?.gps ?? null;
+    } finally {
+      handle.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** The position a capture carries (photo EXIF or video metadata), or null. */
+export async function gpsOfCapture(file: File, kind: string, contentType: string): Promise<{ lat: number; lng: number } | null> {
+  if (kind === 'photo') return contentType === 'image/jpeg' ? gpsOfFile(file) : null;
+  if (kind === 'video') return /^video\/(mp4|quicktime)$/.test(contentType) ? gpsOfVideoFile(file) : null;
+  return null;
 }

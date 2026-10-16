@@ -8,7 +8,7 @@
 // rejects anything that arrives altered. Originals are never re-encoded.
 import { File, FileMode, Paths, UploadType } from 'expo-file-system';
 
-import { gpsOfFile } from './exif-gps';
+import { gpsOfCapture } from './exif-gps';
 import { api } from './api';
 import { captureFile, fileFor, fileSize } from './local-store';
 import { LocalEntry, RemoteMedia, StorageLocation } from './types';
@@ -126,8 +126,8 @@ export async function uploadEntry(
         }
       : undefined;
 
-  // Places: the position the camera wrote into the photo ("Save location" on); none otherwise.
-  const gps = entry.kind === 'photo' && entry.contentType === 'image/jpeg' ? gpsOfFile(source) : null;
+  // Places: the position the camera wrote into the photo or video ("Save location" on); none otherwise.
+  const gps = await gpsOfCapture(source, entry.kind, entry.contentType);
 
   const plan = await api.startUpload({
     md5: singleMd5,

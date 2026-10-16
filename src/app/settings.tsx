@@ -795,6 +795,8 @@ export default function SettingsScreen() {
               ) : null}
               <View style={styles.divider} />
               <LinkRow icon="swap-horizontal-outline" label="Requests and sent" onPress={() => router.push('/shares')} />
+              <View style={styles.divider} />
+              <LinkRow icon="hand-left-outline" label="Blocked people" onPress={() => router.push('/blocked')} />
             </Section>
 
             <Section title="Computers" footer="Use Lens on any computer: open lens.instagrowapp.com, click Sign in and scan the QR code. Only approve codes on a screen in front of you.">

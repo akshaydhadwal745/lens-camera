@@ -19,8 +19,15 @@ measured results: `docs/design/people.md`.
   joins that group again).
 - **"Is this Riya?"**: only about people you named, when a face is close but
   not certain (0.363–0.45). Yes moves just that face; No never asks again.
-- Lens account names stay random; linking a person to a Lens friend for share
-  suggestions comes with step 5.
+- Lens account names stay random. **Link to Lens friend** (person page) lets
+  Lens suggest "Share 8 photos from this week with Riya?" when Riya allows it.
+- **Smart link** ("Is this quiet-tiger-8703?" card at the top of People): when
+  one face group is in ≥ 60 % (and ≥ 3) of the photos with faces you shared with
+  one friend (accepted shares, last 150), with a clear lead over the next group.
+  A group that fills the photos of two or more friends (usually you) is left
+  out. Yes links; No never asks that pair again (`people-smart-link-asked` doc).
+  Code: `src/lib/people-smart-link.ts`; the Sent list (`GET /shares/out`) gives
+  the sender their own item ids for it (not for albums).
 
 ## How it works
 - `modules/lens-camera/android/.../people/`:

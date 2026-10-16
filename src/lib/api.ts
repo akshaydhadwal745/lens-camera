@@ -128,6 +128,8 @@ export type UploadPlan = PlanExtras &
   );
 export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
 /** Someone to share with: `account` = signed in (not a guest phone); `sharedBefore` = an accepted share before. */
+/** Settings → Blocked people; name is null when their account was deleted. */
+export type BlockedPerson = { id: string; name: string | null; at: number };
 export type Person = { id: string; name: string; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
 /** suggestMe: they let their friends' Lens suggest sharing with them (People). */
 export type Contact = Person & { lastSharedAt: number; trusted?: boolean; shares?: number; suggestMe?: boolean };
@@ -148,6 +150,8 @@ export type ShareRequest = {
   thumbs?: { id: string; kind: string; thumbUrl?: string }[];
   /** Set when a whole album is offered. */
   album?: { id: string; name: string };
+  /** Sent list only, not for albums: the sender's own item ids. */
+  mediaIds?: string[];
 };
 type Page<T> = { items: T[]; cursor: string | null };
 export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
@@ -323,6 +327,7 @@ export const api = {
   acceptShare: (id: string, alwaysAccept = false) => request<{ status: ShareStatus; count: number }>('POST', `/shares/in/${id}/accept`, { alwaysAccept }),
   declineShare: (id: string, block = false) => request<{ status: ShareStatus; blocked: boolean }>('POST', `/shares/in/${id}/decline`, { block }),
   cancelShare: (id: string) => request<{ status: ShareStatus }>('POST', `/shares/out/${id}/cancel`),
+  blocked: () => request<{ blocked: BlockedPerson[] }>('GET', '/blocks'),
   setBlocked: (userId: string, blocked: boolean) => request<{ blocked: boolean }>(blocked ? 'POST' : 'DELETE', `/blocks/${userId}`),
   setTrusted: (userId: string, trusted: boolean) => request<{ trusted: boolean }>('PUT', `/contacts/${userId}`, { trusted }),
   // Push notifications (FCM token per phone) and which kinds the user wants.

@@ -28,25 +28,36 @@ export function notify(title: string, message?: string, tone?: ToastMessage['ton
   else Alert.alert(title, message);
 }
 
-export function confirmDestructive(title: string, message: string, action = 'Delete'): Promise<boolean> {
-  if (isWeb) return Promise.resolve(window.confirm(`${title}\n${message}`));
-  return new Promise((resolve) =>
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-      { text: action, style: 'destructive', onPress: () => resolve(true) },
-    ]),
-  );
+export type ConfirmRequest = {
+  title: string;
+  message?: string;
+  options: { value: string; label: string; destructive?: boolean }[];
+  resolve: (value: string | null) => void;
+};
+let confirmListener: ((r: ConfirmRequest) => void) | null = null;
+
+/** The sheet host (src/components/ConfirmSheet.tsx, mounted once in the root layout). */
+export function onConfirm(listener: (r: ConfirmRequest) => void): () => void {
+  confirmListener = listener;
+  return () => {
+    if (confirmListener === listener) confirmListener = null;
+  };
 }
 
 /**
- * Asks the user to pick one of several actions; resolves to the chosen value,
- * or null if cancelled. Web falls back to a series of confirm() prompts.
+ * Asks the user to pick one of several actions, on Lens's own sheet; resolves to
+ * the chosen value, or null if cancelled. Without the host (very early in boot)
+ * it falls back to the system alert box (web: a series of confirm() prompts).
  */
 export function chooseAction<T extends string>(
   title: string,
   message: string,
   options: { value: T; label: string; destructive?: boolean }[],
 ): Promise<T | null> {
+  const listener = confirmListener;
+  if (listener) {
+    return new Promise((resolve) => listener({ title, message, options, resolve: (v) => resolve(v as T | null) }));
+  }
   if (isWeb) {
     for (const o of options) if (window.confirm(`${title}\n${message}\n\n${o.label}?`)) return Promise.resolve(o.value);
     return Promise.resolve(null);
@@ -61,6 +72,10 @@ export function chooseAction<T extends string>(
       { text: 'Cancel', style: 'cancel' as const, onPress: () => resolve(null) },
     ]),
   );
+}
+
+export async function confirmDestructive(title: string, message: string, action = 'Delete'): Promise<boolean> {
+  return (await chooseAction(title, message, [{ value: 'yes', label: action, destructive: true }])) === 'yes';
 }
 
 export function errorMessage(error: unknown): string {

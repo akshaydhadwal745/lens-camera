@@ -38,6 +38,7 @@ mixes four of the proposed app directions (design canvas, 2026-10-10):
 
 - `src/components/ui/Text.tsx` wraps `Text`/`TextInput`. Screens keep writing `fontWeight` and it picks the matching Geist file, since Android can't synthesise weights from one custom file. A style that names its own `fontFamily` (the mono presets) is left alone. Every screen imports `Text`/`TextInput` from there, not from `react-native`.
 - Older screens use `colors` from `src/lib/ui.ts`; those names now map onto the palette (`colors.link`, `colors.action` added).
+- **Messages and questions are Lens's own, never the system alert box:** `notify()` → the banner (`Toast.tsx`); `confirmDestructive()` / `chooseAction()` → the confirm sheet (`ConfirmSheet.tsx`, 2026-10-16): solid card from the bottom, title + message, full-width pill buttons (red-tinted for destructive, blue for others), Cancel last; back button or tap outside = cancel. Both hosts are mounted once in the root layout.
 - All of this is JS + font assets, so it ships by OTA to dev-41 (same runtime).
 
 ## Next native build

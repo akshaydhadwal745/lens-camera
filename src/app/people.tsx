@@ -10,7 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { clearFaceThumbs, FaceThumb } from '@/components/FaceThumb';
 import { Text } from '@/components/ui/Text';
+import { api } from '@/lib/api';
 import { peopleSupported, photoCount, turnPeopleOff, turnPeopleOn } from '@/lib/people';
+import { SmartLink, smartLinkAnswered, smartLinkSuggestion } from '@/lib/people-smart-link';
 import { font, palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 import { LensPeople, PeopleGroup, PeopleStatus } from '../../modules/lens-camera';
@@ -23,6 +25,7 @@ export default function PeopleScreen() {
   const [status, setStatus] = useState<PeopleStatus | null>(null);
   const [groups, setGroups] = useState<PeopleGroup[]>([]);
   const [asks, setAsks] = useState<Ask[]>([]);
+  const [smart, setSmart] = useState<SmartLink | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -35,6 +38,10 @@ export default function PeopleScreen() {
     const names = new Map(g.map((x) => [x.id, x.name]));
     const a = await LensPeople.asks(5);
     setAsks(a.map((x) => ({ ...x, name: names.get(x.groupId) ?? 'this person' })));
+    // Smart link: needs every group (also 1–2 photos) and the people you shared with.
+    const all = await LensPeople.groups(1, false);
+    const friends = await api.contacts().then((r) => r.contacts, () => []);
+    setSmart(await smartLinkSuggestion(all, friends));
   }, []);
 
   useFocusEffect(
@@ -66,12 +73,23 @@ export default function PeopleScreen() {
     clearFaceThumbs();
     setGroups([]);
     setAsks([]);
+    setSmart(null);
     await load();
   };
 
   const answer = async (a: Ask, yes: boolean) => {
     if (yes) await LensPeople?.confirm(a.faceId, a.groupId);
     else await LensPeople?.reject(a.faceId, a.groupId);
+    await load();
+  };
+
+  const answerSmart = async (link: SmartLink, yes: boolean) => {
+    smartLinkAnswered(link);
+    setSmart(null);
+    if (yes) {
+      await LensPeople?.setContact(link.groupId, link.friend.id);
+      notify('Linked', link.friend.suggestMe ? `Lens can now suggest sharing their photos with ${link.friend.name}.` : `When ${link.friend.name} turns on suggestions, Lens can suggest sharing their photos.`);
+    }
     await load();
   };
 
@@ -137,6 +155,24 @@ export default function PeopleScreen() {
               : `${status.ownPhotos} PHOTOS · ALL GROUPED`}
           </Text>
 
+          {smart ? (
+            <View style={styles.ask}>
+              <FaceThumb faceId={smart.coverFaceId} size={48} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.askText}>Is this {smart.friend.name}?</Text>
+                <Text style={styles.askHint}>
+                  In {smart.shared} of the {smart.withFace} photos with people you shared with them. Link so Lens can suggest shares.
+                </Text>
+              </View>
+              <Pressable style={styles.askButton} onPress={() => void answerSmart(smart, false)} accessibilityRole="button">
+                <Text style={styles.askButtonText}>No</Text>
+              </Pressable>
+              <Pressable style={[styles.askButton, { backgroundColor: colors.action }]} onPress={() => void answerSmart(smart, true)} accessibilityRole="button">
+                <Text style={styles.askButtonText}>Yes</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {asks.map((a) => (
             <View key={a.faceId} style={styles.ask}>
               <FaceThumb faceId={a.faceId} size={48} />
@@ -201,6 +237,7 @@ const styles = StyleSheet.create({
   statusLine: { color: '#86868B', fontSize: 11, letterSpacing: 1, fontFamily: font.mono, marginBottom: 14 },
   ask: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#1C1C1E', borderRadius: 20, padding: 12, marginBottom: 10 },
   askText: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
+  askHint: { color: '#86868B', fontSize: 12, lineHeight: 16, marginTop: 2 },
   askButton: { minHeight: 40, minWidth: 56, paddingHorizontal: 14, borderRadius: 980, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center' },
   askButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 6 },

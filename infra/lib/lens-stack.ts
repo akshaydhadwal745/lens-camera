@@ -184,6 +184,11 @@ function handler(event) {
     req.uri = '/e/index.html';
     return req;
   }
+  // "My Lens code" links (/u/<id>) scanned with a phone's own camera.
+  if (uri.indexOf('/u/') === 0) {
+    req.uri = '/u/index.html';
+    return req;
+  }
   if (uri.charAt(uri.length - 1) === '/') {
     req.uri = uri + 'index.html';
     return req;

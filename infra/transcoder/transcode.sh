@@ -58,7 +58,8 @@ done
 FILTER=${FILTER%;}
 
 mkdir -p out
-ffmpeg -hide_banner -loglevel warning -y -i in.media -filter_complex "$FILTER" "${ARGS[@]}" \
+# -map_metadata -1: streams carry no location (or other tags); the owner's position lives in Places.
+ffmpeg -hide_banner -loglevel warning -y -i in.media -map_metadata -1 -filter_complex "$FILTER" "${ARGS[@]}" \
   $( [[ -n $HAS_AUDIO ]] && echo "-c:a aac -b:a 128k -ac 2" ) \
   -pix_fmt yuv420p -force_key_frames "expr:gte(t,n_forced*2)" -sc_threshold 0 \
   -f hls -hls_time 4 -hls_playlist_type vod -hls_segment_type fmp4 -hls_flags independent_segments \

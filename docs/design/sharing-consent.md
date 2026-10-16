@@ -93,5 +93,10 @@ decline + block, unblock; account deletion with an accepted share.
 
 ## Later
 
-Unblock list in Settings; "leave" a contact; a web page for `/u/<id>` codes
-scanned with the phone's own camera.
+"Leave" a contact.
+
+Done 2026-10-16: **Blocked people** (Settings → Sharing; `GET /v1/blocks`,
+Unblock asks first) and **`/u/<id>`** (a "My Lens code" scanned with the phone's
+own camera: App Link → `src/app/u/[id].tsx` shows the person → pick photos →
+share screen with them chosen; without Lens, `site/src/pages/u/` offers Open in
+Lens / Get the app).

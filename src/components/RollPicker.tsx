@@ -22,9 +22,11 @@ type Props = {
   onClose: () => void;
   /** Resolves when they're added. */
   onPick: (ids: string[]) => Promise<void>;
+  /** Most items in one pick (a share request takes 50). */
+  max?: number;
 };
 
-export function RollPicker({ visible, title, exclude, onClose, onPick }: Props) {
+export function RollPicker({ visible, title, exclude, onClose, onPick, max = MAX }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const gallery = useStore(selectGallery);
@@ -45,7 +47,7 @@ export function RollPicker({ visible, title, exclude, onClose, onPick }: Props) 
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(g.id)) next.delete(g.id);
-      else if (next.size < MAX) next.add(g.id);
+      else if (next.size < max) next.add(g.id);
       return next;
     });
   };
