@@ -111,7 +111,7 @@ export type AffiliateDashboard = {
 export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
 export type FeedbackKind = 'review' | 'issue' | 'idea' | 'other';
 export type FeedbackItem = {
-  id: string; reference: string; kind: FeedbackKind; rating?: number; message: string; email?: string; accountEmail?: string;
+  id: string; reference: string; kind: FeedbackKind; source?: string; rating?: number; message: string; email?: string; accountEmail?: string;
   device?: Record<string, string>; at: number; status: string; emailStatus?: string;
 };
 export type ContactMessage = { id: string; reference: string; name: string; email: string; topic: string; message: string; at: number; status: string };
@@ -348,7 +348,7 @@ export const api = {
   referrals: () => request<Referrals>('GET', '/referrals'),
   claimReferral: (code: string) => request<{ program: string; state: string }>('POST', '/referrals/claim', { code }),
   // Settings → Feedback: stored, then emailed to the team (infra/lambda/api/feedback.ts).
-  sendFeedback: (body: { kind: FeedbackKind; rating?: number; message: string; email?: string; includeDevice: boolean; device?: Record<string, string> }) =>
+  sendFeedback: (body: { kind: FeedbackKind; source?: string; rating?: number; message: string; email?: string; includeDevice: boolean; device?: Record<string, string> }) =>
     request<{ received: boolean; reference: string }>('POST', '/feedback', body),
   affiliate: () => request<AffiliateDashboard>('GET', '/affiliates/me'),
   applyAffiliate: (body: { name: string; channels: string; audience?: string; pan?: string; upi?: string; agree: boolean }) =>

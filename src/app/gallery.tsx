@@ -49,6 +49,8 @@ import { formatBytes, formatEta, formatRate } from '@/lib/format';
 import { keepOnly, prefetchPhoto, prefetchVideo } from '@/lib/video-prefetch';
 import { confirmAndDelete } from '@/lib/delete-flow';
 import { loadDoc, saveDoc } from '@/lib/local-store';
+import { nextPrompt, PromptKind } from '@/lib/review-prompt';
+import { FeedbackPrompt } from '@/components/FeedbackPrompt';
 import { isBurstExtra } from '@/lib/edits';
 import { providerInfo } from '@/lib/storage/providers';
 import { GalleryItem } from '@/lib/types';
@@ -190,6 +192,20 @@ export default function GalleryScreen() {
   const name = useStore((s) => s.identity?.name);
   const remoteLoading = useStore((s) => s.remoteLoading);
   const sharedLoading = useStore((s) => s.sharedLoading);
+
+  // The feedback loop (src/lib/review-prompt.ts): decided once when the roll opens, only when calm.
+  const [prompt, setPrompt] = useState<PromptKind | null>(null);
+  const calm = !pending && !failed && online && !isGuestBanner();
+  function isGuestBanner() {
+    return isGuest && !isWeb && !nudgeDismissed && mine.length >= 3;
+  }
+  useEffect(() => {
+    if (isWeb || prompt || !calm) return;
+    const t = setTimeout(() => setPrompt(nextPrompt({ photos: mine.length, calm })), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calm]);
+
 
   const [tab, setTab] = useState<Tab>(params.tab === 'shared' ? 'shared' : 'mine');
   const [selecting, setSelecting] = useState(false);
@@ -418,6 +434,8 @@ export default function GalleryScreen() {
         <Ionicons name="close" size={16} color="#86868B" />
       </Pressable>
     </View>
+  ) : prompt && tab === 'mine' && !selecting ? (
+    <FeedbackPrompt kind={prompt} onClose={() => setPrompt(null)} />
   ) : null;
 
   const rollStatus = getRollStatus();

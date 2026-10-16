@@ -1,3 +1,4 @@
+import { recordAppOpen } from '@/lib/review-prompt';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -34,6 +35,8 @@ export default function RootLayout() {
     LensImaging?.requestMlModules?.().catch(() => {});
     // People on: keep its charging-only grouping job scheduled.
     peopleAppStart();
+    // Feedback loop: counts app opens (src/lib/review-prompt.ts).
+    recordAppOpen();
     void startPush();
   }, []);
 

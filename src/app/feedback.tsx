@@ -38,10 +38,12 @@ function deviceDetails() {
 
 export default function FeedbackScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ kind?: string }>();
+  // From the roll's feedback card: ?kind=review&rating=4&source=prompt, ?kind=idea&source=prompt-missing.
+  const params = useLocalSearchParams<{ kind?: string; rating?: string; source?: string }>();
+  const source = params.source === 'prompt' || params.source === 'prompt-missing' ? params.source : 'settings';
   const accountEmail = useStore((s) => s.identity?.email ?? '');
   const [kind, setKind] = useState<FeedbackKind>(KINDS.some((k) => k.kind === params.kind) ? (params.kind as FeedbackKind) : 'review');
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(() => Math.min(5, Math.max(0, Math.round(Number(params.rating) || 0))));
   const [message, setMessage] = useState('');
   const [wantReply, setWantReply] = useState(false);
   const [email, setEmail] = useState(accountEmail);
@@ -51,6 +53,15 @@ export default function FeedbackScreen() {
   const [sent, setSent] = useState<string | null>(null);
 
   const current = KINDS.find((k) => k.kind === kind)!;
+  // The question follows the answer: happy → what's missing; unhappy → what went wrong.
+  const prompt =
+    source === 'prompt-missing' && kind === 'idea'
+      ? 'What’s one thing Lens is missing? A feature, a setting, anything.'
+      : kind === 'review' && rating >= 4
+        ? 'Glad you like it! Anything you’re missing? (optional)'
+        : kind === 'review' && rating > 0
+          ? 'Sorry about that. What’s missing or not working well?'
+          : current.prompt;
   const canSend = !busy && (kind === 'review' ? rating > 0 : message.trim().length >= 10);
 
   const send = async () => {
@@ -59,6 +70,7 @@ export default function FeedbackScreen() {
     try {
       const r = await api.sendFeedback({
         kind,
+        source,
         rating: kind === 'review' ? rating : undefined,
         message: message.trim(),
         email: wantReply ? email.trim() : undefined,
@@ -128,7 +140,7 @@ export default function FeedbackScreen() {
           style={styles.message}
           value={message}
           onChangeText={setMessage}
-          placeholder={current.prompt}
+          placeholder={prompt}
           placeholderTextColor="#636366"
           multiline
           maxLength={4000}

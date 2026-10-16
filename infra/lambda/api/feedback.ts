@@ -45,6 +45,8 @@ export async function submitFeedback(identity: Identity, req: Req): Promise<Res>
   if (clean(req.body?.website, 200)) return json(200, { received: true, reference: `F-${randomId(4).toUpperCase()}` });
 
   const kind: Kind = FEEDBACK_KINDS.includes(req.body?.kind) ? req.body.kind : 'other';
+  // Where it came from: Settings, or the roll's feedback card (rating / "what's missing?").
+  const source = ['settings', 'prompt', 'prompt-missing'].includes(req.body?.source) ? (req.body.source as string) : 'settings';
   const ratingRaw = req.body?.rating;
   const rating = ratingRaw === undefined || ratingRaw === null ? undefined : Number(ratingRaw);
   if (rating !== undefined && !(Number.isInteger(rating) && rating >= 1 && rating <= 5)) throw new HttpError(400, 'Rating must be 1 to 5 stars');
@@ -66,6 +68,7 @@ export async function submitFeedback(identity: Identity, req: Req): Promise<Res>
     sk: `${String(at).padStart(15, '0')}#${id}`,
     reference,
     kind,
+    source,
     ...(rating !== undefined ? { rating } : {}),
     message,
     ...(email ? { email } : {}),
@@ -100,7 +103,7 @@ async function emailFeedback(f: Record<string, any>): Promise<void> {
   const label = KIND_LABEL[f.kind as Kind] ?? 'Feedback';
   const body = [
     `${label}${f.rating ? ` ${stars(f.rating)} (${f.rating}/5)` : ''}`,
-    `Reference: ${f.reference}`,
+    `Reference: ${f.reference} · from ${f.source === 'prompt' ? 'the in-app rating card' : f.source === 'prompt-missing' ? 'the “what’s missing?” card' : 'Settings → Feedback'}`,
     `From: ${f.email ? `${f.email} (wants a reply)` : f.accountEmail ? `${f.accountEmail} (account email, no reply asked)` : 'guest, no email'}`,
     `Device: ${device}`,
     '',
@@ -183,6 +186,7 @@ export async function listFeedback(req: Req): Promise<Res> {
       id: f.sk,
       reference: f.reference,
       kind: f.kind,
+      source: f.source,
       rating: f.rating,
       message: f.message,
       email: f.email,

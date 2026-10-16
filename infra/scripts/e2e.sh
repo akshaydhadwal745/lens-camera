@@ -550,6 +550,9 @@ FB=$(call GET "/admin/feedback" "$TADM")
 FID=$(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.id")
 [[ $(call POST "/admin/feedback/$(node -p "encodeURIComponent('$FID')")/done" "$TADM" | j .status) == done ]] && ok "feedback marked done"
 [[ $(call GET "/admin/feedback" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "feedback list hidden from normal accounts"
+R=$(call POST /feedback "$TA" -d '{"kind":"review","rating":2,"source":"prompt","message":"[e2e] from the rating card"}'); FREF3=$(echo "$R" | j .reference)
+[[ $(call GET "/admin/feedback" "$TADM" | j ".feedback.find(f=>f.reference==='$FREF3')?.source") == prompt ]] && ok "rating-card answers are tagged with their source"
+[[ $(call GET "/admin/feedback" "$TADM" | j ".feedback.find(f=>f.reference==='$FREF2')?.source") == settings ]] && ok "Settings feedback is tagged settings"
 # --- contact form (stored + emailed to the team) ---
 R=$(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d "{\"name\":\"E2E\",\"email\":\"c$(date +%s%N)@e2e.lens.invalid\",\"topic\":\"support\",\"message\":\"Automated test message, please ignore.\"}")
 CREF=$(echo "$R" | j .reference)

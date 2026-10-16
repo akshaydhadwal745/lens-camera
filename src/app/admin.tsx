@@ -148,6 +148,7 @@ function Feedback() {
             </Text>
             <Text style={styles.small} selectable>
               {f.email ? `${f.email} (wants a reply)` : f.accountEmail ?? 'guest'} · {f.reference} · {new Date(f.at).toLocaleString()}
+              {f.source && f.source !== 'settings' ? ` · from ${f.source === 'prompt' ? 'rating card' : '“missing?” card'}` : ''}
               {f.emailStatus === 'pending' ? ' · email pending' : ''}
             </Text>
             {f.device && (
