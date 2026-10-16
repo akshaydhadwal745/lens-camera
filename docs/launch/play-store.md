@@ -60,7 +60,7 @@ receive data at the user's direction (Play doesn't count either as sharing).
 
 | Play data type | Collected | Optional? | Purposes | Notes |
 |---|---|---|---|---|
-| Personal info → Name | Yes | Optional | Account management | Random Lens name; affiliates' legal name |
+| Personal info → Name | Yes | Optional | Account management, App functionality | Random Lens name; optional real name (Settings → Your name, shown to share partners; Google sign-in name kept only as a suggestion); affiliates' legal name |
 | Personal info → Email address | Yes | Optional | Account management, App functionality | Email sign-in code, Google sign-in |
 | Personal info → User IDs | Yes | Required | App functionality, Account management | Lens account id (guest), Google account id |
 | Personal info → Other info | Yes | Optional | Account management | Affiliates only: PAN (encrypted, tax law) |

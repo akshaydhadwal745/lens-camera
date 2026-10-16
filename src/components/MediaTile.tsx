@@ -8,6 +8,7 @@ import { formatDuration } from '@/lib/format';
 import { font } from '@/lib/theme';
 import { useStore } from '@/lib/store';
 import { displayUri, GalleryItem } from '@/lib/types';
+import { who } from '@/lib/names';
 
 type Props = {
   item: GalleryItem;
@@ -89,7 +90,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
       onLongPress={() => onLongPress(item)}
       onPressIn={onPressIn ? () => onPressIn(item) : undefined}
       accessibilityRole="button"
-      accessibilityLabel={`${item.kind === 'video' ? 'Video' : 'Photo'}${item.ownerName ? ` from ${item.ownerName}` : ''}`}
+      accessibilityLabel={`${item.kind === 'video' ? 'Video' : 'Photo'}${item.ownerName ? ` from ${who({ name: item.ownerName, realName: item.ownerRealName })}` : ''}`}
       accessibilityState={{ selected }}
       style={{ width: size, height: size, borderRadius: 4, overflow: 'hidden' }}
     >
@@ -111,7 +112,7 @@ export const MediaTile = memo(function MediaTile({ item, size, selecting, select
       {item.edit?.burst?.pick && item.edit.burst.count > 1 && !selecting && <Text style={styles.burst}>⧉ {item.edit.burst.count}</Text>}
       {showOwner && item.ownerName && (
         <Text style={styles.owner} numberOfLines={1}>
-          {item.ownerName}
+          {who({ name: item.ownerName, realName: item.ownerRealName })}
         </Text>
       )}
       {!showOwner && <SyncBadge item={item} />}

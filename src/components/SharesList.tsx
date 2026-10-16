@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/Text';
 import { api, ShareRequest, ShareStatus } from '@/lib/api';
+import { handleOf, who } from '@/lib/names';
 import { askForNotifications } from '@/lib/push';
 import { palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -88,8 +89,8 @@ export function SharesList({ initial }: { initial: 'in' | 'out' }) {
   const takeBack = async (r: ShareRequest) => {
     const revoke = r.status === 'accepted';
     const ok = await confirmDestructive(
-      revoke ? `Revoke from ${r.to.name}?` : `Cancel share to ${r.to.name}?`,
-      revoke ? `${r.to.name} loses access to the ${whatText(r)} right away.` : `${r.to.name} won't be able to accept it.`,
+      revoke ? `Revoke from ${who(r.to)}?` : `Cancel share to ${who(r.to)}?`,
+      revoke ? `${who(r.to)} loses access to the ${whatText(r)} right away.` : `${who(r.to)} won't be able to accept it.`,
       revoke ? 'Revoke' : 'Cancel share',
     );
     if (!ok) return;
@@ -150,9 +151,10 @@ export function SharesList({ initial }: { initial: 'in' | 'out' }) {
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>
-                    {tab === 'in' ? `${person.name} wants to share ${whatText(r)}` : `${whatText(r)} to ${person.name}`}
+                    {tab === 'in' ? `${who(person)} wants to share ${whatText(r)}` : `${whatText(r)} to ${who(person)}`}
                   </Text>
                   <Text style={styles.meta}>
+                    {handleOf(person) ? `${handleOf(person)} · ` : ''}
                     {person.account ? 'Signed-in account' : 'Guest phone'} · {ago(r.createdAt, now)}
                     {waiting && tab === 'in' ? ` · expires in ${Math.max(1, Math.ceil((r.expiresAt - now) / 86400000))} d` : ''}
                   </Text>

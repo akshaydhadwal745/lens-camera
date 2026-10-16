@@ -9,6 +9,16 @@ after reinstalling.
 server `infra/lambda/api/auth.ts`, `identity.ts` (sessions), `oauth.ts`
 (`googleLoginClaims`). Web sign-in is out of scope for now.
 
+## Names
+
+- **Lens name** (`quiet-tiger-8703`): given at setup, unique, never changes; your
+  identity for codes, search and links.
+- **Your name** (optional, Settings → Sharing → Your name; also asked once before
+  the first share, pre-filled from Google sign-in): what friends see, with the
+  Lens name under it. Not unique, not searchable, shown only to people you share
+  with, who share with you, who scan your code, and album members. Clear it any
+  time. `PUT /v1/me {realName}`; code in `infra/lambda/api/real-names.ts`.
+
 ## Signing in
 
 | Method | Where | How |

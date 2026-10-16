@@ -21,6 +21,7 @@ import {
 } from './lib';
 import { suggestFlags } from './people';
 import { randomName } from './names';
+import { realNames } from './real-names';
 import { attribute } from './attribution';
 import { onAttributed, rewardsHook } from './referrals';
 
@@ -30,6 +31,10 @@ export type Identity = {
   usedBytes: number;
   tokenId: string;
   email?: string;
+  /** Optional name friends see next to the Lens name (real-names.ts). */
+  realName?: string;
+  /** From Google sign-in: only a suggestion for the Settings field. */
+  googleName?: string;
   bonusBytes?: number;
   /** May use /admin: email in ADMIN_EMAILS, or `admin` set on the profile directly in the database. */
   admin?: boolean;
@@ -256,19 +261,22 @@ export async function authenticate(req: Req): Promise<Identity> {
     bonusBytes: profile.Item.bonusBytes ?? 0,
     tokenId,
     email: profile.Item.email,
+    realName: profile.Item.realName,
+    googleName: profile.Item.googleName,
     admin:
       profile.Item.admin === true || (!!profile.Item.email && env.adminEmails.includes(String(profile.Item.email).toLowerCase())) || undefined,
   };
 }
 
 export function me(identity: Identity): Res {
-  const { tokenId: _session, ...profile } = identity;
-  return json(200, { ...profile, quotaBytes: quotaFor(identity), signedInQuotaBytes: env.quotaBytes });
+  const { tokenId: _session, googleName, ...profile } = identity;
+  return json(200, { ...profile, suggestedName: googleName, quotaBytes: quotaFor(identity), signedInQuotaBytes: env.quotaBytes });
 }
 
 /** GET /v1/users?q=prefix: search identities by name prefix. */
 /** Profile + relation facts the share screens show so the sender picks the right person. */
-async function describeUsers(identity: Identity, ids: string[]) {
+/** Real names: always for a scanned code (they hold your code); in search only for people you shared with. */
+async function describeUsers(identity: Identity, ids: string[], realName: 'always' | 'known' = 'known') {
   if (!ids.length) return [];
   const keys = ids.flatMap((id) => [{ pk: `D#${id}`, sk: 'PROFILE' }, { pk: `D#${identity.id}`, sk: `C#${id}` }]);
   const result = await ddb.send(new BatchGetCommand({ RequestItems: { [env.table]: { Keys: keys } } }));
@@ -280,6 +288,7 @@ async function describeUsers(identity: Identity, ids: string[]) {
     .map((id) => ({
       id,
       name: profile.get(id)!.name as string,
+      realName: realName === 'always' || contact.has(id) ? ((profile.get(id)!.realName as string | undefined) ?? null) : null,
       // Signed in with email/Google (vs a guest phone): one more hint it's the right person.
       account: !!profile.get(id)!.email,
       sharedBefore: contact.has(id),
@@ -318,7 +327,7 @@ export async function searchUsers(identity: Identity, req: Req): Promise<Res> {
 export async function lookupUser(identity: Identity, id: string): Promise<Res> {
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(id) || id === identity.id) throw new HttpError(404, 'Not found');
   await rateLimit(`users#${identity.id}`, 300, 'Too many searches. Try again later.');
-  const [user] = await describeUsers(identity, [id]);
+  const [user] = await describeUsers(identity, [id], 'always');
   if (!user) throw new HttpError(404, 'Not found');
   return json(200, { user });
 }
@@ -344,8 +353,8 @@ export async function contacts(identity: Identity): Promise<Res> {
     .sort((a, b) => b.lastSharedAt - a.lastSharedAt)
     .slice(0, 50);
   // People: which friends said their Lens friends' phones may suggest sharing with them.
-  const suggest = await suggestFlags(identity, list.map((c) => c.id));
-  return json(200, { contacts: list.map((c) => ({ ...c, suggestMe: suggest.has(c.id) })) });
+  const [suggest, real] = await Promise.all([suggestFlags(identity, list.map((c) => c.id)), realNames(list.map((c) => c.id))]);
+  return json(200, { contacts: list.map((c) => ({ ...c, realName: real.get(c.id) ?? null, suggestMe: suggest.has(c.id) })) });
 }
 
 // ---------- Pairing codes (current web sign-in) ----------

@@ -6,7 +6,8 @@ import { ddb, env, json, randomId, rateLimit, Req, Res } from './lib';
 // Nearby Lens users on the same Wi-Fi (docs/design/organise-and-share.md, step 3).
 // Phones announce only a short-lived random code over mDNS; this API is the only
 // place a code turns into a display name, and only for people who turned
-// "Visible to nearby Lens users" on (PROFILE.nearbyVisible). Network presence
+// "Visible to nearby Lens users" on (PROFILE.nearbyVisible). Real names only for
+// people you already shared with (real-names.ts). Network presence
 // alone proves nothing: a code is valid 15 minutes and tied to a signed-in session.
 //   NB#<code> CODE { identityId, ttl }   (DynamoDB TTL removes it)
 
@@ -67,6 +68,6 @@ export async function nearbyResolve(identity: Identity, req: Req): Promise<Res> 
   const people = ids
     .map((id) => ({ id, p: has(`D#${id}`, 'PROFILE') }))
     .filter(({ id, p }) => p?.nearbyVisible === true && !has(`D#${identity.id}`, `B#${id}`) && !has(`D#${id}`, `B#${identity.id}`))
-    .map(({ id, p }) => ({ id, name: p!.name as string, account: !!p!.email, sharedBefore: !!has(`D#${identity.id}`, `C#${id}`), nearby: true }));
+    .map(({ id, p }) => ({ id, name: p!.name as string, realName: has(`D#${identity.id}`, `C#${id}`) ? ((p!.realName as string | undefined) ?? null) : null, account: !!p!.email, sharedBefore: !!has(`D#${identity.id}`, `C#${id}`), nearby: true }));
   return json(200, { people });
 }

@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/Text';
 import { api, Person } from '@/lib/api';
 import { useStore } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
+import { handleOf, who } from '@/lib/names';
 
 const NO_PICKS = new Set<string>();
 
@@ -33,7 +34,7 @@ export default function PersonCodeScreen() {
   }, [identity, id, mine]);
 
   const facts = person
-    ? [person.account ? 'Signed-in account' : 'Guest phone', person.sharedBefore ? 'Shared before' : 'New to you'].join(' · ')
+    ? [handleOf(person), person.account ? 'Signed-in account' : 'Guest phone', person.sharedBefore ? 'Shared before' : 'New to you'].filter(Boolean).join(' · ')
     : '';
 
   return (
@@ -63,9 +64,9 @@ export default function PersonCodeScreen() {
         ) : (
           <>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{person.name.slice(0, 1).toUpperCase()}</Text>
+              <Text style={styles.avatarText}>{who(person).slice(0, 1).toUpperCase()}</Text>
             </View>
-            <Text style={styles.lead}>{person.name}</Text>
+            <Text style={styles.lead}>{who(person)}</Text>
             <Text style={styles.hint}>{facts}</Text>
             <Pressable style={styles.primary} onPress={() => setPicking(true)} accessibilityRole="button">
               <Text style={styles.primaryText}>Pick photos to share</Text>
@@ -77,7 +78,7 @@ export default function PersonCodeScreen() {
       {person ? (
         <RollPicker
           visible={picking}
-          title={`Share with ${person.name}`}
+          title={`Share with ${who(person)}`}
           exclude={NO_PICKS}
           max={50}
           onClose={() => setPicking(false)}

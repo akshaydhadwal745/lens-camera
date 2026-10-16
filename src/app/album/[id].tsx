@@ -16,6 +16,7 @@ import { refreshShared, selectGallery, selectShared, useStore } from '@/lib/stor
 import { palette } from '@/lib/theme';
 import type { GalleryItem } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
+import { who } from '@/lib/names';
 
 const GAP = 3;
 
@@ -202,7 +203,7 @@ export default function AlbumScreen() {
               {sharedWithMe
                 ? `${isEvent ? 'Event by' : 'Shared by'} ${params.ownerName ?? 'a friend'}`
                 : members.length
-                  ? `Shared with ${members.map((m) => m.name ?? 'someone').join(', ')}`
+                  ? `Shared with ${members.map((m) => who(m)).join(', ')}`
                   : `${items?.length ?? 0} item${items?.length === 1 ? '' : 's'}`}
             </Text>
           ) : null}

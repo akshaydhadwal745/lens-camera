@@ -14,6 +14,7 @@ import { api, ShareRequest } from '@/lib/api';
 import { refreshShared } from '@/lib/store';
 import { palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
+import { handleOf, who } from '@/lib/names';
 
 export default function ShareRequestScreen() {
   const insets = useSafeAreaInsets();
@@ -46,7 +47,7 @@ export default function ShareRequestScreen() {
       const res = await api.acceptShare(r.shareId, always);
       // The Shared tab reads the store: load the new items before going there.
       await refreshShared();
-      notify('Accepted', `${res.count} item${res.count === 1 ? '' : 's'} from ${r.from.name} ${res.count === 1 ? 'is' : 'are'} in your Shared tab.`);
+      notify('Accepted', `${res.count} item${res.count === 1 ? '' : 's'} from ${who(r.from)} ${res.count === 1 ? 'is' : 'are'} in your Shared tab.`);
       router.replace({ pathname: '/gallery', params: { tab: 'shared' } });
     } catch (e) {
       notify('Could not accept', errorMessage(e));
@@ -58,8 +59,8 @@ export default function ShareRequestScreen() {
     if (!r) return;
     if (block) {
       const ok = await confirmDestructive(
-        `Block ${r.from.name}?`,
-        `You won't get shares from ${r.from.name} again. They aren't told. You can unblock later.`,
+        `Block ${who(r.from)}?`,
+        `You won't get shares from ${who(r.from)} again. They aren't told. You can unblock later.`,
         'Decline and block',
       );
       if (!ok) return;
@@ -92,9 +93,10 @@ export default function ShareRequestScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 140, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
           <Text style={styles.headline}>
-            {r.from.name} wants to share {whatText(r)} with you
+            {who(r.from)} wants to share {whatText(r)} with you
           </Text>
           <Text style={styles.meta}>
+            {handleOf(r.from) ? `${handleOf(r.from)} · ` : ''}
             {r.from.account ? 'Signed-in account' : 'Guest phone'} · {r.knownSender ? 'You accepted from them before' : 'First time sharing with you'}
           </Text>
           {!pending ? <Text style={[styles.note, { color: palette.accent }]}>{STATUS_LABEL[r.status]}</Text> : null}
@@ -112,7 +114,7 @@ export default function ShareRequestScreen() {
           ) : pending ? (
             <View style={styles.hidden}>
               <Ionicons name="eye-off-outline" size={28} color="#86868B" />
-              <Text style={styles.hiddenText}>Previews are hidden because this is someone new. Look only if you expect photos from {r.from.name}.</Text>
+              <Text style={styles.hiddenText}>Previews are hidden because this is someone new. Look only if you expect photos from {who(r.from)}.</Text>
               <Pressable style={styles.secondary} onPress={() => void showPreviews()} disabled={busy !== null}>
                 {busy === 'previews' ? <ActivityIndicator color="#fff" /> : <Text style={styles.secondaryText}>Show previews</Text>}
               </Pressable>
@@ -122,7 +124,7 @@ export default function ShareRequestScreen() {
           {pending ? (
             <View style={styles.alwaysRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.alwaysTitle}>Always accept from {r.from.name}</Text>
+                <Text style={styles.alwaysTitle}>Always accept from {who(r.from)}</Text>
                 <Text style={styles.meta}>Their next shares go straight to your Shared tab (you can turn this off later).</Text>
               </View>
               <Switch value={always} onValueChange={setAlways} />
@@ -139,7 +141,7 @@ export default function ShareRequestScreen() {
             {busy === 'accept' ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Accept</Text>}
           </Pressable>
           <Pressable onPress={() => void decline(true)} disabled={busy !== null} hitSlop={8} style={styles.blockLink}>
-            <Text style={styles.blockText}>Decline and block {r?.from.name}</Text>
+            <Text style={styles.blockText}>Decline and block {who(r?.from, '')}</Text>
           </Pressable>
         </View>
       ) : null}

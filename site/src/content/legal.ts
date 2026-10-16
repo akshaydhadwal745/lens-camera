@@ -15,7 +15,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '15 October 2026', hi: '15 अक्टूबर 2026' },
+  updated: { en: '16 October 2026', hi: '16 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -37,8 +37,9 @@ export const privacy: Record<Lang, LegalDoc> = {
           head: ['Data', 'Why we need it', 'How long we keep it'],
           rows: [
             ['A random Lens name (like "quiet-tiger-8703")', 'To identify your account and let friends find you when you share', 'Until you delete your account'],
+            ['Your name, if you add one (Settings → Your name; optional)', 'Shown next to your Lens name to people you share with, who share with you, or who scan your Lens code, so they recognise you. It is never searchable and isn’t shown to strangers who only search a Lens name', 'Until you remove it or delete your account'],
             ['Your email address (if you sign in with email or Google)', 'To sign you in with one-time codes and to recognise your account on new devices', 'Until you delete your account'],
-            ['Your Google account ID (if you sign in with Google)', 'To sign you in with Google. Google also sends your name and profile photo; we do not store them', 'Until you delete your account'],
+            ['Your Google account ID (if you sign in with Google)', 'To sign you in with Google. Google also sends your name and profile photo: we keep the name only to suggest it in Settings → Your name (no one else sees it unless you save it there) and do not store the photo', 'Until you delete your account'],
             ['Photos and videos you back up, and their metadata (for example date, camera model and, if your camera recorded it, location)', 'To store, show, share and stream your library, the core of Lens', 'Until you delete them (see Trash and Archive below) or your account'],
             ['Thumbnails, previews, edit settings, portrait outlines and streaming copies', 'To make browsing fast and show your edits on every device', 'Previews/edits: as long as the photo. Streaming copies: 90 days after last made'],
             ['Who you share items with', 'To show shared items to them', 'Until you or they remove the share'],
@@ -140,8 +141,9 @@ export const privacy: Record<Lang, LegalDoc> = {
           head: ['डेटा', 'क्यों ज़रूरी है', 'कितने समय रखते हैं'],
           rows: [
             ['एक रैंडम Lens नाम (जैसे "quiet-tiger-8703")', 'आपका अकाउंट पहचानने और शेयर करते समय दोस्तों को आपको ढूँढने देने के लिए', 'अकाउंट डिलीट करने तक'],
+            ['आपका नाम, अगर आप जोड़ें (Settings → Your name; वैकल्पिक)', 'आपके Lens नाम के साथ उन लोगों को दिखता है जिनसे आप शेयर करते हैं, जो आपसे शेयर करते हैं, या जो आपका Lens कोड स्कैन करते हैं, ताकि वे आपको पहचान सकें। इसे कभी सर्च नहीं किया जा सकता और सिर्फ़ Lens नाम सर्च करने वाले अनजान लोगों को नहीं दिखता', 'जब तक आप इसे हटा न दें या अकाउंट डिलीट न करें'],
             ['आपका ईमेल (ईमेल या Google से साइन इन करने पर)', 'एक बार के कोड से साइन इन और नए डिवाइस पर आपका अकाउंट पहचानने के लिए', 'अकाउंट डिलीट करने तक'],
-            ['आपकी Google अकाउंट ID (Google से साइन इन करने पर)', 'Google से साइन इन के लिए। Google आपका नाम और प्रोफ़ाइल फ़ोटो भी भेजता है; हम उन्हें स्टोर नहीं करते', 'अकाउंट डिलीट करने तक'],
+            ['आपकी Google अकाउंट ID (Google से साइन इन करने पर)', 'Google से साइन इन के लिए। Google आपका नाम और प्रोफ़ाइल फ़ोटो भी भेजता है: नाम हम सिर्फ़ Settings → Your name में सुझाने के लिए रखते हैं (जब तक आप वहाँ सेव न करें, किसी और को नहीं दिखता), फ़ोटो स्टोर नहीं करते', 'अकाउंट डिलीट करने तक'],
             ['आपकी बैकअप की गई फ़ोटो और वीडियो, और उनका मेटाडेटा (जैसे तारीख़, कैमरा मॉडल और, अगर कैमरे ने रिकॉर्ड की हो, लोकेशन)', 'आपकी लाइब्रेरी स्टोर करने, दिखाने, शेयर और स्ट्रीम करने के लिए, यही Lens का मूल काम है', 'जब तक आप उन्हें डिलीट न करें (नीचे ट्रैश और आर्काइव देखें) या अकाउंट'],
             ['थंबनेल, प्रीव्यू, एडिट सेटिंग, पोर्ट्रेट आउटलाइन और स्ट्रीमिंग कॉपी', 'ब्राउज़िंग तेज़ करने और हर डिवाइस पर आपके एडिट दिखाने के लिए', 'प्रीव्यू/एडिट: फ़ोटो जितने समय। स्ट्रीमिंग कॉपी: आख़िरी बार बनने के 90 दिन बाद तक'],
             ['आप किसके साथ शेयर करते हैं', 'शेयर की गई चीज़ें उन्हें दिखाने के लिए', 'जब तक आप या वे शेयर न हटाएँ'],

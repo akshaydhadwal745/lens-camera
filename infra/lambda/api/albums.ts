@@ -3,6 +3,7 @@ import { BatchGetCommand, BatchWriteCommand, DeleteCommand, GetCommand, PutComma
 import { Identity } from './identity';
 import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res } from './lib';
 import { MediaRecord, mediaKey, toClient } from './media';
+import { realNames } from './real-names';
 
 // Albums (docs/design/organise-and-share.md). A photo can be in several albums;
 // deleting an album never deletes photos. Records:
@@ -185,6 +186,7 @@ export async function refresh(ownerId: string, albumId: string) {
 export async function listAlbums(identity: Identity): Promise<Res> {
   const [mine, shared] = await Promise.all([queryAll(`D#${identity.id}`, 'AL#'), queryAll(`D#${identity.id}`, 'SA#')]);
   const albums = await Promise.all((mine as Album[]).sort((a, b) => b.updatedAt - a.updatedAt).map((a) => view(identity, a)));
+  const real = await realNames(shared.map((s) => s.ownerId as string));
   return json(200, {
     albums,
     shared: shared
@@ -194,6 +196,7 @@ export async function listAlbums(identity: Identity): Promise<Res> {
         name: s.name as string,
         ownerId: s.ownerId as string,
         ownerName: s.ownerName as string,
+        ownerRealName: real.get(s.ownerId as string) ?? null,
         at: s.at as number,
         // Joined through an event link: members can add their photos.
         ...(typeof s.shareId === 'string' && s.shareId.startsWith('ev-') ? { event: true } : {}),
@@ -357,7 +360,8 @@ export async function albumDetail(identity: Identity, albumId: string): Promise<
         ...(it.by !== identity.id ? { addedBy: { id: it.by, name: names.get(it.by) } } : {}),
       })),
   );
-  return json(200, { album: await view(identity, album), items, members: members.map((m) => ({ id: m.memberId, name: m.name, shareId: m.shareId })) });
+  const real = await realNames(members.map((m) => m.memberId));
+  return json(200, { album: await view(identity, album), items, members: members.map((m) => ({ id: m.memberId, name: m.name, realName: real.get(m.memberId) ?? null, shareId: m.shareId })) });
 }
 
 /** DELETE /v1/albums/:id: the album goes, the photos stay; members lose the album's items. */

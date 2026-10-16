@@ -283,5 +283,10 @@ export async function googleLoginClaims(identity: Identity | null, req: Req) {
   if (!validIssuer || claims.aud !== clientId || Number(claims.exp) * 1000 < Date.now() || !claims.sub) {
     throw new HttpError(401, 'Google sign-in could not be verified');
   }
-  return { sub: String(claims.sub), email: claims.email as string | undefined, emailVerified: claims.email_verified === true };
+  return {
+    sub: String(claims.sub),
+    email: claims.email as string | undefined,
+    emailVerified: claims.email_verified === true,
+    name: typeof claims.name === 'string' ? claims.name : undefined,
+  };
 }

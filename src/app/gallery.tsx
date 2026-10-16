@@ -56,6 +56,7 @@ import { providerInfo } from '@/lib/storage/providers';
 import { GalleryItem } from '@/lib/types';
 import { font, palette, type as typeStyle } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
+import { who } from '@/lib/names';
 
 const isWeb = Platform.OS === 'web';
 const GAP = 4;
@@ -547,7 +548,7 @@ export default function GalleryScreen() {
         <Pressable style={styles.nearbyStrip} onPress={() => setSelecting(true)} accessibilityRole="button">
           <Ionicons name="wifi" size={16} color={palette.accent} />
           <Text style={styles.nearbyText} numberOfLines={1}>
-            {nearby.length === 1 ? `${nearby[0].name} is nearby` : `${nearby[0].name} and ${nearby.length - 1} more nearby`}
+            {nearby.length === 1 ? `${who(nearby[0])} is nearby` : `${who(nearby[0])} and ${nearby.length - 1} more nearby`}
           </Text>
           <Text style={styles.nearbyAction}>Pick photos</Text>
         </Pressable>

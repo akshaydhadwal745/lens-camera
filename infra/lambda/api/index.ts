@@ -23,6 +23,7 @@ import { HttpError, json, parseEvent, Res } from './lib';
 import { createSet, saveDiagnostics, saveProbe } from './lab';
 import { checkDuplicate, completeExternal, completeUpload, listMedia, partUrls, previewsUploaded, startUpload, uploadedParts } from './media';
 import { commitEdit, startEdit } from './edits';
+import { setRealName } from './real-names';
 import { accept, cancel, decline, inbox, listBlocked, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
 import { notificationPrefs, registerPush, unregisterPush } from './push';
 import { listPlaces, placeItems, setPlaces } from './places';
@@ -105,6 +106,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     const identity = await authenticate(req);
 
     if (route === 'GET /me') return me(identity);
+    if (route === 'PUT /me') return await setRealName(identity, req);
     if (route === 'DELETE /account') return await requestAccountDeletion(identity, req);
     if (route === 'POST /auth/email/start') return await startEmail(identity, req);
     if (route === 'POST /auth/email/verify') return await verifyEmail(identity, req);

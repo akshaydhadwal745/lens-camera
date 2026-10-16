@@ -80,6 +80,18 @@ $0.001 per user who opts in.
 - **A group's name is a private label the user types** ("Mom", "Riya"), stored
   only in the on-phone face database, like a phone contact name. Unnamed groups
   just show the face.
+- **Real names (user, 2026-10-16: "we must have entry to real name"; "our name
+  is core identity but they can give their name as well in settings"):** the
+  Lens name stays the unique identity; each person may add **Your name**
+  (Settings → Sharing, or once before the first share, pre-filled from the
+  Google sign-in name). Shown as the title with the Lens name under it ("Riya
+  Sharma · quiet-tiger-8703"), so the smart-link card reads "Is this Riya
+  Sharma?". Not unique (two Riya Sharmas are told apart by the Lens name), never
+  searchable; visible to share partners, people who scan your code, event/album
+  members, not to strangers searching a Lens name or seeing you nearby.
+  Server: `infra/lambda/api/real-names.ts` (`PUT /me {realName}`, `realName`
+  next to every `name`); app: `src/lib/names.ts` (`who`, `handleOf`),
+  `src/components/RealNameSheet.tsx`.
 - **Lens account names stay random** (`quiet-tiger-8703`) and matter only for
   sharing: "Link to a Lens friend" picks from people you already shared with,
   scanned ("My Lens code") or saw nearby, so nobody types a random name. The

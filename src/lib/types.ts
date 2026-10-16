@@ -82,6 +82,7 @@ export interface TrashItem extends RemoteMedia {
 export interface SharedMedia extends RemoteMedia {
   ownerId: string;
   ownerName: string;
+  ownerRealName?: string | null;
   /** Shared as part of this album (shared albums). */
   albumId?: string;
   /** Whose album that is (event albums hold several people's photos). */
@@ -181,6 +182,7 @@ export interface GalleryItem {
   /** Present for items shared with me. */
   ownerId?: string;
   ownerName?: string;
+  ownerRealName?: string | null;
   /** Shared with me as part of this album. */
   albumId?: string;
   /** Whose album that is (an event album holds several people's photos). */

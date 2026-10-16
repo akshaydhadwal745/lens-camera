@@ -6,11 +6,16 @@ import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api, Person } from '@/lib/api';
+import { handleOf, who } from '@/lib/names';
 import { onPersonPicked } from '@/lib/person-code';
 import { askForNotifications } from '@/lib/push';
 import { useNearbyPeople } from '@/lib/nearby';
 import { queueShare, selectGallery, useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
+import { RealNameSheet } from '@/components/RealNameSheet';
+import { loadDoc, saveDoc } from '@/lib/local-store';
+
+const NAME_ASKED_DOC = 'real-name-asked';
 
 function Avatar({ name }: { name: string }) {
   // Deterministic color from the name.
@@ -25,6 +30,7 @@ function Avatar({ name }: { name: string }) {
 /** What tells look-alike names apart: signed-in account vs guest phone, and whether you've shared before. */
 function PersonFacts({ person }: { person: Person }) {
   const facts = [
+    handleOf(person),
     person.account === undefined ? null : person.account ? 'Signed-in account' : 'Guest phone',
     person.sharedBefore || person.lastSharedAt ? 'Shared before' : person.account === undefined ? null : 'New to you',
   ].filter(Boolean);
@@ -53,6 +59,14 @@ export default function ShareScreen() {
   const [chosen, setChosen] = useState<Map<string, Person>>(new Map());
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Asked once, before the first share: the name friends see next to the Lens name.
+  const [askName, setAskName] = useState<{ suggestion: string } | null>(null);
+  const [namePrompt, setNamePrompt] = useState(false);
+  useEffect(() => {
+    if (loadDoc<boolean>(NAME_ASKED_DOC, false)) return;
+    api.me().then((r) => (r.realName ? saveDoc(NAME_ASKED_DOC, true) : setAskName({ suggestion: r.suggestedName ?? '' })), () => {});
+  }, []);
+  const review = () => (askName ? setNamePrompt(true) : setConfirming(true));
   // Location stays private by default: recipients get photos without the GPS position.
   const [includeLocation, setIncludeLocation] = useState(false);
 
@@ -123,10 +137,11 @@ export default function ShareScreen() {
         ? await api.shareAlbum(album, to, includeLocation)
         : ready.length
           ? await api.share(ready, to, includeLocation)
-          : { shared: 0, recipients: [...chosen.values()].map((p) => p.name), requests: [] };
+          : { shared: 0, recipients: [...chosen.values()].map((p) => who(p)), requests: [] };
       const requests = result.requests ?? [];
-      const waiting = requests.filter((r) => r.status === 'pending').map((r) => r.name);
-      const auto = requests.filter((r) => r.status === 'accepted').map((r) => r.name);
+      const shownName = (r: { id: string; name: string }) => who(chosen.get(r.id) ?? r);
+      const waiting = requests.filter((r) => r.status === 'pending').map(shownName);
+      const auto = requests.filter((r) => r.status === 'accepted').map(shownName);
       const items = album ? `the album “${albumName ?? 'Album'}”` : `${result.shared} item${result.shared === 1 ? '' : 's'}`;
       notify(
         'Sent',
@@ -168,7 +183,7 @@ export default function ShareScreen() {
         <Text style={styles.title}>
           {album ? `Share “${albumName ?? 'Album'}”` : `Send ${count} item${count === 1 ? '' : 's'}`}
         </Text>
-        <Pressable onPress={() => setConfirming(true)} disabled={!chosen.size || !count || sending} hitSlop={10} style={styles.headerButton}>
+        <Pressable onPress={review} disabled={!chosen.size || !count || sending} hitSlop={10} style={styles.headerButton}>
           {sending ? (
             <ActivityIndicator color={colors.link} />
           ) : (
@@ -207,7 +222,7 @@ export default function ShareScreen() {
         <View style={styles.chips}>
           {[...chosen.values()].map((p) => (
             <Pressable key={p.id} onPress={() => toggle(p)} style={styles.chip}>
-              <Text style={styles.chipText}>{p.name}</Text>
+              <Text style={styles.chipText}>{who(p)}</Text>
               <Ionicons name="close" size={14} color="#000" />
             </Pressable>
           ))}
@@ -221,9 +236,9 @@ export default function ShareScreen() {
             const on = chosen.has(p.id);
             return (
               <Pressable key={p.id} onPress={() => toggle(p)} style={styles.row} accessibilityState={{ selected: on }}>
-                <Avatar name={p.name} />
+                <Avatar name={who(p)} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{p.name}</Text>
+                  <Text style={styles.name}>{who(p)}</Text>
                   <PersonFacts person={p} />
                 </View>
                 <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? colors.link : '#636366'} />
@@ -251,9 +266,9 @@ export default function ShareScreen() {
           const on = chosen.has(item.id);
           return (
             <Pressable onPress={() => toggle(item)} style={styles.row} accessibilityState={{ selected: on }}>
-              <Avatar name={item.name} />
+              <Avatar name={who(item)} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.name}</Text>
+                <Text style={styles.name}>{who(item)}</Text>
                 <PersonFacts person={item} />
               </View>
               {item.exact ? <Text style={styles.exact}>Exact</Text> : null}
@@ -262,6 +277,21 @@ export default function ShareScreen() {
           );
         }}
       />
+
+      {namePrompt && askName ? (
+        <RealNameSheet
+          lensName={myName ?? ''}
+          initial={askName.suggestion}
+          title="What name should friends see?"
+          skipLabel="Skip"
+          onDone={() => {
+            saveDoc(NAME_ASKED_DOC, true);
+            setAskName(null);
+            setNamePrompt(false);
+            setConfirming(true);
+          }}
+        />
+      ) : null}
 
       {/* Last look before anything is sent: exactly who, and what. */}
       <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
@@ -272,9 +302,9 @@ export default function ShareScreen() {
             </Text>
             {[...chosen.values()].map((p) => (
               <View key={p.id} style={styles.sheetRow}>
-                <Avatar name={p.name} />
+                <Avatar name={who(p)} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{p.name}</Text>
+                  <Text style={styles.name}>{who(p)}</Text>
                   <PersonFacts person={p} />
                 </View>
               </View>

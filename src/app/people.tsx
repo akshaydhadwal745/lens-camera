@@ -16,6 +16,7 @@ import { SmartLink, smartLinkAnswered, smartLinkSuggestion } from '@/lib/people-
 import { font, palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 import { LensPeople, PeopleGroup, PeopleStatus } from '../../modules/lens-camera';
+import { handleOf, who } from '@/lib/names';
 
 type Ask = { faceId: number; groupId: number; photoId: string; name: string };
 
@@ -88,7 +89,7 @@ export default function PeopleScreen() {
     setSmart(null);
     if (yes) {
       await LensPeople?.setContact(link.groupId, link.friend.id);
-      notify('Linked', link.friend.suggestMe ? `Lens can now suggest sharing their photos with ${link.friend.name}.` : `When ${link.friend.name} turns on suggestions, Lens can suggest sharing their photos.`);
+      notify('Linked', link.friend.suggestMe ? `Lens can now suggest sharing their photos with ${who(link.friend)}.` : `When ${who(link.friend)} turns on suggestions, Lens can suggest sharing their photos.`);
     }
     await load();
   };
@@ -159,9 +160,9 @@ export default function PeopleScreen() {
             <View style={styles.ask}>
               <FaceThumb faceId={smart.coverFaceId} size={48} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.askText}>Is this {smart.friend.name}?</Text>
+                <Text style={styles.askText}>Is this {who(smart.friend)}?</Text>
                 <Text style={styles.askHint}>
-                  In {smart.shared} of the {smart.withFace} photos with people you shared with them. Link so Lens can suggest shares.
+                  {handleOf(smart.friend) ? `${handleOf(smart.friend)} · ` : ''}In {smart.shared} of the {smart.withFace} photos with people you shared with them. Link so Lens can suggest shares.
                 </Text>
               </View>
               <Pressable style={styles.askButton} onPress={() => void answerSmart(smart, false)} accessibilityRole="button">

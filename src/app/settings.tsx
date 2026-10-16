@@ -44,6 +44,7 @@ import {
 import { loadSettings, setCameraOption } from '@/lib/pro-camera';
 import { font, palette, type as typeStyle } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
+import { RealNameSheet } from '@/components/RealNameSheet';
 
 const isWeb = Platform.OS === 'web';
 // Same units as everywhere else (1 GB = 1024³ bytes; quotas are set that way, so 100 GB shows as 100).
@@ -408,6 +409,19 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (nearbySupported) api.nearbySettings().then((r) => setNearbyVisible(r.visible), () => {});
   }, []);
+  // Your name: shown to friends next to the Lens name (optional; src/components/RealNameSheet.tsx).
+  const [realName, setRealName] = useState<string | null>(null);
+  const [suggestedName, setSuggestedName] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  useEffect(() => {
+    api.me().then(
+      (r) => {
+        setRealName(r.realName ?? null);
+        setSuggestedName(r.suggestedName ?? '');
+      },
+      () => {},
+    );
+  }, []);
   // People: may friends' phones suggest sharing photos of me with me? (off by default)
   const [suggestMe, setSuggestMe] = useState(false);
   useEffect(() => {
@@ -495,6 +509,16 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
 
+      {editingName && identity ? (
+        <RealNameSheet
+          lensName={identity.name}
+          initial={realName ?? suggestedName}
+          onDone={(name, saved) => {
+            if (saved) setRealName(name);
+            setEditingName(false);
+          }}
+        />
+      ) : null}
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
         {/* Design A: who you are + your space, in one card. */}
         <View style={styles.accountCard}>
@@ -505,14 +529,14 @@ export default function SettingsScreen() {
               accessibilityLabel={`You are ${identity.name}. Tap to copy your name`}
             >
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initials(identity.name || identity.email)}</Text>
+                <Text style={styles.avatarText}>{initials(realName || identity.name || identity.email)}</Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.name} numberOfLines={1}>
-                  {identity.name || identity.email || 'Lens'}
+                  {realName || identity.name || identity.email || 'Lens'}
                 </Text>
                 <Text style={styles.muted} numberOfLines={1}>
-                  {identity.email ?? 'Guest · photos tied to this phone'}
+                  {[realName ? identity.name : null, identity.email ?? 'Guest · photos tied to this phone'].filter(Boolean).join(' · ')}
                 </Text>
               </View>
               <Ionicons name="copy-outline" size={16} color={palette.dim} />
@@ -749,7 +773,13 @@ export default function SettingsScreen() {
 
             {Platform.OS === 'android' && identity ? <NotificationsSection /> : null}
 
-            <Section title="Sharing" footer="Friends scan your code to share with exactly you. You accept each share before it reaches your Shared tab, and you can cancel or revoke what you send.">
+            <Section title="Sharing" footer="Your Lens name is your identity; your name is shown next to it to people you share with. Friends scan your code to share with exactly you. You accept each share before it reaches your Shared tab, and you can cancel or revoke what you send.">
+              {identity ? (
+                <>
+                  <LinkRow icon="person-outline" label="Your name" value={realName ?? 'Add'} valueColor={realName ? undefined : palette.link} onPress={() => setEditingName(true)} />
+                  <View style={styles.divider} />
+                </>
+              ) : null}
               <LinkRow icon="qr-code-outline" label="My Lens code" onPress={() => router.push('/my-code')} />
               {nearbySupported ? (
                 <>

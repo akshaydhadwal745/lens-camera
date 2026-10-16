@@ -196,6 +196,15 @@ call POST "/shares/in/$SR/accept" "$TB" >/dev/null
 
 # --- Places + private location (docs/design/organise-and-share.md step 2) ---
 C=$(curl -sS -X POST "$API/devices"); TC=$(echo "$C" | j .token)
+# Real names: optional, next to the unique Lens name; never searchable by strangers.
+[[ $(call PUT /me "$TA" -d '{"realName":"  Asha   Verma\u0007 "}' | j .realName) == "Asha Verma" ]] && ok "A sets a real name (cleaned)"
+[[ $(call GET /me "$TA" | j .realName) == "Asha Verma" ]] && ok "… /me returns it"
+[[ $(call GET /contacts "$TB" | j ".contacts.find(c=>c.id==='$IA').realName") == "Asha Verma" ]] && ok "B (shared with A) sees A's real name"
+[[ $(call GET "/users?q=$NA" "$TC" | j ".users.find(u=>u.id==='$IA').realName") == "" ]] && ok "a stranger's search shows only the Lens name"
+[[ $(call GET "/users/$IA" "$TC" | j .user.realName) == "Asha Verma" ]] && ok "a scanned code shows the real name"
+[[ $(call PUT /me "$TB" -d '{"realName":"Asha Verma"}' | j .realName) == "Asha Verma" ]] && ok "two people may have the same real name"
+call PUT /me "$TB" -d '{"realName":null}' >/dev/null
+[[ $(call PUT /me "$TA" -d '{"realName":""}' | j .realName) == "" && $(call GET /me "$TA" | j .realName) == "" ]] && ok "A clears it"
 GPSF="$(dirname "$0")/fixtures/gps.jpg"; GSIZE=$(stat -c %s "$GPSF"); GMD5=$(md5b64 "$GPSF")
 IDG="$(node -p "Date.now().toString(36).padStart(8,'0')")-gpsplace"
 R=$(call POST /media "$TC" -d "{\"id\":\"$IDG\",\"contentType\":\"image/jpeg\",\"size\":$GSIZE,\"kind\":\"photo\",\"md5\":\"$GMD5\",\"gps\":{\"lat\":30.741,\"lng\":76.7833}}")

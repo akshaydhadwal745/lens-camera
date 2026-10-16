@@ -16,6 +16,7 @@ import { palette } from '@/lib/theme';
 import type { GalleryItem } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 import { LensPeople, PeopleGroup } from '../../../modules/lens-camera';
+import { handleOf, who } from '@/lib/names';
 
 const GAP = 3;
 
@@ -147,7 +148,7 @@ export default function PersonScreen() {
                 <Pressable style={styles.action} onPress={() => setLinking(true)} accessibilityRole="button">
                   <Ionicons name="link-outline" size={15} color="#fff" />
                   <Text style={styles.actionText} numberOfLines={1}>
-                    {friend ? friend.name : 'Link to Lens friend'}
+                    {friend ? who(friend) : 'Link to Lens friend'}
                   </Text>
                 </Pressable>
                 {others.length ? (
@@ -169,7 +170,7 @@ export default function PersonScreen() {
                 >
                   <Ionicons name="paper-plane-outline" size={18} color="#fff" />
                   <Text style={styles.suggestText}>
-                    Share {photoCount(suggestion.length)} from this week with {group.name ?? friend.name}?
+                    Share {photoCount(suggestion.length)} from this week with {group.name ?? who(friend)}?
                   </Text>
                 </Pressable>
               ) : null}
@@ -223,9 +224,12 @@ export default function PersonScreen() {
                     accessibilityRole="button"
                   >
                     <Ionicons name={f.id === group?.contactId ? 'checkmark-circle' : 'person-circle-outline'} size={30} color={f.id === group?.contactId ? colors.action : '#86868B'} />
-                    <Text style={styles.mergeName} numberOfLines={1}>
-                      {f.name}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mergeName} numberOfLines={1}>
+                        {who(f)}
+                      </Text>
+                      {handleOf(f) ? <Text style={styles.meta}>{handleOf(f)}</Text> : null}
+                    </View>
                     {f.suggestMe ? <Text style={styles.meta}>suggestions on</Text> : null}
                   </Pressable>
                 ))

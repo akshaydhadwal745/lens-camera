@@ -129,7 +129,7 @@ function VideoPage({
 
 function SyncLine({ item }: { item: GalleryItem }) {
   const transfer = useStore((s) => s.transfers[item.id]);
-  if (item.ownerName) return <Text style={styles.sub}>From {item.ownerName}</Text>;
+  if (item.ownerName) return <Text style={styles.sub}>From {item.ownerRealName ? `${item.ownerRealName} · ${item.ownerName}` : item.ownerName}</Text>;
   if (item.sync === 'uploading' && transfer) {
     const pct = transfer.total ? Math.round((transfer.sent / transfer.total) * 100) : 0;
     const extra = [transfer.rate > 0 ? formatRate(transfer.rate) : '', transfer.recording ? 'recording' : formatEta(transfer.total - transfer.sent, transfer.rate)]

@@ -347,6 +347,7 @@ export function selectShared(s: State): GalleryItem[] {
     edit: m.edit,
     ownerId: m.ownerId,
     ownerName: m.ownerName,
+    ownerRealName: m.ownerRealName,
     albumId: m.albumId,
     albumOwnerId: m.albumOwnerId,
   }));

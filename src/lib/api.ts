@@ -129,15 +129,15 @@ export type UploadPlan = PlanExtras &
 export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
 /** Someone to share with: `account` = signed in (not a guest phone); `sharedBefore` = an accepted share before. */
 /** Settings → Blocked people; name is null when their account was deleted. */
-export type BlockedPerson = { id: string; name: string | null; at: number };
-export type Person = { id: string; name: string; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
+export type BlockedPerson = { id: string; name: string | null; realName?: string | null; at: number };
+export type Person = { id: string; name: string; realName?: string | null; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
 /** suggestMe: they let their friends' Lens suggest sharing with them (People). */
 export type Contact = Person & { lastSharedAt: number; trusted?: boolean; shares?: number; suggestMe?: boolean };
 export type ShareStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'revoked' | 'expired';
 export type ShareRequest = {
   shareId: string;
-  from: { id: string; name: string; account: boolean };
-  to: { id: string; name: string; account: boolean };
+  from: { id: string; name: string; realName?: string | null; account: boolean };
+  to: { id: string; name: string; realName?: string | null; account: boolean };
   photos: number;
   videos: number;
   count: number;
@@ -168,7 +168,7 @@ export type Album = {
   event?: { code: string; url: string };
 };
 /** An album someone shared with me (its items are in the Shared list with this albumId). `event`: joined by link, I can add my photos. */
-export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; at: number; event?: boolean };
+export type SharedAlbum = { id: string; name: string; ownerId: string; ownerName: string; ownerRealName?: string | null; at: number; event?: boolean };
 /** A trip or event Lens found (docs/design/switch-features.md §4); `items`/`filmIds` only in the detail. */
 export type Recap = {
   key: string;
@@ -197,10 +197,20 @@ export const api = {
   register: (device?: string, fingerprint?: string, extra?: { ref?: string; emulator?: boolean }) =>
     request<IdentityResponse & { restored?: boolean }>('POST', '/devices', { device, fingerprint, ...extra }),
   me: () =>
-    request<{ id: string; name: string; email?: string; usedBytes: number; quotaBytes: number; bonusBytes?: number; admin?: boolean }>(
-      'GET',
-      '/me',
-    ),
+    request<{
+      id: string;
+      name: string;
+      email?: string;
+      usedBytes: number;
+      quotaBytes: number;
+      bonusBytes?: number;
+      admin?: boolean;
+      /** The name friends see next to the Lens name (optional). */
+      realName?: string;
+      /** From Google sign-in, to pre-fill Settings → Your name. */
+      suggestedName?: string;
+    }>('GET', '/me'),
+  setRealName: (realName: string | null) => request<{ realName: string | null }>('PUT', '/me', { realName }),
 
   // Accounts (guest → signed in)
   authEmailStart: (email: string) => request<{ sent: boolean }>('POST', '/auth/email/start', { email }),
@@ -283,7 +293,7 @@ export const api = {
   // Albums (docs/design/organise-and-share.md).
   albums: () => request<{ albums: Album[]; shared: SharedAlbum[] }>('GET', '/albums'),
   createAlbum: (name: string, mediaIds: string[] = []) => request<{ album: Album }>('POST', '/albums', { name, mediaIds }),
-  album: (id: string) => request<{ album: Album; items: RemoteMedia[]; members: { id: string; name?: string; shareId: string }[] }>('GET', `/albums/${id}`),
+  album: (id: string) => request<{ album: Album; items: RemoteMedia[]; members: { id: string; name?: string; realName?: string | null; shareId: string }[] }>('GET', `/albums/${id}`),
   renameAlbum: (id: string, name: string) => request<{ id: string; name: string }>('PUT', `/albums/${id}`, { name }),
   deleteAlbum: (id: string) => request<unknown>('DELETE', `/albums/${id}`),
   editAlbum: (id: string, change: { add?: string[]; remove?: string[] }) => request<{ id: string; count: number }>('POST', `/albums/${id}/items`, change),

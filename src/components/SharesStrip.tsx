@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/Text';
 import { api } from '@/lib/api';
 import { palette } from '@/lib/theme';
 import { colors } from '@/lib/ui';
+import { who } from '@/lib/names';
 
 export function SharesStrip() {
   const [pending, setPending] = useState(0);
@@ -20,7 +21,8 @@ export function SharesStrip() {
         .sharesIn()
         .then((r) => {
           setPending(r.pending);
-          setFirst(r.requests.find((x) => x.status === 'pending')?.from.name ?? null);
+          const first = r.requests.find((x) => x.status === 'pending');
+          setFirst(first ? who(first.from) : null);
         })
         .catch(() => {});
     void load();

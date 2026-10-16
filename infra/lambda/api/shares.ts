@@ -5,6 +5,7 @@ import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/
 
 import { stripGps } from './exif-strip';
 import { stripVideoLocation } from './video-strip';
+import { realNames } from './real-names';
 import { ddb, decodeCursor, encodeCursor, env, HttpError, json, randomId, Req, Res, s3, signMediaUrl } from './lib';
 import { addMember, albumMediaIds, getAlbum, removeMember } from './albums';
 import { derivativeKey, MediaRecord, mediaKey, toClient } from './media';
@@ -233,11 +234,12 @@ async function thumbs(r: ShareRequest, limit = 12): Promise<{ id: string; kind: 
   );
 }
 
-function view(r: ShareRequest, now = Date.now()) {
+/** real: real names to show (the sender's to a recipient; the recipient's to the sender once accepted). */
+function view(r: ShareRequest, now = Date.now(), real = new Map<string, string>()) {
   return {
     shareId: r.shareId,
-    from: { id: r.fromId, name: r.fromName, account: r.fromAccount },
-    to: { id: r.toId, name: r.toName, account: r.toAccount },
+    from: { id: r.fromId, name: r.fromName, realName: real.get(r.fromId) ?? null, account: r.fromAccount },
+    to: { id: r.toId, name: r.toName, realName: real.get(r.toId) ?? null, account: r.toAccount },
     photos: r.photos,
     videos: r.videos,
     count: r.mediaIds.length,
@@ -270,12 +272,13 @@ async function list(identity: Identity, prefix: 'IN#' | 'OUT#', req: Req) {
 export async function inbox(identity: Identity, req: Req): Promise<Res> {
   const { items, cursor } = await list(identity, 'IN#', req);
   const now = Date.now();
+  const real = await realNames(items.map((r) => r.fromId));
   const known = new Set(
     (await batchGet([...new Set(items.map((r) => r.fromId))].map((id) => ({ pk: `D#${identity.id}`, sk: `C#${id}` })))).map((c) => (c.sk as string).slice(2)),
   );
   const out = await Promise.all(
     items.map(async (r) => {
-      const v = view(r, now);
+      const v = view(r, now, real);
       const showThumbs = v.status === 'pending' && known.has(r.fromId);
       return { ...v, knownSender: known.has(r.fromId), thumbs: showThumbs ? await thumbs(r) : undefined };
     }),
@@ -291,7 +294,9 @@ export async function inbox(identity: Identity, req: Req): Promise<Res> {
 export async function sent(identity: Identity, req: Req): Promise<Res> {
   const { items, cursor } = await list(identity, 'OUT#', req);
   const now = Date.now();
-  return json(200, { requests: items.map((r) => ({ ...view(r, now), mediaIds: r.albumId ? undefined : r.mediaIds })), cursor });
+  // Their real name only once they accepted (a request alone doesn't reveal it).
+  const real = await realNames(items.filter((r) => r.status === 'accepted' || r.status === 'revoked').map((r) => r.toId));
+  return json(200, { requests: items.map((r) => ({ ...view(r, now, real), mediaIds: r.albumId ? undefined : r.mediaIds })), cursor });
 }
 
 async function load(pk: string, sk: string): Promise<ShareRequest | undefined> {
@@ -307,7 +312,7 @@ export async function request(identity: Identity, shareId: string, req: Req): Pr
   checkId(shareId);
   const r = await load(`D#${identity.id}`, `IN#${shareId}`);
   if (!r) throw new HttpError(404, 'Not found');
-  const v = view(r);
+  const v = view(r, Date.now(), await realNames([r.fromId]));
   const known = !!(await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${identity.id}`, sk: `C#${r.fromId}` } }))).Item;
   const showThumbs = v.status === 'pending' && (known || req.query.previews === '1');
   return json(200, { ...v, knownSender: known, thumbs: showThumbs ? await thumbs(r, 50) : undefined });
@@ -410,13 +415,14 @@ export async function listBlocked(identity: Identity): Promise<Res> {
     items.push(...(page.Items ?? []));
     start = page.LastEvaluatedKey;
   } while (start);
-  // Blocks made with POST /blocks/:id carry no name: read it from the profile (gone = deleted account).
-  const unnamed = items.filter((x) => !x.name).map((x) => ({ pk: `D#${(x.sk as string).slice(2)}`, sk: 'PROFILE' }));
-  const names = new Map((await batchGet(unnamed)).map((p) => [(p.pk as string).slice(2), p.name as string]));
+  // Blocks made with POST /blocks/:id carry no name: read it from the profile (gone = deleted account), with the real name.
+  const profiles = await batchGet(items.map((x) => ({ pk: `D#${(x.sk as string).slice(2)}`, sk: 'PROFILE' })));
+  const byId = new Map(profiles.map((p) => [(p.pk as string).slice(2), p]));
   const blocked = items
     .map((x) => {
       const id = (x.sk as string).slice(2);
-      return { id, name: (x.name as string | undefined) ?? names.get(id) ?? null, at: (x.at as number | undefined) ?? 0 };
+      const p = byId.get(id);
+      return { id, name: (x.name as string | undefined) ?? (p?.name as string | undefined) ?? null, realName: (p?.realName as string | undefined) ?? null, at: (x.at as number | undefined) ?? 0 };
     })
     .sort((a, b) => b.at - a.at);
   return json(200, { blocked });
@@ -450,6 +456,7 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
     const m = current.get(`${s.ownerId}#${s.mediaId}`);
     return m && !m.deletedAt;
   });
+  const real = await realNames(shareItems.map((s) => s.ownerId as string));
   const items = await Promise.all(
     shareItems.map(async (s) => ({
       ...(await withoutLocation(s, current.get(`${s.ownerId}#${s.mediaId}`)!, await toClient({
@@ -462,6 +469,7 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
       }))),
       ownerId: s.ownerId,
       ownerName: s.ownerName,
+      ownerRealName: real.get(s.ownerId) ?? null,
       sharedAt: s.sharedAt,
       albumId: s.albumId,
       // Event albums hold several people's photos: whose album it is.

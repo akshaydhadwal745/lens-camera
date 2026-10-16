@@ -24,6 +24,7 @@ import {
 import { createIdentity, Identity, issueToken, webSignIn } from './identity';
 import { ddb, derivedKey, env, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
 import { googleLoginClaims } from './oauth';
+import { cleanRealName } from './real-names';
 import { isDisposableEmail } from './disposable';
 import { attribute } from './attribution';
 import { forgetGuest, onAttributed, onPhoneSignIn, rewardsHook } from './referrals';
@@ -155,7 +156,9 @@ export async function webVerifyGoogle(req: Req): Promise<Res> {
   const claims = await googleLoginClaims(null, req);
   const logins: { kind: LoginKind; value: string }[] = [{ kind: 'google', value: claims.sub }];
   if (claims.email && claims.emailVerified) logins.push({ kind: 'email', value: claims.email.toLowerCase() });
-  return webSignIn(await accountForWeb(req, logins, claims.email?.toLowerCase()), req);
+  const accountId = await accountForWeb(req, logins, claims.email?.toLowerCase());
+  await rememberGoogleName(accountId, claims.name);
+  return webSignIn(accountId, req);
 }
 
 // ---------- Google (Android) ----------
@@ -166,7 +169,26 @@ export async function verifyGoogle(identity: Identity, req: Req): Promise<Res> {
   const logins: { kind: LoginKind; value: string }[] = [{ kind: 'google', value: claims.sub }];
   // A verified Google email is the same person as that email's code login.
   if (claims.email && claims.emailVerified) logins.push({ kind: 'email', value: claims.email.toLowerCase() });
-  return json(200, await signIn(identity, req, logins, claims.email?.toLowerCase()));
+  const result = await signIn(identity, req, logins, claims.email?.toLowerCase());
+  await rememberGoogleName(result.id, claims.name);
+  return json(200, result);
+}
+
+/** The Google profile name, kept only as a suggestion for Settings → Your name (real-names.ts); never shown to others. */
+async function rememberGoogleName(accountId: string, name: string | undefined) {
+  const clean = cleanRealName(name);
+  if (!clean) return;
+  await ddb
+    .send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: { pk: `D#${accountId}`, sk: 'PROFILE' },
+        UpdateExpression: 'SET googleName = :n',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: { ':n': clean },
+      }),
+    )
+    .catch(() => {});
 }
 
 // ---------- Sign-in core ----------

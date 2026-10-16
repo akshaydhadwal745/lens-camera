@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/Text';
 import { api, BlockedPerson } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
+import { handleOf, who } from '@/lib/names';
 
 export default function BlockedScreen() {
   const insets = useSafeAreaInsets();
@@ -28,7 +29,7 @@ export default function BlockedScreen() {
   useEffect(load, [load]);
 
   const unblock = async (p: BlockedPerson) => {
-    const name = p.name ?? 'this person';
+    const name = who(p, 'this person');
     if (!(await confirmDestructive(`Unblock ${name}?`, 'They can send you share requests again. You still accept each one.', 'Unblock'))) return;
     setBusy(p.id);
     try {
@@ -74,9 +75,9 @@ export default function BlockedScreen() {
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name} numberOfLines={1}>
-                  {item.name ?? 'Deleted account'}
+                  {who(item, 'Deleted account')}
                 </Text>
-                {item.at ? <Text style={styles.meta}>Blocked {formatDate(item.at)}</Text> : null}
+                <Text style={styles.meta}>{[handleOf(item), item.at ? `Blocked ${formatDate(item.at)}` : null].filter(Boolean).join(' · ')}</Text>
               </View>
               <Pressable onPress={() => void unblock(item)} disabled={busy !== null} style={styles.button} accessibilityRole="button">
                 {busy === item.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Unblock</Text>}

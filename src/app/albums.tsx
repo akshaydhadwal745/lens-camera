@@ -11,6 +11,7 @@ import { Text } from '@/components/ui/Text';
 import { Album, api, SharedAlbum } from '@/lib/api';
 import { palette } from '@/lib/theme';
 import { colors, errorMessage, notify } from '@/lib/ui';
+import { who } from '@/lib/names';
 
 export default function AlbumsScreen() {
   const insets = useSafeAreaInsets();
@@ -88,13 +89,13 @@ export default function AlbumsScreen() {
             <>
               <Text style={styles.section}>Shared with you</Text>
               {shared.map((s) => (
-                <Pressable key={`${s.ownerId}-${s.id}`} style={styles.sharedRow} onPress={() => router.push({ pathname: '/album/[id]', params: { id: s.id, owner: s.ownerId, name: s.name, ownerName: s.ownerName, ...(s.event ? { event: '1' } : {}) } })}>
+                <Pressable key={`${s.ownerId}-${s.id}`} style={styles.sharedRow} onPress={() => router.push({ pathname: '/album/[id]', params: { id: s.id, owner: s.ownerId, name: s.name, ownerName: who({ name: s.ownerName, realName: s.ownerRealName }), ...(s.event ? { event: '1' } : {}) } })}>
                   <Ionicons name="people-outline" size={22} color="#86868B" />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.name} numberOfLines={1}>
                       {s.name}
                     </Text>
-                    <Text style={styles.count}>from {s.ownerName}</Text>
+                    <Text style={styles.count}>from {who({ name: s.ownerName, realName: s.ownerRealName })}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#636366" />
                 </Pressable>
