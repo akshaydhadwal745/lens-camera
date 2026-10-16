@@ -268,6 +268,25 @@ function EarnSection({ signedIn }: { signedIn: boolean }) {
   );
 }
 
+/** Rate Lens, report a problem, suggest a feature (src/app/feedback.tsx). */
+function FeedbackSection() {
+  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; kind: string }[] = [
+    { icon: 'star-outline', label: 'Rate Lens', kind: 'review' },
+    { icon: 'bug-outline', label: 'Report a problem', kind: 'issue' },
+    { icon: 'bulb-outline', label: 'Suggest a feature', kind: 'idea' },
+  ];
+  return (
+    <Section title="Feedback" footer="Every message is read by the Lens team.">
+      {rows.map((r, i) => (
+        <View key={r.kind}>
+          {i > 0 && <View style={styles.divider} />}
+          <LinkRow icon={r.icon} label={r.label} onPress={() => router.push(`/feedback?kind=${r.kind}` as Href)} />
+        </View>
+      ))}
+    </Section>
+  );
+}
+
 /** Delete the account and everything in it (Google Play requirement; also on the website). */
 function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -543,6 +562,8 @@ export default function SettingsScreen() {
         {!isWeb && <AccountSection />}
 
         {identity && <EarnSection signedIn={!!identity.email} />}
+
+        {identity && <FeedbackSection />}
 
         {!isWeb && (
           <>

@@ -414,6 +414,11 @@ function handler(event) {
       schedule: events.Schedule.rate(Duration.days(1)),
       targets: [new targets.LambdaFunction(maintenance)],
     });
+    // Feedback emails that failed are re-sent within the hour (the feedback is stored first).
+    new events.Rule(this, 'FeedbackEmailRetry', {
+      schedule: events.Schedule.rate(Duration.hours(1)),
+      targets: [new targets.LambdaFunction(maintenance, { event: events.RuleTargetInput.fromObject({ retryFeedbackEmails: true }) })],
+    });
 
     // Account deletion: the API hands off to Maintenance, which may continue itself.
     api.addEnvironment('MAINTENANCE_FUNCTION', maintenance.functionName);

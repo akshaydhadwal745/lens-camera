@@ -37,6 +37,7 @@ import { requestStream } from './stream';
 import { requestAccountDeletion } from './account';
 import { followLink } from './attribution';
 import { closeContact, listContact, submitContact } from './contact';
+import { closeFeedback, listFeedback, submitFeedback } from './feedback';
 import { claimCode, decideReferral, heldReferrals, myReferrals } from './referrals';
 import {
   apply as applyAffiliate,
@@ -115,6 +116,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /users') return await searchUsers(identity, req);
     if (seg[1] === 'users' && seg.length === 3 && method === 'GET') return await lookupUser(identity, seg[2]);
     if (route === 'GET /contacts') return await contacts(identity);
+    if (route === 'POST /feedback') return await submitFeedback(identity, req);
     if (route === 'POST /pairing') return await createPairing(identity);
     // Phone side of QR sign-in, and the phone's list of signed-in browsers.
     if (seg[1] === 'login-sessions' && seg.length === 4 && seg[3] === 'info' && method === 'GET') return await loginSessionInfo(seg[2]);
@@ -145,6 +147,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (seg[2] === 'payouts' && seg.length === 6 && seg[5] === 'paid' && method === 'POST') return await markPaid(identity.id, seg[3], seg[4], req);
       if (route === 'GET /admin/audit') return await auditTrail(req);
       if (route === 'GET /admin/contact') return await listContact(req);
+      if (route === 'GET /admin/feedback') return await listFeedback(req);
+      if (seg[2] === 'feedback' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeFeedback(identity.id, decodeURIComponent(seg[3]));
       if (seg[2] === 'contact' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeContact(identity.id, decodeURIComponent(seg[3]));
     }
 

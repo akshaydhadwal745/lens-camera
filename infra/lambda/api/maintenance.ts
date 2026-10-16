@@ -4,6 +4,7 @@
 import { continueAccountDeletion, pendingDeletions, startBackgroundDeletion } from './account';
 import { runMaintenance } from './trash';
 import { approveDueCommissions, Purchase, recordPurchase, recordRefund } from './affiliates';
+import { retryFeedbackEmails } from './feedback';
 
 type Event = {
   now?: unknown;
@@ -12,11 +13,14 @@ type Event = {
   /** Until Play Billing is wired: verified purchases/refunds arrive here (tests use this too). */
   purchase?: Purchase;
   refund?: { orderId: string; at?: number };
+  /** Hourly: re-send feedback emails that failed (the feedback itself is already stored). */
+  retryFeedbackEmails?: boolean;
   /** Approve commissions as of `now` for one affiliate (tests). */
   approveCommissions?: { now: number; onlyAffiliate: string };
 };
 
 export async function handler(event: Event, context?: { getRemainingTimeInMillis(): number }) {
+  if (event?.retryFeedbackEmails) return await retryFeedbackEmails();
   if (event?.purchase) return { status: await recordPurchase(event.purchase) };
   if (event?.refund) return { status: await recordRefund(event.refund.orderId, event.refund.at) };
   if (event?.approveCommissions) {
@@ -36,7 +40,7 @@ export async function handler(event: Event, context?: { getRemainingTimeInMillis
   const stats = await runMaintenance(now, simulated ? (event.onlyOwner as string) : undefined);
   // Account deletions that didn't finish (a run timed out or failed): resume them.
   if (!simulated) for (const id of await pendingDeletions()) await startBackgroundDeletion(id);
-  if (!simulated) Object.assign(stats, { commissionsApproved: await approveDueCommissions(now) });
+  if (!simulated) Object.assign(stats, { commissionsApproved: await approveDueCommissions(now), feedbackEmails: await retryFeedbackEmails() });
   console.log('maintenance', JSON.stringify(stats));
   return stats;
 }

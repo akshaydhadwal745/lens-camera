@@ -109,6 +109,11 @@ export type AffiliateDashboard = {
   payouts?: { month: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string }[];
 };
 export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
+export type FeedbackKind = 'review' | 'issue' | 'idea' | 'other';
+export type FeedbackItem = {
+  id: string; reference: string; kind: FeedbackKind; rating?: number; message: string; email?: string; accountEmail?: string;
+  device?: Record<string, string>; at: number; status: string; emailStatus?: string;
+};
 export type ContactMessage = { id: string; reference: string; name: string; email: string; topic: string; message: string; at: number; status: string };
 export type AdminPayout = { affiliateId: string; name?: string; email?: string; upi?: string; pan?: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string };
 export type Session = { id: string; label: string; kind: string; createdAt: number; lastUsedAt: number; current: boolean };
@@ -342,6 +347,9 @@ export const api = {
   // Invite friends (+storage) and the affiliate program.
   referrals: () => request<Referrals>('GET', '/referrals'),
   claimReferral: (code: string) => request<{ program: string; state: string }>('POST', '/referrals/claim', { code }),
+  // Settings → Feedback: stored, then emailed to the team (infra/lambda/api/feedback.ts).
+  sendFeedback: (body: { kind: FeedbackKind; rating?: number; message: string; email?: string; includeDevice: boolean; device?: Record<string, string> }) =>
+    request<{ received: boolean; reference: string }>('POST', '/feedback', body),
   affiliate: () => request<AffiliateDashboard>('GET', '/affiliates/me'),
   applyAffiliate: (body: { name: string; channels: string; audience?: string; pan?: string; upi?: string; agree: boolean }) =>
     request<{ status: string }>('POST', '/affiliates/apply', body),
@@ -361,6 +369,8 @@ export const api = {
     runPayouts: (month: string) => request<{ payouts: { affiliateId: string; grossPaise: number }[] }>('POST', '/admin/payouts/run', { month }),
     payouts: (month: string) => request<{ payouts: AdminPayout[] }>('GET', `/admin/payouts?month=${month}`),
     contact: (status: 'new' | 'done') => request<{ messages: ContactMessage[] }>('GET', `/admin/contact?status=${status}`),
+    feedback: (status: 'new' | 'done') => request<{ feedback: FeedbackItem[] }>('GET', `/admin/feedback?status=${status}`),
+    closeFeedback: (id: string) => request<{ status: string }>('POST', `/admin/feedback/${encodeURIComponent(id)}/done`),
     closeContact: (id: string) => request<{ status: string }>('POST', `/admin/contact/${encodeURIComponent(id)}/done`),
     markPaid: (affiliateId: string, month: string, reference: string) =>
       request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),

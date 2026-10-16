@@ -531,6 +531,25 @@ S=$(call GET "/admin/payouts?month=$MONTH" "$TADM")
 [[ $(call GET "/admin/audit?entity=affiliate:$IP" "$TADM" | j .events.length) -ge 8 ]] && ok "audit trail recorded"
 AUDIT=$(node -p "require('./outputs.json').Lens.AuditBucketName")
 [[ $(aws s3api list-objects-v2 --profile lens --bucket "$AUDIT" --prefix "audit/$(date -u +%F)/affiliate:$IP/" --query 'length(Contents)' --output text) -ge 8 ]] && ok "audit events locked in S3 (Object Lock)"
+# --- in-app feedback (Settings → Feedback): stored first, emailed after ---
+R=$(call POST /feedback "$TA" -d '{"kind":"review","rating":5,"message":"[e2e] Love it","includeDevice":true,"device":{"model":"E2E phone","os":"android","osVersion":"16","build":"dev-0","secret":"dropped"}}')
+FREF=$(echo "$R" | j .reference)
+[[ $(echo "$R" | j .received) == true && $FREF == F-* ]] && ok "review stored ($FREF)"
+[[ $(call POST /feedback "$TA" -d '{"kind":"review","message":"no stars"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "a review needs a star rating"
+[[ $(call POST /feedback "$TA" -d '{"kind":"review","rating":9}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "rating must be 1–5"
+[[ $(call POST /feedback "$TA" -d '{"kind":"issue","message":"short"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "a problem report needs a few words"
+[[ $(call POST /feedback "$TA" -d '{"kind":"idea","message":"[e2e] please add a timer","email":"not-an-email"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "a bad reply email is refused"
+R=$(call POST /feedback "$TA" -d '{"kind":"issue","message":"[e2e] The camera froze once","email":"reply@e2e.lens.invalid","includeDevice":false,"device":{"model":"should not be kept"}}')
+FREF2=$(echo "$R" | j .reference)
+[[ $(call POST /feedback "$TA" -d '{"kind":"other","message":"[e2e] bot text here","website":"http://spam"}' | j .received) == true ]] && ok "feedback honeypot: bots get a fake success"
+FB=$(call GET "/admin/feedback" "$TADM")
+[[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.rating") == 5 && $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.device.model") == "E2E phone" ]] && ok "admin sees the rating and the shared device"
+[[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.device.secret") == "" ]] && ok "only known device fields are kept"
+[[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF2')?.device") == "" && $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF2')?.email") == reply@e2e.lens.invalid ]] && ok "no device details without consent; reply email kept"
+[[ $(echo "$FB" | j ".feedback.some(f=>f.message.includes('bot text'))") == false ]] && ok "the bot's feedback isn't stored"
+FID=$(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.id")
+[[ $(call POST "/admin/feedback/$(node -p "encodeURIComponent('$FID')")/done" "$TADM" | j .status) == done ]] && ok "feedback marked done"
+[[ $(call GET "/admin/feedback" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "feedback list hidden from normal accounts"
 # --- contact form (stored + emailed to the team) ---
 R=$(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d "{\"name\":\"E2E\",\"email\":\"c$(date +%s%N)@e2e.lens.invalid\",\"topic\":\"support\",\"message\":\"Automated test message, please ignore.\"}")
 CREF=$(echo "$R" | j .reference)
@@ -560,6 +579,7 @@ R=$(call POST /lab/sets "$TD" -d "{\"files\":[{\"name\":\"single.jpg\",\"bytes\"
 LSET=$(echo "$R" | j .setId)
 curl -sS -X PUT "$(echo "$R" | j '.urls["single.jpg"]')" -H 'content-type: image/jpeg' -H "content-md5: $LMD5" --data-binary @"$LABF" -o /dev/null
 [[ -n "$LSET" && $(vcount "lab/sets/$LSET/") -ge 2 ]] && ok "account to delete has a Quality Lab set ($LSET)"
+[[ $(call POST /feedback "$TD" -d '{"kind":"other","message":"[e2e] feedback before deletion"}' | j .received) == true ]] && ok "account to delete sent feedback"
 [[ $(call DELETE /account "$TD" -o /dev/null -w '%{http_code}') == 400 ]] && ok "deletion needs an explicit confirmation"
 [[ $(call DELETE /account "$TD" -d '{"confirm":"DELETE"}' -o /dev/null -w '%{http_code}') == 202 ]] && ok "account deletion accepted"
 [[ $(call GET /me "$TD" -o /dev/null -w '%{http_code}') == 401 ]] && ok "its sessions stop working at once"
@@ -570,6 +590,7 @@ done
 [[ "$GONE" == None ]] && ok "account removed in the background" || fail "account still there"
 [[ $(vcount "m/$ID_D/") == 0 && $(vcount "d/$ID_D/") == 0 && $(vcount "r/$ID_D/") == 0 ]] && ok "every stored file and version deleted"
 [[ $(vcount "lab/sets/$LSET/") == 0 ]] && ok "its Quality Lab set deleted too"
+[[ $(call GET "/admin/feedback" "$TADM" | j ".feedback.some(f=>f.message==='[e2e] feedback before deletion')") == false ]] && ok "its feedback deleted too"
 [[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == false ]] && ok "friends lose access to what it shared"
 N=$(curl -sS -X POST "$API/devices"); TN=$(echo "$N" | j .token)
 call POST /auth/email/start "$TN" -d "{\"email\":\"$MAILD\"}" >/dev/null

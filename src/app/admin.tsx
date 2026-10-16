@@ -7,14 +7,14 @@ import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Share, Sty
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AdminAffiliate, AdminPayout, api, ContactMessage } from '@/lib/api';
+import { AdminAffiliate, AdminPayout, api, ContactMessage, FeedbackItem } from '@/lib/api';
 import { rupees } from '@/lib/format';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
-type Tab = 'inbox' | 'affiliates' | 'referrals' | 'payouts';
+type Tab = 'inbox' | 'feedback' | 'affiliates' | 'referrals' | 'payouts';
 /** Affiliate approvals and payouts are managed on the website only (lens.instagrowapp.com/app/admin). */
 const WEB_TOOLS = Platform.OS === 'web';
-const TABS: Tab[] = WEB_TOOLS ? ['inbox', 'affiliates', 'referrals', 'payouts'] : ['inbox', 'referrals'];
+const TABS: Tab[] = WEB_TOOLS ? ['inbox', 'feedback', 'affiliates', 'referrals', 'payouts'] : ['inbox', 'feedback', 'referrals'];
 
 function lastMonth(): string {
   const d = new Date();
@@ -84,6 +84,85 @@ function Inbox() {
             <View style={styles.actions}>
               <Button label="Reply" onPress={() => reply(m)} />
               {m.status === 'new' && <Button label="Mark done" onPress={() => done(m)} />}
+            </View>
+          </View>
+        ))
+      )}
+    </>
+  );
+}
+
+const KIND_LABEL: Record<string, string> = { review: 'Review', issue: 'Problem', idea: 'Idea', other: 'Other' };
+
+/** Settings → Feedback submissions (ratings, reviews, problems, ideas). */
+function Feedback() {
+  const [status, setStatus] = useState<'new' | 'done'>('new');
+  const [rows, setRows] = useState<FeedbackItem[] | null>(null);
+  const load = useCallback(() => {
+    api.admin.feedback(status).then((r) => setRows(r.feedback), (e) => notify('Error', errorMessage(e)));
+  }, [status]);
+  useEffect(load, [load]);
+  const done = async (f: FeedbackItem) => {
+    try {
+      await api.admin.closeFeedback(f.id);
+      load();
+    } catch (e) {
+      notify('Error', errorMessage(e));
+    }
+  };
+  const reply = (f: FeedbackItem) =>
+    Linking.openURL(`mailto:${f.email}?subject=${encodeURIComponent(`Re: your Lens feedback (${f.reference})`)}`).catch(() => undefined);
+  const rated = (rows ?? []).filter((f) => f.rating);
+  const avg = rated.length ? rated.reduce((n, f) => n + (f.rating ?? 0), 0) / rated.length : 0;
+  return (
+    <>
+      <View style={styles.chips}>
+        {(['new', 'done'] as const).map((st) => (
+          <Pressable
+            key={st}
+            style={[styles.chip, st === status && styles.chipOn]}
+            onPress={() => {
+              setRows(null);
+              setStatus(st);
+            }}
+          >
+            <Text style={[styles.chipText, st === status && { color: '#000' }]}>{st}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {rated.length > 0 && (
+        <Text style={styles.small}>
+          Average rating {avg.toFixed(1)} ★ from {rated.length} review{rated.length > 1 ? 's' : ''} (this list)
+        </Text>
+      )}
+      {!rows ? (
+        <ActivityIndicator color={colors.link} />
+      ) : rows.length === 0 ? (
+        <Text style={styles.empty}>No feedback.</Text>
+      ) : (
+        rows.map((f) => (
+          <View key={f.id} style={styles.card}>
+            <Text style={styles.name}>
+              {KIND_LABEL[f.kind] ?? f.kind}
+              {f.rating ? ` · ${'★'.repeat(f.rating)}${'☆'.repeat(5 - f.rating)}` : ''}
+            </Text>
+            <Text style={styles.small} selectable>
+              {f.email ? `${f.email} (wants a reply)` : f.accountEmail ?? 'guest'} · {f.reference} · {new Date(f.at).toLocaleString()}
+              {f.emailStatus === 'pending' ? ' · email pending' : ''}
+            </Text>
+            {f.device && (
+              <Text style={styles.small} selectable>
+                {Object.values(f.device).filter(Boolean).join(' · ')}
+              </Text>
+            )}
+            {!!f.message && (
+              <Text style={styles.body} selectable>
+                {f.message}
+              </Text>
+            )}
+            <View style={styles.actions}>
+              {f.email && <Button label="Reply" onPress={() => reply(f)} />}
+              {f.status === 'new' && <Button label="Mark done" onPress={() => done(f)} />}
             </View>
           </View>
         ))
@@ -283,6 +362,7 @@ export default function AdminScreen() {
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, gap: 10 }} keyboardShouldPersistTaps="handled">
         {tab === 'inbox' && <Inbox />}
+        {tab === 'feedback' && <Feedback />}
         {tab === 'affiliates' && WEB_TOOLS && <Affiliates />}
         {tab === 'referrals' && <Referrals />}
         {tab === 'payouts' && WEB_TOOLS && <Payouts />}

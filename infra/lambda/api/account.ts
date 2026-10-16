@@ -145,6 +145,25 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
     await deleteAllVersions(prefix);
   }
 
+  // Feedback this account sent (Settings → Send feedback).
+  const feedback: { pk: string; sk: string }[] = [];
+  let fbStart: Record<string, any> | undefined;
+  do {
+    const page = await ddb.send(
+      new QueryCommand({
+        TableName: env.table,
+        KeyConditionExpression: 'pk = :p',
+        FilterExpression: 'identityId = :id',
+        ExpressionAttributeValues: { ':p': 'FEEDBACK', ':id': id },
+        ProjectionExpression: 'pk, sk',
+        ExclusiveStartKey: fbStart,
+      }),
+    );
+    feedback.push(...((page.Items ?? []) as { pk: string; sk: string }[]));
+    fbStart = page.LastEvaluatedKey;
+  } while (fbStart);
+  await deleteKeys(feedback);
+
   // This account in other people's contact lists.
   const rest = await partitionItems(id);
   const reverseContacts = rest.filter((i) => (i.sk as string).startsWith('C#')).map((i) => ({ pk: `D#${(i.sk as string).slice(2)}`, sk: `C#${id}` }));
