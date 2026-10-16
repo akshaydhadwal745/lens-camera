@@ -65,6 +65,7 @@ import {
   webVerifyEmail,
   webVerifyGoogle,
 } from './auth';
+import { createLink as createShareLink, linkInfo, listLinks, openLink, revokeLink } from './links';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -95,6 +96,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /web/auth/google') return await webVerifyGoogle(req);
     if (route === 'DELETE /web-sessions/current') return await signOutCurrent(req);
     if (route === 'POST /web/guest') return await webGuest(req);
+
+    // Share links (lens.instagrowapp.com/s/<token>): anyone with the link can look (links.ts).
+    if (seg[1] === 'links' && seg.length === 3 && method === 'GET') return await linkInfo(seg[2], req);
 
     // Event album links (lens.instagrowapp.com/e/<code>): anyone with the link can look; signed-in
     // (or guest) people also learn whether they're already in.
@@ -231,6 +235,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[1] === 'shares' && seg[2] === 'in' && seg.length === 5 && method === 'POST' && seg[4] === 'decline') return await decline(identity, seg[3], req);
     if (seg[1] === 'shares' && seg[2] === 'out' && seg.length === 5 && method === 'POST' && seg[4] === 'cancel') return await cancel(identity, seg[3]);
     if (route === 'GET /blocks') return await listBlocked(identity);
+    if (route === 'POST /links') return await createShareLink(identity, req);
+    if (route === 'GET /links') return await listLinks(identity);
+    if (seg[1] === 'links' && seg.length === 4 && method === 'POST' && seg[3] === 'open') return await openLink(identity, seg[2]);
+    if (seg[1] === 'links' && seg.length === 4 && method === 'POST' && seg[3] === 'revoke') return await revokeLink(identity, seg[2]);
     if (seg[1] === 'blocks' && seg.length === 3 && (method === 'POST' || method === 'DELETE')) return await setBlocked(identity, seg[2], method === 'POST');
     if (seg[1] === 'contacts' && seg.length === 3 && method === 'PUT') return await setTrusted(identity, seg[2], req);
     if (route === 'PUT /push') return await registerPush(identity, req);

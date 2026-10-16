@@ -1,6 +1,6 @@
 import { recordAppOpen } from '@/lib/review-prompt';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -15,6 +15,7 @@ import { identityChanged, startPush } from '@/lib/push';
 import { peopleAppStart } from '@/lib/people';
 import { boot, useStore } from '@/lib/store';
 import { fontFiles } from '@/lib/theme';
+import { takePendingShareLink } from '@/lib/share-link';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -47,6 +48,13 @@ export default function RootLayout() {
     if (identityId) identityChanged();
   }, [identityId]);
 
+  // A fresh install that came from a share link: open what was shared, once (src/lib/share-link.ts).
+  const ready = status === 'ready' && !introVisible;
+  useEffect(() => {
+    if (!ready) return;
+    void takePendingShareLink().then((token) => token && router.push({ pathname: '/s/[token]', params: { token } }));
+  }, [ready]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
       <StatusBar style="light" />
@@ -67,6 +75,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="trash" options={{ presentation: 'modal' }} />
         <Stack.Screen name="blocked" />
+        <Stack.Screen name="links" />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />
         <Stack.Screen name="camera-info" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lab" />
@@ -78,6 +87,7 @@ export default function RootLayout() {
         <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="l/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="u/[id]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="s/[token]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="signin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="oauth" options={{ animation: 'none' }} />
         <Stack.Screen name="link" />

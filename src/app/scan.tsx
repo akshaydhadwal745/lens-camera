@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { parseEventCode } from '@/lib/event-link';
 import { parsePersonCode, pickPerson } from '@/lib/person-code';
 import { colors, errorMessage } from '@/lib/ui';
+import { parseShareLink } from '@/lib/share-link';
 
 /** The sign-in QR encodes https://<site>/l/<session id>/. */
 export function loginSessionFrom(data: string): string | null {
@@ -46,6 +47,13 @@ export default function ScanScreen() {
           handled.current = false;
           setMessage(errorMessage(error));
         });
+      return;
+    }
+    // A share link as a QR code (lens.instagrowapp.com/s/<token>): open what was shared.
+    const shareToken = parseShareLink(result.data);
+    if (shareToken) {
+      handled.current = true;
+      router.replace({ pathname: '/s/[token]', params: { token: shareToken } });
       return;
     }
     // An event album's QR code (lens.instagrowapp.com/e/<code>): open it to join.

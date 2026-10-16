@@ -151,7 +151,7 @@ export function SharesList({ initial }: { initial: 'in' | 'out' }) {
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>
-                    {tab === 'in' ? `${who(person)} wants to share ${whatText(r)}` : `${whatText(r)} to ${who(person)}`}
+                    {tab === 'in' ? `${who(person)} wants to share ${whatText(r)}` : `${whatText(r)} to ${who(person)}${r.viaLink ? ' (by link)' : ''}`}
                   </Text>
                   <Text style={styles.meta}>
                     {handleOf(person) ? `${handleOf(person)} · ` : ''}

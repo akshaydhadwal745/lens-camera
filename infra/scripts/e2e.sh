@@ -240,6 +240,35 @@ curl -sS -o "$TMP/shared-gps2.mp4" "$(call GET /shared "$TB" | j ".items.find(i=
 cmp -s "$TMP/shared-gps2.mp4" "$GVF" && ok "with \"include location\" the recipient gets the original video"
 call POST "/shares/out/$SV2/cancel" "$TC" >/dev/null
 
+# --- Share links (docs/features/share-links.md): people without Lens, by WhatsApp etc. ---
+pub() { curl -sS "$API/links/$1"; }
+LT=$(call POST /links "$TC" -d "{\"mediaIds\":[\"$IDG\"],\"expires\":\"7d\",\"mode\":\"anyone\"}" | j .link.token)
+[[ ${#LT} == 22 ]] && ok "C makes a link for one photo"
+[[ $(call POST /links "$TC" -d '{"albumId":"x","mediaIds":["a"]}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "albums can't be shared by link"
+[[ $(call POST /links "$TC" -d "{\"mediaIds\":$(node -p "JSON.stringify(Array.from({length:21},(_, i)=>'x'+i))")}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "a link holds at most 20 items"
+[[ $(call POST /links "$TC" -d '{"mediaIds":["someone-elses1"]}' -o /dev/null -w '%{http_code}') == 409 ]] && ok "only your own uploaded items"
+R=$(pub "$LT"); [[ $(echo "$R" | j .items.length) == 1 && $(echo "$R" | j .link.status) == active && $(echo "$R" | j ".items[0].place") == "" ]] && ok "the web page sees the photo (no place)"
+curl -sS -o "$TMP/link-gps.jpg" "$(echo "$R" | j ".items[0].url")"
+node -e "const b=require('fs').readFileSync('$TMP/link-gps.jpg');process.exit(b.includes(Buffer.from([0x1e,0,0,0,1,0,0,0]))||b.length!==$GSIZE?1:0)" && ok "… its original has the GPS wiped" || fail "link original not GPS-free"
+R=$(call POST "/links/$LT/open" "$TB"); [[ -n $(echo "$R" | j .shareId) ]] && ok "B opens it in Lens"
+[[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDG')") == true ]] && ok "… and has it in Shared"
+[[ $(call GET /shares/out "$TC" | j ".requests.find(r=>r.viaLink&&r.to.id==='$IB').status") == accepted ]] && ok "C's Sent shows B opened the link"
+[[ $(call POST "/links/$LT/open" "$TB" | j .shareId) == $(echo "$R" | j .shareId) ]] && ok "opening again changes nothing"
+LO=$(call POST /links "$TC" -d "{\"mediaIds\":[\"$IDV\"],\"expires\":\"1d\",\"mode\":\"one\"}" | j .link.token)
+[[ $(pub "$LO" | j .items.length) == 0 && $(pub "$LO" | j .link.mode) == one ]] && ok "a one-person link shows nothing on the web"
+call POST "/links/$LO/open" "$TB" >/dev/null
+[[ $(call POST "/links/$LO/open" "$TA" -o /dev/null -w '%{http_code}') == 403 ]] && ok "… once opened, nobody else can"
+[[ $(pub "$LO" | j .link.status) == used ]] && ok "… and the page says it was opened"
+[[ $(call GET /links "$TC" | j ".links.length") == 2 && $(call GET /links "$TC" | j ".links.find(l=>l.token==='$LT').claims[0].id") == "$IB" ]] && ok "C's links list who opened them"
+[[ $(call GET /links "$TA" | j ".links.length") == 0 ]] && ok "links are private to their owner"
+[[ $(call POST "/links/$LT/revoke" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "only the owner can turn a link off"
+call POST "/links/$LT/revoke" "$TC" >/dev/null
+[[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDG')") == false ]] && ok "turning it off ends B's access"
+[[ $(pub "$LT" | j .link.status) == revoked && $(pub "$LT" | j .items.length) == 0 ]] && ok "… and the web page shows nothing"
+[[ $(call POST "/links/$LT/open" "$TA" -o /dev/null -w '%{http_code}') == 410 ]] && ok "… and nobody can open it any more"
+[[ $(curl -sS -o /dev/null -w '%{http_code}' "$API/links/AAAAAAAAAAAAAAAAAAAAAA") == 404 ]] && ok "unknown links: 404"
+call POST "/links/$LO/revoke" "$TC" >/dev/null
+
 # --- Nearby on this Wi-Fi (step 3): codes only, names only for people who opted in ---
 [[ $(call POST /nearby/code "$TA" | j .code) == "" ]] && ok "not visible: no code to announce"
 call PUT /nearby "$TA" -d '{"visible":true}' >/dev/null

@@ -184,6 +184,11 @@ function handler(event) {
     req.uri = '/e/index.html';
     return req;
   }
+  // Share links (/s/<token>): photos sent to people with or without Lens.
+  if (uri.indexOf('/s/') === 0) {
+    req.uri = '/s/index.html';
+    return req;
+  }
   // "My Lens code" links (/u/<id>) scanned with a phone's own camera.
   if (uri.indexOf('/u/') === 0) {
     req.uri = '/u/index.html';

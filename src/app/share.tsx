@@ -14,6 +14,7 @@ import { queueShare, selectGallery, useStore } from '@/lib/store';
 import { colors, errorMessage, notify } from '@/lib/ui';
 import { RealNameSheet } from '@/components/RealNameSheet';
 import { loadDoc, saveDoc } from '@/lib/local-store';
+import { ShareLinkSheet } from '@/components/ShareLinkSheet';
 
 const NAME_ASKED_DOC = 'real-name-asked';
 
@@ -62,6 +63,7 @@ export default function ShareScreen() {
   // Asked once, before the first share: the name friends see next to the Lens name.
   const [askName, setAskName] = useState<{ suggestion: string } | null>(null);
   const [namePrompt, setNamePrompt] = useState(false);
+  const [linkSheet, setLinkSheet] = useState(false);
   useEffect(() => {
     if (loadDoc<boolean>(NAME_ASKED_DOC, false)) return;
     api.me().then((r) => (r.realName ? saveDoc(NAME_ASKED_DOC, true) : setAskName({ suggestion: r.suggestedName ?? '' })), () => {});
@@ -191,6 +193,19 @@ export default function ShareScreen() {
           )}
         </Pressable>
       </View>
+
+      {/* People without Lens: a link for WhatsApp or any app (picked items only, never an album). */}
+      {!album && requested.length > 0 ? (
+        <Pressable style={styles.linkRow} onPress={() => setLinkSheet(true)} accessibilityRole="button">
+          <Ionicons name="link-outline" size={20} color={colors.link} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.linkRowTitle}>Share by link</Text>
+            <Text style={styles.linkRowHint}>For people without Lens: WhatsApp, messages, any app</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#636366" />
+        </Pressable>
+      ) : null}
+      {linkSheet ? <ShareLinkSheet ids={requested} onClose={() => setLinkSheet(false)} /> : null}
 
       {skipped > 0 && (
         <Text style={styles.note}>
@@ -338,6 +353,9 @@ export default function ShareScreen() {
 }
 
 const styles = StyleSheet.create({
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 8, marginBottom: 4, padding: 14, borderRadius: 16, backgroundColor: '#1C1C1E' },
+  linkRowTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  linkRowHint: { color: '#86868B', fontSize: 13, marginTop: 2 },
   fill: { flex: 1, backgroundColor: '#000' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 52 },
   headerButton: { minHeight: 44, minWidth: 64, justifyContent: 'center' },

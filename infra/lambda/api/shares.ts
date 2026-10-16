@@ -51,6 +51,8 @@ type ShareRequest = {
   albumName?: string;
   /** The sender chose to include where photos were taken (off by default: recipients get GPS-free copies). */
   withLocation?: boolean;
+  /** Made by opening a share link (links.ts): the token, so revoking the link revokes this too. */
+  linkToken?: string;
 };
 
 async function batchGet(keys: { pk: string; sk: string }[]): Promise<Record<string, any>[]> {
@@ -248,6 +250,7 @@ function view(r: ShareRequest, now = Date.now(), real = new Map<string, string>(
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,
     respondedAt: r.respondedAt,
+    viaLink: r.linkToken ? true : undefined,
   };
 }
 
@@ -385,6 +388,53 @@ export async function cancel(identity: Identity, shareId: string): Promise<Res> 
   return json(200, { status: 'revoked' });
 }
 
+/**
+ * Share links (links.ts): the recipient opened a link in Lens, which is their
+ * accept. Writes the same records as an accepted request (Sent/Shared, access,
+ * contacts), so everything else (revoke, deletion, location) works as usual.
+ */
+export async function grantFromLink(
+  owner: { id: string; name: string; account: boolean },
+  recipient: Identity,
+  media: MediaRecord[],
+  link: { token: string; withLocation: boolean },
+): Promise<{ shareId: string; count: number }> {
+  const now = Date.now();
+  const shareId = newShareId();
+  const photos = media.filter((m) => m.kind !== 'video').length;
+  const base: Omit<ShareRequest, 'pk' | 'sk'> = {
+    shareId,
+    fromId: owner.id,
+    fromName: owner.name,
+    fromAccount: owner.account,
+    toId: recipient.id,
+    toName: recipient.name,
+    toAccount: !!recipient.email,
+    mediaIds: media.map((m) => m.id),
+    photos,
+    videos: media.length - photos,
+    status: 'accepted',
+    createdAt: now,
+    expiresAt: now,
+    respondedAt: now,
+    linkToken: link.token,
+    ...(link.withLocation ? { withLocation: true } : {}),
+  };
+  await batchWrite([put({ ...base, pk: `D#${owner.id}`, sk: `OUT#${shareId}` }), put({ ...base, pk: `D#${recipient.id}`, sk: `IN#${shareId}` })]);
+  const count = await grant({ ...base, pk: `D#${recipient.id}`, sk: `IN#${shareId}` }, undefined, now);
+  return { shareId, count };
+}
+
+/** Revokes one accepted share as its sender (used when a share link is revoked). */
+export async function revokeAsSender(ownerId: string, shareId: string): Promise<void> {
+  const r = await load(`D#${ownerId}`, `OUT#${shareId}`);
+  if (!r || effectiveStatus(r) !== 'accepted') return;
+  const now = Date.now();
+  await transition(r, 'accepted', 'revoked', now).catch(() => {});
+  await batchWrite(r.mediaIds.map((id) => del({ pk: `D#${r.toId}`, sk: `S#${id}#${r.fromId}` })));
+  await Promise.all(r.mediaIds.map((id) => archiveIfOrphaned(r.fromId, id)));
+}
+
 async function block(identity: Identity, userId: string, name?: string) {
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `D#${identity.id}`, sk: `B#${userId}`, name, at: Date.now() } }));
   // Blocking also ends "always accept" from them.
@@ -484,7 +534,7 @@ export async function sharedWithMe(identity: Identity, req: Req): Promise<Res> {
  * "include location", reaches the recipient as a copy with the GPS block wiped
  * (same pixels, byte edits only; made once, next to its previews: d/<owner>/<id>/nogps.jpg).
  */
-async function withoutLocation<T extends { url?: string }>(s: Record<string, any>, owner: MediaRecord, client: T): Promise<T> {
+export async function withoutLocation<T extends { url?: string }>(s: Record<string, any>, owner: MediaRecord, client: T): Promise<T> {
   if (!owner.gps || s.withLocation || !client.url) return client;
   if (owner.kind === 'video' && VIDEO_TYPES.has(owner.contentType)) return videoWithoutLocation(s, owner, client);
   if (owner.contentType !== 'image/jpeg') return { ...client, url: undefined }; // can't wipe it safely: preview only

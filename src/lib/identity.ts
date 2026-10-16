@@ -10,6 +10,7 @@ import { Platform } from 'react-native';
 
 import { installReferrer, isEmulator } from '../../modules/lens-device';
 import { api, IdentityResponse } from './api';
+import { markFreshInstall } from './share-link';
 
 /** `email` is set once the guest identity became a signed-in account. */
 export type Identity = IdentityResponse;
@@ -98,5 +99,7 @@ export async function ensureIdentity(): Promise<Identity> {
   const ref = Platform.OS === 'android' ? await installReferrer() : undefined;
   const created = await api.register(deviceLabel(), await deviceFingerprint(), { ref, emulator: isEmulator() || undefined });
   await saveIdentity(created);
+  // A share link may have brought this install (Play referrer, or the clipboard after the website).
+  markFreshInstall(ref);
   return created;
 }

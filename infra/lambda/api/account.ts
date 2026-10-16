@@ -12,6 +12,7 @@ import { BatchWriteCommand, DeleteCommand, GetCommand, QueryCommand, ScanCommand
 import type { Identity } from './identity';
 import { clearedCookie, ddb, env, HttpError, json, Req, Res, withCookies } from './lib';
 import { deleteAllVersions, deleteShares } from './trash';
+import { deleteLinksOf } from './links';
 
 const lambda = new LambdaClient({});
 export const DELETING_GSI = 'DELETING';
@@ -129,6 +130,9 @@ async function deletePartition(id: string, prefix?: string) {
 export async function continueAccountDeletion(id: string, deadline: number): Promise<boolean> {
   const profile = (await ddb.send(new GetCommand({ TableName: env.table, Key: profileKey(id) }))).Item;
   if (!profile?.deleting) return true;
+
+  // Share links this account made stop working at once (docs/features/share-links.md).
+  await deleteLinksOf(id);
 
   // Shares this account gave (recipients lose access), media by media.
   for (const media of await partitionItems(id, 'M#')) {

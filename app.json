@@ -49,6 +49,11 @@
               "scheme": "https",
               "host": "lens.instagrowapp.com",
               "pathPrefix": "/u/"
+            },
+            {
+              "scheme": "https",
+              "host": "lens.instagrowapp.com",
+              "pathPrefix": "/s/"
             }
           ],
           "category": [

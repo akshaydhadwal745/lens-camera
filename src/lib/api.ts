@@ -129,6 +129,22 @@ export type UploadPlan = PlanExtras &
 export type OAuthTokens = { accessToken: string; refreshToken?: string; expiresAt: number; accountId?: string };
 /** Someone to share with: `account` = signed in (not a guest phone); `sharedBefore` = an accepted share before. */
 /** Settings → Blocked people; name is null when their account was deleted. */
+/** A share link (docs/features/share-links.md). */
+export type ShareLink = {
+  token: string;
+  url: string;
+  count: number;
+  photos: number;
+  videos: number;
+  mode: 'anyone' | 'one';
+  withLocation: boolean;
+  createdAt: number;
+  expiresAt: number;
+  status: 'active' | 'expired' | 'revoked' | 'used';
+  opens: number;
+  mediaIds: string[];
+  claims?: { id: string; name: string; realName: string | null; at: number }[];
+};
 export type BlockedPerson = { id: string; name: string | null; realName?: string | null; at: number };
 export type Person = { id: string; name: string; realName?: string | null; account?: boolean; sharedBefore?: boolean; exact?: boolean; lastSharedAt?: number | null };
 /** suggestMe: they let their friends' Lens suggest sharing with them (People). */
@@ -152,6 +168,8 @@ export type ShareRequest = {
   album?: { id: string; name: string };
   /** Sent list only, not for albums: the sender's own item ids. */
   mediaIds?: string[];
+  /** Made by someone opening a share link. */
+  viaLink?: boolean;
 };
 type Page<T> = { items: T[]; cursor: string | null };
 export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
@@ -338,6 +356,18 @@ export const api = {
   declineShare: (id: string, block = false) => request<{ status: ShareStatus; blocked: boolean }>('POST', `/shares/in/${id}/decline`, { block }),
   cancelShare: (id: string) => request<{ status: ShareStatus }>('POST', `/shares/out/${id}/cancel`),
   blocked: () => request<{ blocked: BlockedPerson[] }>('GET', '/blocks'),
+  // Share links: for people without Lens (WhatsApp, messages…).
+  createLink: (mediaIds: string[], expires: '1d' | '7d' | '30d', mode: 'anyone' | 'one', includeLocation: boolean) =>
+    request<{ link: ShareLink }>('POST', '/links', { mediaIds, expires, mode, includeLocation }),
+  links: () => request<{ links: ShareLink[] }>('GET', '/links'),
+  revokeLink: (token: string) => request<{ status: string; revoked: number }>('POST', `/links/${token}/revoke`),
+  openLink: (token: string) =>
+    request<{ own?: boolean; shareId?: string; ownerId?: string; mediaIds: string[]; count?: number }>('POST', `/links/${token}/open`),
+  linkInfo: (token: string) =>
+    request<{ link: { from: { name: string; realName: string | null }; count: number; photos: number; videos: number; mode: 'anyone' | 'one'; status: ShareLink['status']; expiresAt: number } }>(
+      'GET',
+      `/links/${token}`,
+    ),
   setBlocked: (userId: string, blocked: boolean) => request<{ blocked: boolean }>(blocked ? 'POST' : 'DELETE', `/blocks/${userId}`),
   setTrusted: (userId: string, trusted: boolean) => request<{ trusted: boolean }>('PUT', `/contacts/${userId}`, { trusted }),
   // Push notifications (FCM token per phone) and which kinds the user wants.

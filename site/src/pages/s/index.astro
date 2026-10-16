@@ -1,0 +1,103 @@
+---
+// /s/<token>/: a share link (docs/features/share-links.md). With Lens installed,
+// Android opens the app straight away (App Links) and the photos land in the
+// Shared tab. Without it, this page shows them (location removed unless the
+// sender included it) and offers Lens; "Get Lens" carries the link through the
+// install (Play install referrer, or the clipboard for the website APK).
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout lang="en" path="s" title="Shared with you" description="Photos and videos shared with you on Lens." noindex>
+  <section class="block share">
+    <div class="narrow">
+      <p class="kicker">Shared with you</p>
+      <h1 id="share-title">Loading…</h1>
+      <p class="lead" id="share-meta"></p>
+      <p class="note" id="share-private" hidden>
+        This link is for one person. Open it in Lens to see the photos: the first person who opens it in Lens gets them, and nobody else can after
+        that.
+      </p>
+    </div>
+    <div class="feed" id="share-feed" aria-live="polite"></div>
+    <div class="narrow">
+      <p class="note" id="share-after" hidden>
+        Get Lens and open it: what was shared with you is waiting in your <strong>Shared</strong> tab, in full quality. No need to ask for it again.
+      </p>
+      <p class="note" id="share-iphone" hidden>Lens for iPhone is coming soon. You can save the photos from this page.</p>
+    </div>
+  </section>
+  <div class="bar" id="share-bar" hidden>
+    <a class="btn btn-primary" id="open-app" href="/download/">Open in Lens</a>
+    <a class="btn" id="get-app" href="/download/">Get Lens</a>
+  </div>
+</Layout>
+
+<style>
+  .kicker {
+    color: var(--accent, #facc15);
+    font: 600 12px/1 var(--mono, ui-monospace, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .share {
+    padding-bottom: 120px;
+  }
+  .feed {
+    display: grid;
+    gap: 16px;
+    max-width: 720px;
+    margin: 24px auto 0;
+    padding: 0 16px;
+  }
+  .feed figure {
+    margin: 0;
+    background: #1c1c1e;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .feed img,
+  .feed video {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 80vh;
+    object-fit: contain;
+    background: #000;
+  }
+  .feed figcaption {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 14px;
+  }
+  .feed figcaption a {
+    color: var(--link, #2997ff);
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    z-index: 10;
+  }
+  .bar .btn {
+    flex: 1;
+    max-width: 260px;
+    text-align: center;
+  }
+  .status-error {
+    color: #ff453a;
+  }
+</style>
+
+<script>
+  import '../../scripts/share-link.ts';
+</script>

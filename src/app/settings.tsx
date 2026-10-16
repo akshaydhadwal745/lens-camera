@@ -826,6 +826,8 @@ export default function SettingsScreen() {
               <View style={styles.divider} />
               <LinkRow icon="swap-horizontal-outline" label="Requests and sent" onPress={() => router.push('/shares')} />
               <View style={styles.divider} />
+              <LinkRow icon="link-outline" label="Share links" onPress={() => router.push('/links' as Href)} />
+              <View style={styles.divider} />
               <LinkRow icon="hand-left-outline" label="Blocked people" onPress={() => router.push('/blocked')} />
             </Section>
 
