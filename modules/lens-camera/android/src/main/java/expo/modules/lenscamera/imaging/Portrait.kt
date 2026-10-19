@@ -125,7 +125,10 @@ object Portrait {
       } else {
         subjectMask(upright)?.also { lastKind = "subject" } ?: return false
       }
-      var maskBitmap = refine(upright, coarse)
+      // Refinement only sharpens the edges: if it fails, the coarse mask still makes the portrait.
+      var maskBitmap = runCatching { refine(upright, coarse) }
+        .onFailure { Log.w(TAG, "edge refinement failed, using the coarse mask", it) }
+        .getOrElse { Bitmap.createScaledBitmap(coarse, upright.width, upright.height, true) }
       // …then store it in the photo's stored orientation (that's how the renderer samples it).
       val inverse = Matrix().also { toUpright.invert(it) }
       maskBitmap = Bitmap.createBitmap(maskBitmap, 0, 0, maskBitmap.width, maskBitmap.height, inverse, true)
@@ -172,10 +175,22 @@ object Portrait {
     val band = 0.015f * max(w, h)
     val dist = edgeDistance(p, w, h, band)
     val out = IntArray(n)
+    var bad = 0
     for (i in 0 until n) {
       val t = (1f - dist[i] / band).coerceIn(0f, 1f)
-      val v = ((refined[i] * t + p[i] * (1f - t)).coerceIn(0f, 1f) * 255).roundToInt()
+      // coerceIn lets NaN through: a pixel the filter couldn't solve keeps the coarse value
+      // (seen on the Galaxy S8, 2026-10-19: "Cannot round NaN value" dropped the whole mask).
+      var mixed = refined[i] * t + p[i] * (1f - t)
+      if (!mixed.isFinite()) {
+        bad++
+        mixed = p[i]
+      }
+      val v = (mixed.coerceIn(0f, 1f) * 255).roundToInt()
       out[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+    }
+    if (bad > 0) {
+      Log.w(TAG, "refine: $bad of $n pixels not finite (${w}x$h, guide ${guide.count { !it.isFinite() }}, " +
+        "refined ${refined.count { !it.isFinite() }}, dist ${dist.count { !it.isFinite() }})")
     }
     return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
   }
