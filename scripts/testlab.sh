@@ -31,7 +31,10 @@ run_matrix() { # apk-name devices...
   curl -sfL -o "$WORK/$apk" "https://github.com/$REPO/releases/download/dev-$N/$apk"
   local args=()
   for d in "$@"; do args+=(--device "model=${d%/*},version=${d#*/}"); done
-  local type=(--type game-loop --scenario-numbers 1 --timeout 600s)
+  # 15 min: budget phones on Test Lab racks can spend minutes waiting for Play services to
+  # download the ML Kit models; at 10 min the A14 (dev-136) and OnePlus (dev-131) were cut off
+  # mid-run with no result. Override with SELFTEST_TIMEOUT=600s.
+  local type=(--type game-loop --scenario-numbers 1 --timeout "${SELFTEST_TIMEOUT:-900s}")
   [ "${TYPE:-}" = robo ] && type=(--type robo --timeout 300s)
   "$G" firebase test android run --project "$PROJECT" "${type[@]}" \
     --app "$WORK/$apk" "${args[@]}" --async >/dev/null 2>"$WORK/run.log" || { grep -E "ERROR|Reason" "$WORK/run.log" >&2; exit 1; }
