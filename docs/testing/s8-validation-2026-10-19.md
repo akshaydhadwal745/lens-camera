@@ -30,7 +30,8 @@ alone. Evidence files: `test-results/dev-131|134|136/` and the session scratchpa
 | B7 | low | Free-up-space dialog promised a system confirm + trash (Android 9/10 deletes at once); "1 imported photo and video"; "Something went wrong" for a denied permission | copy | platform-aware text, counts, "Photos access needed" (dev-134) | |
 | B8 | low | Requests list still "Waiting" after Decline | list loaded once | `useFocusEffect` reload (dev-135) | |
 | — | low | "Only these one item" | copy | fixed (dev-135) | |
-| — | tooling | Test Lab cut slow rack phones at 10 min (no result) | Play services model downloads | self-test timeout 15 min | re-run queued |
+| — | tooling | Test Lab cut slow rack phones at 10 min (no result) | Play services model downloads | self-test timeout 15 min | A14 re-run finished |
+| — | tooling | Self-test hung forever on the Pixel 8a (quality-sample upload never finished on a slow network) | no timeout on the upload | 3-min bound, warning instead (dev-137) | re-run pending |
 
 ## Results by checklist item (S8)
 
@@ -44,13 +45,13 @@ alone. Evidence files: `test-results/dev-131|134|136/` and the session scratchpa
 | 2.1 EV + lock | ✅ after B1/B2 | request dumps |
 | 2.2 volume key | ✅ photo, volume unchanged | |
 | 2.3 timer | ✅ 3 s → capture 3.76 s | |
-| 2.5 mirror selfie | ⚠ EXIF orientation 4 (mirrored); text test open | |
+| 2.5 mirror selfie | ✅ on → EXIF orientation 4 (mirrored), off → 3 | |
 | 2.6 location | ✅ after B5; shared originals GPS-free (same bytes) | |
 | 3.1 video | ✅ 1080p30 + AAC in sync, live upload | ffprobe |
 | 3.3 pause | ✅ self-test 2.8 s clip with 2 s left out | |
 | 3.4 time-lapse | ✅ 26 s → 59 frames, 1.97 s at 30 fps | |
 | 3.5 slow motion | ✗ hidden: CameraX 1.6 exposes no high-speed on the S8 (Camera2 has 720p 120/240; stock app has Super Slow-mo) | Camera info |
-| 3.9 keep awake | see below | |
+| 3.9 keep awake | ✅ 30 s timeout: camera on screen → still on at 75 s, off at 200 s (2-min idle release); launcher cold start → on at 50/80 s | dumpsys power |
 | 3.10 shutter → gallery | ✅ instant, photo saved | |
 | 3.11 live upload time-lapse | ⚠ file only grows at stop on the S8 (no head start) | |
 | 4.2 live portrait | ✅ real person, 23.7 fps | |
@@ -103,8 +104,8 @@ multi-frame merge already matches the stock noise. Recommendation below.
 |---|---|---|
 | Old | F01L Android 8.1 | 30 pass / 1 warn / 0 fail |
 | Budget | OPPO A79 Android 14 | 30 / 3 / 0 |
-| Budget | Galaxy A14 5G | no result: cut at 10 min waiting for Play services models → re-run with 15 min |
-| Mid | Pixel 8a | 19 / 14 / 3 — the rack phone had partial connectivity (no token, no uploads, no model downloads); 76 % of 16 MP is the known CameraX limit |
+| Budget | Galaxy A14 5G | re-run (15 min): 28 / 3 / 1 — People "LiteRT not available" (known for this rack phone), Play services downloads timed out on the rack |
+| Mid | Pixel 8a | run 1: 19 / 14 / 3 with partial connectivity; run 2 (network fine): **hung 13 min on the quality-sample upload** → self-test upload bounded to 3 min (dev-137), re-run pending. 76 % of 16 MP is the known CameraX limit |
 | Flagship | Galaxy S22 Ultra | 35 / 1 / 0 |
 | Screens | Robo, 2 virtual phones | 0 crashes |
 | API / website | live | 350/350, pass |
