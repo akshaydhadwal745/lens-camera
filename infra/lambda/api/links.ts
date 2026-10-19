@@ -50,8 +50,9 @@ type LinkRecord = {
   ttl: number;
 };
 
+/** On the website's own domain: what people see and what Android verifies for "open in Lens" (App Links). */
 export function linkUrl(token: string): string {
-  return `https://${env.cdnDomain}/s/${token}`;
+  return `${env.webOrigin || `https://${env.cdnDomain}`}/s/${token}`;
 }
 
 function linkStatus(l: LinkRecord, now = Date.now()): 'active' | 'expired' | 'revoked' | 'used' {
