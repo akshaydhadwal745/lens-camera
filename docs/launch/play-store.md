@@ -103,7 +103,7 @@ Face data (People) is processed **on the phone only** and is not collected (neve
 | Advertising ID | ✅ not used (no `AD_ID` permission, no ads SDK) → declare "No ads" | manifest |
 | Background location | ✅ none (fine/coarse only while the camera is open, opt-in) | |
 | Store graphics | ✅ icon 512×512, feature graphic 1024×500, 5 phone screenshots 1080×2160 | `docs/launch/assets/` |
-| Bundle | ⏳ `Lens-play-dev-137` (Play bundle workflow) | |
+| Bundle | ✅ `Lens-play-dev-137.aab` (120 MB: arm64, armeabi-v7a, x86, x86_64), signed with the release key (SHA-256 BD:D5:…:3B) | Play bundle run 39236829992 |
 
 ## Decision before the first upload: package name
 
