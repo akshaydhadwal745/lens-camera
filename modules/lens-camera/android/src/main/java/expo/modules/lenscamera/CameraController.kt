@@ -1425,12 +1425,21 @@ class CameraController(private val context: Context) {
         } else if (ok && file.exists() && file.length() > 0) {
           done(Result.success(mapOf("uri" to "file://${file.absolutePath}", "duration" to event.recordingStats.recordedDurationNanos / 1e9, "startDelayMs" to startDelayMs, "slowFactor" to if (config.isSlowMo) slowFactor else 1)))
         } else {
-          done(Result.failure(CameraException(event.cause?.message ?: "Recording failed (code ${event.error})")))
+          done(Result.failure(CameraException(recordingError(event.error) ?: event.cause?.message ?: "Recording failed (code ${event.error})")))
         }
         // Settings that changed while recording (e.g. resolution) apply now.
         if (running) bind()
       }
     }
+  }
+
+  /** CameraX VideoRecordEvent.Finalize errors in plain words (null = use CameraX's message). */
+  private fun recordingError(code: Int): String? = when (code) {
+    VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA -> "Nothing was recorded: it stopped before the first frame. Tap record and wait for the timer."
+    VideoRecordEvent.Finalize.ERROR_INSUFFICIENT_STORAGE -> "Your phone is out of storage. Free up some space and try again."
+    VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE -> "The camera stopped while recording (another app may have taken it)."
+    VideoRecordEvent.Finalize.ERROR_ENCODING_FAILED -> "This phone couldn't encode the video. Try a lower resolution in PRO."
+    else -> null
   }
 
   fun stopRecording() {

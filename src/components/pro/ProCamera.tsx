@@ -528,7 +528,10 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       })
       .catch((error) => {
         live?.cancel();
-        notify('Recording failed', errorMessage(error), 'problem');
+        // CameraX "no valid data" (code 8): stopped before the first frame, e.g. a double tap. Not a fault.
+        const message = errorMessage(error);
+        if (/\(code 8\)|Nothing was recorded/.test(message)) notify('Nothing recorded', 'It stopped before the first frame. Tap record and wait for the timer.');
+        else notify('Recording failed', message, 'problem');
       })
       .finally(() => {
         setRecording(false);
