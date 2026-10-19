@@ -4,6 +4,7 @@ import { File, Paths } from 'expo-file-system';
 
 import { LensImaging } from '../../modules/lens-camera';
 import { PREVIEW_PX, THUMB_PX } from './derivatives';
+import { stripJpegMetadata } from './jpeg-meta';
 import { EditRecipe } from './edits';
 import { downloadFromStorage } from './storage';
 import { extensionFor } from './storage/useOriginal';
@@ -41,5 +42,8 @@ export async function renderCloudDerivatives(remote: RemoteMedia, edit: EditReci
   }
   const preview = await LensImaging.renderImage(source, recipe, { maxPixel: PREVIEW_PX, format: 'jpeg', quality: 0.85 });
   const thumb = await LensImaging.renderImage(preview.uri, null, { maxPixel: THUMB_PX, format: 'jpeg', quality: 0.8 });
+  // Other people see these: no EXIF, so no GPS (src/lib/jpeg-meta.ts). Rendered upright already.
+  stripJpegMetadata(preview.uri);
+  stripJpegMetadata(thumb.uri);
   return { preview: new File(preview.uri), thumb: new File(thumb.uri) };
 }

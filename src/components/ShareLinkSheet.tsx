@@ -90,7 +90,7 @@ export function ShareLinkSheet({ ids, onClose }: { ids: string[]; onClose: () =>
               </View>
             ))}
           </ScrollView>
-          <Text style={styles.note}>Only these {items.length === 1 ? 'one item' : `${items.length} items`}. Not your albums or the rest of your library.</Text>
+          <Text style={styles.note}>{items.length === 1 ? 'Only this one item' : `Only these ${items.length} items`}. Not your albums or the rest of your library.</Text>
 
           {link ? (
             <>

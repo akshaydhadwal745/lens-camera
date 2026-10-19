@@ -2,7 +2,7 @@
 // shared (Sent). Nothing reaches your Shared tab until you accept; what you sent
 // can be cancelled while it's waiting and revoked after (docs/design/sharing-consent.md).
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,24 +61,27 @@ export function SharesList({ initial }: { initial: 'in' | 'out' }) {
     void askForNotifications();
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    (tab === 'in' ? api.sharesIn() : api.sharesOut()).then(
-      (r) => {
-        if (!alive) return;
-        setNow(Date.now());
-        setItems(r.requests);
-      },
-      (error) => {
-        if (!alive) return;
-        setItems([]);
-        notify('Could not load', errorMessage(error));
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [tab]);
+  // On every visit, not just the first: back from a request (accept/decline) shows its new status.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      (tab === 'in' ? api.sharesIn() : api.sharesOut()).then(
+        (r) => {
+          if (!alive) return;
+          setNow(Date.now());
+          setItems(r.requests);
+        },
+        (error) => {
+          if (!alive) return;
+          setItems([]);
+          notify('Could not load', errorMessage(error));
+        },
+      );
+      return () => {
+        alive = false;
+      };
+    }, [tab]),
+  );
 
   const switchTab = (t: 'in' | 'out') => {
     if (t === tab) return;

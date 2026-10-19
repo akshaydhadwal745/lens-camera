@@ -6,6 +6,7 @@ import { ImageManipulator, ImageRef, SaveFormat } from 'expo-image-manipulator';
 import { createVideoPlayer } from 'expo-video';
 
 import { isImagingAvailable, LensImaging } from '../../modules/lens-camera';
+import { stripJpegMetadata } from './jpeg-meta';
 import { EditRecipe, isNeutral, withoutTrim } from './edits';
 import { captureFile, uriFor } from './local-store';
 import { LocalEntry } from './types';
@@ -64,6 +65,9 @@ function moveInto(uri: string, name: string): string {
 async function renderEdited(sourceUri: string, recipe: EditRecipe, entry: LocalEntry, stamp: string) {
   const preview = await LensImaging!.renderImage(sourceUri, recipe, { maxPixel: PREVIEW_PX, format: 'jpeg', quality: 0.85 });
   const thumb = await LensImaging!.renderImage(preview.uri, null, { maxPixel: THUMB_PX, format: 'jpeg', quality: 0.8 });
+  // Other people see these: no EXIF, so no GPS (src/lib/jpeg-meta.ts). Rendered upright already.
+  stripJpegMetadata(preview.uri);
+  stripJpegMetadata(thumb.uri);
   return {
     previewFile: moveInto(preview.uri, `${entry.id}.preview.${stamp}.jpg`),
     thumbFile: moveInto(thumb.uri, `${entry.id}.thumb.${stamp}.jpg`),
