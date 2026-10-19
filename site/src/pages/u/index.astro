@@ -34,7 +34,7 @@ import Layout from '../../layouts/Layout.astro';
   const button = document.getElementById('open-app') as HTMLAnchorElement | null;
   if (button && /^[A-Za-z0-9_-]{6,64}$/.test(id)) {
     button.href = /Android/i.test(navigator.userAgent)
-      ? `intent://u/${id}#Intent;scheme=lens;package=com.akshay.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
+      ? `intent://u/${id}#Intent;scheme=lens;package=com.instagrowapp.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
       : `lens://u/${id}`;
   }
 </script>

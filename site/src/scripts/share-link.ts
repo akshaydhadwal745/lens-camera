@@ -67,7 +67,7 @@ function wireButtons(getUrl: string) {
   const get = $('get-app') as HTMLAnchorElement;
   const fallback = new URL(getUrl, location.origin).toString();
   open.href = android
-    ? `intent://s/${token}#Intent;scheme=lens;package=com.akshay.lens;S.browser_fallback_url=${encodeURIComponent(fallback)};end`
+    ? `intent://s/${token}#Intent;scheme=lens;package=com.instagrowapp.lens;S.browser_fallback_url=${encodeURIComponent(fallback)};end`
     : `lens://s/${token}`;
   get.href = getUrl;
   for (const a of [open, get]) {

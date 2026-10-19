@@ -13,7 +13,7 @@ N=${1:?usage: phone-selftest.sh <build number> <adb serial> [out dir]}
 SERIAL=${2:?adb serial, e.g. 192.180.2.204:5555}
 OUT=${3:-$(pwd)/test-results/dev-$N/phones}
 REPO=akshaydhadwal745/lens-camera
-PKG=com.akshay.lens
+PKG=com.instagrowapp.lens
 source ~/.local/bin/android-env.sh 2>/dev/null || true
 A=(timeout 60 adb -s "$SERIAL")
 case "$SERIAL" in *:*) adb connect "$SERIAL" >/dev/null 2>&1 || true ;; esac

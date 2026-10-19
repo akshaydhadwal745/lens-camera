@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-PACKAGE = "com.akshay.lens"
+PACKAGE = "com.instagrowapp.lens"
 MARK = {"pass": "✓", "warn": "!", "fail": "✗", "skip": "–"}
 
 

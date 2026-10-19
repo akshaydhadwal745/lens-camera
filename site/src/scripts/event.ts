@@ -46,7 +46,7 @@ function say(text: string, error = false) {
 const openApp = $('open-app') as HTMLAnchorElement;
 if (valid) {
   openApp.href = /Android/i.test(navigator.userAgent)
-    ? `intent://e/${code}#Intent;scheme=lens;package=com.akshay.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
+    ? `intent://e/${code}#Intent;scheme=lens;package=com.instagrowapp.lens;S.browser_fallback_url=${encodeURIComponent(location.origin + '/download/')};end`
     : `lens://e/${code}`;
 }
 

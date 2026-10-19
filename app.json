@@ -10,10 +10,10 @@
     "backgroundColor": "#0B1020",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.akshay.lens"
+      "bundleIdentifier": "com.instagrowapp.lens"
     },
     "android": {
-      "package": "com.akshay.lens",
+      "package": "com.instagrowapp.lens",
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.ACTIVITY_RECOGNITION",

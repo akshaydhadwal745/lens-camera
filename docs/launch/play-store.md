@@ -105,14 +105,21 @@ Face data (People) is processed **on the phone only** and is not collected (neve
 | Store graphics | ✅ icon 512×512, feature graphic 1024×500, 5 phone screenshots 1080×2160 | `docs/launch/assets/` |
 | Bundle | ✅ `Lens-play-dev-137.aab` (120 MB: arm64, armeabi-v7a, x86, x86_64), signed with the release key (SHA-256 BD:D5:…:3B) | Play bundle run 39236829992 |
 
-## Decision before the first upload: package name
+## Package name: `com.instagrowapp.lens` (decided 2026-10-19)
 
-The package name is **`com.akshay.lens`** and it can never change on Play once uploaded.
-Keeping it is the low-risk choice: App Links (`assetlinks.json`), the Google sign-in Android
-client, Firebase, the OTA runtime and everyone's existing install all use it, and users only
-see it in the Play URL (`play.google.com/store/apps/details?id=com.akshay.lens`). Changing it
-(e.g. `com.instagrowapp.lens`) means a new Firebase app, OAuth client, assetlinks entry, and
-current testers reinstalling. **Recommendation: keep it.**
+The owner chose `com.instagrowapp.lens` (permanent on Play). Done for the switch:
+- `app.json` Android package and iOS bundle id.
+- Firebase project `lens-5df67`: second Android app `com.instagrowapp.lens`
+  (1:786852806412:android:430a1944060ec7398b1329) with the release SHA-256; `google-services.json`
+  (local + GitHub secret `GOOGLE_SERVICES_JSON`) lists both packages, so push works for old and new.
+- `assetlinks.json` lists both packages (App Links open either app).
+- Website `intent://` links, S8 / Test Lab / Device Farm scripts.
+- Google sign-in runs in the browser (web OAuth client): no Android client to change.
+
+Existing website installs (`com.akshay.lens`) can't be upgraded in place: after the next promote
+their "New Lens version" pill installs the new app next to the old one. The new app gets the same
+guest account back (same signing key → same Android ID → same device fingerprint); signed-in users
+sign in again. Then uninstall the old Lens once everything in it shows Safe.
 
 ## Play Console answers (ready to paste)
 

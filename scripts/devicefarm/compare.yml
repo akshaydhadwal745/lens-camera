@@ -9,7 +9,7 @@ phases:
       - echo "Stock camera vs Lens on $DEVICEFARM_DEVICE_NAME ($DEVICEFARM_DEVICE_OS_VERSION)"
   pre_test:
     commands:
-      - for p in CAMERA RECORD_AUDIO POST_NOTIFICATIONS; do adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.akshay.lens android.permission.$p || true; done
+      - for p in CAMERA RECORD_AUDIO POST_NOTIFICATIONS; do adb -s $DEVICEFARM_DEVICE_UDID shell pm grant com.instagrowapp.lens android.permission.$p || true; done
       - adb -s $DEVICEFARM_DEVICE_UDID shell input keyevent KEYCODE_WAKEUP || true
       - adb -s $DEVICEFARM_DEVICE_UDID shell settings put system screen_off_timeout 600000 || true
   test:
@@ -28,7 +28,7 @@ phases:
         [ -n "$NEW" ] && $A pull "/sdcard/DCIM/Camera/$NEW" $DEVICEFARM_LOG_DIR/stock-photo.jpg || true
         $A shell am force-stop ${STOCK%%/*} || true
         # 2. Lens, opened like a user does (intro animation, then the camera).
-        $A shell am start -n com.akshay.lens/.MainActivity
+        $A shell am start -n com.instagrowapp.lens/.MainActivity
         sleep 14; shot lens-1; sleep 5; shot lens-2
   post_test:
     commands:
