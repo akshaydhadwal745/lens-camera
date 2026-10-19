@@ -14,7 +14,7 @@ import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res } from './lib'
 
 const ses = new SESv2Client({});
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-export const CONTACT_TOPICS = ['support', 'privacy', 'grievance', 'delete-account', 'affiliate', 'business', 'other'] as const;
+export const CONTACT_TOPICS = ['support', 'privacy', 'grievance', 'delete-account', 'report', 'affiliate', 'business', 'other'] as const;
 const KEEP_SECONDS = 2 * 365 * 86400;
 
 const clean = (v: unknown, max: number) =>
