@@ -176,12 +176,14 @@ object Portrait {
     val dist = edgeDistance(p, w, h, band)
     val out = IntArray(n)
     var bad = 0
+    var firstBad: String? = null
     for (i in 0 until n) {
       val t = (1f - dist[i] / band).coerceIn(0f, 1f)
       // coerceIn lets NaN through: a pixel the filter couldn't solve keeps the coarse value
       // (seen on the Galaxy S8, 2026-10-19: "Cannot round NaN value" dropped the whole mask).
       var mixed = refined[i] * t + p[i] * (1f - t)
       if (!mixed.isFinite()) {
+        if (bad == 0) firstBad = "i=$i refined=${refined[i]} p=${p[i]} dist=${dist[i]} band=$band t=$t mixed=$mixed"
         bad++
         mixed = p[i]
       }
@@ -190,7 +192,7 @@ object Portrait {
     }
     if (bad > 0) {
       Log.w(TAG, "refine: $bad of $n pixels not finite (${w}x$h, guide ${guide.count { !it.isFinite() }}, " +
-        "refined ${refined.count { !it.isFinite() }}, dist ${dist.count { !it.isFinite() }})")
+        "refined ${refined.count { !it.isFinite() }}, dist ${dist.count { !it.isFinite() }}; first: $firstBad)")
     }
     return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
   }

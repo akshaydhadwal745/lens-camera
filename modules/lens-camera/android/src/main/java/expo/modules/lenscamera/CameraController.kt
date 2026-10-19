@@ -705,7 +705,10 @@ class CameraController(private val context: Context) {
     val (iso0, ns0, ev0) = frozen
     val isoRange = f.isoRange!!
     val nsRange = f.exposureRangeNs!!
-    val gain = Math.pow(2.0, config.ev - ev0)
+    // In the camera's EV steps, like the label (S8: 0.5) and like unlocked exposure compensation.
+    val step = camera?.cameraInfo?.exposureState?.exposureCompensationStep?.toDouble() ?: 0.0
+    val delta = (config.ev - ev0).let { if (step > 0) (it / step).roundToInt() * step else it }
+    val gain = Math.pow(2.0, delta)
     val iso = (iso0 * gain).roundToInt().coerceIn(isoRange.lower, isoRange.upper)
     val rest = iso0 * gain / iso
     val ns = (ns0 * rest).toLong().coerceIn(nsRange.lower, maxOf(ns0, minOf(nsRange.upper, 66_666_666L)))
@@ -1079,7 +1082,10 @@ class CameraController(private val context: Context) {
     val ns = lastExposureNs ?: 0L
     val now = SystemClock.elapsedRealtime()
     val dark = isDark()
-    val bright = iso <= 400 && ns <= 33_000_000L
+    // 1/25 s counts as bright: under 50 Hz mains light auto exposure settles on 1/25 s (anti-flicker)
+    // in an ordinary room, and with ≤ 1/30 s the auto path never came back from best quality once a
+    // dim moment had moved it there (Galaxy S8 office, 2026-10-19: every burst then rebuilt the camera).
+    val bright = iso <= 400 && ns <= 41_700_000L
     dimSince = if (dark) (dimSince.takeIf { it > 0 } ?: now) else 0L
     brightSince = if (bright) (brightSince.takeIf { it > 0 } ?: now) else 0L
     val next = when {

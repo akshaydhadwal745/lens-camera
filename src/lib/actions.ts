@@ -62,7 +62,8 @@ export async function shareMedia(item: GalleryItem): Promise<void> {
 export async function saveToDevice(item: GalleryItem): Promise<void> {
   const permission = await MediaLibrary.requestPermissionsAsync(true);
   if (!permission.granted) {
-    throw new Error('Photos access was denied. Enable it in Settings to save.');
+    // A choice, not a failure: the viewer titles it "Photos access needed".
+    throw Object.assign(new Error('Lens can save to your phone once you allow photos access in Settings.'), { name: 'PermissionDenied' });
   }
   await MediaLibrary.Asset.create(await outputFileUri(item));
 }

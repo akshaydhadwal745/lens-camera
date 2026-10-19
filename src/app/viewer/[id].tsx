@@ -339,7 +339,8 @@ function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
       await action();
       if (success) notify(success);
     } catch (error) {
-      notify('Something went wrong', errorMessage(error));
+      const denied = error instanceof Error && error.name === 'PermissionDenied';
+      notify(denied ? 'Photos access needed' : 'Something went wrong', errorMessage(error));
     } finally {
       setBusy(false);
     }

@@ -47,6 +47,14 @@ import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 import { RealNameSheet } from '@/components/RealNameSheet';
 
 const isWeb = Platform.OS === 'web';
+
+/** "1 imported photo", "3 imported photos and 1 video". */
+function describeItems(photos: number, videos: number): string {
+  const part = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (!videos) return `${part(photos, 'imported photo')}`;
+  if (!photos) return `${part(videos, 'imported video')}`;
+  return `${part(photos, 'imported photo')} and ${part(videos, 'video')}`;
+}
 // Same units as everywhere else (1 GB = 1024³ bytes; quotas are set that way, so 100 GB shows as 100).
 const GB = 1024 ** 3;
 const formatGB = (bytes: number) => (bytes >= GB ? `${Math.round(bytes / GB)} GB` : formatBytes(bytes));
@@ -458,13 +466,19 @@ export default function SettingsScreen() {
 
   // Gallery originals of imported items that are safe in Lens (Android).
   const galleryCount = useStore((s) => galleryCleanupCandidates(s).length);
+  const galleryVideos = useStore((s) => galleryCleanupCandidates(s).filter((e) => e.kind === 'video').length);
   const galleryBytes = useStore((s) => galleryCleanupCandidates(s).reduce((n, e) => n + e.size, 0));
   const [galleryBusy, setGalleryBusy] = useState(false);
   const onRemoveFromGallery = async () => {
     if (!galleryCount || galleryBusy) return;
     const ok = await confirmDestructive(
       'Remove from phone gallery?',
-      `${galleryCount} imported photo${galleryCount === 1 ? '' : 's'} and video${galleryCount === 1 ? '' : 's'} (${formatBytes(galleryBytes)}) are backed up in Lens. Each one is checked against its copy in Lens first; anything that doesn't match exactly stays. Android will ask you to confirm, and keeps them in its trash for a while.`,
+      `${describeItems(galleryCount - galleryVideos, galleryVideos)} (${formatBytes(galleryBytes)}) ${galleryCount === 1 ? 'is' : 'are'} backed up in Lens. Each one is checked against its copy in Lens first; anything that doesn't match exactly stays. ${
+        // Android 11+ asks first and keeps a trash; older Android deletes at once (GalleryCleanup.kt).
+        Number(Platform.Version) >= 30
+          ? 'Android will ask you to confirm, and keeps them in its trash for a while.'
+          : 'This Android version has no gallery trash: they are deleted from the phone right away (your copy in Lens stays).'
+      }`,
       'Check and remove',
     );
     if (!ok) return;

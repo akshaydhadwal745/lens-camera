@@ -37,8 +37,11 @@ class LocationTracker(private val context: Context) {
       for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
         if (!runCatching { m.isProviderEnabled(provider) }.getOrDefault(false)) continue
         runCatching { m.getLastKnownLocation(provider) }.getOrNull()?.let { offer(it) }
-        // Every 5 s / 10 m at most, and only while the camera is on screen.
-        runCatching { m.requestLocationUpdates(provider, 5_000L, 10f, listener, Looper.getMainLooper()) }
+        // Every 5 s at most, and only while the camera is on screen. No distance filter: a
+        // phone that stays put would get no new fix, and after MAX_AGE_MS its photos lost
+        // their location (Galaxy S8, 2026-10-19: none after 10 min in one room). The receiver
+        // runs at this interval anyway; the filter only dropped the callbacks.
+        runCatching { m.requestLocationUpdates(provider, 5_000L, 0f, listener, Looper.getMainLooper()) }
           .onFailure { Log.w(TAG, "location updates from $provider failed", it) }
       }
       listening = true
