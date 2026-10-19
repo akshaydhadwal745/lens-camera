@@ -109,7 +109,7 @@ export type AffiliateDashboard = {
   payouts?: { month: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string }[];
 };
 export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
-export type FeedbackKind = 'review' | 'issue' | 'idea' | 'other';
+export type FeedbackKind = 'review' | 'issue' | 'idea' | 'other' | 'report';
 export type FeedbackItem = {
   id: string; reference: string; kind: FeedbackKind; source?: string; rating?: number; message: string; email?: string; accountEmail?: string;
   device?: Record<string, string>; at: number; status: string; emailStatus?: string;

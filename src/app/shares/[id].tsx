@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { STATUS_LABEL, whatText } from '@/components/SharesList';
 import { Text } from '@/components/ui/Text';
 import { api, ShareRequest } from '@/lib/api';
+import { reportContent } from '@/lib/report';
 import { refreshShared } from '@/lib/store';
 import { palette } from '@/lib/theme';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -73,6 +74,19 @@ export default function ShareRequestScreen() {
       notify('Could not decline', errorMessage(e));
       setBusy(null);
     }
+  };
+
+  // Report the sender (Play UGC policy); blocking from there also declines this request.
+  const report = async () => {
+    if (!r) return;
+    const next = await reportContent({ what: 'share-request', ownerId: r.from.id, ownerName: who(r.from), shareId: r.shareId });
+    if (next !== 'block' || !pending) return;
+    try {
+      await api.declineShare(r.shareId, true);
+    } catch {
+      // Already blocked: the request can't reach the Shared tab anyway.
+    }
+    router.back();
   };
 
   const cols = width >= 700 ? 6 : 4;
@@ -145,6 +159,11 @@ export default function ShareRequestScreen() {
           </Pressable>
         </View>
       ) : null}
+      {r ? (
+        <Pressable onPress={() => void report()} disabled={busy !== null} hitSlop={8} style={styles.blockLink} accessibilityRole="button">
+          <Text style={styles.reportText}>Report {who(r.from, '')}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -172,4 +191,5 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   blockLink: { width: '100%', alignItems: 'center', paddingVertical: 6 },
   blockText: { color: palette.danger, fontSize: 14 },
+  reportText: { color: palette.soft, fontSize: 13 },
 });

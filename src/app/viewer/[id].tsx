@@ -21,6 +21,7 @@ import { ZoomableImage } from '@/components/ZoomableImage';
 
 import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
+import { reportContent } from '@/lib/report';
 import { formatBytes, formatDate, formatDuration, formatEta, formatRate } from '@/lib/format';
 import { hasEdit, useFullQuality, useMotionVideo, webCanShowOriginal } from '@/lib/full-view';
 import { confirmAndDelete } from '@/lib/delete-flow';
@@ -358,6 +359,16 @@ function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
       if (deletingLast) setIndex((i) => Math.max(0, i - 1));
     });
 
+  // Shared with me: report it (and the sender); blocking also takes it out of the list.
+  const onReport = () =>
+    run(async () => {
+      const deletingLast = index >= items.length - 1;
+      const next = await reportContent({ what: 'shared-item', ownerId: current.ownerId, ownerName: current.ownerName, mediaId: current.id });
+      if (next !== 'block') return;
+      await removeSharedItem(current);
+      if (deletingLast) setIndex((i) => Math.max(0, i - 1));
+    });
+
   if (!current) return <View style={styles.fill} />;
   const safe = current.sync === 'synced' && !current.ownerName;
   const meta = metaText(current);
@@ -482,6 +493,7 @@ function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
               disabled={busy}
               onPress={() => run(() => saveToDevice(current), isWeb ? undefined : 'Saved to Photos')}
             />
+            {shared && <Action icon="flag-outline" label="Report" disabled={busy} onPress={onReport} />}
             <Action icon="trash-outline" label={shared ? 'Remove' : 'Delete'} disabled={busy} onPress={onDelete} />
           </View>
 
