@@ -28,10 +28,15 @@ import Layout from '../../layouts/Layout.astro';
     </div>
     <div class="event-grid" id="event-grid" aria-live="polite"></div>
     <p class="note event-empty" id="event-empty" hidden>No photos yet. Be the first to add some.</p>
+    <p class="note report"><a id="event-report" href="/contact/?topic=report" rel="nofollow">Report this album</a></p>
   </section>
 </Layout>
 
 <style>
+  .report a {
+    color: inherit;
+    opacity: 0.7;
+  }
   .kicker {
     color: var(--accent, #facc15);
     font: 600 12px/1 var(--mono, ui-monospace, monospace);

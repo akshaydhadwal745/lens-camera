@@ -8,6 +8,10 @@ const hint = document.getElementById('delete-hint')!;
 
 const preset = new URLSearchParams(location.search).get('topic');
 if (preset && [...topic.options].some((o) => o.value === preset)) topic.value = preset;
+// Report links on shared pages (/s/, /e/) pass what was reported: start the message with it.
+const reported = new URLSearchParams(location.search).get('ref');
+const messageBox = form.elements.namedItem('message') as HTMLTextAreaElement | null;
+if (preset === 'report' && reported && messageBox && !messageBox.value) messageBox.value = `Reported: ${reported.slice(0, 200)}\nWhat's wrong: `;
 const syncHint = () => (hint.hidden = topic.value !== 'delete-account');
 topic.addEventListener('change', syncHint);
 syncHint();

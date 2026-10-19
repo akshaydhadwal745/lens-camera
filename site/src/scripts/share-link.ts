@@ -149,3 +149,7 @@ async function load() {
 }
 
 void load();
+
+// Report link → contact form with this page's address (Play UGC policy: reporting for everyone who can see it).
+const reportLink = document.getElementById('share-report') as HTMLAnchorElement | null;
+if (reportLink) reportLink.href = `/contact/?topic=report&ref=${encodeURIComponent(location.origin + location.pathname)}`;

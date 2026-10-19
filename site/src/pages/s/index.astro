@@ -24,6 +24,7 @@ import Layout from '../../layouts/Layout.astro';
         Get Lens and open it: what was shared with you is waiting in your <strong>Shared</strong> tab, in full quality. No need to ask for it again.
       </p>
       <p class="note" id="share-iphone" hidden>Lens for iPhone is coming soon. You can save the photos from this page.</p>
+      <p class="note report"><a id="share-report" href="/contact/?topic=report" rel="nofollow">Report this link</a></p>
     </div>
   </section>
   <div class="bar" id="share-bar" hidden>
@@ -33,6 +34,10 @@ import Layout from '../../layouts/Layout.astro';
 </Layout>
 
 <style>
+  .report a {
+    color: inherit;
+    opacity: 0.7;
+  }
   .kicker {
     color: var(--accent, #facc15);
     font: 600 12px/1 var(--mono, ui-monospace, monospace);

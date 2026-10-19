@@ -15,7 +15,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '16 October 2026', hi: '16 अक्टूबर 2026' },
+  updated: { en: '19 October 2026', hi: '19 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -246,7 +246,7 @@ export const terms: Record<Lang, LegalDoc> = {
       { h2: '2. Your account', p: ['Keep access to your email and phone secure; anyone with access to them could sign in. You are responsible for activity on your account. You must be 18 or older, or have a parent or guardian’s consent.'] },
       {
         h2: '3. Acceptable use',
-        p: ['Don’t use Lens to store or share content that is illegal, including child sexual abuse material, content that infringes others’ rights, or malware. Don’t try to break, overload or get around the limits and security of Lens. We may remove such content, report it to authorities where required by law, and suspend accounts.'],
+        p: ['Don’t use Lens to store or share content that is illegal, including child sexual abuse material, content that infringes others’ rights, or malware. Don’t send people content that harasses, threatens or sexually exploits anyone, or intimate images of someone without their consent. To report a photo, a link or a person, tap Report on what was shared with you, or use the contact form (topic “Report”); we review every report. Don’t try to break, overload or get around the limits and security of Lens. We may remove such content, report it to authorities where required by law, and suspend accounts.'],
       },
       { h2: '4. Storage limits', p: ['The free plan includes 100 GB of Lens storage after you sign in (5 GB before). When you reach the limit, new uploads pause. Storage in your own connected services is governed by those services.'] },
       {
@@ -268,7 +268,7 @@ export const terms: Record<Lang, LegalDoc> = {
     blocks: [
       { h2: '1. आपका कंटेंट आपका ही रहता है', p: ['Lens में रखी फ़ोटो और वीडियो के सारे अधिकार आपके पास रहते हैं। आप हमें सिर्फ़ वही अनुमति देते हैं जो आपके लिए Lens चलाने के लिए ज़रूरी है: स्टोर करना, कॉपी करना (बैकअप, प्रीव्यू और स्ट्रीमिंग के लिए), और जहाँ आप कहें वहाँ दिखाना या शेयर करना।'] },
       { h2: '2. आपका अकाउंट', p: ['अपने ईमेल और फ़ोन की पहुँच सुरक्षित रखें; जिसके पास इनकी पहुँच है वह साइन इन कर सकता है। आपके अकाउंट पर होने वाली गतिविधि की ज़िम्मेदारी आपकी है। आपकी उम्र 18 साल या ज़्यादा होनी चाहिए, या माता-पिता/अभिभावक की सहमति।'] },
-      { h2: '3. सही इस्तेमाल', p: ['Lens का इस्तेमाल ग़ैरक़ानूनी कंटेंट रखने या शेयर करने के लिए न करें, जिसमें बाल यौन शोषण सामग्री, दूसरों के अधिकारों का उल्लंघन करने वाला कंटेंट या मैलवेयर शामिल है। Lens की सीमाओं और सुरक्षा को तोड़ने, ओवरलोड करने या बायपास करने की कोशिश न करें। हम ऐसा कंटेंट हटा सकते हैं, क़ानून के अनुसार अधिकारियों को रिपोर्ट कर सकते हैं और अकाउंट निलंबित कर सकते हैं।'] },
+      { h2: '3. सही इस्तेमाल', p: ['Lens का इस्तेमाल ग़ैरक़ानूनी कंटेंट रखने या शेयर करने के लिए न करें, जिसमें बाल यौन शोषण सामग्री, दूसरों के अधिकारों का उल्लंघन करने वाला कंटेंट या मैलवेयर शामिल है। किसी को परेशान करने, धमकाने या किसी का यौन शोषण करने वाला कंटेंट, या किसी की सहमति के बिना उसकी निजी तस्वीरें न भेजें। किसी फ़ोटो, लिंक या व्यक्ति की रिपोर्ट करने के लिए, आपके साथ शेयर की गई चीज़ पर Report दबाएँ या संपर्क फ़ॉर्म (विषय “रिपोर्ट”) इस्तेमाल करें; हम हर रिपोर्ट की समीक्षा करते हैं। Lens की सीमाओं और सुरक्षा को तोड़ने, ओवरलोड करने या बायपास करने की कोशिश न करें। हम ऐसा कंटेंट हटा सकते हैं, क़ानून के अनुसार अधिकारियों को रिपोर्ट कर सकते हैं और अकाउंट निलंबित कर सकते हैं।'] },
       { h2: '4. स्टोरेज सीमा', p: ['फ़्री प्लान में साइन इन के बाद 100 GB Lens स्टोरेज (पहले 5 GB) शामिल है। सीमा पूरी होने पर नए अपलोड रुक जाते हैं। आपकी जोड़ी गई अपनी सेवाओं का स्टोरेज उन्हीं सेवाओं के नियमों से चलता है।'] },
       {
         h2: '4a. दोस्तों को इनवाइट करें (बोनस स्टोरेज)',
