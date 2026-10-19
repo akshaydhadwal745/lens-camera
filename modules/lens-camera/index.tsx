@@ -21,6 +21,8 @@ export type Capabilities = {
   maxShutter: number;
   minEV: number;
   maxEV: number;
+  /** EV step the camera applies (Android; e.g. 0.5 on the Galaxy S8, 1/3 on many phones). */
+  evStep?: number;
   minZoom: number;
   maxZoom: number;
   manualExposure: boolean;

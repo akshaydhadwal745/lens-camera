@@ -937,7 +937,7 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
                   <View style={[styles.evSun, { top: 36 - 9 - (tapEv / Math.max(1, caps!.maxEV!)) * 30 }]}>
                     <Ionicons name="sunny" size={16} color={palette.accent} />
                   </View>
-                  {tapEv !== 0 && <Text style={styles.evValue}>{formatEv(Math.round(tapEv * 10) / 10)}</Text>}
+                  {snapEv(tapEv, caps?.evStep) !== 0 && <Text style={styles.evValue}>{formatEv(snapEv(tapEv, caps?.evStep))}</Text>}
                 </View>
               )}
             </View>
@@ -1561,6 +1561,12 @@ function timeLapseClipSeconds(seconds: number): number {
     if (seconds <= until) break;
   }
   return frames / 30;
+}
+
+/** The EV the camera really applies: it moves in steps (Galaxy S8: 0.5), so +0.8 is really +1.0. */
+function snapEv(ev: number, step: number | undefined): number {
+  const snapped = step && step > 0 ? Math.round(ev / step) * step : ev;
+  return Math.round(snapped * 10) / 10;
 }
 
 /** Exposure compensation within what this camera allows. */

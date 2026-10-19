@@ -225,8 +225,17 @@ class CameraController(private val context: Context) {
   private var wbAnchor: ColorTemperature.Anchor? = null
   private var wbAnchorTransform: ColorSpaceTransform? = null
   private var appliedRequestKey: String? = null
-  /** Long-press lock: auto exposure held (Camera2 AE lock) until unlocked or the camera re-binds. */
+  /** Long-press lock: auto exposure held until unlocked or the camera re-binds. */
   private var aeLocked = false
+  /**
+   * The lock's exposure (ISO, ns) and the EV at that moment: camera-pipe overrides Camera2's
+   * AE_LOCK, so the lock freezes the settled exposure as a manual one (PipeAe).
+   */
+  private var aeFrozen: Triple<Int, Long, Double>? = null
+  /** Torch state last sent to CameraX (null = unknown, after a bind). enableTorch resets the AE mode. */
+  private var torchApplied: Boolean? = null
+  /** Manual AE (AE_MODE_OFF) last set through PipeAe (null = unknown). */
+  private var manualAeApplied: Boolean? = null
 
   fun setPreviewSurface(provider: Preview.SurfaceProvider) {
     previewSurface = provider
@@ -326,6 +335,9 @@ class CameraController(private val context: Context) {
     appliedRequestKey = null
     lowLightBoostOn = false
     aeLocked = false // a new camera/mode starts unlocked (the app resets its lock badge too)
+    aeFrozen = null
+    torchApplied = null
+    manualAeApplied = null
 
     // Fallback chain: if the phone refuses a combination (HDR + 60 fps + stabilization
     // on a budget phone, say), drop the most demanding option and try again.
@@ -664,7 +676,13 @@ class CameraController(private val context: Context) {
       val target = (baseRatio() * config.zoom).toFloat().coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
       if (kotlin.math.abs(target - zoomState.zoomRatio) > 0.001f) cam.cameraControl.setZoomRatio(target)
     }
-    if (f.hasFlash) cam.cameraControl.enableTorch(config.torch && config.isVideo)
+    // Only on a change: every enableTorch call also resets CameraX's AE mode (PipeAe).
+    val torch = f.hasFlash && config.torch && config.isVideo
+    if (f.hasFlash && torch != torchApplied) {
+      torchApplied = torch
+      manualAeApplied = null
+      cam.cameraControl.enableTorch(torch)
+    }
 
     val exposure = cam.cameraInfo.exposureState
     if (config.exposureMode != "manual" && exposure.isExposureCompensationSupported) {
@@ -676,6 +694,22 @@ class CameraController(private val context: Context) {
     }
     // The maker's Night mode controls exposure itself.
     if (!nightExtension) applyRequestOptions(cam, f)
+  }
+
+  /**
+   * A locked exposure moved by the EV dragged since the lock (2^ΔEV more or less light):
+   * ISO first, so the shutter (motion blur) stays what auto exposure chose; then the shutter,
+   * up to 1/15 s (hand shake) or down to the camera's shortest.
+   */
+  private fun frozenExposure(f: CameraFacts, frozen: Triple<Int, Long, Double>): Pair<Int, Long> {
+    val (iso0, ns0, ev0) = frozen
+    val isoRange = f.isoRange!!
+    val nsRange = f.exposureRangeNs!!
+    val gain = Math.pow(2.0, config.ev - ev0)
+    val iso = (iso0 * gain).roundToInt().coerceIn(isoRange.lower, isoRange.upper)
+    val rest = iso0 * gain / iso
+    val ns = (ns0 * rest).toLong().coerceIn(nsRange.lower, maxOf(ns0, minOf(nsRange.upper, 66_666_666L)))
+    return iso to ns
   }
 
   /** Manual exposure, white balance and focus through Camera2 request keys. */
@@ -701,6 +735,24 @@ class CameraController(private val context: Context) {
       // Long exposures need a long frame; never shorter than the exposure itself.
       b.setCaptureRequestOption(CaptureRequest.SENSOR_FRAME_DURATION, maxOf(ns, 33_333_333L))
       parts += "ae:$iso:$ns"
+    } else if (aeFrozen != null && aeLocked && config.exposureMode != "manual" && f.canManualExposure) {
+      // Long-press lock: the settled exposure, brightened/darkened by the EV dragged since.
+      val (iso, ns) = frozenExposure(f, aeFrozen!!)
+      b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+      b.setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, iso)
+      b.setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, ns)
+      b.setCaptureRequestOption(CaptureRequest.SENSOR_FRAME_DURATION, maxOf(ns, 33_333_333L))
+      parts += "lock:$iso:$ns"
+    }
+    // camera-pipe only lets AE_MODE_OFF through its own 3A state (PipeAe); the torch keeps AE on.
+    val wantManualAe = parts.any { it.startsWith("astro:") || it.startsWith("ae:") || it.startsWith("lock:") } && torchApplied != true
+    if (wantManualAe != manualAeApplied) {
+      // Back to auto only when we turned it off: a needless call would also drop low-light boost.
+      if (wantManualAe || manualAeApplied == true) {
+        val ok = PipeAe.setManual(cam.cameraControl, wantManualAe)
+        if (wantManualAe && !ok) Log.w(TAG, "manual exposure not available through CameraX on this phone")
+      }
+      manualAeApplied = wantManualAe
     }
 
     if (config.whiteBalanceMode == "manual" && f.canManualWhiteBalance) {
@@ -744,7 +796,9 @@ class CameraController(private val context: Context) {
       parts += "faces"
     }
 
-    if (aeLocked && config.exposureMode != "manual" && f.aeLockAvailable) {
+    // Cameras without manual exposure: Camera2's AE lock (camera-pipe may still override it,
+    // so the app only promises an AF lock there: focusAt returns ae=false).
+    if (aeLocked && aeFrozen == null && config.exposureMode != "manual" && f.aeLockAvailable) {
       b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
       parts += "aelock"
     }
@@ -812,6 +866,8 @@ class CameraController(private val context: Context) {
       "maxShutter" to minOf((f.exposureRangeNs?.upper ?: 1_000_000_000L) / 1e9, 1.0),
       "minEV" to (exposure?.exposureCompensationRange?.lower ?: 0) * step,
       "maxEV" to (exposure?.exposureCompensationRange?.upper ?: 0) * step,
+      // The camera applies EV in these steps (Galaxy S8: 0.5): the app shows what it really gets.
+      "evStep" to step,
       "minZoom" to ((zoom?.minZoomRatio ?: 1f) / base).toDouble(),
       "maxZoom" to (minOf(zoom?.maxZoomRatio ?: 1f, 20f) / base).toDouble(),
       "manualExposure" to f.canManualExposure,
@@ -889,11 +945,14 @@ class CameraController(private val context: Context) {
     val flags = if (af) FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE else FocusMeteringAction.FLAG_AE
     val builder = FocusMeteringAction.Builder(point, flags)
     if (lock) builder.disableAutoCancel() else builder.setAutoCancelDuration(5, TimeUnit.SECONDS)
-    // The camera facts to lock exposure with; null = no exposure lock (manual exposure or not supported).
-    val lockFacts = if (lock && config.exposureMode != "manual" && f?.aeLockAvailable == true) f else null
+    // The camera facts to lock exposure with; null = no exposure lock (manual exposure, or a
+    // camera without manual exposure: camera-pipe overrides Camera2's AE lock, see PipeAe).
+    val lockFacts = if (lock && config.exposureMode != "manual" && f?.canManualExposure == true) f else null
     val aeLock = lockFacts != null
-    if (aeLocked && !aeLock) {
+    if (aeLocked) {
+      // A new tap or lock starts from auto exposure again (and meters at the new point).
       aeLocked = false
+      aeFrozen = null
       f?.let { applyRequestOptions(cam, it) }
     }
     val future = runCatching { cam.cameraControl.startFocusAndMetering(builder.build()) }.getOrNull()
@@ -901,7 +960,10 @@ class CameraController(private val context: Context) {
       // Hold exposure once metering at the point has finished (else it would lock the old exposure).
       val apply = Runnable {
         if (camera === cam) {
+          val iso = lastIso
+          val ns = lastExposureNs
           aeLocked = true
+          aeFrozen = if (iso != null && ns != null) Triple(iso, ns, config.ev) else null
           applyRequestOptions(cam, lockFacts)
         }
       }
@@ -914,6 +976,7 @@ class CameraController(private val context: Context) {
   fun unlockFocus() {
     val cam = camera ?: return
     aeLocked = false
+    aeFrozen = null
     facts?.let { applyRequestOptions(cam, it) }
     runCatching { cam.cameraControl.cancelFocusAndMetering() }
   }
