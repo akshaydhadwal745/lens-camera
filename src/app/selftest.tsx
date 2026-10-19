@@ -39,6 +39,8 @@ import { deleteSet, keepFile, newSet, uploadSet } from '@/lib/quality-lab';
 import { capture as saveCapture, getState, isHot } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
+/** The shutter-path quality set upload (4 full-size photos) may take this long on a slow network. */
+const UPLOAD_SET_TIMEOUT_MS = 3 * 60 * 1000;
 const MARK = { pass: '✓', warn: '!', fail: '✗', skip: '–' } as const;
 const MARK_COLOR = { pass: '#30D158', warn: '#FACC15', fail: '#FF453A', skip: '#86868B' } as const;
 
@@ -162,7 +164,14 @@ export default function SelfTestScreen() {
       }
       kept.current.shutter = {};
       try {
-        const setId = await uploadSet(set, (await cameraDeviceReport()) as Record<string, unknown>, () => {});
+        // Bounded: on a slow network the upload never finished and the whole self-test hung
+        // (Pixel 8a on Test Lab, dev-136: no result after 15 min). The set stays a warning.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timedOut = new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), UPLOAD_SET_TIMEOUT_MS);
+        });
+        const setId = await Promise.race([uploadSet(set, (await cameraDeviceReport()) as Record<string, unknown>, () => {}), timedOut]).finally(() => clearTimeout(timer));
+        if (setId === null) return done('warn', `quality samples not uploaded within ${UPLOAD_SET_TIMEOUT_MS / 60000} min (slow network)`);
         return done('pass', `set ${setId} (${present.map((id) => names[id]).join(', ')})`, { setId, files: present.map((id) => names[id]) });
       } finally {
         deleteSet(set.localId);
