@@ -57,7 +57,7 @@ detail 2.41 vs 2.47, ZSL same as quick), and quick is faster (saved 0.84 s vs 1.
 (the camera session rebuilds), so on the S8 a 1.5 s hold gave 1 shot. **Now automatic
 (`captureMode: 'auto'`, the default):** Photo mode with plain JPEG binds the quick path in
 normal light and moves to best quality when the scene stays dim (`isDark()`: ISO ≥ 800, or
-≥ 1/20 s at ISO ≥ 400) for 2 s; back to quick when bright (ISO ≤ 400, ≤ 1/25 s: the 50 Hz anti-flicker step of an ordinary room; ≤ 1/30 s kept the S8 on best quality all day, 2026-10-19) for 2 s. The
+≥ 1/20 s at ISO ≥ 400) for 2 s; back to quick when bright (ISO ≤ 640, ≤ 1/25 s: an ordinary 50 Hz room; with ISO ≤ 400 / ≤ 1/30 s the S8 stayed on best quality all day, 2026-10-19 — quick = best quality measured at ISO 160/400/500: sets 33o3ZY7Y, WrFSr31v, OtL0vZFg) for 2 s. The
 switch waits until no photo, burst or recording is in progress. Smart burst on the quick path
 needs no switch. Ultra HDR, RAW, maker modes, Portrait and Night keep their own paths. No
 setting (feedback: automatic, not options). Self-test: `shutter-auto`, `burst-auto`.

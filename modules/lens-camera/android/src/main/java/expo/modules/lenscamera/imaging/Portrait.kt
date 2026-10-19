@@ -170,9 +170,12 @@ object Portrait {
     val mp = IntArray(n).also { up.getPixels(it, 0, w, 0, 0, w, h) }
     up.recycle()
     val p = FloatArray(n) { (mp[it] and 0xFF) / 255f }
-    val refined = guidedFilter(guide, p, w, h, radius = (0.006f * max(w, h)).roundToInt() + 2, eps = 1e-3f)
+    // The long side by a plain comparison: on the Galaxy S8 (Android 9) max(w, h) came out as 0
+    // in this method (band 0 → every pixel 0/0 = NaN; the dex is right, the phone's runtime isn't).
+    val longSide = (if (w >= h) w else h).toFloat()
+    val refined = guidedFilter(guide, p, w, h, radius = (0.006f * longSide).roundToInt() + 2, eps = 1e-3f)
     // Trimap band: within ~1.5 % of the long side of the coarse edge use the refined value, fading to coarse outside.
-    val band = 0.015f * max(w, h)
+    val band = (0.015f * longSide).coerceAtLeast(1f)
     val dist = edgeDistance(p, w, h, band)
     val out = IntArray(n)
     var bad = 0

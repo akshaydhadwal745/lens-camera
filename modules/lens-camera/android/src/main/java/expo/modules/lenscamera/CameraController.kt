@@ -1082,10 +1082,13 @@ class CameraController(private val context: Context) {
     val ns = lastExposureNs ?: 0L
     val now = SystemClock.elapsedRealtime()
     val dark = isDark()
-    // 1/25 s counts as bright: under 50 Hz mains light auto exposure settles on 1/25 s (anti-flicker)
-    // in an ordinary room, and with ≤ 1/30 s the auto path never came back from best quality once a
-    // dim moment had moved it there (Galaxy S8 office, 2026-10-19: every burst then rebuilt the camera).
-    val bright = iso <= 400 && ns <= 41_700_000L
+    // Ordinary indoor light counts as bright: under 50 Hz mains light auto exposure settles on 1/25 s
+    // (anti-flicker) at ISO 400–640 in an ordinary room. With ≤ 1/30 s and ISO ≤ 400 the auto path never
+    // came back from best quality once a dim moment had moved it there (Galaxy S8 office, 2026-10-19:
+    // every burst then rebuilt the camera, 1–2 shots per hold). Quick = best quality there: Quality Lab
+    // sets at ISO 160, 400 and 500 (2026-10-15-33o3ZY7Y, 2026-10-19-WrFSr31v, 2026-10-19-OtL0vZFg).
+    // 640–800 stays a hysteresis band below isDark().
+    val bright = iso <= 640 && ns <= 41_700_000L
     dimSince = if (dark) (dimSince.takeIf { it > 0 } ?: now) else 0L
     brightSince = if (bright) (brightSince.takeIf { it > 0 } ?: now) else 0L
     val next = when {
