@@ -9,6 +9,7 @@ import { Affiliates, Payouts, Referrals } from './pages/programs';
 import { Feedback, Inbox } from './pages/support';
 import { Overview } from './pages/overview';
 import { Phones } from './pages/phones';
+import { Costs, Errors, Health } from './pages/system';
 import { Team } from './pages/team';
 import { UserDetail, Users } from './pages/users';
 import { Link, navigate, usePath } from './ui';
@@ -25,6 +26,9 @@ const SECTIONS: Section[] = [
   { path: '/affiliates', label: 'Affiliates', permission: 'affiliates', group: 'Programs' },
   { path: '/referrals', label: 'Referrals', permission: 'referrals', group: 'Programs' },
   { path: '/payouts', label: 'Payouts', permission: 'payouts', group: 'Programs' },
+  { path: '/health', label: 'Health', permission: 'health', group: 'System' },
+  { path: '/errors', label: 'App errors', permission: 'errors', group: 'System' },
+  { path: '/costs', label: 'AWS costs', permission: 'costs', group: 'System' },
   { path: '/activity', label: 'Activity log', permission: 'audit', group: 'Admin' },
   { path: '/team', label: 'Team', permission: 'team', group: 'Admin' },
 ];
@@ -51,6 +55,9 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
       '/affiliates': <Affiliates />,
       '/referrals': <Referrals />,
       '/payouts': <Payouts />,
+      '/health': <Health />,
+      '/errors': <Errors />,
+      '/costs': <Costs />,
       '/activity': <Activity />,
       '/team': <Team me={me.email} />,
     }[active.path];

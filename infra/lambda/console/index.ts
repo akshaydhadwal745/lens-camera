@@ -10,6 +10,9 @@ import { env, HttpError, json, parseEvent, Res, safeEqual } from '../api/lib';
 import { adminPhones } from '../api/phones';
 import { decideReferral, heldReferrals } from '../api/referrals';
 import { feedbackFile } from './attachments';
+import { costs } from './costs';
+import { errors } from './errors';
+import { health } from './health';
 import { activity, log } from './log';
 import { overview } from './overview';
 import { Permission, permissionsOf, removeTeamMember, requirePermission, ROLES, setTeamMember, teamMembers } from './roles';
@@ -98,6 +101,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       await log({ entity: `contact:${id}`, action: 'contact.done', actor: `console:${email}` });
       return res;
     }
+    if (route === 'GET /health') return await allowed('health', () => health(req));
+    if (route === 'GET /errors') return await allowed('errors', () => errors(req));
+    if (route === 'GET /costs') return await allowed('costs', () => costs(req));
     if (route === 'GET /phones') return await allowed('phones', () => adminPhones(req));
 
     if (route === 'GET /affiliates') return await allowed('affiliates', () => listAffiliates(req));

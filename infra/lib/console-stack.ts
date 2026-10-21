@@ -37,6 +37,8 @@ export type ConsoleStackProps = StackProps & {
   mediaBucketName: string;
   auditBucketName: string;
   feedbackBucketName: string;
+  /** System health: "label=name" lists (functions, Batch queue ARNs) and the website CDN id. */
+  health: { functions: string[]; queues: string[]; distributionId: string };
 };
 
 export class ConsoleStack extends Stack {
@@ -71,6 +73,10 @@ export class ConsoleStack extends Stack {
         WEB_ORIGIN: (this.node.tryGetContext('webOrigin') as string | undefined) ?? '',
         CODE_SENDER: `no-reply@${(this.node.tryGetContext('codeDomain') as string | undefined) ?? ''}`,
         PLAY_URL: (this.node.tryGetContext('playUrl') as string | undefined) ?? '',
+        HEALTH_FUNCTIONS: props.health.functions.join(','),
+        HEALTH_QUEUES: props.health.queues.join(','),
+        HEALTH_DISTRIBUTION: props.health.distributionId,
+        MONTHLY_BUDGET_USD: String(this.node.tryGetContext('monthlyBudgetUsd') ?? ''),
       },
       bundling: { minify: true, sourceMap: true, target: 'node24', loader: { '.txt': 'text' } },
     });
@@ -87,7 +93,10 @@ export class ConsoleStack extends Stack {
         ],
       }),
     );
-    fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['cloudwatch:GetMetricData'], resources: ['*'] }));
+    // Health (read-only service metrics) and costs. None of these can read user data.
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({ actions: ['cloudwatch:GetMetricData', 'batch:ListJobs', 'ses:GetAccount', 'ce:GetCostAndUsage', 'ce:GetCostForecast'], resources: ['*'] }),
+    );
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`] }));
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 

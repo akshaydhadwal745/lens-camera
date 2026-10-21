@@ -23,6 +23,7 @@ export const PERMISSIONS = [
   'inbox.write',
   'phones',
   'health',
+  'errors',
   'costs',
   'referrals',
   'affiliates',
@@ -35,7 +36,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 const GRANTS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
   admin: PERMISSIONS.filter((p) => p !== 'team'),
-  support: ['overview', 'users', 'users.write', 'feedback', 'feedback.write', 'inbox', 'inbox.write', 'phones', 'health'],
+  support: ['overview', 'users', 'users.write', 'feedback', 'feedback.write', 'inbox', 'inbox.write', 'phones', 'health', 'errors'],
   finance: ['overview', 'referrals', 'affiliates', 'payouts', 'costs', 'audit'],
   viewer: ['overview', 'phones', 'health'],
 };

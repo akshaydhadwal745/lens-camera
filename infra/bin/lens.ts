@@ -31,5 +31,13 @@ if (consoleCert) {
     mediaBucketName: 'lens-media-495026846839',
     auditBucketName: 'lens-audit3d8ade0a-gotgzbiazyz7',
     feedbackBucketName: 'lens-feedback-495026846839',
+    health: {
+      functions: ['App API=Lens-ApiF70053CD-d75399Vb4PwY', 'Background jobs=Lens-Maintenance3AE505C2-oDFUX400gtYo'],
+      queues: [
+        'spot=arn:aws:batch:ap-south-1:495026846839:job-queue/TranscodeSpot4B0F3103-xzAihLXbrADQkcb7',
+        'on-demand=arn:aws:batch:ap-south-1:495026846839:job-queue/TranscodeOnDemandB032F9D-8rzsHI9PX5xxzON5',
+      ],
+      distributionId: 'E3PXRTVW0JJH1V',
+    },
   });
 }

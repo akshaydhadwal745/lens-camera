@@ -216,3 +216,32 @@ export function Confirm({ text, onYes, children, danger }: { text: string; onYes
     </button>
   );
 }
+
+/** Simple bars for any series (hours, days): label shown on hover. */
+export function Bars({ rows, caption, format = n }: { rows: { label: string; value: number; bad?: number }[]; caption: ReactNode; format?: (v: number) => string }) {
+  const max = Math.max(1e-9, ...rows.map((r) => r.value));
+  const [hover, setHover] = useState<number | null>(null);
+  const w = 100 / Math.max(1, rows.length);
+  const shown = hover === null ? null : rows[hover];
+  return (
+    <figure className="chart">
+      <figcaption>
+        <span>{caption}</span>
+        <span className="muted">{shown ? `${shown.label}: ${format(shown.value)}${shown.bad ? ` · ${format(shown.bad)} errors` : ''}` : `peak ${format(Math.max(0, ...rows.map((r) => r.value)))}`}</span>
+      </figcaption>
+      <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={typeof caption === 'string' ? caption : 'chart'} onMouseLeave={() => setHover(null)}>
+        {rows.map((r, i) => {
+          const h = (r.value / max) * 38;
+          const hb = r.bad ? (r.bad / max) * 38 : 0;
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)}>
+              <rect x={i * w} y={0} width={w} height={40} className="hit" />
+              <rect x={i * w + w * 0.15} y={40 - Math.max(h, r.value ? 0.8 : 0.3)} width={w * 0.7} height={Math.max(h, r.value ? 0.8 : 0.3)} className={hover === i ? 'bar on' : 'bar'} rx={0.4} />
+              {hb > 0 && <rect x={i * w + w * 0.15} y={40 - Math.max(hb, 0.8)} width={w * 0.7} height={Math.max(hb, 0.8)} className="bar bad" rx={0.4} />}
+            </g>
+          );
+        })}
+      </svg>
+    </figure>
+  );
+}
