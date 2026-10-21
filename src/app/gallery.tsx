@@ -44,8 +44,10 @@ import {
   selectTransferTotals,
   dismissSpaceFreed,
   canImport,
+  scanCameraNow,
   importFromGallery,
 } from '@/lib/store';
+import { autoBackupEnabled, autoBackupOffered, autoBackupSupported, enableAutoBackup, markAutoBackupOffered } from '@/lib/auto-backup';
 import { formatBytes, formatEta, formatRate } from '@/lib/format';
 import { keepOnly, prefetchPhoto, prefetchVideo } from '@/lib/video-prefetch';
 import { confirmAndDelete } from '@/lib/delete-flow';
@@ -171,8 +173,48 @@ function UploadBanner({ pending }: { pending: number }) {
   );
 }
 
+/** Once: offer to back up photos taken with the phone's own camera too (src/lib/auto-backup.ts). */
+function CameraBackupOffer({ onClose }: { onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const close = () => {
+    markAutoBackupOffered();
+    onClose();
+  };
+  return (
+    <View style={[styles.banner, styles.offer]}>
+      <Ionicons name="camera-outline" size={18} color={palette.link} />
+      <View style={{ flex: 1, gap: 8 }}>
+        <Text style={styles.bannerText}>Back up photos from your phone’s own camera too? Everything you shoot, in any camera app, safe in full quality.</Text>
+        <View style={styles.offerButtons}>
+          <Pressable
+            style={styles.offerPrimary}
+            disabled={busy}
+            onPress={async () => {
+              setBusy(true);
+              const on = await enableAutoBackup(30);
+              setBusy(false);
+              if (on) {
+                void scanCameraNow();
+                notify('Camera backup is on', 'New photos and videos from your camera app back up automatically, starting with the last 30 days.');
+              } else notify('Lens needs access to your photos', 'Allow it in the next prompt, or later in Settings → Uploads.');
+              close();
+            }}
+          >
+            {busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.offerPrimaryText}>Turn on</Text>}
+          </Pressable>
+          <Pressable onPress={close} hitSlop={8}>
+            <Text style={styles.offerSecondary}>Not now</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function GalleryScreen() {
   const insets = useSafeAreaInsets();
+  // Shown once, to people who already use Lens (a few photos in), when the app supports it.
+  const [showCameraOffer, setShowCameraOffer] = useState(() => autoBackupSupported && !autoBackupEnabled() && !autoBackupOffered());
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ tab?: Tab }>();
   const status = useStore((s) => s.status);
@@ -445,6 +487,8 @@ export default function GalleryScreen() {
         <Ionicons name="close" size={16} color="#86868B" />
       </Pressable>
     </View>
+  ) : showCameraOffer && mine.length >= 3 && tab === 'mine' && !selecting ? (
+    <CameraBackupOffer onClose={() => setShowCameraOffer(false)} />
   ) : prompt && tab === 'mine' && !selecting ? (
     <FeedbackPrompt kind={prompt} onClose={() => setPrompt(null)} />
   ) : null;
@@ -752,6 +796,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surface,
   },
   bannerText: { color: palette.text, fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  offer: { alignItems: 'flex-start' },
+  offerButtons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  offerPrimary: { backgroundColor: palette.link, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 7, minWidth: 80, alignItems: 'center' },
+  offerPrimaryText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  offerSecondary: { color: palette.muted, fontSize: 13, fontWeight: '500' },
   uploadBanner: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
   uploadRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   uploadTrack: { height: 4, borderRadius: 2, backgroundColor: palette.surface2, overflow: 'hidden' },

@@ -139,6 +139,23 @@ class LensDeviceModule : Module() {
         GalleryCleanup.find(resolver, hint, size.toLong(), dateTaken?.toLong())
       }
     }
+    // Play in-app review: Google decides whether the card shows (quota); true = the flow ran.
+    AsyncFunction("requestReview") { promise: Promise ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction promise.resolve(false)
+      val manager = com.google.android.play.core.review.ReviewManagerFactory.create(activity)
+      manager.requestReviewFlow().addOnCompleteListener { request ->
+        if (!request.isSuccessful) {
+          promise.resolve(false)
+        } else {
+          manager.launchReviewFlow(activity, request.result).addOnCompleteListener { promise.resolve(true) }
+        }
+      }
+    }
+    // Automatic camera backup (opt-in): new items in the camera folders since `sinceMs`.
+    AsyncFunction("galleryItemsSince") Coroutine { sinceMs: Double, limit: Int ->
+      val resolver = appContext.reactContext?.contentResolver ?: throw IllegalStateException("No context")
+      kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { GalleryWatch.since(resolver, sinceMs.toLong(), limit) }
+    }
     // MD5 (hex) of a content:// item's bytes, or null if it can't be read.
     AsyncFunction("md5OfContent") Coroutine { uri: String ->
       val resolver = appContext.reactContext?.contentResolver ?: throw IllegalStateException("No context")

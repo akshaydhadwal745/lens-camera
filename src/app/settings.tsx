@@ -12,6 +12,7 @@ import { api, NotificationPrefs, Session, WEB_URL } from '@/lib/api';
 import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
 import { clearUsage } from '@/lib/usage';
+import { autoBackupEnabled, autoBackupSupported, disableAutoBackup, enableAutoBackup } from '@/lib/auto-backup';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
 import { setSaveLocation as setSaveLocationPref } from '@/lib/location-pref';
 import { nearbySupported, nearbyVisibilityChanged } from '@/lib/nearby';
@@ -34,6 +35,7 @@ import {
   selectLocalUsage,
   selectPendingCount,
   selectWaitingForWifi,
+  scanCameraNow,
   setCellularUploads,
   setKeepFree,
   setLiveUpload,
@@ -412,6 +414,7 @@ export default function SettingsScreen() {
   const [shutterSound, setShutterSound] = useState(() => loadSettings().shutterSound);
   const [scanCodes, setScanCodes] = useState(() => loadSettings().scanCodes);
   const [shareDiagnostics, setShareDiagnostics] = useState(() => diagnosticsEnabled());
+  const [cameraBackup, setCameraBackup] = useState(() => autoBackupEnabled());
   const [nearbyVisible, setNearbyVisible] = useState(false);
   useEffect(() => {
     if (nearbySupported) api.nearbySettings().then((r) => setNearbyVisible(r.visible), () => {});
@@ -740,6 +743,28 @@ export default function SettingsScreen() {
                   : "Originals always upload at full quality, never compressed. On mobile data you can hold back big files (usually videos) until you're on Wi-Fi."
               }
             >
+              {autoBackupSupported && (
+                <>
+                  <SwitchRow
+                    icon="camera-outline"
+                    label="Back up my phone’s camera too"
+                    hint="Photos and videos taken with any camera app (the camera folder only, never WhatsApp or screenshots), in full quality."
+                    value={cameraBackup}
+                    onChange={async (v) => {
+                      if (!v) {
+                        disableAutoBackup();
+                        setCameraBackup(false);
+                        return;
+                      }
+                      const on = await enableAutoBackup(30);
+                      setCameraBackup(on);
+                      if (on) void scanCameraNow();
+                      else notify('Lens needs access to your photos', 'Allow photos and videos for Lens in the phone’s settings, then turn this on again.');
+                    }}
+                  />
+                  <View style={styles.divider} />
+                </>
+              )}
               <Row label="Connection" value={!online ? 'Offline' : cellular ? 'Mobile data' : 'Wi-Fi'} />
               <View style={styles.divider} />
               <Row label="Waiting" value={waitingForWifi ? `${pending} (${waitingForWifi} for Wi-Fi)` : String(pending)} />

@@ -6,6 +6,7 @@ import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import { api, ApiError, setAuth, SignInResult } from './api';
 import { track } from './usage';
+import { scanCamera } from './auto-backup';
 import { deviceLabel, ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity';
 import {
   captureFile,
@@ -465,6 +466,7 @@ export async function boot() {
   if (!isWeb) void registerBackgroundBackup();
   if (!isWeb) watchThermal();
   if (!isWeb) void backfillDerivatives();
+  if (!isWeb) watchCamera();
   if (state.identity || !isWeb) {
     void ensureCloudIdentity().then((ok) => {
       if (!ok) return;
@@ -530,6 +532,8 @@ function watchConnectivity() {
 export async function runBackgroundSync(ms: number) {
   await boot();
   const deadline = Date.now() + ms;
+  // New photos from the phone's own camera (opt-in, src/lib/auto-backup.ts).
+  await scanCamera(addGalleryItems);
   kickSync();
   // Wait while the loop works; give up at the deadline (the OS will call again).
   while (Date.now() < deadline) {
@@ -1182,6 +1186,29 @@ export async function importFromGallery(): Promise<{ added: number; skipped: num
     kickSync();
   }
   return { added: fresh.length, skipped: picked.length - fresh.length };
+}
+
+/** Camera photos found by auto-backup: add the ones Lens doesn't have yet; returns how many. */
+function addGalleryItems(items: Parameters<typeof importEntry>[0][]): number {
+  const known = new Set(state.entries.map((e) => e.importUri).filter(Boolean));
+  const fresh = items.filter((p) => !known.has(p.uri));
+  if (!fresh.length) return 0;
+  setEntries([...fresh.map(importEntry), ...state.entries].sort((a, b) => b.createdAt - a.createdAt));
+  track('auto_backup_item', fresh.length);
+  kickSync();
+  return fresh.length;
+}
+
+/** Scan for new camera photos now (Settings turned it on) and whenever Lens comes to the front. */
+export const scanCameraNow = () => scanCamera(addGalleryItems);
+let cameraWatched = false;
+function watchCamera() {
+  if (cameraWatched) return;
+  cameraWatched = true;
+  setTimeout(() => void scanCamera(addGalleryItems), 4000);
+  AppState.addEventListener('change', (s) => {
+    if (s === 'active') void scanCamera(addGalleryItems);
+  });
 }
 
 /** Copy an imported item into Lens just before upload. False = not now (no room) or failed. */

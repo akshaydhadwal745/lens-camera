@@ -25,6 +25,8 @@ type LensDeviceNative = {
   stopBackup(): void;
   installReferrer(): Promise<string | null>;
   isEmulator(): boolean;
+  requestReview?(): Promise<boolean>;
+  galleryItemsSince?(sinceMs: number, limit: number): Promise<(PickedMedia & { dateAdded: number })[]>;
   pickMedia(max: number): Promise<PickedMedia[]>;
   canRead(uri: string): boolean;
   copyMedia(uri: string, destination: string): Promise<number>;
@@ -120,6 +122,18 @@ export const mediaPicker = native?.pickMedia
         }
       },
     }
+  : null;
+
+/**
+ * Android (from the APK that added it): new photos/videos in the phone's camera folders since a time,
+ * for automatic backup (src/lib/auto-backup.ts). Uses the same permission as galleryCleanup. Null on
+ * older APKs and other platforms.
+ */
+/** Play in-app review (from the APK that added it): true when Google's review flow ran. */
+export const playReview = native?.requestReview ? { request: () => native.requestReview!() } : null;
+
+export const galleryWatch = native?.galleryItemsSince
+  ? { since: (sinceMs: number, limit = 200) => native.galleryItemsSince!(sinceMs, limit) }
   : null;
 
 /**

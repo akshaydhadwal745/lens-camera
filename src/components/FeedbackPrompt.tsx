@@ -1,6 +1,7 @@
 // The roll's feedback card (src/lib/review-prompt.ts decides when): "How's Lens
 // so far?" with stars, or "What's one thing Lens is missing?". Answers open the
-// feedback form (src/app/feedback.tsx) pre-filled; nothing is sent until Send.
+// feedback form (src/app/feedback.tsx) pre-filled; nothing is sent until Send. 4–5 stars open
+// Google Play's in-app review instead (when the app came from Play).
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
@@ -9,13 +10,19 @@ import { Text } from '@/components/ui/Text';
 
 import { markMissingAnswered, markNeverAsk, markPromptShown, markRated, PromptKind } from '@/lib/review-prompt';
 import { palette } from '@/lib/theme';
+import { track } from '@/lib/usage';
+import { playReview } from '../../modules/lens-device';
 
 export function FeedbackPrompt({ kind, onClose }: { kind: PromptKind; onClose: () => void }) {
   useEffect(() => markPromptShown(), []);
 
-  const rate = (stars: number) => {
+  const rate = async (stars: number) => {
     markRated(stars);
     onClose();
+    track(`rated_${stars}`);
+    // Happy: Google Play's own review card (ratings decide how Lens ranks on Play). Not happy, or
+    // not installed from Play: our feedback form, so we can fix what's wrong.
+    if (stars >= 4 && playReview && (await playReview.request().catch(() => false))) return;
     router.push(`/feedback?kind=review&rating=${stars}&source=prompt` as never);
   };
   const missing = () => {

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/lens_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/lens_widget_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="8dp">
+  <ImageView
+      android:layout_width="32dp"
+      android:layout_height="32dp"
+      android:contentDescription="@string/lens_widget_label"
+      android:src="@drawable/lens_tile" />
+  <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="4dp"
+      android:text="@string/lens_widget_label"
+      android:textColor="#FFFFFFFF"
+      android:textSize="12sp" />
+</LinearLayout>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="lens_widget_label">Lens</string>
+  <string name="lens_widget_description">Open the Lens camera in one tap</string>
+  <string name="lens_tile_label">Lens camera</string>
+</resources>

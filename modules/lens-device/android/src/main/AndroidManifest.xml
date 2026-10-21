@@ -12,5 +12,27 @@
       android:name="expo.modules.lensdevice.BackupService"
       android:exported="false"
       android:foregroundServiceType="dataSync" />
+    <!-- Quick-settings tile and home-screen widget: open the Lens camera in one tap. -->
+    <service
+      android:name="expo.modules.lensdevice.LensTileService"
+      android:exported="true"
+      android:icon="@drawable/lens_tile"
+      android:label="@string/lens_tile_label"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+    <receiver
+      android:name="expo.modules.lensdevice.LensWidget"
+      android:exported="false"
+      android:label="@string/lens_widget_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/lens_widget_info" />
+    </receiver>
   </application>
 </manifest>
