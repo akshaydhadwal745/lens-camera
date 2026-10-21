@@ -102,7 +102,7 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '6. Cookies on the website',
-        p: ['The website uses only strictly necessary cookies. "__Host-lens" keeps you signed in. It is secure, HttpOnly (scripts cannot read it) and sent only to lens.instagrowapp.com. It lasts up to 30 days or until you log out. If you arrive through an invite or affiliate link, a second cookie, "__Host-lensref", remembers that link’s code for up to 30 days so the right person is credited if you sign up on the website. We use no advertising or tracking cookies.'],
+        p: ['The website uses only strictly necessary cookies. "__Host-lens" keeps you signed in. It is secure, HttpOnly (scripts cannot read it) and sent only to lens.instagrowapp.com. It lasts up to 30 days or until you log out. If you arrive through an invite or affiliate link, a second cookie, "__Host-lensref", remembers that link’s code for up to 30 days so the right person is credited if you sign up on the website. We use no advertising or tracking cookies. To see which pages help people, each page view and a few clicks (such as Get Lens) are counted by our own script, without cookies or any ID: we keep only daily totals per page and per source website (for example "google.com"), never anything about you. Your browser’s tab remembers only that the visit was already counted (session storage, cleared when you close the tab).'],
       },
       {
         h2: '7. Your rights',
@@ -209,7 +209,7 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '6. वेबसाइट पर कुकी',
-        p: ['वेबसाइट सिर्फ़ ज़रूरी कुकी इस्तेमाल करती है। "__Host-lens" आपको साइन इन रखती है। यह सुरक्षित, HttpOnly (स्क्रिप्ट नहीं पढ़ सकतीं) है और सिर्फ़ lens.instagrowapp.com को भेजी जाती है। यह 30 दिन तक या लॉग आउट करने तक रहती है। अगर आप किसी इनवाइट या एफ़िलिएट लिंक से आते हैं, तो दूसरी कुकी "__Host-lensref" उस लिंक का कोड 30 दिन तक याद रखती है ताकि वेबसाइट पर साइन अप करने पर सही व्यक्ति को श्रेय मिले। हम कोई विज्ञापन या ट्रैकिंग कुकी इस्तेमाल नहीं करते।'],
+        p: ['वेबसाइट सिर्फ़ ज़रूरी कुकी इस्तेमाल करती है। "__Host-lens" आपको साइन इन रखती है। यह सुरक्षित, HttpOnly (स्क्रिप्ट नहीं पढ़ सकतीं) है और सिर्फ़ lens.instagrowapp.com को भेजी जाती है। यह 30 दिन तक या लॉग आउट करने तक रहती है। अगर आप किसी इनवाइट या एफ़िलिएट लिंक से आते हैं, तो दूसरी कुकी "__Host-lensref" उस लिंक का कोड 30 दिन तक याद रखती है ताकि वेबसाइट पर साइन अप करने पर सही व्यक्ति को श्रेय मिले। हम कोई विज्ञापन या ट्रैकिंग कुकी इस्तेमाल नहीं करते। यह देखने के लिए कि कौन-से पेज लोगों की मदद करते हैं, हर पेज व्यू और कुछ क्लिक (जैसे Get Lens) हमारी अपनी स्क्रिप्ट गिनती है, बिना कुकी या किसी ID के: हम सिर्फ़ हर पेज और हर स्रोत वेबसाइट (जैसे "google.com") के रोज़ाना कुल आँकड़े रखते हैं, आपके बारे में कुछ नहीं। ब्राउज़र का टैब सिर्फ़ यह याद रखता है कि विज़िट गिन ली गई (सेशन स्टोरेज, टैब बंद करने पर मिट जाता है)।'],
       },
       {
         h2: '7. आपके अधिकार',
