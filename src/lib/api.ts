@@ -108,30 +108,7 @@ export type AffiliateDashboard = {
   commissions?: { id: string; at: number; amountPaise: number; status: string; paid: boolean }[];
   payouts?: { month: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string }[];
 };
-export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
-/** Admin → Phones (infra/lambda/api/phones.ts): counts only. */
-export type PhoneCount = { label: string; count: number };
-export type PhoneStats = {
-  month: string;
-  phones: number;
-  models: PhoneCount[];
-  brands: PhoneCount[];
-  android: PhoneCount[];
-  ram: PhoneCount[];
-  tiers: PhoneCount[];
-  cameraLevel: PhoneCount[];
-  chips: PhoneCount[];
-  builds: PhoneCount[];
-  features: Record<string, { yes: number; known: number }>;
-};
-
 export type FeedbackKind = 'review' | 'issue' | 'idea' | 'other' | 'report';
-export type FeedbackItem = {
-  id: string; reference: string; kind: FeedbackKind; source?: string; rating?: number; message: string; email?: string; accountEmail?: string;
-  device?: Record<string, string>; at: number; status: string; emailStatus?: string;
-};
-export type ContactMessage = { id: string; reference: string; name: string; email: string; topic: string; message: string; at: number; status: string };
-export type AdminPayout = { affiliateId: string; name?: string; email?: string; upi?: string; pan?: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string };
 export type Session = { id: string; label: string; kind: string; createdAt: number; lastUsedAt: number; current: boolean };
 type DerivativeUrls = { thumb?: string; preview?: string };
 type PlanExtras = { derivativeUrls?: DerivativeUrls; previewReady?: boolean };
@@ -238,7 +215,6 @@ export const api = {
       usedBytes: number;
       quotaBytes: number;
       bonusBytes?: number;
-      admin?: boolean;
       /** The name friends see next to the Lens name (optional). */
       realName?: string;
       /** From Google sign-in, to pre-fill Settings → Your name. */
@@ -409,8 +385,19 @@ export const api = {
   referrals: () => request<Referrals>('GET', '/referrals'),
   claimReferral: (code: string) => request<{ program: string; state: string }>('POST', '/referrals/claim', { code }),
   // Settings → Feedback: stored, then emailed to the team (infra/lambda/api/feedback.ts).
-  sendFeedback: (body: { kind: FeedbackKind; source?: string; rating?: number; message: string; email?: string; includeDevice: boolean; device?: Record<string, string> }) =>
-    request<{ received: boolean; reference: string }>('POST', '/feedback', body),
+  sendFeedback: (body: {
+    kind: FeedbackKind;
+    source?: string;
+    rating?: number;
+    message: string;
+    email?: string;
+    includeDevice: boolean;
+    device?: Record<string, string>;
+    /** Keys from feedbackAttachment (screenshots, src/lib/feedback-attach.ts). */
+    attachments?: string[];
+  }) => request<{ received: boolean; reference: string }>('POST', '/feedback', body),
+  feedbackAttachment: (body: { contentType: string; size: number }) =>
+    request<{ key: string; url: string; headers: Record<string, string> }>('POST', '/feedback/attachments', body),
   affiliate: () => request<AffiliateDashboard>('GET', '/affiliates/me'),
   applyAffiliate: (body: { name: string; channels: string; audience?: string; pan?: string; upi?: string; agree: boolean }) =>
     request<{ status: string }>('POST', '/affiliates/apply', body),
@@ -418,25 +405,7 @@ export const api = {
     request<{ panMasked?: string; upiMasked?: string }>('PUT', '/affiliates/payout-details', body),
   createAffiliateLink: (campaign: string) => request<{ code: string; url: string }>('POST', '/affiliates/links', { campaign }),
 
-  // Admin (allow-listed accounts).
-  admin: {
-    affiliates: (status: string) => request<{ affiliates: AdminAffiliate[] }>('GET', `/admin/affiliates?status=${status}`),
-    decideAffiliate: (id: string, action: string, note?: string) =>
-      request<{ status: string }>('POST', `/admin/affiliates/${id}`, { action, note }),
-    heldReferrals: () =>
-      request<{ held: { inviterId: string; friendId: string; friendName: string; reason: string; at: number }[] }>('GET', '/admin/referrals/held'),
-    decideReferral: (friendId: string, action: 'release' | 'reject') =>
-      request<{ state: string }>('POST', `/admin/referrals/${friendId}`, { action }),
-    runPayouts: (month: string) => request<{ payouts: { affiliateId: string; grossPaise: number }[] }>('POST', '/admin/payouts/run', { month }),
-    payouts: (month: string) => request<{ payouts: AdminPayout[] }>('GET', `/admin/payouts?month=${month}`),
-    contact: (status: 'new' | 'done') => request<{ messages: ContactMessage[] }>('GET', `/admin/contact?status=${status}`),
-    feedback: (status: 'new' | 'done') => request<{ feedback: FeedbackItem[] }>('GET', `/admin/feedback?status=${status}`),
-    phones: (month: string) => request<PhoneStats>('GET', `/admin/phones?month=${month}`),
-    closeFeedback: (id: string) => request<{ status: string }>('POST', `/admin/feedback/${encodeURIComponent(id)}/done`),
-    closeContact: (id: string) => request<{ status: string }>('POST', `/admin/contact/${encodeURIComponent(id)}/done`),
-    markPaid: (affiliateId: string, month: string, reference: string) =>
-      request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),
-  },
+
   /** Anonymous camera diagnostics (src/lib/diagnostics.ts). */
   diagnostics: (report: { device: Record<string, unknown>; build: unknown; phone?: string; events: unknown[] }) =>
     request<{ ok: boolean }>('POST', '/diagnostics', report),

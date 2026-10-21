@@ -37,20 +37,13 @@ import { deleteStorage, getStorage, putStorage, requestProvider } from './storag
 import { requestStream } from './stream';
 import { requestAccountDeletion } from './account';
 import { followLink } from './attribution';
-import { closeContact, listContact, submitContact } from './contact';
-import { closeFeedback, listFeedback, submitFeedback } from './feedback';
-import { adminPhones } from './phones';
-import { claimCode, decideReferral, heldReferrals, myReferrals } from './referrals';
+import { submitContact } from './contact';
+import { attachmentUpload, submitFeedback } from './feedback';
+import { claimCode, myReferrals } from './referrals';
 import {
   apply as applyAffiliate,
-  auditTrail,
   createLink,
   dashboard as affiliateDashboard,
-  decideAffiliate,
-  listAffiliates,
-  markPaid,
-  payoutSheet,
-  runPayouts,
   updatePayoutDetails,
 } from './affiliates';
 import { updateManifest } from './updates';
@@ -123,6 +116,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /users') return await searchUsers(identity, req);
     if (seg[1] === 'users' && seg.length === 3 && method === 'GET') return await lookupUser(identity, seg[2]);
     if (route === 'GET /contacts') return await contacts(identity);
+    if (route === 'POST /feedback/attachments') return await attachmentUpload(identity, req);
     if (route === 'POST /feedback') return await submitFeedback(identity, req);
     if (route === 'POST /pairing') return await createPairing(identity);
     // Phone side of QR sign-in, and the phone's list of signed-in browsers.
@@ -142,23 +136,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'PUT /affiliates/payout-details') return await updatePayoutDetails(identity, req);
     if (route === 'POST /affiliates/links') return await createLink(identity, req);
 
-    // Admin (allow-listed accounts only).
-    if (seg[1] === 'admin') {
-      if (!identity.admin) throw new HttpError(404, 'Not found');
-      if (route === 'GET /admin/affiliates') return await listAffiliates(req);
-      if (seg[2] === 'affiliates' && seg.length === 4 && method === 'POST') return await decideAffiliate(identity.id, seg[3], req);
-      if (route === 'GET /admin/referrals/held') return await heldReferrals();
-      if (seg[2] === 'referrals' && seg.length === 4 && method === 'POST') return await decideReferral(identity.id, seg[3], req);
-      if (route === 'POST /admin/payouts/run') return await runPayouts(identity.id, req);
-      if (route === 'GET /admin/payouts') return await payoutSheet(req, identity.id);
-      if (seg[2] === 'payouts' && seg.length === 6 && seg[5] === 'paid' && method === 'POST') return await markPaid(identity.id, seg[3], seg[4], req);
-      if (route === 'GET /admin/audit') return await auditTrail(req);
-      if (route === 'GET /admin/contact') return await listContact(req);
-      if (route === 'GET /admin/feedback') return await listFeedback(req);
-      if (route === 'GET /admin/phones') return await adminPhones(req);
-      if (seg[2] === 'feedback' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeFeedback(identity.id, decodeURIComponent(seg[3]));
-      if (seg[2] === 'contact' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeContact(identity.id, decodeURIComponent(seg[3]));
-    }
+    // Admin moved to the Lens Console (infra/lambda/console): its own sign-in and API.
+
 
     if (route === 'POST /diagnostics') return await saveDiagnostics(identity, req);
     // Camera quality R&D: capability reports + Quality Lab sets.

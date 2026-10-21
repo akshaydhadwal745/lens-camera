@@ -16,6 +16,7 @@ type FeedbackRow = {
   at: number;
   status: string;
   emailStatus?: string;
+  attachments?: number;
 };
 
 const KINDS = [
@@ -72,6 +73,7 @@ export function Feedback({ canWrite }: { canWrite: boolean }) {
                     </span>
                   </header>
                   <p className="msg">{f.message}</p>
+                  {!!f.attachments && <Screenshots id={f.id} count={f.attachments} />}
                   <footer>
                     <span className="muted small">
                       {f.email ? `Reply to: ${f.email}` : f.accountEmail ? `Account: ${f.accountEmail}` : 'No reply address'}
@@ -93,6 +95,29 @@ export function Feedback({ canWrite }: { canWrite: boolean }) {
         }
       </Loaded>
     </Page>
+  );
+}
+
+/** Hidden until asked for: opening them is recorded in the activity log. */
+function Screenshots({ id, count }: { id: string; count: number }) {
+  const [open, setOpen] = useState(false);
+  if (!open)
+    return (
+      <button className="btn ghost attach" onClick={() => setOpen(true)}>
+        📎 {count} screenshot{count > 1 ? 's' : ''} · show
+      </button>
+    );
+  return (
+    <div className="shots">
+      {Array.from({ length: count }, (_, i) => {
+        const src = `/api/feedback/${encodeURIComponent(id)}/files/${i}`;
+        return (
+          <a key={i} href={src} target="_blank" rel="noopener">
+            <img src={src} alt={`Screenshot ${i + 1}`} loading="lazy" />
+          </a>
+        );
+      })}
+    </div>
   );
 }
 

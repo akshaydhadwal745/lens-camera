@@ -86,7 +86,6 @@ function RootLayout() {
         <Stack.Screen name="invite" options={{ presentation: 'modal' }} />
         <Stack.Screen name="partners" options={{ presentation: 'modal' }} />
         <Stack.Screen name="feedback" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="admin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="l/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="u/[id]" options={{ presentation: 'modal' }} />

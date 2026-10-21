@@ -5,12 +5,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api, FeedbackKind } from '@/lib/api';
 import { buildInfo } from '@/lib/build-info';
+import { canAttach, discardScreenshots, MAX_SCREENSHOTS, pickScreenshots, Screenshot, uploadScreenshots } from '@/lib/feedback-attach';
 import { useStore } from '@/lib/store';
 import { colors, errorMessage } from '@/lib/ui';
 
@@ -51,6 +52,8 @@ export default function FeedbackScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [shots, setShots] = useState<Screenshot[]>([]);
+  const [picking, setPicking] = useState(false);
 
   const current = KINDS.find((k) => k.kind === kind)!;
   // The question follows the answer: happy → what's missing; unhappy → what went wrong.
@@ -68,6 +71,7 @@ export default function FeedbackScreen() {
     setBusy(true);
     setError(null);
     try {
+      const attachments = shots.length ? await uploadScreenshots(shots) : undefined;
       const r = await api.sendFeedback({
         kind,
         source,
@@ -76,12 +80,27 @@ export default function FeedbackScreen() {
         email: wantReply ? email.trim() : undefined,
         includeDevice,
         device: includeDevice ? deviceDetails() : undefined,
+        attachments,
       });
+      discardScreenshots(shots);
       setSent(r.reference);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const attach = async () => {
+    setPicking(true);
+    setError(null);
+    try {
+      const more = await pickScreenshots(MAX_SCREENSHOTS - shots.length);
+      setShots((s) => [...s, ...more].slice(0, MAX_SCREENSHOTS));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPicking(false);
     }
   };
 
@@ -147,6 +166,35 @@ export default function FeedbackScreen() {
           textAlignVertical="top"
         />
 
+        {canAttach && kind !== 'review' && (
+          <View style={styles.shots}>
+            {shots.map((s, i) => (
+              <View key={s.uri} style={styles.shot}>
+                <Image source={{ uri: s.uri }} style={styles.shotImage} resizeMode="cover" accessibilityLabel={`Screenshot ${i + 1}`} />
+                <Pressable
+                  style={styles.shotRemove}
+                  hitSlop={8}
+                  onPress={() => {
+                    discardScreenshots([s]);
+                    setShots((all) => all.filter((x) => x.uri !== s.uri));
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove screenshot ${i + 1}`}
+                >
+                  <Ionicons name="close" size={14} color="#fff" />
+                </Pressable>
+              </View>
+            ))}
+            {shots.length < MAX_SCREENSHOTS && (
+              <Pressable style={styles.addShot} onPress={attach} disabled={picking || busy} accessibilityRole="button">
+                {picking ? <ActivityIndicator color="#fff" /> : <Ionicons name="image-outline" size={22} color="#fff" />}
+                <Text style={styles.addShotText}>{shots.length ? 'Add another' : 'Attach screenshot'}</Text>
+              </Pressable>
+            )}
+            <Text style={[styles.small, { width: '100%' }]}>Optional, up to {MAX_SCREENSHOTS}. Only the Lens team sees them; photo details like location are removed.</Text>
+          </View>
+        )}
+
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>I’d like a reply by email</Text>
@@ -207,4 +255,10 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   thanks: { color: '#fff', fontSize: 28, fontWeight: '700' },
   muted: { color: '#8e8e93', fontSize: 15 },
+  shots: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  shot: { width: 84, height: 120, borderRadius: 10, overflow: 'hidden', backgroundColor: '#1c1c1e' },
+  shotImage: { width: '100%', height: '100%' },
+  shotRemove: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' },
+  addShot: { width: 84, height: 120, borderRadius: 10, backgroundColor: '#1c1c1e', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 6 },
+  addShotText: { color: '#fff', fontSize: 12, textAlign: 'center' },
 });

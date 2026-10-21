@@ -665,3 +665,23 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- feedback screenshots ---------- */
+
+.attach {
+  margin-bottom: 8px;
+  padding: 0 10px;
+}
+.shots {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.shots img {
+  display: block;
+  max-height: 320px;
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}

@@ -6,12 +6,18 @@
 // "Include phone model and app version" on.
 //
 // Keys: FEEDBACK  <time>#<id>  the submission (kept 2 years, privacy policy §1)
+//
+// Screenshots: up to 3 images the user picks to show a problem (re-encoded on the phone, so no
+// photo metadata). Uploaded first (POST /feedback/attachments → presigned PUT into the feedback
+// bucket under f/<identity>/), then named in the submission. Deleted with the feedback/account.
+import { HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
+import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { hashIp } from './attribution';
 import { Identity } from './identity';
-import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res } from './lib';
+import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res, s3 } from './lib';
 
 const ses = new SESv2Client({});
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
@@ -20,7 +26,7 @@ type Kind = (typeof FEEDBACK_KINDS)[number];
 // report: someone reported content or a person from the app (Play UGC policy; src/lib/report.ts).
 const KIND_LABEL: Record<Kind, string> = { review: 'Review', issue: 'Issue', idea: 'Feature idea', other: 'Feedback', report: 'REPORT (content or user)' };
 const KEEP_SECONDS = 2 * 365 * 86400;
-/** Email retries stop after this many tries (the row stays in Admin → Feedback). */
+/** Email retries stop after this many tries (the row stays in Lens Console → Feedback). */
 const MAX_EMAIL_TRIES = 8;
 
 const clean = (v: unknown, max: number) =>
@@ -40,6 +46,47 @@ function deviceDetails(raw: unknown): Record<string, string> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+const ATTACHMENT_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+const MAX_ATTACHMENTS = 3;
+/** Kept small: the Lens Console shows them through its own API (Lambda responses are ≤ 6 MB). */
+const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+const attachmentPrefix = (identity: Identity) => `f/${identity.id}/`;
+
+/** POST /v1/feedback/attachments {contentType, size}: where to upload one screenshot (10 minutes). */
+export async function attachmentUpload(identity: Identity, req: Req): Promise<Res> {
+  if (!env.feedbackBucket) throw new HttpError(503, 'Screenshots can’t be attached right now');
+  const ext = ATTACHMENT_TYPES[String(req.body?.contentType)];
+  const size = Number(req.body?.size);
+  if (!ext) throw new HttpError(400, 'Attach a JPEG, PNG or WebP image');
+  if (!Number.isInteger(size) || size <= 0 || size > MAX_ATTACHMENT_BYTES) throw new HttpError(400, 'That image is too large (4 MB at most)');
+  await rateLimit(`feedback-file#${identity.id}`, 20, 'Too many screenshots this hour. Please try again later.');
+  const key = `${attachmentPrefix(identity)}${Date.now()}-${randomId(9)}.${ext}`;
+  const url = await presign(
+    s3,
+    new PutObjectCommand({ Bucket: env.feedbackBucket, Key: key, ContentType: String(req.body.contentType), ContentLength: size }),
+    { expiresIn: 600 },
+  );
+  return json(200, { key, url, headers: { 'content-type': req.body.contentType } });
+}
+
+/** The attachment keys named in a submission: this identity's own uploads that really exist. */
+async function checkedAttachments(identity: Identity, raw: unknown): Promise<string[]> {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_ATTACHMENTS) throw new HttpError(400, `Attach up to ${MAX_ATTACHMENTS} screenshots`);
+  const keys = [...new Set(raw.map(String))];
+  for (const key of keys) {
+    if (!key.startsWith(attachmentPrefix(identity)) || !/^f\/[A-Za-z0-9_-]+\/\d+-[A-Za-z0-9_-]+\.(jpg|png|webp)$/.test(key)) throw new HttpError(400, 'Unknown screenshot');
+    try {
+      const head = await s3.send(new HeadObjectCommand({ Bucket: env.feedbackBucket, Key: key }));
+      if ((head.ContentLength ?? 0) > MAX_ATTACHMENT_BYTES) throw new HttpError(400, 'That image is too large');
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      throw new HttpError(400, 'A screenshot didn’t finish uploading. Please attach it again.');
+    }
+  }
+  return keys;
+}
+
 /** POST /v1/feedback {kind, rating?, message, email?, includeDevice, device?, website?}: signed-in or guest app users. */
 export async function submitFeedback(identity: Identity, req: Req): Promise<Res> {
   // Honeypot (never shown): bots that fill it get a fake success.
@@ -57,6 +104,7 @@ export async function submitFeedback(identity: Identity, req: Req): Promise<Res>
   const email = clean(req.body?.email, 254).toLowerCase();
   if (email && !EMAIL.test(email)) throw new HttpError(400, 'That email address doesn’t look right');
   const device = req.body?.includeDevice === true ? deviceDetails(req.body?.device) : undefined;
+  const attachments = await checkedAttachments(identity, req.body?.attachments);
 
   await rateLimit(`feedback#${identity.id}`, 10, 'You’ve sent a lot of feedback this hour. Thank you! Please try again later.');
   if (req.sourceIp) await rateLimit(`feedback-ip#${req.sourceIp}`, 40, 'Too many messages from this network. Please try again in an hour.');
@@ -76,6 +124,7 @@ export async function submitFeedback(identity: Identity, req: Req): Promise<Res>
     accountEmail: identity.email ?? undefined,
     identityId: identity.id,
     ...(device ? { device } : {}),
+    ...(attachments.length ? { attachments } : {}),
     ip: hashIp(req.sourceIp),
     status: 'new',
     email_status: 'pending',
@@ -107,10 +156,11 @@ async function emailFeedback(f: Record<string, any>): Promise<void> {
     `Reference: ${f.reference} · from ${f.source === 'prompt' ? 'the in-app rating card' : f.source === 'prompt-missing' ? 'the “what’s missing?” card' : f.source === 'report' ? 'an in-app Report button' : 'Settings → Feedback'}`,
     `From: ${f.email ? `${f.email} (wants a reply)` : f.accountEmail ? `${f.accountEmail} (account email, no reply asked)` : 'guest, no email'}`,
     `Device: ${device}`,
+    ...(f.attachments?.length ? [`Screenshots: ${f.attachments.length} (open them in the Lens Console → Feedback)`] : []),
     '',
     f.message || '(no text)',
     '',
-    replyTo ? '— Reply to this email to answer them directly.' : '— No reply address. Also in Admin → Feedback.',
+    replyTo ? '— Reply to this email to answer them directly.' : '— No reply address. Also in Lens Console → Feedback.',
   ].join('\n');
   try {
     await ses.send(
@@ -196,6 +246,7 @@ export async function listFeedback(req: Req): Promise<Res> {
       at: f.at,
       status: f.status,
       emailStatus: f.email_status,
+      attachments: Array.isArray(f.attachments) ? f.attachments.length : 0,
     })),
   });
 }

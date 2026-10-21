@@ -167,6 +167,8 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
     fbStart = page.LastEvaluatedKey;
   } while (fbStart);
   await deleteKeys(feedback);
+  // …and the screenshots attached to it.
+  if (env.feedbackBucket) await deleteAllVersions(`f/${id}/`, env.feedbackBucket);
 
   // This account in other people's contact lists.
   const rest = await partitionItems(id);

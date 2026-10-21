@@ -28,6 +28,8 @@ export const env = {
   webOrigin: process.env.WEB_ORIGIN ?? '',
   /** Sent only by our CloudFront (/api): proves the viewer headers are real. */
   edgeSecret: process.env.EDGE_SECRET ?? '',
+  /** Screenshots users attach to feedback (the only user images the Lens Console can open). */
+  feedbackBucket: process.env.FEEDBACK_BUCKET ?? '',
   /** Append-only audit trail (S3 Object Lock). */
   auditBucket: process.env.AUDIT_BUCKET ?? '',
   /** Accounts (by email) allowed into /admin. */

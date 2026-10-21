@@ -30,5 +30,6 @@ if (consoleCert) {
     tableName: 'Lens',
     mediaBucketName: 'lens-media-495026846839',
     auditBucketName: 'lens-audit3d8ade0a-gotgzbiazyz7',
+    feedbackBucketName: 'lens-feedback-495026846839',
   });
 }

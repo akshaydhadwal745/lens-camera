@@ -36,8 +36,6 @@ export type Identity = {
   /** From Google sign-in: only a suggestion for the Settings field. */
   googleName?: string;
   bonusBytes?: number;
-  /** May use /admin: email in ADMIN_EMAILS, or `admin` set on the profile directly in the database. */
-  admin?: boolean;
 };
 
 /** Sessions end after this long without use (sliding; refreshed at most daily). */
@@ -265,8 +263,6 @@ export async function authenticate(req: Req): Promise<Identity> {
     email: profile.Item.email,
     realName: profile.Item.realName,
     googleName: profile.Item.googleName,
-    admin:
-      profile.Item.admin === true || (!!profile.Item.email && env.adminEmails.includes(String(profile.Item.email).toLowerCase())) || undefined,
   };
 }
 

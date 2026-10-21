@@ -79,16 +79,16 @@ export async function deleteShares(ownerId: string, id: string) {
 }
 
 /** Deletes every S3 version (and delete marker) under a prefix. */
-export async function deleteAllVersions(prefix: string) {
+export async function deleteAllVersions(prefix: string, bucket = env.bucket) {
   let keyMarker: string | undefined;
   let versionMarker: string | undefined;
   do {
     const page = await s3.send(
-      new ListObjectVersionsCommand({ Bucket: env.bucket, Prefix: prefix, KeyMarker: keyMarker, VersionIdMarker: versionMarker }),
+      new ListObjectVersionsCommand({ Bucket: bucket, Prefix: prefix, KeyMarker: keyMarker, VersionIdMarker: versionMarker }),
     );
     const objects = [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])].map((v) => ({ Key: v.Key!, VersionId: v.VersionId }));
     if (objects.length) {
-      await s3.send(new DeleteObjectsCommand({ Bucket: env.bucket, Delete: { Objects: objects, Quiet: true } }));
+      await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: objects, Quiet: true } }));
     }
     keyMarker = page.IsTruncated ? page.NextKeyMarker : undefined;
     versionMarker = page.IsTruncated ? page.NextVersionIdMarker : undefined;

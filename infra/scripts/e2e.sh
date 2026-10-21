@@ -553,12 +553,20 @@ signin "$TP" "p$(date +%s%N)@e2e.lens.invalid" >/dev/null
 [[ $(call GET /affiliates/me "$TP" | j .panMasked) == "••••••234F" ]] && ok "PAN stored encrypted, shown masked"
 [[ $(call POST /affiliates/links "$TP" -d '{}' -o /dev/null -w '%{http_code}') == 403 ]] && ok "no links before approval"
 [[ $(call GET /admin/affiliates "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "admin API hidden from normal accounts"
-ADM=$(newphone "$(openssl rand -hex 32)"); TADM=$(echo "$ADM" | j .token); IADM=$(echo "$ADM" | j .id)
-signin "$TADM" "adm$(date +%s%N)@e2e.lens.invalid" >/dev/null
-aws dynamodb update-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"D#$IADM\"},\"sk\":{\"S\":\"PROFILE\"}}" \
-  --update-expression 'SET #a = :t' --expression-attribute-names '{"#a":"admin"}' --expression-attribute-values '{":t":{"BOOL":true}}'
-[[ $(call GET "/admin/affiliates?status=applied" "$TADM" | j ".affiliates.some(a=>a.id==='$IP')") == true ]] && ok "admin sees the application"
-[[ $(call POST "/admin/affiliates/$IP" "$TADM" -d '{"action":"approve"}' | j .status) == approved ]] && ok "admin approves"
+# Admin actions go through the Lens Console API (own sign-in): a test team member with a
+# console session made directly in the table (Google + authenticator can't be scripted).
+CONSOLE="${CONSOLE:-https://console.lens.instagrowapp.com}/api"
+CADM="adm$(date +%s%N)@e2e.lens.invalid"; CTOK=$(openssl rand -hex 32); CHASH=$(printf %s "$CTOK" | sha256sum | cut -d' ' -f1); NOWMS=$(date +%s%3N)
+ddbput() { aws dynamodb put-item --profile lens --region ap-south-1 --table-name Lens --item "$1" >/dev/null; }
+ddbdel() { aws dynamodb delete-item --profile lens --region ap-south-1 --table-name Lens --key "$1" >/dev/null; }
+ddbput "{\"pk\":{\"S\":\"ADMIN#$CADM\"},\"sk\":{\"S\":\"ROLE\"},\"role\":{\"S\":\"admin\"}}"
+ddbput "{\"pk\":{\"S\":\"CSESS#$CHASH\"},\"sk\":{\"S\":\"S\"},\"stage\":{\"S\":\"full\"},\"email\":{\"S\":\"$CADM\"},\"createdAt\":{\"N\":\"$NOWMS\"},\"lastSeen\":{\"N\":\"$NOWMS\"},\"ttl\":{\"N\":\"$(( NOWMS / 1000 + 7200 ))\"}}"
+trap 'rm -rf "$TMP"; ddbdel "{\"pk\":{\"S\":\"ADMIN#$CADM\"},\"sk\":{\"S\":\"ROLE\"}}"; ddbdel "{\"pk\":{\"S\":\"CSESS#$CHASH\"},\"sk\":{\"S\":\"S\"}}"' EXIT
+capi() { local m=$1 p=$2; shift 2; if [[ $m == GET ]]; then curl -sS "$CONSOLE$p" -H "cookie: __Host-lc=$CTOK" "$@"; else curl -sS -X "$m" "$CONSOLE$p" -H "cookie: __Host-lc=$CTOK" -H 'x-console: 1' -H "origin: ${CONSOLE%/api}" -H 'content-type: application/json' "$@"; fi; }
+[[ $(capi GET /me | j .role) == admin ]] && ok "console session for a test admin"
+[[ $(curl -sS "$CONSOLE/me" -H "authorization: Bearer $TA" -o /dev/null -w '%{http_code}') == 401 ]] && ok "a Lens app token can't use the console"
+[[ $(capi GET "/affiliates?status=applied" | j ".affiliates.some(a=>a.id==='$IP')") == true ]] && ok "admin sees the application"
+[[ $(capi POST "/affiliates/$IP" -d '{"action":"approve"}' | j .status) == approved ]] && ok "admin approves"
 ACODE=$(call GET /affiliates/me "$TP" | j ".links[0].code")
 [[ -n "$ACODE" ]] && ok "approved partner gets a first link: $ACODE"
 [[ $(call POST /affiliates/links "$TP" -d '{"campaign":"instagram"}' | j .campaign) == instagram ]] && ok "extra campaign link"
@@ -576,17 +584,17 @@ paise "{\"purchase\":{\"orderId\":\"$O3\",\"userId\":\"$IU\",\"grossPaise\":3540
 aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"approveCommissions\":{\"now\":$(( $(date +%s%3N) + 31 * DAY )),\"onlyAffiliate\":\"$IP\"}}" "$TMP/p.json" >/dev/null
 [[ $(j .approved < "$TMP/p.json") == 2 && $(call GET /affiliates/me "$TP" | j .approvedPaise) == 131065 ]] && ok "approved after 30 days: ₹1,310.65"
 MONTH="2099-$(printf %02d $(( RANDOM % 12 + 1 )))"
-R=$(call POST /admin/payouts/run "$TADM" -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}")
+R=$(capi POST /payouts/run -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}")
 [[ $(echo "$R" | j ".payouts[0].grossPaise") == 131065 && $(echo "$R" | j ".payouts[0].tdsPaise") == 0 ]] && ok "monthly payout statement (under the TDS threshold: no TDS)"
-[[ $(call POST /admin/payouts/run "$TADM" -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}" | j .payouts.length) == 0 ]] && ok "payout run is idempotent"
-S=$(call GET "/admin/payouts?month=$MONTH" "$TADM")
+[[ $(capi POST /payouts/run -d "{\"month\":\"$MONTH\",\"affiliateId\":\"$IP\"}" | j .payouts.length) == 0 ]] && ok "payout run is idempotent"
+S=$(capi GET "/payouts?month=$MONTH")
 [[ $(echo "$S" | j ".payouts.find(p=>p.affiliateId==='$IP').upi") == e2e.creator@okaxis ]] && ok "payout sheet decrypts the UPI ID for the transfer"
-[[ $(call POST "/admin/payouts/$IP/$MONTH/paid" "$TADM" -d '{"reference":"UPI-E2E-1"}' | j .status) == paid ]] && ok "marked paid" || fail "mark paid"
+[[ $(capi POST "/payouts/$IP/$MONTH/paid" -d '{"reference":"UPI-E2E-1"}' | j .status) == paid ]] && ok "marked paid" || fail "mark paid"
 [[ $(call GET /affiliates/me "$TP" | j .paidPaise) == 131065 && $(call GET /affiliates/me "$TP" | j ".payouts[0].status") == paid ]] && ok "partner sees the payout" || fail "partner payout view"
 [[ $(paise "{\"refund\":{\"orderId\":\"$O3\"}}") == reversed && $(call GET /affiliates/me "$TP" | j .approvedPaise) == -127500 ]] && ok "refund after payout: clawed back from the next payout"
-[[ $(call POST "/admin/affiliates/$IP" "$TADM" -d '{"action":"suspend","note":"e2e"}' | j .status) == suspended ]] && ok "admin suspends"
+[[ $(capi POST "/affiliates/$IP" -d '{"action":"suspend","note":"e2e"}' | j .status) == suspended ]] && ok "admin suspends"
 [[ $(curl -sS -o /dev/null -w '%{redirect_url}' "$SITE/go/$ACODE") != *via=* ]] && ok "suspended partner's links stop attributing"
-[[ $(call GET "/admin/audit?entity=affiliate:$IP" "$TADM" | j .events.length) -ge 8 ]] && ok "audit trail recorded"
+[[ $(capi GET "/audit?entity=affiliate:$IP" | j .events.length) -ge 8 ]] && ok "audit trail recorded"
 AUDIT=$(node -p "require('./outputs.json').Lens.AuditBucketName")
 [[ $(aws s3api list-objects-v2 --profile lens --bucket "$AUDIT" --prefix "audit/$(date -u +%F)/affiliate:$IP/" --query 'length(Contents)' --output text) -ge 8 ]] && ok "audit events locked in S3 (Object Lock)"
 # --- in-app feedback (Settings → Feedback): stored first, emailed after ---
@@ -600,26 +608,41 @@ FREF=$(echo "$R" | j .reference)
 R=$(call POST /feedback "$TA" -d '{"kind":"issue","message":"[e2e] The camera froze once","email":"reply@e2e.lens.invalid","includeDevice":false,"device":{"model":"should not be kept"}}')
 FREF2=$(echo "$R" | j .reference)
 [[ $(call POST /feedback "$TA" -d '{"kind":"other","message":"[e2e] bot text here","website":"http://spam"}' | j .received) == true ]] && ok "feedback honeypot: bots get a fake success"
-FB=$(call GET "/admin/feedback" "$TADM")
+FB=$(capi GET "/feedback")
 [[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.rating") == 5 && $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.device.model") == "E2E phone" ]] && ok "admin sees the rating and the shared device"
 [[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.device.secret") == "" ]] && ok "only known device fields are kept"
 [[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF2')?.device") == "" && $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF2')?.email") == reply@e2e.lens.invalid ]] && ok "no device details without consent; reply email kept"
 [[ $(echo "$FB" | j ".feedback.some(f=>f.message.includes('bot text'))") == false ]] && ok "the bot's feedback isn't stored"
 FID=$(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.id")
-[[ $(call POST "/admin/feedback/$(node -p "encodeURIComponent('$FID')")/done" "$TADM" | j .status) == done ]] && ok "feedback marked done"
+[[ $(capi POST "/feedback/$(node -p "encodeURIComponent('$FID')")/done" | j .status) == done ]] && ok "feedback marked done"
 [[ $(call GET "/admin/feedback" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "feedback list hidden from normal accounts"
 R=$(call POST /feedback "$TA" -d '{"kind":"review","rating":2,"source":"prompt","message":"[e2e] from the rating card"}'); FREF3=$(echo "$R" | j .reference)
-[[ $(call GET "/admin/feedback" "$TADM" | j ".feedback.find(f=>f.reference==='$FREF3')?.source") == prompt ]] && ok "rating-card answers are tagged with their source"
-[[ $(call GET "/admin/feedback" "$TADM" | j ".feedback.find(f=>f.reference==='$FREF2')?.source") == settings ]] && ok "Settings feedback is tagged settings"
+[[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF3')?.source") == prompt ]] && ok "rating-card answers are tagged with their source"
+[[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF2')?.source") == settings ]] && ok "Settings feedback is tagged settings"
+# Screenshots attached to feedback: own uploads only, shown only in the console (and audited).
+printf '\xff\xd8\xff\xe0e2e-screenshot' > "$TMP/shot.jpg"; SHOTSIZE=$(stat -c %s "$TMP/shot.jpg")
+SLOT=$(call POST /feedback/attachments "$TA" -d "{\"contentType\":\"image/jpeg\",\"size\":$SHOTSIZE}")
+SKEY=$(echo "$SLOT" | j .key); SURL=$(echo "$SLOT" | j .url)
+[[ $SKEY == f/$IA/* ]] && ok "screenshot upload slot under the account's own folder"
+[[ $(curl -sS -X PUT "$SURL" -H 'content-type: image/jpeg' --data-binary @"$TMP/shot.jpg" -o /dev/null -w '%{http_code}') == 200 ]] && ok "screenshot uploaded"
+[[ $(call POST /feedback/attachments "$TA" -d '{"contentType":"image/gif","size":10}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "only JPEG/PNG/WebP screenshots"
+[[ $(call POST /feedback/attachments "$TA" -d '{"contentType":"image/jpeg","size":9999999}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "screenshots over 4 MB refused"
+[[ $(call POST /feedback "$TB" -d "{\"kind\":\"issue\",\"message\":\"[e2e] someone else's screenshot\",\"attachments\":[\"$SKEY\"]}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "can't attach another account's screenshot"
+R=$(call POST /feedback "$TA" -d "{\"kind\":\"issue\",\"message\":\"[e2e] with a screenshot\",\"attachments\":[\"$SKEY\"]}"); FREF4=$(echo "$R" | j .reference)
+FID4=$(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF4')?.id")
+[[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF4')?.attachments") == 1 ]] && ok "console lists the screenshot count"
+[[ $(capi GET "/feedback/$(node -p "encodeURIComponent('$FID4')")/files/0" -o "$TMP/got.jpg" -w '%{content_type}') == image/jpeg ]] && cmp -s "$TMP/shot.jpg" "$TMP/got.jpg" && ok "console opens the screenshot (same bytes)"
+[[ $(capi GET "/feedback/$(node -p "encodeURIComponent('$FID4')")/files/1" -o /dev/null -w '%{http_code}') == 404 ]] && ok "no screenshot beyond what was attached"
+[[ $(capi GET "/activity" | j ".events.some(e=>e.action==='feedback.screenshot.viewed'&&e.entity==='feedback:$FID4')") == true ]] && ok "opening a screenshot is in the activity log"
 # --- contact form (stored + emailed to the team) ---
 R=$(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d "{\"name\":\"E2E\",\"email\":\"c$(date +%s%N)@e2e.lens.invalid\",\"topic\":\"support\",\"message\":\"Automated test message, please ignore.\"}")
 CREF=$(echo "$R" | j .reference)
 [[ $(echo "$R" | j .received) == true && $CREF == L-* ]] && ok "contact form message received ($CREF)"
 [[ $(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d '{"name":"x","email":"bad","message":"hello there friend"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "contact form needs a valid email"
 [[ $(curl -sS -X POST "$WAPI/contact" -H 'content-type: application/json' -d '{"name":"bot","email":"b@x.com","message":"spam spam spam","website":"http://spam"}' | j .received) == true ]] && ok "honeypot: bots get a fake success"
-CM=$(call GET "/admin/contact" "$TADM" | j ".messages.find(m=>m.reference==='$CREF')?.id")
-[[ -n "$CM" && $(call GET "/admin/contact" "$TADM" | j ".messages.some(m=>m.email==='b@x.com')") == false ]] && ok "admin inbox shows the message (not the bot's)"
-[[ $(call POST "/admin/contact/$(node -p "encodeURIComponent('$CM')")/done" "$TADM" | j .status) == done ]] && ok "message marked done"
+CM=$(capi GET "/inbox" | j ".messages.find(m=>m.reference==='$CREF')?.id")
+[[ -n "$CM" && $(capi GET "/inbox" | j ".messages.some(m=>m.email==='b@x.com')") == false ]] && ok "admin inbox shows the message (not the bot's)"
+[[ $(capi POST "/inbox/$(node -p "encodeURIComponent('$CM')")/done" | j .status) == done ]] && ok "message marked done"
 [[ $(call GET "/admin/contact" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "inbox hidden from normal accounts"
 # --- delete account (Play requirement): everything goes, the email can start fresh ---
 D=$(curl -sS -X POST "$API/devices"); TD=$(echo "$D" | j .token); ID_D=$(echo "$D" | j .id)
@@ -651,7 +674,7 @@ done
 [[ "$GONE" == None ]] && ok "account removed in the background" || fail "account still there"
 [[ $(vcount "m/$ID_D/") == 0 && $(vcount "d/$ID_D/") == 0 && $(vcount "r/$ID_D/") == 0 ]] && ok "every stored file and version deleted"
 [[ $(vcount "lab/sets/$LSET/") == 0 ]] && ok "its Quality Lab set deleted too"
-[[ $(call GET "/admin/feedback" "$TADM" | j ".feedback.some(f=>f.message==='[e2e] feedback before deletion')") == false ]] && ok "its feedback deleted too"
+[[ $(capi GET "/feedback" | j ".feedback.some(f=>f.message==='[e2e] feedback before deletion')") == false ]] && ok "its feedback deleted too"
 [[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == false ]] && ok "friends lose access to what it shared"
 N=$(curl -sS -X POST "$API/devices"); TN=$(echo "$N" | j .token)
 call POST /auth/email/start "$TN" -d "{\"email\":\"$MAILD\"}" >/dev/null

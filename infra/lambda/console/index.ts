@@ -9,6 +9,7 @@ import { closeFeedback, listFeedback } from '../api/feedback';
 import { env, HttpError, json, parseEvent, Res, safeEqual } from '../api/lib';
 import { adminPhones } from '../api/phones';
 import { decideReferral, heldReferrals } from '../api/referrals';
+import { feedbackFile } from './attachments';
 import { activity, log } from './log';
 import { overview } from './overview';
 import { Permission, permissionsOf, removeTeamMember, requirePermission, ROLES, setTeamMember, teamMembers } from './roles';
@@ -82,6 +83,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       const res = await closeFeedback(email, id);
       await log({ entity: `feedback:${id}`, action: 'feedback.done', actor: `console:${email}` });
       return res;
+    }
+    if (seg[0] === 'feedback' && seg.length === 4 && seg[2] === 'files' && method === 'GET') {
+      need('feedback');
+      const id = decodeURIComponent(seg[1]);
+      await log({ entity: `feedback:${id}`, action: 'feedback.screenshot.viewed', actor: `console:${email}`, data: { n: Number(seg[3]) } });
+      return await feedbackFile(id, Number(seg[3]));
     }
     if (route === 'GET /inbox') return await allowed('inbox', () => listContact(req));
     if (seg[0] === 'inbox' && seg.length === 3 && seg[2] === 'done' && method === 'POST') {

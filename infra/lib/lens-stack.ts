@@ -114,6 +114,26 @@ export class LensStack extends Stack {
 
     new CfnOutput(this, 'AuditBucketName', { value: auditBucket.bucketName });
 
+    // Screenshots users attach to feedback (lambda/api/feedback.ts). Separate from the media
+    // bucket: the Lens Console may read this one only, never anyone's photos or videos.
+    const feedbackBucket = new s3.Bucket(this, 'FeedbackFiles', {
+      bucketName: `lens-feedback-${this.account}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      // Same as the feedback rows (2 years, privacy policy); account deletion removes them sooner.
+      lifecycleRules: [{ expiration: Duration.days(731) }, { abortIncompleteMultipartUploadAfter: Duration.days(1) }],
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.PUT],
+          allowedOrigins: [(this.node.tryGetContext('webOrigin') as string | undefined) || 'https://lens.instagrowapp.com'],
+          allowedHeaders: ['content-type'],
+          maxAge: 3600,
+        },
+      ],
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
     const table = new dynamodb.TableV2(this, 'Table', {
       tableName: 'Lens',
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
@@ -373,6 +393,7 @@ function handler(event) {
       TRANSCODE_JOB: transcodeJob.jobDefinitionArn,
       STREAM_KEY_PARAM,
       AUDIT_BUCKET: auditBucket.bucketName,
+      FEEDBACK_BUCKET: feedbackBucket.bucketName,
       // Who may open /admin (comma-separated emails).
       ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
       // Play Store listing for invite/affiliate links; empty until the app is published.
@@ -444,6 +465,7 @@ function handler(event) {
     for (const fn of [api, maintenance]) {
       table.grantReadWriteData(fn);
       auditBucket.grantPut(fn, 'audit/*');
+      feedbackBucket.grantReadWrite(fn, 'f/*'); // upload links, check uploads, delete with the account
       mediaBucket.grantReadWrite(fn); // presigned PUT/multipart, Head, Delete, tagging, versions
       fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:RestoreObject'], resources: [mediaBucket.arnForObjects('m/*')] }));
       fn.addToRolePolicy(

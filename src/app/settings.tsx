@@ -247,17 +247,12 @@ function AccountSection() {
   );
 }
 
-/** Invite friends (+storage), the affiliate program, and admin tools for allow-listed accounts. */
+/** Invite friends (+storage) and the affiliate program. (Admin lives in the Lens Console website.) */
 function EarnSection({ signedIn }: { signedIn: boolean }) {
-  const [admin, setAdmin] = useState(false);
-  useEffect(() => {
-    if (signedIn) api.me().then((m) => setAdmin(!!m.admin), () => undefined);
-  }, [signedIn]);
-  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; to: '/invite' | '/partners' | '/admin' }[] = [
+  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; to: '/invite' | '/partners' }[] = [
     { icon: 'gift-outline', label: 'Invite friends', value: '+10 GB each', to: '/invite' },
     // Native: only an entry that opens the website, where the whole program lives (apply, dashboard, payouts).
     { icon: 'trending-up-outline', label: 'Affiliate program', value: Platform.OS === 'web' ? '50%' : undefined, to: '/partners' },
-    ...(admin ? [{ icon: 'shield-checkmark-outline' as const, label: 'Admin', to: '/admin' as const }] : []),
   ];
   return (
     <Section title="Invite & earn">

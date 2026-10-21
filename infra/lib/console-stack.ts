@@ -36,6 +36,7 @@ export type ConsoleStackProps = StackProps & {
   tableName: string;
   mediaBucketName: string;
   auditBucketName: string;
+  feedbackBucketName: string;
 };
 
 export class ConsoleStack extends Stack {
@@ -59,6 +60,8 @@ export class ConsoleStack extends Stack {
         // Only for its CloudWatch size metric: no read/write permission on it below.
         BUCKET: props.mediaBucketName,
         AUDIT_BUCKET: props.auditBucketName,
+        // Screenshots users attach to feedback: the only user images it may read.
+        FEEDBACK_BUCKET: props.feedbackBucketName,
         ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
         EDGE_SECRET: edgeSecret,
         CONSOLE_ORIGIN: origin,
@@ -73,6 +76,7 @@ export class ConsoleStack extends Stack {
     });
     table.grantReadWriteData(fn);
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:PutObject'], resources: [`arn:aws:s3:::${props.auditBucketName}/audit/*`] }));
+    fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:GetObject'], resources: [`arn:aws:s3:::${props.feedbackBucketName}/f/*`] }));
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['ssm:GetParameter'],
