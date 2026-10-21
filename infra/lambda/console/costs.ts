@@ -19,20 +19,32 @@ async function compute() {
   const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const thirtyAgo = new Date(tomorrow.getTime() - 30 * 86_400_000);
 
-  const [byService, daily, forecast] = await Promise.all([
+  // Usage before credits (what each service costs), and credits/refunds separately: with AWS
+  // credits on the account the net per service is ~0, which says nothing.
+  const usageOnly = { Not: { Dimensions: { Key: 'RECORD_TYPE' as const, Values: ['Credit', 'Refund'] } } };
+  const [byService, byType, daily, forecast] = await Promise.all([
     ce.send(
       new GetCostAndUsageCommand({
         TimePeriod: { Start: ymd(lastMonthStart), End: ymd(tomorrow) },
         Granularity: 'MONTHLY',
         Metrics: ['UnblendedCost'],
+        Filter: usageOnly,
         GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
       }),
     ),
-    ce.send(new GetCostAndUsageCommand({ TimePeriod: { Start: ymd(thirtyAgo), End: ymd(tomorrow) }, Granularity: 'DAILY', Metrics: ['UnblendedCost'] })),
+    ce.send(
+      new GetCostAndUsageCommand({
+        TimePeriod: { Start: ymd(lastMonthStart), End: ymd(tomorrow) },
+        Granularity: 'MONTHLY',
+        Metrics: ['UnblendedCost'],
+        GroupBy: [{ Type: 'DIMENSION', Key: 'RECORD_TYPE' }],
+      }),
+    ),
+    ce.send(new GetCostAndUsageCommand({ TimePeriod: { Start: ymd(thirtyAgo), End: ymd(tomorrow) }, Granularity: 'DAILY', Metrics: ['UnblendedCost'], Filter: usageOnly })),
     // No forecast on the last day of the month or with too little history: that's fine.
     ymd(tomorrow) < ymd(nextMonth)
       ? ce
-          .send(new GetCostForecastCommand({ TimePeriod: { Start: ymd(tomorrow), End: ymd(nextMonth) }, Metric: 'UNBLENDED_COST', Granularity: 'MONTHLY' }))
+          .send(new GetCostForecastCommand({ TimePeriod: { Start: ymd(tomorrow), End: ymd(nextMonth) }, Metric: 'UNBLENDED_COST', Granularity: 'MONTHLY', Filter: usageOnly }))
           .catch((e) => (console.error('forecast', e), null))
       : Promise.resolve(null),
   ]);
@@ -42,9 +54,13 @@ async function compute() {
       .map((g) => ({ service: g.Keys?.[0] ?? '?', usd: Number(g.Metrics?.UnblendedCost?.Amount ?? 0) }))
       .filter((s) => Math.abs(s.usd) >= 0.005)
       .sort((a, b) => b.usd - a.usd);
-    return { month: r.TimePeriod?.Start?.slice(0, 7) ?? '?', usd: services.reduce((s, x) => s + x.usd, 0), services, estimated: !!r.Estimated };
+    const month = r.TimePeriod?.Start?.slice(0, 7) ?? '?';
+    const types = byType.ResultsByTime?.find((t) => t.TimePeriod?.Start?.slice(0, 7) === month)?.Groups ?? [];
+    const credits = types.filter((g) => ['Credit', 'Refund'].includes(g.Keys?.[0] ?? '')).reduce((s, g) => s + Number(g.Metrics?.UnblendedCost?.Amount ?? 0), 0);
+    const usd = services.reduce((s, x) => s + x.usd, 0);
+    return { month, usd, credits, net: Math.max(0, usd + credits), services, estimated: !!r.Estimated };
   });
-  const thisMonth = months.find((m) => m.month === ymd(monthStart).slice(0, 7)) ?? { month: ymd(monthStart).slice(0, 7), usd: 0, services: [], estimated: true };
+  const thisMonth = months.find((m) => m.month === ymd(monthStart).slice(0, 7)) ?? { month: ymd(monthStart).slice(0, 7), usd: 0, credits: 0, net: 0, services: [], estimated: true };
   const lastMonth = months.find((m) => m.month === ymd(lastMonthStart).slice(0, 7)) ?? null;
   const rest = forecast ? Number(forecast.Total?.Amount ?? 0) : null;
 

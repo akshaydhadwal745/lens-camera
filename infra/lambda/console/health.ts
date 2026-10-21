@@ -157,9 +157,9 @@ async function compute() {
     })),
     {
       name: 'Email (sign-in codes, feedback)',
-      status: account ? status(account.SendingEnabled !== false && account.EnforcementStatus !== 'SHUTDOWN', account.EnforcementStatus === 'PROBATION' || bounceRate > 0.04 || complaintRate > 0.001) : 'warn',
+      status: account ? status(account.SendingEnabled !== false && account.EnforcementStatus !== 'SHUTDOWN', account.EnforcementStatus === 'PROBATION' || (sesSent >= 50 && (bounceRate > 0.04 || complaintRate > 0.001))) : 'warn',
       detail: account
-        ? `${Math.round(account.SendQuota?.SentLast24Hours ?? 0)} sent in 24 h of ${Math.round(account.SendQuota?.Max24HourSend ?? 0)} allowed · bounces ${(bounceRate * 100).toFixed(1)}% · ${account.EnforcementStatus ?? 'healthy'}`
+        ? `${Math.round(account.SendQuota?.SentLast24Hours ?? 0)} sent in 24 h of ${Math.round(account.SendQuota?.Max24HourSend ?? 0)} allowed · ${sesSent >= 50 ? `bounces ${(bounceRate * 100).toFixed(1)}%` : `${Math.round(total(m.sesBounce))} of ${Math.round(sesSent)} bounced this week`} · ${(account.EnforcementStatus ?? 'healthy').toLowerCase()}`
         : 'Could not read the email account',
     },
     {

@@ -157,7 +157,7 @@ export function Errors() {
   );
 }
 
-type Month = { month: string; usd: number; services: { service: string; usd: number }[]; estimated: boolean };
+type Month = { month: string; usd: number; credits: number; net: number; services: { service: string; usd: number }[]; estimated: boolean };
 type Costs = { at: number; budgetUsd: number | null; thisMonth: Month; lastMonth: Month | null; forecastMonthUsd: number | null; daily: { day: string; usd: number }[] };
 
 const usd = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `$${v.toFixed(v < 10 ? 2 : 0)}`);
@@ -190,20 +190,21 @@ export function Costs() {
         </>
       }
     >
-      <p className="muted small">From AWS Cost Explorer, in US dollars. AWS updates it a few times a day; the latest day is still incomplete.</p>
+      <p className="muted small">From AWS Cost Explorer, in US dollars: what each service used before credits, and what is actually billed after them. AWS updates it a few times a day; today is still incomplete.</p>
       <Loaded state={state}>
         {(c) => {
           const over = c.budgetUsd && c.forecastMonthUsd ? c.forecastMonthUsd > c.budgetUsd : false;
           return (
             <>
               <div className="stats">
-                <Stat label={`This month (${c.thisMonth.month})`} value={usd(c.thisMonth.usd)} sub="so far" />
-                <Stat label="Month-end forecast" value={usd(c.forecastMonthUsd)} sub={c.budgetUsd ? <span className={over ? 'bad-text' : ''}>budget {usd(c.budgetUsd)}</span> : undefined} />
-                <Stat label="Last month" value={usd(c.lastMonth?.usd)} sub={c.lastMonth?.month} />
+                <Stat label={`Usage this month (${c.thisMonth.month})`} value={usd(c.thisMonth.usd)} sub="so far, before credits" />
+                <Stat label="You pay this month" value={usd(c.thisMonth.net)} sub={c.thisMonth.credits < 0 ? `credits cover ${usd(-c.thisMonth.credits)}` : 'no credits applied'} />
+                <Stat label="Month-end usage forecast" value={usd(c.forecastMonthUsd)} sub={c.budgetUsd ? <span className={over ? 'bad-text' : ''}>budget {usd(c.budgetUsd)}</span> : undefined} />
+                <Stat label="Last month" value={usd(c.lastMonth?.usd)} sub={c.lastMonth ? `${c.lastMonth.month} · paid ${usd(c.lastMonth.net)}` : undefined} />
               </div>
               <div className="grid2">
                 <Card>
-                  <Bars caption={<>Per day (30 days)</>} rows={c.daily.map((d) => ({ label: d.day, value: d.usd }))} format={(v) => usd(v)} />
+                  <Bars caption={<>Usage per day (30 days)</>} rows={c.daily.map((d) => ({ label: d.day, value: d.usd }))} format={(v) => usd(v)} />
                 </Card>
                 <Card title="This month by service">
                   {c.thisMonth.services.length ? (
