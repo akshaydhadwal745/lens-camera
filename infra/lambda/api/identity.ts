@@ -190,6 +190,8 @@ export async function register(req?: Req): Promise<Res> {
                   usedBytes: 0,
                   createdAt: now,
                   ...(fingerprint ? { fingerprint } : {}),
+                  // Automated tests (infra/scripts/e2e.sh): left out of the console's numbers.
+                  ...(req?.headers?.['x-lens-test'] === '1' ? { test: true } : {}),
                   gsi1pk: 'NAME',
                   gsi1sk: name,
                 },

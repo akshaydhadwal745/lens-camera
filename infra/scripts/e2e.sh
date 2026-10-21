@@ -2,6 +2,8 @@
 # End-to-end smoke test against the deployed API. Creates two throwaway identities.
 set -euo pipefail
 API="${API:-$(node -p "require('./outputs.json').Lens.ApiUrl.replace(/\/$/, '')")}/v1"
+# Every request is marked as test traffic: accounts it makes stay out of the console's numbers.
+curl() { command curl -H 'x-lens-test: 1' "$@"; }
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 j() { node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const o=JSON.parse(d);console.log(eval('o'+process.argv[1])??'')})" "$1"; }
 call() { local m=$1 p=$2 t=$3; shift 3; curl -sS -X "$m" "$API$p" -H "authorization: Bearer $t" -H 'content-type: application/json' "$@"; }

@@ -1,6 +1,7 @@
 import { App } from 'aws-cdk-lib';
 
 import { ConsoleCertStack } from '../lib/console-cert-stack';
+import { ConsoleStack } from '../lib/console-stack';
 import { LensStack } from '../lib/lens-stack';
 
 const app = new App();
@@ -17,3 +18,17 @@ new ConsoleCertStack(app, 'LensConsoleCert', {
   tags: { app: 'lens' },
   domain: 'console.lens.instagrowapp.com',
 });
+
+const consoleCert = app.node.tryGetContext('consoleCertificateArn') as string | undefined;
+if (consoleCert) {
+  new ConsoleStack(app, 'LensConsole', {
+    env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION ?? 'ap-south-1' },
+    description: 'Lens Console: admin control centre (own site, API and sign-in)',
+    tags: { app: 'lens' },
+    domain: app.node.tryGetContext('consoleDomain') as string,
+    certificateArn: consoleCert,
+    tableName: 'Lens',
+    mediaBucketName: 'lens-media-495026846839',
+    auditBucketName: 'lens-audit3d8ade0a-gotgzbiazyz7',
+  });
+}
