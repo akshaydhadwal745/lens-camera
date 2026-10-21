@@ -397,6 +397,7 @@ function handler(event) {
       STREAM_KEY_PARAM,
       AUDIT_BUCKET: auditBucket.bucketName,
       FEEDBACK_BUCKET: feedbackBucket.bucketName,
+      WEB_BUCKET: webBucket.bucketName,
       // Who may open /admin (comma-separated emails).
       ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
       // Play Store listing for invite/affiliate links; empty until the app is published.
@@ -474,6 +475,7 @@ function handler(event) {
       table.grantReadWriteData(fn);
       auditBucket.grantPut(fn, 'audit/*');
       feedbackBucket.grantReadWrite(fn, 'f/*'); // upload links, check uploads, delete with the account
+      webBucket.grantRead(fn, 's/index.html'); // share-link page template (links.ts linkPage)
       mediaBucket.grantReadWrite(fn); // presigned PUT/multipart, Head, Delete, tagging, versions
       fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:RestoreObject'], resources: [mediaBucket.arnForObjects('m/*')] }));
       fn.addToRolePolicy(
@@ -569,6 +571,33 @@ function handler(event) {
   return req;
 }`),
     });
+    // Share links (/s/<token>): the page with this link's title and first photo as the preview
+    // (chat apps read it), served by the API from the website's /s/index.html (links.ts linkPage).
+    const sharePageRewrite = new cloudfront.Function(this, 'SharePageRewrite', {
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var req = event.request;
+  var token = req.uri.replace(/^\\/s\\/?/, '').replace(/\\/+$/, '').replace(/^index\\.html$/, '');
+  req.uri = '/v1/s-page' + (token ? '/' + token : '');
+  return req;
+}`),
+    });
+    distribution.addBehavior(
+      '/s/*',
+      new origins.HttpOrigin(Fn.select(2, Fn.split('/', apiUrl.url)), {
+        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        customHeaders: edgeSecret ? { 'x-lens-edge': edgeSecret } : undefined,
+      }),
+      {
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: apiOriginPolicy,
+        responseHeadersPolicy: securityHeaders,
+        functionAssociations: [{ function: sharePageRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+      },
+    );
     for (const pattern of ['/r/*', '/go/*']) {
       distribution.addBehavior(
         pattern,

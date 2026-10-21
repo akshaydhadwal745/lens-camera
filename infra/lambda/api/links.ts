@@ -1,7 +1,9 @@
 import { BatchGetCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { authenticate, Identity } from './identity';
-import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res } from './lib';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+
+import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res, s3 } from './lib';
 import { MediaRecord, mediaKey, toClient } from './media';
 import { realNames } from './real-names';
 import { grantFromLink, revokeAsSender, withoutLocation } from './shares';
@@ -288,4 +290,59 @@ export async function deleteLinksOf(ownerId: string): Promise<void> {
     const rows = (await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': `LK#${r.token}` } }))).Items ?? [];
     for (const row of rows) await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: row.pk, sk: row.sk } }));
   }
+}
+
+// ---------- The link's web page with a real preview (WhatsApp, Telegram, iMessage…) ----------
+// CloudFront sends /s/<token> here (infra/lib/lens-stack.ts). The page itself is the website's
+// /s/index.html (it loads the photos in the browser); this only rewrites its title and preview
+// image, so chat apps show "<name> shared 12 photos with you" with the first photo. Only for active
+// "anyone with the link" links: one-person, expired and revoked links keep the generic card.
+
+let template: { html: string; at: number } | null = null;
+
+async function pageTemplate(): Promise<string> {
+  if (template && Date.now() - template.at < 5 * 60_000) return template.html;
+  const r = await s3.send(new GetObjectCommand({ Bucket: env.webBucket, Key: 's/index.html' }));
+  const html = await r.Body!.transformToString('utf-8');
+  template = { html, at: Date.now() };
+  return html;
+}
+
+const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function setMeta(html: string, find: RegExp, value: string) {
+  return html.replace(find, (m) => m.replace(/content="[^"]*"/, `content="${attr(value)}"`));
+}
+
+/** GET /v1/s-page/<token>: the share-link page with this link's title and preview. */
+export async function linkPage(token: string, req: Req): Promise<Res> {
+  if (req.sourceIp) await rateLimit(`link-page#${req.sourceIp}`, 600);
+  let html = await pageTemplate();
+  const l = TOKEN.test(token) ? await getLink(token) : undefined;
+  const status = l ? linkStatus(l) : 'revoked';
+  if (l && status === 'active') {
+    const what = [l.photos ? `${l.photos} photo${l.photos === 1 ? '' : 's'}` : '', l.videos ? `${l.videos} video${l.videos === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ') || 'photos';
+    const real = (await realNames([l.ownerId])).get(l.ownerId);
+    const title = `${real ?? l.ownerName} shared ${what} with you`;
+    const description = 'Full quality, not compressed. Open to see and save them, or get Lens.';
+    html = html.replace(/<title>[^<]*<\/title>/, `<title>${attr(title)}</title>`);
+    html = setMeta(html, /<meta property="og:title"[^>]*>/, title);
+    html = setMeta(html, /<meta name="description"[^>]*>/, description);
+    html = setMeta(html, /<meta property="og:description"[^>]*>/, description);
+    html = setMeta(html, /<meta property="og:url"[^>]*>/, linkUrl(token));
+    if (l.mode === 'anyone') {
+      const first = (await linkMedia(l))[0];
+      const preview = first ? (await toClient(first)).previewUrl : undefined;
+      if (preview) {
+        // The preview copy has no location data (derivatives are made without it).
+        html = setMeta(html, /<meta property="og:image"[^>]*>/, preview);
+        html = html.replace(/<meta property="og:image:width"[^>]*>/, '').replace(/<meta property="og:image:height"[^>]*>/, '');
+      }
+    }
+  }
+  return {
+    statusCode: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, max-age=60', 'x-robots-tag': 'noindex, nofollow' },
+    body: html,
+  };
 }

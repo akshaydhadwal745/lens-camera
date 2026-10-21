@@ -60,7 +60,7 @@ import {
   webVerifyEmail,
   webVerifyGoogle,
 } from './auth';
-import { createLink as createShareLink, linkInfo, listLinks, openLink, revokeLink } from './links';
+import { createLink as createShareLink, linkInfo, linkPage, listLinks, openLink, revokeLink } from './links';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -94,6 +94,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
 
     // Share links (lens.instagrowapp.com/s/<token>): anyone with the link can look (links.ts).
     if (seg[1] === 'links' && seg.length === 3 && method === 'GET') return await linkInfo(seg[2], req);
+    // The share-link web page with a real preview (CloudFront /s/* → here).
+    if (seg[1] === 's-page' && seg.length <= 3 && method === 'GET') return await linkPage(seg[2] ?? '', req);
 
     // Event album links (lens.instagrowapp.com/e/<code>): anyone with the link can look; signed-in
     // (or guest) people also learn whether they're already in.

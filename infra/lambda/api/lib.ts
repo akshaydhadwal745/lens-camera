@@ -34,6 +34,8 @@ export const env = {
   webOrigin: process.env.WEB_ORIGIN ?? '',
   /** Sent only by our CloudFront (/api): proves the viewer headers are real. */
   edgeSecret: process.env.EDGE_SECRET ?? '',
+  /** The website bucket (share-link page template for previews, links.ts linkPage). */
+  webBucket: process.env.WEB_BUCKET ?? '',
   /** Screenshots users attach to feedback (the only user images the Lens Console can open). */
   feedbackBucket: process.env.FEEDBACK_BUCKET ?? '',
   /** Append-only audit trail (S3 Object Lock). */

@@ -257,6 +257,13 @@ R=$(call POST "/links/$LT/open" "$TB"); [[ -n $(echo "$R" | j .shareId) ]] && ok
 [[ $(call GET /shares/out "$TC" | j ".requests.find(r=>r.viaLink&&r.to.id==='$IB').status") == accepted ]] && ok "C's Sent shows B opened the link"
 [[ $(call POST "/links/$LT/open" "$TB" | j .shareId) == $(echo "$R" | j .shareId) ]] && ok "opening again changes nothing"
 LO=$(call POST /links "$TC" -d "{\"mediaIds\":[\"$IDV\"],\"expires\":\"1d\",\"mode\":\"one\"}" | j .link.token)
+# The link's web page carries its own title and photo for chat-app previews (anyone links only).
+SITEP="$(node -p "require('./outputs.json').Lens.WebUrl.replace(/\/$/, '')")"
+SP=$(curl -sS "$SITEP/s/$LT" -A 'WhatsApp/2.23.20.0')
+[[ $SP == *"shared 1 photo with you"* && $SP == *'og:image" content="https://'*'/d/'* && $SP != *"og-en.png"* ]] && ok "share link preview: title and the photo's preview"
+SO=$(curl -sS "$SITEP/s/$LO")
+[[ $SO == *"shared 1 video with you"* && $SO == *"og-en.png"* ]] && ok "one-person link: title only, no photo in the preview"
+[[ $(curl -sS "$SITEP/s/AAAAAAAAAAAAAAAAAAAAAA" | grep -c "Shared with you") -ge 1 ]] && ok "unknown link: the generic page"
 [[ $(pub "$LO" | j .items.length) == 0 && $(pub "$LO" | j .link.mode) == one ]] && ok "a one-person link shows nothing on the web"
 call POST "/links/$LO/open" "$TB" >/dev/null
 [[ $(call POST "/links/$LO/open" "$TA" -o /dev/null -w '%{http_code}') == 403 ]] && ok "… once opened, nobody else can"
