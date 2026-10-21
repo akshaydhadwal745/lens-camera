@@ -828,7 +828,8 @@ const backup = {
     this.done += 1;
   },
   end() {
-    if (!this.active) return;
+    // A video still uploading while it records (or just after) keeps the service.
+    if (!this.active || liveUploadsActive > 0) return;
     backupService.stop();
     this.active = false;
     if (duplicatesSkipped) {
@@ -1233,12 +1234,33 @@ export function startLiveUpload(id: string): LiveUpload | null {
   if (isWeb || !LiveUpload.supported || !state.identity || state.signedOut || !liveAllowedNow(state)) return null;
   const own = state.storage?.storages[0];
   if (own && own.status !== 'full' && own.status !== 'signed-out') return null;
+  // Background backup service from the start (the app is on screen now, as Android 12+ requires):
+  // leaving Lens during or right after recording must not stop the video's upload
+  // (S8, 2026-10-19: no "Backing up…" notification for a video still uploading).
+  liveUploadsActive += 1;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    liveUploadsActive -= 1;
+    if (!syncing) backup.end();
+  };
+  liveRelease.set(id, release);
+  backup.begin(state.entries.filter((e) => !e.uploadedAt && !e.error).length + 1);
   return new LiveUpload(id, {
     canSend: () => liveAllowedNow(state),
     onProgress: (sent, total, recording) => setTransfer(id, sent, total, recording),
-    onCancel: () => clearTransfer(id),
+    onCancel: () => {
+      clearTransfer(id);
+      liveRelease.get(id)?.();
+      liveRelease.delete(id);
+    },
   });
 }
+
+/** Videos uploading while (or just after) they record: they hold the backup service. */
+let liveUploadsActive = 0;
+const liveRelease = new Map<string, () => void>();
 
 /** Why a recording won't upload while it records (shown in the camera), or null if it will. */
 export function liveUploadBlocker(s: State = state): string | null {
@@ -1265,6 +1287,8 @@ export async function finishLiveUpload(live: LiveUpload, entry: LocalEntry) {
     updateEntry(entry.id, { liveUploading: false });
   }
   kickSync(); // previews (and the original, if the live upload didn't finish)
+  liveRelease.get(entry.id)?.();
+  liveRelease.delete(entry.id);
 }
 
 export function setLiveUpload(policy: LiveUploadPolicy) {

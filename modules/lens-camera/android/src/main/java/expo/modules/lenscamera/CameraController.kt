@@ -640,10 +640,15 @@ class CameraController(private val context: Context) {
     return ranges.firstOrNull { it.lower == 24 && it.upper == 30 }
   }
 
-  /** Variable rate for photos: up to 30 fps, down to 15 fps (not lower: hand shake). */
+  /**
+   * Variable rate for photos: up to 30 fps, down to 15 fps (hand shake), or 10 fps on lenses with
+   * optical stabilisation, like the phone's own camera. Galaxy S8 indoors (2026-10-19): Samsung's
+   * camera took 1/10 s at ISO 200, Lens 1/25 s at ISO 500 (2.2× the noise in flat areas).
+   */
   private fun photoFrameRate(cam: CameraFacts): Range<Int>? {
     val ranges = runCatching { cam.info.supportedFrameRateRanges }.getOrNull().orEmpty()
-    return ranges.filter { it.upper == 30 && it.lower >= 15 && it.lower < 30 }.minByOrNull { it.lower }
+    val floor = if (cam.hasOis) 10 else 15
+    return ranges.filter { it.upper == 30 && it.lower >= floor && it.lower < 30 }.minByOrNull { it.lower }
   }
 
   private fun nightFrameRate(cam: CameraFacts): Range<Int>? {
@@ -789,6 +794,12 @@ class CameraController(private val context: Context) {
       b.setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
       b.setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, diopters)
       parts += "af:$diopters"
+    }
+
+    // Photos may run down to 1/10 s on stabilised lenses (photoFrameRate): keep OIS on.
+    if (!config.isVideo && f.hasOis) {
+      b.setCaptureRequestOption(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON)
+      parts += "ois"
     }
 
     // Face-aware exposure/focus (checklist 7.2): Normal camera, automatic exposure, where the
@@ -1088,7 +1099,9 @@ class CameraController(private val context: Context) {
     // every burst then rebuilt the camera, 1–2 shots per hold). Quick = best quality there: Quality Lab
     // sets at ISO 160, 400 and 500 (2026-10-15-33o3ZY7Y, 2026-10-19-WrFSr31v, 2026-10-19-OtL0vZFg).
     // 640–800 stays a hysteresis band below isDark().
-    val bright = iso <= 640 && ns <= 41_700_000L
+    // Stabilised lenses now expose up to 1/10 s at low ISO in ordinary rooms (photoFrameRate):
+    // that is normal light too, as long as it isn't dark by isDark()'s rule.
+    val bright = iso <= 640 && (ns <= 41_700_000L || !dark)
     dimSince = if (dark) (dimSince.takeIf { it > 0 } ?: now) else 0L
     brightSince = if (bright) (brightSince.takeIf { it > 0 } ?: now) else 0L
     val next = when {

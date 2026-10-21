@@ -94,6 +94,8 @@ class CameraFacts(val info: CameraInfo, private val chars: (CameraCharacteristic
     if (Build.VERSION.SDK_INT >= 30) get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) else null
 
   val hasFlash get() = info.hasFlashUnit()
+  /** Optical image stabilisation on this lens: longer handheld exposures stay sharp. */
+  val hasOis get() = get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)?.contains(CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON) == true
 
   companion object {
     fun awbModeFor(p: ColorTemperature.Preset) = when (p) {
