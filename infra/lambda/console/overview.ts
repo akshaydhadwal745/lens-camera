@@ -4,7 +4,7 @@
 //   STATS  LIVE         → the latest overview
 //   STATS  DAY#<date>   → the first overview of each day (kept: trends survive data deletion)
 //
-// Test traffic is left out: accounts flagged `test` (e2e sends x-lens-test), test emails, and
+// Test traffic is left out: accounts flagged `test` (e2e sends x-lens-test), test emails, emulators, and
 // for accounts made before the flag existed, guests created during an e2e run.
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
@@ -23,6 +23,9 @@ const cw = new CloudWatchClient({});
 
 type Row = Record<string, any>;
 
+// Every name aliased (#f0…): several are DynamoDB reserved words (size, status, location, state…).
+const FIELDS = ['pk', 'sk', 'createdAt', 'email', 'test', 'fingerprint', 'attribution', 'usedBytes', 'bonusBytes', 'kind', 'size', 'status', 'location', 'lastUsedAt', 'at', 'archived', 'deletedAt', 'referral', 'state', 'expiresAt', 'gsi1pk', 'code', 'emulator', 'guestId'];
+
 async function scanAll(): Promise<Row[]> {
   const SEGMENTS = 4;
   const parts = await Promise.all(
@@ -36,9 +39,8 @@ async function scanAll(): Promise<Row[]> {
             Segment: segment,
             TotalSegments: SEGMENTS,
             ExclusiveStartKey: start,
-            ProjectionExpression:
-              'pk, sk, createdAt, email, test, fingerprint, attribution, usedBytes, bonusBytes, kind, #size, #status, #location, lastUsedAt, #at, archived, deletedAt, referral, #state, mode, expiresAt, gsi1pk',
-            ExpressionAttributeNames: { '#size': 'size', '#status': 'status', '#location': 'location', '#at': 'at', '#state': 'state' },
+            ProjectionExpression: FIELDS.map((_, i) => `#f${i}`).join(', '),
+            ExpressionAttributeNames: Object.fromEntries(FIELDS.map((f, i) => [`#f${i}`, f])),
           }),
         );
         out.push(...(r.Items ?? []));
@@ -60,6 +62,31 @@ function series(times: number[], now: number) {
     if (k in days) days[k]++;
   }
   return Object.entries(days).map(([day, count]) => ({ day, count }));
+}
+
+/** Account IDs that are test traffic (see the header comment). */
+export function testAccounts(profiles: Row[], devices: Row[]): Set<string> {
+  // Phones that said they're an emulator at first start (Test Lab virtual phones, our own emulators).
+  const emulators = new Set(devices.filter((d) => d.emulator === true && d.guestId).map((d) => String(d.guestId)));
+  const testWindows = profiles.filter((p) => String(p.email ?? '').endsWith(TEST_EMAIL)).map((p) => p.createdAt as number).sort((a, b) => a - b);
+  const nearTestRun = (t: number) => {
+    let lo = 0;
+    let hi = testWindows.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (Math.abs(testWindows[mid] - t) <= E2E_WINDOW_MS) return true;
+      if (testWindows[mid] < t) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    return false;
+  };
+  const test = new Set<string>();
+  for (const p of profiles) {
+    const id = String(p.pk).slice(2);
+    if (p.test || String(p.email ?? '').endsWith(TEST_EMAIL) || emulators.has(id)) test.add(id);
+    else if (p.createdAt < TEST_FLAG_SINCE && !p.email && nearTestRun(p.createdAt)) test.add(id);
+  }
+  return test;
 }
 
 async function bucketBytes(): Promise<number | null> {
@@ -92,24 +119,7 @@ export async function compute() {
 
   // ---- who is real ----
   const profiles = rows.filter((r) => r.sk === 'PROFILE' && String(r.pk).startsWith('D#'));
-  const testWindows = profiles.filter((p) => String(p.email ?? '').endsWith(TEST_EMAIL)).map((p) => p.createdAt as number).sort((a, b) => a - b);
-  const nearTestRun = (t: number) => {
-    let lo = 0;
-    let hi = testWindows.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (Math.abs(testWindows[mid] - t) <= E2E_WINDOW_MS) return true;
-      if (testWindows[mid] < t) lo = mid + 1;
-      else hi = mid - 1;
-    }
-    return false;
-  };
-  const test = new Set<string>();
-  for (const p of profiles) {
-    const id = String(p.pk).slice(2);
-    if (p.test || String(p.email ?? '').endsWith(TEST_EMAIL)) test.add(id);
-    else if (p.createdAt < TEST_FLAG_SINCE && !p.email && nearTestRun(p.createdAt)) test.add(id);
-  }
+  const test = testAccounts(profiles, rows.filter((r) => r.sk === 'DEVICE' && String(r.pk).startsWith('FP#')));
   const real = profiles.filter((p) => !test.has(String(p.pk).slice(2)));
   const realIds = new Set(real.map((p) => String(p.pk).slice(2)));
   const mine = (r: Row) => String(r.pk).startsWith('D#') && realIds.has(String(r.pk).slice(2));

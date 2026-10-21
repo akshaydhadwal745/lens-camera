@@ -3,6 +3,7 @@
 import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Req, Res } from '../api/lib';
+import { testAccounts } from './overview';
 
 const TEST_EMAIL = '@e2e.lens.invalid';
 const ID = /^[A-Za-z0-9_-]{6,40}$/;
@@ -39,9 +40,9 @@ export async function userSearch(req: Req): Promise<Res> {
     const r = await ddb.send(
       new ScanCommand({
         TableName: env.table,
-        FilterExpression: 'sk = :p',
-        ExpressionAttributeValues: { ':p': 'PROFILE' },
-        ProjectionExpression: 'pk, sk, #n, email, createdAt, usedBytes, bonusBytes, logins, test',
+        FilterExpression: 'sk = :p OR sk = :d',
+        ExpressionAttributeValues: { ':p': 'PROFILE', ':d': 'DEVICE' },
+        ProjectionExpression: 'pk, sk, #n, email, createdAt, usedBytes, bonusBytes, logins, test, emulator, guestId',
         ExpressionAttributeNames: { '#n': 'name' },
         ExclusiveStartKey: start,
       }),
@@ -49,7 +50,9 @@ export async function userSearch(req: Req): Promise<Res> {
     out.push(...(r.Items ?? []));
     start = r.LastEvaluatedKey;
   } while (start);
-  let users = out.filter((p) => String(p.pk).startsWith('D#')).map(summary);
+  const profiles = out.filter((p) => p.sk === 'PROFILE' && String(p.pk).startsWith('D#'));
+  const tests = testAccounts(profiles, out.filter((d) => d.sk === 'DEVICE'));
+  let users = profiles.map((p) => ({ ...summary(p), test: tests.has(String(p.pk).slice(2)) }));
   if (!withTests) users = users.filter((u) => !u.test);
   if (q) users = users.filter((u) => u.id.toLowerCase() === q || String(u.name ?? '').toLowerCase().includes(q) || String(u.email ?? '').includes(q));
   users.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
