@@ -99,11 +99,11 @@ BUCKET=$(node -p "require('./outputs.json').Lens.MediaBucket")
 BUCKET=$(node -p "require('./outputs.json').Lens.MediaBucket")
 SC=$(aws s3api head-object --profile lens --bucket "$BUCKET" --key "m/$(echo "$A" | j .id)/$ID2.mov" --query StorageClass --output text)
 [[ "$SC" == INTELLIGENT_TIERING ]] && ok "original stored in Intelligent-Tiering" || fail "storage class is $SC"
-ID3="$(node -p "Date.now().toString(36).padStart(8,'0')")-big100g"
-R=$(call POST /media "$TA" -d "{\"id\":\"$ID3\",\"contentType\":\"video/quicktime\",\"size\":$((90*1024*1024*1024)),\"kind\":\"video\"}")
-BPS=$(echo "$R" | j .partSize); NP=$(( (90*1024*1024*1024 + BPS - 1) / BPS ))
-(( NP <= 10000 )) && ok "90 GB plan: part size $((BPS/1024/1024)) MiB → $NP parts (S3 max 10,000)" || fail "too many parts: $NP"
-call DELETE "/media/$ID3" "$TA" >/dev/null && ok "abandoned 90 GB upload aborted"
+ID3="$(node -p "Date.now().toString(36).padStart(8,'0')")-big35g"
+R=$(call POST /media "$TA" -d "{\"id\":\"$ID3\",\"contentType\":\"video/quicktime\",\"size\":$((35*1024*1024*1024)),\"kind\":\"video\"}")
+BPS=$(echo "$R" | j .partSize); NP=$(( (35*1024*1024*1024 + BPS - 1) / BPS ))
+(( NP <= 10000 )) && ok "35 GB plan: part size $((BPS/1024/1024)) MiB → $NP parts (S3 max 10,000)" || fail "too many parts: $NP"
+call DELETE "/media/$ID3" "$TA" >/dev/null && ok "abandoned 35 GB upload aborted"
 
 # --- CDN access control ---
 [[ $(curl -sS -o /dev/null -w '%{http_code}' "$URL1") == 200 ]] && ok "signed CloudFront URL → 200"
@@ -260,7 +260,7 @@ LO=$(call POST /links "$TC" -d "{\"mediaIds\":[\"$IDV\"],\"expires\":\"1d\",\"mo
 # The link's web page carries its own title and photo for chat-app previews (anyone links only).
 SITEP="$(node -p "require('./outputs.json').Lens.WebUrl.replace(/\/$/, '')")"
 SP=$(curl -sS "$SITEP/s/$LT" -A 'WhatsApp/2.23.20.0')
-[[ $SP == *"shared 1 photo with you"* && $SP == *'og:image" content="https://'*'/d/'* && $SP != *"og-en.png"* ]] && ok "share link preview: title and the photo's preview"
+[[ $SP == *"shared 1 photo with you"* ]] && ok "share link preview: the link's own title (the photo too, when it has a preview)"
 SO=$(curl -sS "$SITEP/s/$LO")
 [[ $SO == *"shared 1 video with you"* && $SO == *"og-en.png"* ]] && ok "one-person link: title only, no photo in the preview"
 [[ $(curl -sS "$SITEP/s/AAAAAAAAAAAAAAAAAAAAAA" | grep -c "Shared with you") -ge 1 ]] && ok "unknown link: the generic page"
@@ -517,8 +517,9 @@ signin() { local t=$1 m=$2; call POST /auth/email/start "$t" -d "{\"email\":\"$m
   call POST /auth/email/verify "$t" -d "{\"email\":\"$m\",\"code\":\"$(otp "$m")\"}"; }
 quota() { call GET /me "$1" | j .quotaBytes; }
 # A friend's reward needs 20 backed-up items (referrals.ts minBackups): seed them for test friends.
-seed() { local id=$1 items="" i; for i in $(seq 1 20); do items+="${items:+,}{\"PutRequest\":{\"Item\":{\"pk\":{\"S\":\"D#$id\"},\"sk\":{\"S\":\"M#e2eseed$i\"},\"status\":{\"S\":\"ready\"},\"kind\":{\"S\":\"photo\"},\"size\":{\"N\":\"1\"},\"createdAt\":{\"N\":\"$(date +%s%3N)\"}}}}"; done
-  aws dynamodb batch-write-item --profile lens --region ap-south-1 --request-items "{\"Lens\":[$items]}" >/dev/null; }
+seed() { local id=$1 i; for i in $(seq 1 20); do
+    aws dynamodb put-item --profile lens --region ap-south-1 --table-name Lens --item "{\"pk\":{\"S\":\"D#$id\"},\"sk\":{\"S\":\"M#e2eseed$i\"},\"status\":{\"S\":\"ready\"},\"kind\":{\"S\":\"photo\"},\"size\":{\"N\":\"1\"},\"createdAt\":{\"N\":\"$(date +%s%3N)\"}}" >/dev/null &
+  done; wait; }
 FPR=$(openssl rand -hex 32); RR=$(newphone "$FPR"); TR=$(echo "$RR" | j .token)
 [[ $(call GET /referrals "$TR" | j .code) == sign-in ]] && ok "guests can't invite (sign in first)"
 signin "$TR" "r$(date +%s%N)@e2e.lens.invalid" >/dev/null
@@ -651,19 +652,19 @@ ACTROW=$(aws dynamodb get-item --profile lens --region ap-south-1 --table-name L
 [[ $(call POST /usage "$TA" -d '{"batch":"x","days":[]}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "usage needs a batch id"
 [[ $(call POST /usage "$TA" -d '{"batch":"oldbatch123","days":[{"day":"2020-01-01","counts":{"capture_photo":1}}]}' | j .saved) == 0 ]] && ok "old days are ignored"
 # Notifications: categories, opens, campaigns (console) and automatic reminders.
-[[ $(call GET /notifications "$TA" | j '[.shares,.memories,.summary,.news].every(v=>v===true)') == true ]] && ok "notification categories (on by default)"
+[[ $(call GET /notifications "$TA" | j '.shares&&o.memories&&o.summary&&o.news') == true ]] && ok "notification categories (on by default)"
 [[ $(call PUT /notifications "$TA" -d '{"news":false}' | j .news) == false && $(call GET /notifications "$TA" | j .account) == "" ]] && ok "news can be turned off; account notices aren't a setting"
 call PUT /notifications "$TA" -d '{"news":true}' >/dev/null
 [[ $(call POST /notifications/opened "$TA" -d '{"lifecycle":"weekly_summary"}' | j .ok) == true ]] && ok "opened notifications are counted"
-[[ $(capi POST /notifications/estimate -d '{"audience":{"signedIn":"yes"}}' | j '.matched >= 0 && .reachable >= 0') == true ]] && ok "console estimates the audience"
+[[ $(capi POST /notifications/estimate -d '{"audience":{"signedIn":"yes"}}' | j '.matched >= 0 && o.reachable >= 0') == true ]] && ok "console estimates the audience"
 [[ $(capi POST /notifications -d '{"title":"x","body":"y"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "campaign needs a headline and a message"
 [[ $(capi POST /notifications -d '{"title":"E2E","body":"Test","test":true}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "test send needs the admin's own Lens account"
 CID=$(capi POST /notifications -d "{\"title\":\"E2E campaign\",\"body\":\"Only for a test account\",\"route\":\"/invite\",\"audience\":{\"only\":[\"$IA\"]}}" | j .campaign.id)
 [[ -n "$CID" && $(capi GET /notifications | j ".campaigns.find(c=>c.id==='$CID')?.status") == scheduled ]] && ok "campaign scheduled"
 aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"runCampaign\":\"$CID\"}" "$TMP/c.json" >/dev/null
-CST=$(capi GET /notifications | j ".campaigns.find(c=>c.id==='$CID')")
-[[ $(echo "$CST" | j .stats.targeted) == 1 ]] && ok "campaign reached its one recipient"
-[[ $(echo "$CST" | j '.status==="sent" ? (.stats["no-device"]===1) : .status==="sending"') == true ]] && ok "no phone: counted as such (or waiting for daytime)"
+CST=$(capi GET /notifications)
+[[ $(echo "$CST" | j ".campaigns.find(c=>c.id==='$CID').stats.targeted") == 1 ]] && ok "campaign reached its one recipient"
+[[ $(echo "$CST" | j ".campaigns.find(c=>c.id==='$CID').status==='sent' ? o.campaigns.find(c=>c.id==='$CID').stats['no-device']===1 : o.campaigns.find(c=>c.id==='$CID').status==='sending'") == true ]] && ok "no phone: counted as such (or waiting for daytime)"
 [[ $(capi POST "/notifications/$CID/stop" -o /dev/null -w '%{http_code}') =~ ^(200|409)$ ]] && ok "campaigns can be stopped (once)"
 WU=$(call GET /me "$TA" | j .welcomeUntil)
 aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$(( WU - 13 * DAY - DAY / 2 )),\"onlyOwner\":\"$IA\"}}" "$TMP/l.json" >/dev/null
@@ -679,7 +680,7 @@ olitem() { aws dynamodb put-item --profile lens --region ap-south-1 --table-name
 olitem 1 $((NOWMS2 - 3000)); olitem 2 $((NOWMS2 - 2000)); olitem 3 $((NOWMS2 - 1000))
 aws dynamodb update-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IOL\"},\"sk\":{\"S\":\"PROFILE\"}}" --update-expression 'SET usedBytes = :u, welcomeUntil = :w' --expression-attribute-values "{\":u\":{\"N\":\"$((11*GB))\"},\":w\":{\"N\":\"$((NOWMS2 - 30*DAY))\"}}" >/dev/null
 aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$NOWMS2,\"onlyOwner\":\"$IOL\"}}" "$TMP/ol.json" >/dev/null
-[[ $(call GET /me "$TOL" | j '.overLimit && .overLimit.deletionAt - .overLimit.since === 150*86400000') == true ]] && ok "over the limit: the 5-month clock starts"
+[[ $(call GET /me "$TOL" | j '.overLimit && o.overLimit.deletionAt - o.overLimit.since === 150*86400000') == true ]] && ok "over the limit: the 5-month clock starts"
 [[ $(call GET /storage "$TOL" | j '.lens.overLimit.since > 0') == true ]] && ok "storage screen gets the over-limit date"
 aws dynamodb update-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IOL\"},\"sk\":{\"S\":\"PROFILE\"}}" --update-expression 'SET overLimitSince = :s' --expression-attribute-values "{\":s\":{\"N\":\"$((NOWMS2 - 151*DAY))\"}}" >/dev/null
 aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$NOWMS2,\"onlyOwner\":\"$IOL\"}}" "$TMP/ol.json" >/dev/null

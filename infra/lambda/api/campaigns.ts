@@ -264,7 +264,7 @@ export async function runCampaigns(now: number, deadline: number, onlyId?: strin
             continue;
           }
           counts[result] = (counts[result] ?? 0) + 1;
-          await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: `CR#${c.id}`, sk: uid }, UpdateExpression: 'SET #s = :r, at = :n', ExpressionAttributeNames: { '#s': 'status' }, ExpressionAttributeValues: { ':r': result, ':n': now } }));
+          await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: `CR#${c.id}`, sk: uid }, UpdateExpression: 'SET #s = :r, #a = :n', ExpressionAttributeNames: { '#s': 'status', '#a': 'at' }, ExpressionAttributeValues: { ':r': result, ':n': now } }));
         }
       }
       start = r.LastEvaluatedKey;
