@@ -460,7 +460,26 @@ function Payouts() {
   );
 }
 
+/** The website no longer hosts admin (it moves to the separate Lens Console, docs/design/admin-console.md). */
+function WebAdminClosed() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.fill, { paddingTop: insets.top + 40, paddingHorizontal: 24, alignItems: 'center' }]}>
+      <Text style={styles.name}>This page isn’t available.</Text>
+      <Pressable onPress={() => router.replace('/')} hitSlop={10} style={{ marginTop: 16 }}>
+        <Text style={styles.done}>Go to Lens</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function AdminScreen() {
+  // Web: no admin tools on the public site, and no admin API calls from it.
+  if (WEB_TOOLS) return <WebAdminClosed />;
+  return <AppAdmin />;
+}
+
+function AppAdmin() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('inbox');
   return (
