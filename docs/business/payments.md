@@ -26,5 +26,10 @@ Guests 5 GB → sign-in: 40 GB for 3 months (+1 month if invited) → 14-day sof
 ## Console (Users → account)
 Shows plan, welcome, over-limit date and deletion date; support can give N months of a plan, mark a payment failed, or end a plan (audited). Used for testing until Razorpay is live.
 
-## Next: Razorpay
-Subscriptions (UPI Autopay, cards) for ₹59/month or ₹499/year (Plus 50 GB) on the website and APK; webhook → activatePlan / paymentFailed / cancelPlan; test mode first (owner provides key id, key secret, webhook secret via a file, stored in SSM).
+## Next: Razorpay + the "Lock in" offer (decided 2026-10-21 night; build 2026-10-22)
+- **Option A:** after the free 3-month welcome, the 4th month of Lens Plus (50 GB) costs **₹19**, then **₹59/month** (or ₹499/year).
+- **Offered at the start, optional:** a "Lock in Lens Plus" screen at sign-in and after the first 20 backups → Razorpay **UPI Autopay / card mandate, ₹0 today**, subscription starts when the welcome ends (₹19 first charge). "Not now" keeps the free welcome; the offer comes back at 80% storage, after a trip recap and in the last welcome week; the ₹19 price ends with the welcome.
+- RBI e-mandate: Razorpay's pre-debit notice + our reminder 3 days before the first charge; one-tap cancel in the app and on the website.
+- Razorpay webhooks → `activatePlan` (paid/renewed), `paymentFailed` (7-day grace), `cancelPlan` (ends at period end).
+- Where: website + APK. The Play Store app must use Google Play Billing (intro price / free trial) or Google's user choice billing (Razorpay beside Play, 11% fee).
+- Keys: the owner's account is LIVE-only → its dashboard **Test Mode** switch for test keys (Key ID + Secret in `~/Downloads/razorpay-test.txt`, stored in SSM `/lens/razorpay/*`); live needs the account's Subscriptions feature enabled.
