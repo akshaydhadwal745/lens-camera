@@ -139,7 +139,15 @@
           "color": "#FACC15"
         }
       ],
-      "./plugins/with-gallery-cleanup.js"
+      "./plugins/with-gallery-cleanup.js",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "instagrowapp",
+          "project": "lens-app"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

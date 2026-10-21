@@ -71,7 +71,7 @@ receive data at the user's direction (Play doesn't count either as sharing).
 | Audio → Voice or sound recordings | Yes | Optional | App functionality | Only the soundtrack of videos the user records |
 | App activity → Other user-generated content | Yes | Optional | App functionality | Albums, shares, edits, event albums |
 | App activity → Other actions | Yes | Optional | App functionality, Fraud prevention | Invite/affiliate attribution (install referrer) |
-| App info and performance → Crash logs / Diagnostics | Yes | Optional (Settings → Camera) | Analytics (app performance) | Camera events + phone model; not stored with the account |
+| App info and performance → Crash logs / Diagnostics | Yes | Optional (Settings → Camera) | Analytics (app performance) | Camera events + phone model; crash reports via Sentry (stack trace, build, phone model, in-app steps; no IP, no screenshots), kept 30 days; not stored with the account |
 | Device or other IDs | Yes | Required | Fraud prevention, App functionality | Hash of Android ID; push token (Firebase) |
 | Contacts, Messages, Calendar, Health, Web history, Files | No | – | – | |
 

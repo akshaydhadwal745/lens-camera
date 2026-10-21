@@ -6,9 +6,10 @@
 // need a new APK (see app.config.js). extraNodeModules is only a fallback, so a
 // hoisted copy still wins once it's a direct dependency.
 const path = require('node:path');
-const { getDefaultConfig } = require('expo/metro-config');
+// Sentry's Expo config = Expo's default + debug IDs in bundles (source maps for crash reports).
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   'expo-keep-awake': path.join(__dirname, 'node_modules/expo/node_modules/expo-keep-awake'),

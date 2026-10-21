@@ -720,7 +720,7 @@ export default function SettingsScreen() {
                 <SwitchRow
                   icon="pulse-outline"
                   label="Share camera diagnostics"
-                  hint="Anonymous: your phone model and what its camera can do, so Lens works well on every phone. No photos, no location, not linked to you."
+                  hint="Anonymous: your phone model, what its camera can do, and crash reports, so Lens works well on every phone. No photos, no location, not linked to you."
                   value={shareDiagnostics}
                   onChange={(v) => {
                     setShareDiagnostics(v);

@@ -1,3 +1,4 @@
+import { Sentry, startCrashReporting } from '@/lib/sentry';
 import { recordAppOpen } from '@/lib/review-prompt';
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
@@ -17,9 +18,11 @@ import { boot, useStore } from '@/lib/store';
 import { fontFiles } from '@/lib/theme';
 import { takePendingShareLink } from '@/lib/share-link';
 
+// First thing, so crashes during start-up are caught too.
+startCrashReporting();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function RootLayout() {
+function RootLayout() {
   const status = useStore((s) => s.status);
   const [introVisible, setIntroVisible] = useState(true);
   // Geist + IBM Plex Mono. Android has them built into the APK (expo-font plugin
@@ -100,3 +103,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(RootLayout);

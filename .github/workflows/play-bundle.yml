@@ -110,6 +110,9 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+          # Crash reports (src/lib/sentry.ts): upload source maps when the token secret exists.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}
 
       # Same checks as the APKs: Lens's release certificate (never the debug key),
       # versionCode = N, the runtime the OTA updates for dev-N target, both CPU types.

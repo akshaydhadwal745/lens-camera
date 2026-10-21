@@ -32,7 +32,8 @@ console.log(`runtime ${runtime}`);
 
 const out = 'dist-ota';
 rmSync(out, { recursive: true, force: true });
-npx('expo', 'export', '--platform', platform, '--output-dir', out);
+// --source-maps: CI uploads them to Sentry (readable crash stacks); only metadata-listed files are published.
+npx('expo', 'export', '--platform', platform, '--output-dir', out, '--source-maps');
 const meta = JSON.parse(readFileSync(join(out, 'metadata.json'), 'utf8')).fileMetadata[platform];
 
 const TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', ttf: 'font/ttf', otf: 'font/otf', json: 'application/json' };

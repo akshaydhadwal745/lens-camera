@@ -127,6 +127,8 @@ jobs:
           fi
           grep -E "warning: .*modules/lens-camera" xcodebuild.log | sort -u | head -50 || true
           ccache -s || true
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: 'true' # dev-client build: no crash reports to symbolicate
 
       - name: Verify app binary
         run: |
@@ -256,6 +258,9 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+          # Crash reports (src/lib/sentry.ts): upload source maps when the token secret exists.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}
 
       # Which updates this APK accepts: the runtime version from app.config.js
       # (hash of committed native inputs). The OTA job computes the same value;
@@ -301,6 +306,7 @@ jobs:
     env:
       EXPO_PUBLIC_BUILD: ${{ github.run_number }}
       EXPO_PUBLIC_COMMIT: ${{ github.sha }}
+      HAS_SENTRY: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
     permissions:
       contents: read
       id-token: write
@@ -341,6 +347,16 @@ jobs:
           WEB_ORIGIN: ${{ vars.EXPO_PUBLIC_WEB_URL }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+
+      # Readable crash stacks for over-the-air code too (debug IDs match the bundle).
+      - name: Upload update source maps to Sentry
+        if: ${{ env.HAS_SENTRY == 'true' }}
+        run: npx sentry-expo-upload-sourcemaps dist-ota
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: instagrowapp
+          SENTRY_PROJECT: lens-app
+          SENTRY_URL: https://sentry.io/
 
   # Published as soon as Android is ready (the usual test path); iOS adds its
   # .ipa to the same release in ios-release.

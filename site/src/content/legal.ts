@@ -15,7 +15,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '19 October 2026', hi: '19 अक्टूबर 2026' },
+  updated: { en: '21 October 2026', hi: '21 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -62,9 +62,10 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['Affiliates only: name, channels, PAN and UPI ID (encrypted), commissions and payouts', 'To run the program, pay you and meet tax law (TDS, Form 16A)', '8 years after the financial year (Indian tax and accounting law)'],
             ['A record of reward, commission and payout changes', 'An unchangeable audit trail, so rewards and payments can be checked', '8 years'],
             ['Anonymous camera diagnostics (Android): phone model and Android version, app build, how the camera started (photo and preview size, camera features used, errors), and once per app version a list of what the phone’s cameras support (lenses, resolutions, frame rates, video and photo features). No photos, no location, not linked to your account. You can turn it off in Settings → Camera → Share camera diagnostics', 'To find and fix camera problems on phone models we cannot test ourselves, and to choose the best camera settings for each kind of phone', '1 year'],
+            ['Crash reports (Android): when Lens crashes, freezes or hits an error, a report of where in the code it happened, the app build, phone model and Android version, and the steps inside Lens just before it (which screen, which button). No photos, no location, no screenshots, no IP address, not linked to your name or email. Sent through Sentry. Off together with Settings → Camera → Share camera diagnostics', 'To find and fix crashes and errors', '30 days'],
           ],
         },
-        p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics or crash-reporting in the app today. The only usage data Lens sends is its own anonymous camera diagnostics (in the table above). Google’s on-device ML Kit (document scanner, scene labels, face detection; part of Google Play services) sends Google its own usage and performance statistics, never your photos; and Firebase gives the app an installation ID to deliver notifications. If we add analytics, we will update this policy first.'],
+        p: ['We do not collect your contacts, call logs, SMS, or advertising identifiers, and we do not use third-party analytics in the app. The only usage data Lens sends is its own anonymous camera diagnostics and crash reports (in the table above). Google’s on-device ML Kit (document scanner, scene labels, face detection; part of Google Play services) sends Google its own usage and performance statistics, never your photos; and Firebase gives the app an installation ID to deliver notifications. If we add analytics, we will update this policy first.'],
       },
       {
         h2: '2. Your own storage (Google Drive, OneDrive, Dropbox, Box, S3, WebDAV)',
@@ -78,6 +79,7 @@ export const privacy: Record<Lang, LegalDoc> = {
           'Amazon Web Services (AWS), Mumbai region, India: storage of your photos, videos and account data, our servers, and sending sign-in emails. Data is encrypted at rest and in transit.',
           'Amazon CloudFront (part of AWS): delivers previews and files quickly. It may cache copies at locations outside India for a short time. Every link is signed and expires.',
           'Google: if you choose "Sign in with Google" or connect Google Drive; and Google Firebase Cloud Messaging delivers notifications to Android phones (the notification text, such as "quiet-tiger wants to share 3 photos", passes through Google; never your photos). Turn notifications off in Settings → Notifications.',
+          'Sentry (Functional Software, Inc.), United States: receives crash reports (see the table above) to show us what went wrong; it doesn’t receive photos, videos or account details.',
           'Microsoft, Dropbox, Box or your S3/WebDAV provider: only if you connect them.',
         ],
         p: ['We do not sell, rent or trade your personal data. We do not show ads. We do not use your photos or videos to train AI models. Processors act only on our instructions.'],
@@ -167,9 +169,10 @@ export const privacy: Record<Lang, LegalDoc> = {
             ['सिर्फ़ एफ़िलिएट: नाम, चैनल, PAN और UPI ID (एन्क्रिप्टेड), कमीशन और भुगतान', 'प्रोग्राम चलाने, आपको भुगतान करने और टैक्स क़ानून (TDS, Form 16A) के पालन के लिए', 'वित्त वर्ष के 8 साल बाद तक (भारतीय टैक्स और अकाउंटिंग क़ानून)'],
             ['इनाम, कमीशन और भुगतान में हर बदलाव का रिकॉर्ड', 'न बदला जा सकने वाला ऑडिट रिकॉर्ड, ताकि इनाम और भुगतान जाँचे जा सकें', '8 साल'],
             ['गुमनाम कैमरा डायग्नोस्टिक्स (Android): फ़ोन मॉडल और Android वर्शन, ऐप बिल्ड, कैमरा कैसे शुरू हुआ (फ़ोटो और प्रीव्यू साइज़, इस्तेमाल हुए कैमरा फ़ीचर, एरर), और हर ऐप वर्शन में एक बार यह सूची कि फ़ोन के कैमरे क्या-क्या सपोर्ट करते हैं (लेंस, रेज़ोल्यूशन, फ़्रेम रेट, वीडियो और फ़ोटो फ़ीचर)। कोई फ़ोटो नहीं, कोई लोकेशन नहीं, आपके अकाउंट से जुड़ा नहीं। इसे आप Settings → Camera → Share camera diagnostics में बंद कर सकते हैं', 'उन फ़ोन मॉडल पर कैमरा की समस्याएँ ढूँढने और ठीक करने के लिए जिन्हें हम ख़ुद टेस्ट नहीं कर सकते, और हर तरह के फ़ोन के लिए सबसे अच्छी कैमरा सेटिंग चुनने के लिए', '1 साल'],
+            ['क्रैश रिपोर्ट (Android): जब Lens क्रैश हो, अटक जाए या कोई एरर आए, तो एक रिपोर्ट कि कोड में यह कहाँ हुआ, ऐप बिल्ड, फ़ोन मॉडल और Android वर्शन, और उससे ठीक पहले Lens में क्या किया गया (कौन-सी स्क्रीन, कौन-सा बटन)। कोई फ़ोटो नहीं, कोई लोकेशन नहीं, कोई स्क्रीनशॉट नहीं, कोई IP पता नहीं, आपके नाम या ईमेल से जुड़ा नहीं। Sentry के ज़रिए भेजी जाती है। Settings → Camera → Share camera diagnostics बंद करने पर यह भी बंद', 'क्रैश और एरर ढूँढने और ठीक करने के लिए', '30 दिन'],
           ],
         },
-        p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और आज ऐप में किसी थर्ड-पार्टी एनालिटिक्स या क्रैश रिपोर्टिंग का इस्तेमाल नहीं करते। Lens सिर्फ़ अपने गुमनाम कैमरा डायग्नोस्टिक्स भेजता है (ऊपर टेबल में)। Google का ऑन-डिवाइस ML Kit (डॉक्यूमेंट स्कैनर, सीन लेबल, चेहरा पहचान; Google Play सर्विसेज़ का हिस्सा) Google को अपने इस्तेमाल और परफ़ॉर्मेंस के आँकड़े भेजता है, आपकी फ़ोटो कभी नहीं; और Firebase नोटिफ़िकेशन पहुँचाने के लिए ऐप को एक इंस्टॉलेशन ID देता है। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
+        p: ['हम आपके कॉन्टैक्ट, कॉल लॉग, SMS या विज्ञापन ID इकट्ठा नहीं करते, और ऐप में किसी थर्ड-पार्टी एनालिटिक्स का इस्तेमाल नहीं करते। Lens सिर्फ़ अपने गुमनाम कैमरा डायग्नोस्टिक्स और क्रैश रिपोर्ट भेजता है (ऊपर टेबल में)। Google का ऑन-डिवाइस ML Kit (डॉक्यूमेंट स्कैनर, सीन लेबल, चेहरा पहचान; Google Play सर्विसेज़ का हिस्सा) Google को अपने इस्तेमाल और परफ़ॉर्मेंस के आँकड़े भेजता है, आपकी फ़ोटो कभी नहीं; और Firebase नोटिफ़िकेशन पहुँचाने के लिए ऐप को एक इंस्टॉलेशन ID देता है। एनालिटिक्स जोड़ने से पहले हम यह पॉलिसी अपडेट करेंगे।'],
       },
       {
         h2: '2. आपका अपना स्टोरेज (Google Drive, OneDrive, Dropbox, Box, S3, WebDAV)',
@@ -181,6 +184,7 @@ export const privacy: Record<Lang, LegalDoc> = {
           'Amazon Web Services (AWS), मुंबई रीजन, भारत: आपकी फ़ोटो, वीडियो और अकाउंट डेटा का स्टोरेज, हमारे सर्वर, और साइन-इन ईमेल भेजना। डेटा स्टोरेज और ट्रांसफ़र दोनों में एन्क्रिप्टेड रहता है।',
           'Amazon CloudFront (AWS का हिस्सा): प्रीव्यू और फ़ाइलें तेज़ी से पहुँचाता है। यह थोड़े समय के लिए भारत के बाहर की जगहों पर कॉपी कैश कर सकता है। हर लिंक साइन किया हुआ है और एक्सपायर होता है।',
           'Google: अगर आप "Google से साइन इन" चुनते हैं या Google Drive जोड़ते हैं; और Google Firebase Cloud Messaging Android फ़ोन पर नोटिफ़िकेशन पहुँचाता है (नोटिफ़िकेशन का टेक्स्ट, जैसे "quiet-tiger 3 फ़ोटो शेयर करना चाहता है", Google से होकर जाता है; आपकी फ़ोटो कभी नहीं)। नोटिफ़िकेशन Settings → Notifications में बंद करें।',
+          'Sentry (Functional Software, Inc.), अमेरिका: क्रैश रिपोर्ट पाता है (ऊपर टेबल देखें) ताकि हमें पता चले क्या गड़बड़ हुई; फ़ोटो, वीडियो या अकाउंट की जानकारी नहीं।',
           'Microsoft, Dropbox, Box या आपका S3/WebDAV प्रोवाइडर: सिर्फ़ अगर आप उन्हें जोड़ते हैं।',
         ],
         p: ['हम आपका निजी डेटा बेचते, किराए पर या बदले में नहीं देते। हम विज्ञापन नहीं दिखाते। हम आपकी फ़ोटो या वीडियो से AI मॉडल ट्रेन नहीं करते। प्रोसेसर सिर्फ़ हमारे निर्देश पर काम करते हैं।'],
