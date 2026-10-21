@@ -87,7 +87,7 @@ export type Referrals = {
   friendBonusBytes: number;
   earnedBytes: number;
   bonusBytes: number;
-  friends: { name: string; state: 'joined' | 'signed-in' | 'rewarded' | 'not-eligible'; bytes: number; at: number }[];
+  friends: { name: string; state: 'joined' | 'signed-in' | 'rewarded' | 'not-eligible'; bytes: number; needsBackups?: number; at: number }[];
   canClaim: boolean;
 };
 export type AffiliateLink = { code: string; campaign: string; url: string; clicks: number; signups: number; payers: number; netPaise: number; commissionPaise: number };

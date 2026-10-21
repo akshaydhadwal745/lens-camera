@@ -34,7 +34,7 @@ export default function InviteScreen() {
   const share = async () => {
     if (!data) return;
     await Share.share({
-      message: `I back up my photos with Lens: full quality, private, free. Get it here: ${data.link}`,
+      message: `I back up all my photos with Lens: full quality, and my phone never fills up. Get it with my invite and you get an extra month of 40 GB free: ${data.link}`,
     }).catch(() => undefined);
   };
   const copy = async () => {
@@ -85,7 +85,7 @@ export default function InviteScreen() {
               <Ionicons name="gift-outline" size={44} color={colors.link} />
               <Text style={styles.heroTitle}>+{reward} for every friend</Text>
               <Text style={[styles.muted, { textAlign: 'center' }]}>
-                Share your link. When a friend installs Lens and signs in on their phone, you get {reward} more storage, for good.
+                Share your link. When a friend installs Lens, signs in and backs up 20 photos, you get {reward} more storage, for good (up to 10 friends). They get an extra month of 40 GB free.
                 {data.friendBonusBytes > 0 ? ` They get ${formatBytes(data.friendBonusBytes)} too.` : ''} No limit.
               </Text>
               <Text style={styles.codeText} selectable>
@@ -126,7 +126,7 @@ export default function InviteScreen() {
                       <View style={styles.row}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowLabel}>{f.name}</Text>
-                          <Text style={styles.small}>{STATE_TEXT[f.state]}</Text>
+                          <Text style={styles.small}>{f.needsBackups ? `Signed in · reward when they’ve backed up ${f.needsBackups} photos` : STATE_TEXT[f.state]}</Text>
                         </View>
                         {f.bytes > 0 && <Text style={[styles.rowValue, { color: '#FACC15' }]}>+{formatBytes(f.bytes)}</Text>}
                       </View>

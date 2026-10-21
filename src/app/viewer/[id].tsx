@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -18,6 +19,7 @@ import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ZoomableImage } from '@/components/ZoomableImage';
+import { ShareLinkSheet } from '@/components/ShareLinkSheet';
 
 import { isImagingAvailable } from '../../../modules/lens-camera';
 import { saveLabel, saveToDevice, shareMedia } from '@/lib/actions';
@@ -28,6 +30,7 @@ import { confirmAndDelete } from '@/lib/delete-flow';
 import { providerInfo } from '@/lib/storage/providers';
 import { refreshShared, removeSharedItem, saveEdit, selectGallery, selectShared, useStore } from '@/lib/store';
 import { compact } from '@/lib/edits';
+import { track } from '@/lib/usage';
 import { GalleryItem, viewUri } from '@/lib/types';
 import { keepOnly, prefetchVideo } from '@/lib/video-prefetch';
 import { font, glass, palette } from '@/lib/theme';
@@ -280,6 +283,7 @@ function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
   const loadOriginalFor = (item: GalleryItem) =>
     (isWeb ? webCanShowOriginal(item) : true) && (!cellular || hd.has(item.id));
   const [busy, setBusy] = useState(false);
+  const [linkFor, setLinkFor] = useState<string | null>(null);
   const listRef = useRef<FlatList<GalleryItem>>(null);
 
   const current = items[Math.min(index, items.length - 1)];
@@ -467,7 +471,33 @@ function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
           </View>
 
           <View style={[styles.bottomBar, { bottom: insets.bottom + 16 }]}>
-            <Action icon="share-outline" label="Share" disabled={busy} onPress={() => run(() => shareMedia(current))} />
+            <Action
+              icon="share-outline"
+              label="Share"
+              disabled={busy}
+              onPress={() => {
+                // Chat apps compress what they get: a Lens link sends the original (and shows Lens to
+                // people who don't have it). The file is still one tap away.
+                if (shared || isWeb || current.sync !== 'synced') return run(() => shareMedia(current));
+                Alert.alert('Share', 'Apps like WhatsApp compress photos. A Lens link sends the full-quality original.', [
+                  {
+                    text: 'Full-quality link',
+                    onPress: () => {
+                      track('share_choice_link');
+                      setLinkFor(current.id);
+                    },
+                  },
+                  {
+                    text: 'Send the file',
+                    onPress: () => {
+                      track('share_choice_file');
+                      run(() => shareMedia(current));
+                    },
+                  },
+                  { text: 'Cancel', style: 'cancel' },
+                ]);
+              }}
+            />
             {!shared && (
               <Action
                 icon="paper-plane-outline"
@@ -513,6 +543,7 @@ function ViewerBody({ id, shared }: { id: string; shared: boolean }) {
           )}
         </>
       )}
+      {linkFor ? <ShareLinkSheet ids={[linkFor]} onClose={() => setLinkFor(null)} /> : null}
     </View>
   );
 }
