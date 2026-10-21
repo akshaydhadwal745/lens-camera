@@ -500,8 +500,13 @@ a.card:hover {
 }
 .footer-grid {
   display: grid;
-  grid-template-columns: 2fr repeat(3, 1fr);
+  grid-template-columns: 2fr repeat(4, 1fr);
   gap: 2rem;
+}
+@media (max-width: 1000px) and (min-width: 761px) {
+  .footer-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 @media (max-width: 760px) {
   .footer-grid {
@@ -1103,6 +1108,154 @@ a.card:hover {
   }
 }
 
+/* Home, problem-first sections (2026-10-21). */
+.hp-plain {
+  background: transparent;
+}
+.hp-problems .grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+a.card.hp-problem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.hp-problem h3 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+.hp-problem p {
+  flex: 1;
+}
+.hp-more,
+.hp-link {
+  color: var(--sky);
+  font-weight: 500;
+}
+.hp-more {
+  font-size: 0.95rem;
+}
+.hp-link {
+  display: inline-block;
+  text-decoration: none;
+  font-size: 1.1rem;
+}
+.hp-link:hover {
+  text-decoration: underline;
+}
+.hp-link-gap {
+  margin-top: 2rem;
+}
+.hp-event {
+  flex: 1 1 26rem;
+  aspect-ratio: 4 / 5;
+  max-height: 680px;
+}
+.hp-qr-chip {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: 22rem;
+  padding: 0.8rem 1rem 0.8rem 0.8rem;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(14px);
+  font-weight: 600;
+  line-height: 1.3;
+}
+/* A decorative QR-style mark: three finder squares on a dotted field. */
+.hp-qr {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  background-color: #fff;
+  background-image:
+    radial-gradient(circle at 50% 50%, #000 0 4px, transparent 5px),
+    radial-gradient(circle at 50% 50%, #000 0 4px, transparent 5px),
+    radial-gradient(circle at 50% 50%, #000 0 4px, transparent 5px),
+    radial-gradient(circle, #000 1.6px, transparent 2px);
+  background-size: 22px 22px, 22px 22px, 22px 22px, 7px 7px;
+  background-position: 4px 4px, 38px 4px, 4px 38px, 1px 1px;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  box-shadow: inset 0 0 0 4px #fff;
+}
+.hp-steps {
+  list-style: none;
+  counter-reset: hp;
+  padding: 0;
+  margin: 0 0 2rem;
+  display: grid;
+  gap: 0.75rem;
+}
+.hp-steps li {
+  counter-increment: hp;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 1.1rem;
+  color: var(--soft);
+}
+.hp-steps li::before {
+  content: counter(hp);
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.hp-compare {
+  flex: 1 1 26rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.hp-compare-shot {
+  aspect-ratio: 3 / 4;
+  border-radius: 24px;
+}
+.hp-crushed {
+  filter: blur(2.5px) saturate(0.75) contrast(0.9);
+  transform: scale(1.04);
+}
+.hp-tag {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.9rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+}
+.hp-tag-on {
+  background: var(--brand);
+  border-color: transparent;
+}
+.hp-camera-intro {
+  padding-bottom: 0;
+}
+.hp-trust p {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.55;
+}
+.hp-trust h3 {
+  font-size: 1.2rem;
+}
+
 /* Feature pages: one big photo under the headline; cards lead with a photo. */
 .feature-shot {
   aspect-ratio: 4 / 3;
@@ -1334,6 +1487,26 @@ a.card {
 .pr-note {
   color: var(--muted);
   margin: 0;
+}
+.pr-sub {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+.pr-then {
+  font-size: 1.2rem;
+  color: var(--soft);
+  margin: 0 0 1.2rem;
+}
+.pr-ladder {
+  margin-top: 2.5rem;
+  gap: 2.5rem 3.5rem;
+}
+.pr-ladder strong {
+  color: var(--text);
+}
+.pr-own {
+  margin: 3rem 0 0;
 }
 .pr-plan-list h2 {
   font-size: 1.3rem;
@@ -1648,6 +1821,30 @@ a.card {
 }
 .pg-row > div > :last-child {
   margin-bottom: 0;
+}
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0 0;
+  font-size: 0.98rem;
+}
+.pg-table th,
+.pg-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.75rem 0.75rem 0.75rem 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--soft);
+}
+.pg-table thead th {
+  color: var(--text);
+  font-size: 1.05rem;
+  border-bottom-color: var(--border);
+}
+.pg-table tbody th {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 7rem;
 }
 .pg-links {
   display: flex;

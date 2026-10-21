@@ -2,7 +2,9 @@
 // what the app really does (see ../../docs/README.md feature table).
 import type { Lang } from '../i18n/ui';
 
-export type Section = { h2: string; body: string[]; bullets?: string[] };
+/** A simple comparison table (first column is the row label). */
+export type Table = { caption: string; head: string[]; rows: string[][] };
+export type Section = { h2: string; body: string[]; bullets?: string[]; table?: Table };
 export type Faq = { q: string; a: string };
 export type PageCopy = {
   /** <title> (brand is appended) and the search snippet. */
@@ -27,13 +29,13 @@ export const pages: ContentPage[] = [
     slug: 'free-cloud-backup',
     group: 'features',
     icon: '☁️',
-    name: { en: '100 GB free backup', hi: '100 GB मुफ़्त बैकअप' },
+    name: { en: 'Free cloud backup', hi: 'मुफ़्त क्लाउड बैकअप' },
     copy: {
       en: {
-        title: '100 GB free photo & video backup at original quality',
+        title: 'Free photo & video backup at original quality: 40 GB to start',
         description:
-          'Back up every photo and video at full original quality with 100 GB free. Verified uploads, upload while recording, and automatic space saving on your phone.',
-        h1: '100 GB free backup, at the quality you shot it',
+          'Back up every photo and video at full original quality. 40 GB free for your first 3 months, then 10 GB free forever, or unlimited in your own Google Drive or Dropbox.',
+        h1: 'Free backup, at the quality you shot it',
         lead: 'Every photo and video goes to the cloud the moment you take it, byte for byte. No compression, no "storage saver" quality, no surprises.',
         sections: [
           {
@@ -61,22 +63,28 @@ export const pages: ContentPage[] = [
           },
           {
             h2: 'How much is free?',
-            body: [
-              'Sign in with your email or Google account and you get 100 GB of Lens storage free. Without signing in you can try Lens with 5 GB.',
+            body: ['All of it at full quality, always. The free plan stays free.'],
+            bullets: [
+              'Try it without an account: 5 GB',
+              'Sign in with email or Google: 40 GB free for your first 3 months',
+              'After that: 10 GB free, forever',
+              '+10 GB for every friend who joins and backs up (up to 10 friends)',
+              'Unlimited and free when you back up to your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV',
             ],
           },
         ],
         faq: [
           { q: 'Does Lens compress my photos?', a: 'No. The original file is stored exactly as your camera saved it. Lens only makes small previews for fast browsing, in addition to the original.' },
-          { q: 'What happens when I go over 100 GB?', a: 'New uploads pause and Lens tells you. You can free up space, connect your own storage (Google Drive, OneDrive, Dropbox, Box…), or wait for paid plans.' },
+          { q: 'What happens when the 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays in your library, viewable and downloadable. Only new backups to Lens storage pause while you are above the free limit, until you invite friends, free some space, or switch to your own storage. Lens reminds you 14, 3 and 1 days before.' },
+          { q: 'Can I get unlimited backup?', a: 'Yes, free: connect your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV storage and your originals go there. Lens keeps only small previews, so they don’t count against a Lens limit.' },
           { q: 'Does backup use my mobile data?', a: 'You choose: everything, small files only, or Wi-Fi only. Upload while recording is Wi-Fi only by default.' },
         ],
       },
       hi: {
-        title: 'ओरिजिनल क्वालिटी में 100 GB मुफ़्त फ़ोटो और वीडियो बैकअप',
+        title: 'ओरिजिनल क्वालिटी में मुफ़्त फ़ोटो और वीडियो बैकअप: शुरुआत में 40 GB',
         description:
-          'हर फ़ोटो और वीडियो का पूरी ओरिजिनल क्वालिटी में बैकअप, 100 GB मुफ़्त। जाँचे हुए अपलोड, रिकॉर्डिंग के दौरान अपलोड और फ़ोन में अपने-आप जगह बचत।',
-        h1: '100 GB मुफ़्त बैकअप, उसी क्वालिटी में जिसमें आपने लिया',
+          'हर फ़ोटो और वीडियो का पूरी ओरिजिनल क्वालिटी में बैकअप। पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त, या अपने Google Drive या Dropbox में अनलिमिटेड।',
+        h1: 'मुफ़्त बैकअप, उसी क्वालिटी में जिसमें आपने लिया',
         lead: 'हर फ़ोटो और वीडियो लेते ही क्लाउड में चला जाता है, हूबहू वैसा ही। न कंप्रेशन, न "स्टोरेज सेवर" क्वालिटी, न कोई सरप्राइज़।',
         sections: [
           {
@@ -104,12 +112,20 @@ export const pages: ContentPage[] = [
           },
           {
             h2: 'कितना मुफ़्त है?',
-            body: ['ईमेल या Google अकाउंट से साइन इन करें और 100 GB Lens स्टोरेज मुफ़्त पाएँ। बिना साइन इन के आप 5 GB के साथ Lens आज़मा सकते हैं।'],
+            body: ['सब कुछ पूरी क्वालिटी में, हमेशा। फ़्री प्लान मुफ़्त ही रहेगा।'],
+            bullets: [
+              'बिना अकाउंट आज़माएँ: 5 GB',
+              'ईमेल या Google से साइन इन: पहले 3 महीने 40 GB मुफ़्त',
+              'उसके बाद: 10 GB मुफ़्त, हमेशा',
+              'जुड़कर बैकअप करने वाले हर दोस्त पर +10 GB (10 दोस्तों तक)',
+              'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV में बैकअप करने पर अनलिमिटेड और मुफ़्त',
+            ],
           },
         ],
         faq: [
           { q: 'क्या Lens मेरी फ़ोटो कंप्रेस करता है?', a: 'नहीं। ओरिजिनल फ़ाइल ठीक वैसी ही रखी जाती है जैसी कैमरे ने सेव की। Lens सिर्फ़ तेज़ ब्राउज़िंग के लिए छोटे प्रीव्यू अलग से बनाता है।' },
-          { q: '100 GB से ज़्यादा होने पर क्या होगा?', a: 'नए अपलोड रुक जाते हैं और Lens आपको बताता है। आप जगह ख़ाली कर सकते हैं, अपना स्टोरेज (Google Drive, OneDrive, Dropbox, Box…) जोड़ सकते हैं, या पेड प्लान का इंतज़ार कर सकते हैं।' },
+          { q: '40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ आपकी लाइब्रेरी में रहता है, देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर होने पर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, कुछ जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। Lens 14, 3 और 1 दिन पहले याद दिलाता है।' },
+          { q: 'क्या अनलिमिटेड बैकअप मिल सकता है?', a: 'हाँ, मुफ़्त: अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV स्टोरेज जोड़ें और आपके ओरिजिनल वहाँ जाएँगे। Lens सिर्फ़ छोटे प्रीव्यू रखता है, इसलिए वे Lens की सीमा में नहीं गिने जाते।' },
           { q: 'क्या बैकअप मेरा मोबाइल डेटा इस्तेमाल करता है?', a: 'आप चुनें: सब कुछ, सिर्फ़ छोटी फ़ाइलें, या सिर्फ़ Wi-Fi। रिकॉर्डिंग के दौरान अपलोड डिफ़ॉल्ट रूप से सिर्फ़ Wi-Fi पर होता है।' },
         ],
       },
@@ -350,23 +366,43 @@ export const pages: ContentPage[] = [
     name: { en: 'Sharing', hi: 'शेयरिंग' },
     copy: {
       en: {
-        title: 'Share full-quality photos and videos with friends',
-        description: 'Send photos and videos to friends at full quality. They appear in their Shared tab; delete for everyone or only for yourself.',
-        h1: 'Share at full quality, without WhatsApp compression',
-        lead: 'Send photos and videos to friends on Lens. They see them in their Shared tab, at the quality you shot them.',
+        title: 'Share full-quality photos and videos, even with people without Lens',
+        description: 'Send the original photos and videos, not a compressed copy. Share links open in any browser, expire when you choose, and can be limited to one person.',
+        h1: 'Share at full quality, without the compression',
+        lead: 'Chat apps shrink your photos and videos. Lens sends the original, to friends on Lens or to anyone with a link.',
         sections: [
-          { h2: 'Simple and private', body: ['Find friends by their Lens name. Only the people you send to can open what you share.'] },
+          {
+            h2: 'Share links for everyone',
+            body: ['Pick photos or videos, tap Share by link and paste it into WhatsApp, a message or an email. People without Lens open it in their browser and save the original file.'],
+            bullets: ['Anyone with the link, or only one person', 'Works for 1, 7 or 30 days, and you can turn it off any time', 'Where photos were taken is removed unless you include it', 'See when it was opened'],
+          },
+          { h2: 'Send to friends in Lens', body: ['Find friends by their Lens name. What you send appears in their Shared tab, at the quality you shot it. Only the people you send to can open it.'] },
+          { h2: 'Event albums', body: ['For a wedding, a trip or a party, make an event album and show its QR code. Guests scan it with any phone camera and add their photos from the browser, no app needed.'] },
           { h2: 'You stay in control', body: ['When you delete a shared photo you choose: remove it for everyone, or only for yourself so friends keep their copy.'] },
+        ],
+        faq: [
+          { q: 'Does the person I send to need Lens?', a: 'No. A share link opens in any browser, where they can view and save the photos and videos. With Lens, the items go straight into their Shared tab.' },
+          { q: 'Is it really the original?', a: 'Yes. Lens shares the file your camera made, not a re-compressed copy. Only the location is removed, unless you choose to include it.' },
         ],
       },
       hi: {
-        title: 'दोस्तों के साथ फ़ुल क्वालिटी फ़ोटो और वीडियो शेयर करें',
-        description: 'दोस्तों को पूरी क्वालिटी में फ़ोटो और वीडियो भेजें। वे उनके Shared टैब में दिखते हैं; सबके लिए डिलीट करें या सिर्फ़ अपने लिए।',
-        h1: 'WhatsApp कंप्रेशन के बिना, फ़ुल क्वालिटी में शेयर करें',
-        lead: 'Lens पर दोस्तों को फ़ोटो और वीडियो भेजें। वे उन्हें अपने Shared टैब में, उसी क्वालिटी में देखते हैं जिसमें आपने लिया।',
+        title: 'फ़ुल क्वालिटी फ़ोटो और वीडियो शेयर करें, उन्हें भी जिनके पास Lens नहीं',
+        description: 'ओरिजिनल फ़ोटो और वीडियो भेजें, कंप्रेस की हुई कॉपी नहीं। शेयर लिंक किसी भी ब्राउज़र में खुलते हैं, आपके चुने समय पर ख़त्म होते हैं, और सिर्फ़ एक व्यक्ति तक सीमित हो सकते हैं।',
+        h1: 'फ़ुल क्वालिटी में शेयर करें, बिना कंप्रेशन',
+        lead: 'चैट ऐप आपकी फ़ोटो और वीडियो छोटे कर देते हैं। Lens ओरिजिनल भेजता है, Lens पर दोस्तों को या लिंक से किसी को भी।',
         sections: [
-          { h2: 'आसान और प्राइवेट', body: ['दोस्तों को उनके Lens नाम से ढूँढें। जो आप शेयर करते हैं, उसे सिर्फ़ वही लोग खोल सकते हैं जिन्हें आपने भेजा।'] },
+          {
+            h2: 'सबके लिए शेयर लिंक',
+            body: ['फ़ोटो या वीडियो चुनें, Share by link दबाएँ और लिंक WhatsApp, मैसेज या ईमेल में भेजें। जिनके पास Lens नहीं, वे इसे ब्राउज़र में खोलकर ओरिजिनल फ़ाइल सेव कर सकते हैं।'],
+            bullets: ['लिंक वाला कोई भी, या सिर्फ़ एक व्यक्ति', '1, 7 या 30 दिन चलता है, और आप कभी भी बंद कर सकते हैं', 'फ़ोटो कहाँ ली गई, यह हटा दिया जाता है, जब तक आप शामिल न करें', 'देखें कि कब खोला गया'],
+          },
+          { h2: 'Lens में दोस्तों को भेजें', body: ['दोस्तों को उनके Lens नाम से ढूँढें। जो आप भेजते हैं, वह उनके Shared टैब में उसी क्वालिटी में दिखता है जिसमें आपने लिया। उसे सिर्फ़ वही लोग खोल सकते हैं जिन्हें आपने भेजा।'] },
+          { h2: 'इवेंट एल्बम', body: ['शादी, ट्रिप या पार्टी के लिए इवेंट एल्बम बनाएँ और उसका QR कोड दिखाएँ। मेहमान किसी भी फ़ोन कैमरा से स्कैन करके ब्राउज़र से अपनी फ़ोटो जोड़ते हैं, ऐप की ज़रूरत नहीं।'] },
           { h2: 'कंट्रोल आपके हाथ में', body: ['शेयर की हुई फ़ोटो डिलीट करते समय आप चुनते हैं: सबके लिए हटाएँ, या सिर्फ़ अपने लिए ताकि दोस्तों के पास उनकी कॉपी रहे।'] },
+        ],
+        faq: [
+          { q: 'क्या जिसे भेज रहे हैं उसके पास Lens होना ज़रूरी है?', a: 'नहीं। शेयर लिंक किसी भी ब्राउज़र में खुलता है, जहाँ वे फ़ोटो और वीडियो देख और सेव कर सकते हैं। Lens हो तो चीज़ें सीधे उनके Shared टैब में आती हैं।' },
+          { q: 'क्या सच में ओरिजिनल जाता है?', a: 'हाँ। Lens वही फ़ाइल शेयर करता है जो आपके कैमरे ने बनाई, दोबारा कंप्रेस की हुई कॉपी नहीं। सिर्फ़ लोकेशन हटाई जाती है, जब तक आप उसे शामिल न करें।' },
         ],
       },
     },
@@ -420,11 +456,12 @@ export const pages: ContentPage[] = [
             bullets: ['Every shot is backed up as you take it, at original quality', 'Once verified in the cloud, the full-size file can leave your phone', 'A sharp preview stays, so your gallery works offline', 'Lens keeps the space you choose free, oldest files first'],
             body: [],
           },
-          { h2: 'Free to start', body: ['100 GB free when you sign in. Already have Google Drive, OneDrive or Dropbox space? Connect it.'] },
+          { h2: 'Free to start', body: ['40 GB free for your first 3 months when you sign in, then 10 GB free forever. Already have Google Drive, OneDrive or Dropbox space? Connect it and back up without a limit, free.'] },
         ],
         faq: [
           { q: 'Will I lose quality if Lens removes photos from my phone?', a: 'No. The original is kept in full quality in the cloud and comes back when you open it, share it or save it.' },
           { q: 'Can I still see my photos without internet?', a: 'Yes. Previews stay on your phone, so you can browse your whole gallery offline.' },
+          { q: 'Is anything deleted if I stop using Lens or go over the free limit?', a: 'No. Your photos stay in your account, viewable and downloadable. Over the free limit, only new backups to Lens storage pause.' },
         ],
       },
       hi: {
@@ -439,11 +476,12 @@ export const pages: ContentPage[] = [
             bullets: ['हर शॉट लेते ही ओरिजिनल क्वालिटी में बैकअप होता है', 'क्लाउड में जाँच के बाद बड़ी फ़ाइल फ़ोन से हट सकती है', 'साफ़ प्रीव्यू रहता है, गैलरी ऑफ़लाइन चलती है', 'Lens आपकी चुनी हुई जगह ख़ाली रखता है, सबसे पुरानी फ़ाइलें पहले'],
             body: [],
           },
-          { h2: 'शुरुआत मुफ़्त', body: ['साइन इन करने पर 100 GB मुफ़्त। Google Drive, OneDrive या Dropbox में पहले से जगह है? उसे जोड़ें।'] },
+          { h2: 'शुरुआत मुफ़्त', body: ['साइन इन करने पर पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त। Google Drive, OneDrive या Dropbox में पहले से जगह है? उसे जोड़ें और बिना सीमा के, मुफ़्त बैकअप करें।'] },
         ],
         faq: [
           { q: 'Lens फ़ोन से फ़ोटो हटाए तो क्या क्वालिटी कम होगी?', a: 'नहीं। ओरिजिनल पूरी क्वालिटी में क्लाउड में रहता है और खोलने, शेयर या सेव करने पर वापस आता है।' },
           { q: 'क्या बिना इंटरनेट के फ़ोटो देख सकते हैं?', a: 'हाँ। प्रीव्यू फ़ोन पर रहते हैं, इसलिए आप पूरी गैलरी ऑफ़लाइन देख सकते हैं।' },
+          { q: 'Lens छोड़ने या मुफ़्त सीमा से ऊपर जाने पर क्या कुछ डिलीट होता है?', a: 'नहीं। आपकी फ़ोटो आपके अकाउंट में रहती हैं, देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं।' },
         ],
       },
     },
@@ -483,23 +521,57 @@ export const pages: ContentPage[] = [
     name: { en: 'Weddings & events', hi: 'शादी और इवेंट' },
     copy: {
       en: {
-        title: 'Wedding and event photos: shoot all day, keep every moment',
-        description: 'Hours of video and thousands of photos at a wedding or event? Lens backs them up at original quality and keeps your phone free so you never miss a moment.',
-        h1: 'Weddings and events: never miss a moment to "storage full"',
-        lead: 'Long ceremonies, dim halls and thousands of shots. Lens is built for exactly that.',
+        title: 'Collect everyone’s wedding and event photos with one QR code',
+        description: 'Make an event album, show its QR code, and guests add their photos from any phone, in the browser, no app needed. Everyone sees everything, at full quality.',
+        h1: 'Everyone’s wedding photos. One QR code.',
+        lead: 'After a wedding or a party, the best photos are spread over a hundred phones and get compressed in group chats. With a Lens event album, they all land in one place, in the original quality.',
         sections: [
-          { h2: 'Built for long days', bullets: ['Long 4K videos upload while recording (Android)', 'Night mode for evening functions', 'Space is freed automatically as backup completes', 'Share the full-quality album with family'], body: [] },
+          {
+            h2: 'How an event album works',
+            body: [],
+            bullets: [
+              'Make an album in Lens and tap Invite with QR',
+              'Print the QR code, put it on the tables, or share the link in your group',
+              'Guests scan it with any phone camera and add their photos from the browser, no app or account needed',
+              'Everyone in the album sees everyone’s photos, with new ones arriving as they are added',
+              'Turn the link off when the event is over; people already in keep the album',
+            ],
+          },
+          { h2: 'Full quality, not chat quality', body: ['Photos added to the album are the original files, checked when they arrive. Guests with Lens can add videos too, and see everything at full quality.'] },
+          { h2: 'Built for long days', bullets: ['Long 4K videos upload while recording (Android)', 'Night mode for evening functions', 'Space is freed automatically as backup completes', 'Recaps turn the day into a short film'], body: [] },
           { h2: 'For photographers too', body: ['Manual controls, RAW, presets and exposure tools, plus your own storage (Google Drive, Dropbox, NAS) for client work.'] },
+        ],
+        faq: [
+          { q: 'Do guests need to install Lens?', a: 'No. Guests scan the QR code with their phone camera and add photos from the web page. Videos need the Lens app.' },
+          { q: 'Who can see the album?', a: 'Anyone with the link or the QR code can see the album and add photos, so share it with your guests only. You can turn the link off at any time.' },
+          { q: 'Can a guest remove their photo?', a: 'Yes. Whoever added a photo can remove it, and so can the album owner.' },
         ],
       },
       hi: {
-        title: 'शादी और इवेंट की फ़ोटो: दिन भर शूट करें, हर पल संभालें',
-        description: 'शादी या इवेंट में घंटों का वीडियो और हज़ारों फ़ोटो? Lens इन्हें ओरिजिनल क्वालिटी में बैकअप करता है और फ़ोन ख़ाली रखता है ताकि कोई पल न छूटे।',
-        h1: 'शादी और इवेंट: "स्टोरेज फ़ुल" की वजह से कोई पल न छूटे',
-        lead: 'लंबी रस्में, कम रोशनी वाले हॉल और हज़ारों शॉट। Lens ठीक इसी के लिए बना है।',
+        title: 'एक QR कोड से शादी और इवेंट की सबकी फ़ोटो इकट्ठा करें',
+        description: 'इवेंट एल्बम बनाएँ, उसका QR कोड दिखाएँ, और मेहमान किसी भी फ़ोन से, ब्राउज़र में, बिना ऐप के अपनी फ़ोटो जोड़ें। सब सब कुछ देखते हैं, पूरी क्वालिटी में।',
+        h1: 'शादी की सबकी फ़ोटो। एक QR कोड।',
+        lead: 'शादी या पार्टी के बाद सबसे अच्छी फ़ोटो सौ फ़ोनों में बिखरी रहती हैं और ग्रुप चैट में कंप्रेस हो जाती हैं। Lens इवेंट एल्बम से सब एक जगह आती हैं, ओरिजिनल क्वालिटी में।',
         sections: [
-          { h2: 'लंबे दिन के लिए बना', bullets: ['लंबे 4K वीडियो रिकॉर्ड होते-होते अपलोड (Android)', 'शाम के फ़ंक्शन के लिए नाइट मोड', 'बैकअप पूरा होते ही जगह अपने-आप ख़ाली', 'परिवार के साथ फ़ुल क्वालिटी एल्बम शेयर करें'], body: [] },
+          {
+            h2: 'इवेंट एल्बम कैसे काम करता है',
+            body: [],
+            bullets: [
+              'Lens में एल्बम बनाएँ और Invite with QR दबाएँ',
+              'QR कोड प्रिंट करें, टेबल पर रखें, या लिंक अपने ग्रुप में भेजें',
+              'मेहमान किसी भी फ़ोन कैमरा से स्कैन करके ब्राउज़र से अपनी फ़ोटो जोड़ते हैं, ऐप या अकाउंट की ज़रूरत नहीं',
+              'एल्बम में सब एक-दूसरे की फ़ोटो देखते हैं, नई फ़ोटो जुड़ते ही आती हैं',
+              'इवेंट ख़त्म होने पर लिंक बंद करें; जो पहले से जुड़े हैं उनके पास एल्बम रहता है',
+            ],
+          },
+          { h2: 'फ़ुल क्वालिटी, चैट क्वालिटी नहीं', body: ['एल्बम में जोड़ी गई फ़ोटो ओरिजिनल फ़ाइलें होती हैं, पहुँचते ही जाँची जाती हैं। Lens वाले मेहमान वीडियो भी जोड़ सकते हैं और सब कुछ पूरी क्वालिटी में देखते हैं।'] },
+          { h2: 'लंबे दिन के लिए बना', bullets: ['लंबे 4K वीडियो रिकॉर्ड होते-होते अपलोड (Android)', 'शाम के फ़ंक्शन के लिए नाइट मोड', 'बैकअप पूरा होते ही जगह अपने-आप ख़ाली', 'रीकैप पूरे दिन को एक छोटी फ़िल्म बना देता है'], body: [] },
           { h2: 'फ़ोटोग्राफ़र्स के लिए भी', body: ['मैनुअल कंट्रोल, RAW, प्रीसेट और एक्सपोज़र टूल, साथ में क्लाइंट के काम के लिए अपना स्टोरेज (Google Drive, Dropbox, NAS)।'] },
+        ],
+        faq: [
+          { q: 'क्या मेहमानों को Lens इंस्टॉल करना होगा?', a: 'नहीं। मेहमान फ़ोन कैमरा से QR कोड स्कैन करके वेब पेज से फ़ोटो जोड़ते हैं। वीडियो के लिए Lens ऐप चाहिए।' },
+          { q: 'एल्बम कौन देख सकता है?', a: 'लिंक या QR कोड वाला कोई भी एल्बम देख और फ़ोटो जोड़ सकता है, इसलिए इसे सिर्फ़ अपने मेहमानों के साथ शेयर करें। आप कभी भी लिंक बंद कर सकते हैं।' },
+          { q: 'क्या मेहमान अपनी फ़ोटो हटा सकता है?', a: 'हाँ। जिसने फ़ोटो जोड़ी वह उसे हटा सकता है, और एल्बम का मालिक भी।' },
         ],
       },
     },

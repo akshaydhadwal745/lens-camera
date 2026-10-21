@@ -14,14 +14,16 @@ interface Props {
   copy: PageCopy;
   faq?: FaqItem[];
   links?: [string, string][];
+  /** Breadcrumbs after Home; defaults to this page alone. */
+  trail?: [string, string][];
 }
-const { lang, path, name, copy, faq, links = [] } = Astro.props;
+const { lang, path, name, copy, faq, links = [], trail = [[name, path]] } = Astro.props;
 const t = ui[lang];
 ---
 
 <Layout lang={lang} path={path} title={copy.title} description={copy.description}>
   <section class="pg-hero">
-    <Breadcrumbs lang={lang} trail={[[name, path]]} />
+    <Breadcrumbs lang={lang} trail={trail} />
     <p class="kn-kicker">{name}</p>
     <h1>{copy.h1}</h1>
     <p class="kn-lead">{copy.lead}</p>
@@ -33,6 +35,30 @@ const t = ui[lang];
           <h2>{s.h2}</h2>
           <div>
             {s.body.map((p) => <p>{p}</p>)}
+            {s.table && (
+              <div class="table-wrap">
+                <table class="pg-table">
+                  <caption class="sr-only">{s.table.caption}</caption>
+                  <thead>
+                    <tr>
+                      {s.table.head.map((h) => (
+                        <th scope="col">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.table.rows.map(([label, ...cells]) => (
+                      <tr>
+                        <th scope="row">{label}</th>
+                        {cells.map((c) => (
+                          <td>{c}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             {s.bullets && (
               <ul class="checks">
                 {s.bullets.map((b) => <li>{b}</li>)}

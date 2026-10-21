@@ -1,4 +1,5 @@
 ---
+import { guideHubPages } from '../content/guides';
 import { featurePages, useCasePages } from '../content/pages';
 import { href, type Lang, ui } from '../i18n/ui';
 
@@ -13,6 +14,7 @@ const legal =
         ['privacy', 'Privacy policy'],
         ['terms', 'Terms of service'],
         ['delete-account', 'Delete your account'],
+        ['trust', 'Why you can trust Lens'],
         ['security', 'Privacy & security'],
         ['affiliates', 'Affiliate program'],
         ['contact', 'Contact us'],
@@ -21,6 +23,7 @@ const legal =
         ['privacy', 'प्राइवेसी पॉलिसी'],
         ['terms', 'सेवा की शर्तें'],
         ['delete-account', 'अकाउंट डिलीट करें'],
+        ['trust', 'Lens पर भरोसा क्यों'],
         ['security', 'प्राइवेसी और सुरक्षा'],
         ['affiliates', 'एफ़िलिएट प्रोग्राम'],
         ['contact', 'संपर्क करें'],
@@ -47,6 +50,13 @@ const legal =
         {useCasePages.map((p) => <li><a href={href(lang, `use-cases/${p.slug}`)}>{p.name[lang]}</a></li>)}
         <li><a href={href(lang, 'features/web-app')}>{lang === 'en' ? 'Web app' : 'वेब ऐप'}</a></li>
         <li><a href={href(lang, 'help')}>{t.nav.help}</a></li>
+      </ul>
+    </nav>
+    <nav aria-label={t.footer.guides}>
+      <h2>{t.footer.guides}</h2>
+      <ul>
+        {guideHubPages.map((g) => <li><a href={href(lang, g.path)}>{g.name[lang]}</a></li>)}
+        <li><a href={href(lang, 'guides')}>{t.footer.allGuides}</a></li>
       </ul>
     </nav>
     <nav aria-label={t.footer.company}>

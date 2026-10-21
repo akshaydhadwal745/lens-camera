@@ -1,7 +1,10 @@
 ---
-// Pricing in the "Keynote" style of the home page. Facts must match the app:
-// guest 5 GB, signed in 100 GB, +10 GB per invited friend (no limit), own
-// storage connectors, paid plans not built yet.
+// Pricing in the "Keynote" style of the home page. Facts must match the app
+// (owner decision 2026-10-21): guest 5 GB; signed in 40 GB for the first 3
+// months (welcome), then 10 GB free forever; +10 GB per friend who joins and
+// backs up (up to 10 friends), the friend gets one extra welcome month; own
+// storage has no Lens limit. Nothing is deleted when the welcome ends. Paid
+// plans not built yet: never publish a price.
 import Faq from './Faq.astro';
 import Layout from '../layouts/Layout.astro';
 import { href, type Lang } from '../i18n/ui';
@@ -13,13 +16,15 @@ const { lang } = Astro.props;
 
 const c = {
   en: {
-    title: 'Pricing: 100 GB free photo and video backup',
-    description: 'Lens is free: 100 GB of original-quality backup when you sign in, the full camera and editor, and the web app. Paid plans with more storage are coming; the free plan stays.',
+    title: 'Pricing: free full-quality photo and video backup',
+    description: 'Lens is free: 40 GB of original-quality backup for your first 3 months, then 10 GB free forever, +10 GB per invited friend, and no limit with your own storage.',
     kicker: 'Pricing',
     h1: 'Free.',
-    lead: 'Everything in Lens is free today, including 100 GB of original-quality backup.',
+    lead: 'Every photo at full quality, the whole camera and the web app. Free to start, and free forever.',
     planName: 'Lens Free',
-    planSize: '100 GB',
+    planSize: '40 GB',
+    planSub: 'free for your first 3 months',
+    planThen: 'Then 10 GB free, forever.',
     planNote: 'No card needed. 5 GB to try before you sign in.',
     get: 'Get Lens',
     web: 'Use it on the web',
@@ -30,36 +35,50 @@ const c = {
       'Pro mode, RAW and Ultra HDR, 13 looks',
       'Full editor, changes always reversible',
       'Video up to 4K, streaming on any device',
+      'Share links and event albums with a QR code',
       'Your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS',
-      'Sharing with friends',
       'Web app with QR sign-in and uploads',
-      'Trash for 30 days, Archive for 1 year',
+      'Deleted items recoverable for a year',
     ],
+    ladderTitle: 'How free storage works',
+    ladder: [
+      ['5 GB', 'Try it, no account'],
+      ['40 GB', 'Your first 3 months after you sign in'],
+      ['10 GB', 'Free forever after that'],
+      ['No limit', 'With your own storage'],
+    ],
+    ownText: 'Back up to your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV and Lens adds no limit: your originals go there, Lens keeps only small previews. The space is whatever your storage gives you.',
     inviteTitle: 'Need more space? Bring friends.',
-    inviteText: 'Every friend who joins with your invite adds 10 GB to your storage. There’s no limit.',
+    inviteText: 'Every friend who joins with your invite and backs up adds 10 GB to your storage, for up to 10 friends. Your friend gets an extra month of the 40 GB welcome.',
     inviteStat: '+10 GB',
     inviteStatNote: 'per friend, forever',
     inviteAlt: 'Two friends laughing together in a car',
+    endsTitle: 'When the welcome ends, nothing is deleted.',
+    endsText: 'Everything stays in your library, viewable and downloadable. If you are above the free limit, only new backups to Lens storage pause, until you invite friends, free some space, or switch to your own storage. Lens reminds you 14, 3 and 1 days before.',
     laterTitle: 'Coming later',
     laterBadge: 'Soon',
     laterText: 'Paid plans will add more Lens storage and extras, like choosing where each photo and video goes, and sharing originals straight from your own storage.',
-    laterKeep: 'The free plan stays.',
+    laterKeep: 'The free plan stays free.',
     faqTitle: 'Questions',
     faq: [
-      { q: 'Is it really free?', a: 'Yes. Sign in with your email or Google account and you get 100 GB of backup at original quality, the camera, the editor and the web app, without a card.' },
-      { q: 'What happens when my 100 GB is full?', a: 'Invite friends for +10 GB each, or connect your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS and new photos go there. Paid plans with more Lens storage are coming.' },
+      { q: 'Is it really free?', a: 'Yes. Sign in with your email or Google account and you get 40 GB of backup at original quality for your first 3 months, then 10 GB free forever, plus the camera, the editor and the web app, without a card.' },
+      { q: 'What happens after the first 3 months?', a: 'Your free storage becomes 10 GB, plus anything you earned with invites. Nothing is deleted. If you are above the limit, new backups to Lens storage pause until you invite friends, free space, or connect your own storage.' },
+      { q: 'How do I get unlimited backup for free?', a: 'Connect your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV storage. New originals go there and Lens adds no limit of its own; your provider’s space applies.' },
       { q: 'Is the free plan lower quality?', a: 'No. Every plan stores the exact original file. Nothing is ever compressed to save space.' },
-      { q: 'Can I try it without signing in?', a: 'Yes. Lens works right away with 5 GB. Sign in any time to get 100 GB; your photos come with you.' },
+      { q: 'Can I try it without signing in?', a: 'Yes. Lens works right away with 5 GB. Sign in any time to get the 40 GB welcome; your photos come with you.' },
+      { q: 'How much will paid plans cost?', a: 'Paid plans with more Lens storage are coming, and we will announce them here first. The free plan stays free.' },
     ],
   },
   hi: {
-    title: 'कीमत: 100 GB मुफ़्त फ़ोटो और वीडियो बैकअप',
-    description: 'Lens मुफ़्त है: साइन इन करने पर ओरिजिनल क्वालिटी में 100 GB बैकअप, पूरा कैमरा और एडिटर, और वेब ऐप। ज़्यादा स्टोरेज वाले पेड प्लान आ रहे हैं; फ़्री प्लान रहेगा।',
+    title: 'कीमत: मुफ़्त फ़ुल क्वालिटी फ़ोटो और वीडियो बैकअप',
+    description: 'Lens मुफ़्त है: पहले 3 महीने ओरिजिनल क्वालिटी में 40 GB बैकअप, फिर हमेशा 10 GB मुफ़्त, हर बुलाए दोस्त पर +10 GB, और अपने स्टोरेज के साथ कोई सीमा नहीं।',
     kicker: 'कीमत',
     h1: 'मुफ़्त।',
-    lead: 'आज Lens में सब कुछ मुफ़्त है, ओरिजिनल क्वालिटी में 100 GB बैकअप भी।',
+    lead: 'हर फ़ोटो पूरी क्वालिटी में, पूरा कैमरा और वेब ऐप। शुरुआत मुफ़्त, और हमेशा मुफ़्त।',
     planName: 'Lens फ़्री',
-    planSize: '100 GB',
+    planSize: '40 GB',
+    planSub: 'पहले 3 महीने मुफ़्त',
+    planThen: 'फिर हमेशा 10 GB मुफ़्त।',
     planNote: 'कार्ड की ज़रूरत नहीं। साइन इन से पहले आज़माने के लिए 5 GB।',
     get: 'Lens पाएँ',
     web: 'वेब पर इस्तेमाल करें',
@@ -70,26 +89,38 @@ const c = {
       'प्रो मोड, RAW और Ultra HDR, 13 लुक्स',
       'पूरा एडिटर, हर बदलाव वापस लिया जा सकता है',
       '4K तक वीडियो, हर डिवाइस पर स्ट्रीमिंग',
+      'शेयर लिंक और QR कोड वाले इवेंट एल्बम',
       'अपना Google Drive, OneDrive, Dropbox, Box, S3 या NAS',
-      'दोस्तों के साथ शेयरिंग',
       'QR साइन इन और अपलोड वाला वेब ऐप',
-      '30 दिन ट्रैश, 1 साल आर्काइव',
+      'डिलीट की गई चीज़ें एक साल तक वापस',
     ],
+    ladderTitle: 'मुफ़्त स्टोरेज कैसे काम करता है',
+    ladder: [
+      ['5 GB', 'आज़माएँ, बिना अकाउंट'],
+      ['40 GB', 'साइन इन के बाद पहले 3 महीने'],
+      ['10 GB', 'उसके बाद हमेशा मुफ़्त'],
+      ['कोई सीमा नहीं', 'अपने स्टोरेज के साथ'],
+    ],
+    ownText: 'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV में बैकअप करें और Lens कोई सीमा नहीं लगाता: आपके ओरिजिनल वहाँ जाते हैं, Lens सिर्फ़ छोटे प्रीव्यू रखता है। जगह उतनी है जितनी आपका स्टोरेज देता है।',
     inviteTitle: 'और जगह चाहिए? दोस्तों को लाएँ।',
-    inviteText: 'आपके इनवाइट से जुड़ने वाला हर दोस्त आपके स्टोरेज में 10 GB जोड़ता है। कोई सीमा नहीं।',
+    inviteText: 'आपके इनवाइट से जुड़कर बैकअप करने वाला हर दोस्त आपके स्टोरेज में 10 GB जोड़ता है, 10 दोस्तों तक। आपके दोस्त को 40 GB वेलकम का एक महीना ज़्यादा मिलता है।',
     inviteStat: '+10 GB',
     inviteStatNote: 'हर दोस्त पर, हमेशा',
     inviteAlt: 'कार में साथ हँसते दो दोस्त',
+    endsTitle: 'वेलकम ख़त्म होने पर कुछ भी डिलीट नहीं होता।',
+    endsText: 'सब कुछ आपकी लाइब्रेरी में रहता है, देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर हों तो सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, कुछ जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। Lens 14, 3 और 1 दिन पहले याद दिलाता है।',
     laterTitle: 'बाद में आएगा',
     laterBadge: 'जल्द',
     laterText: 'पेड प्लान में ज़्यादा Lens स्टोरेज और अतिरिक्त फ़ीचर होंगे, जैसे हर फ़ोटो और वीडियो कहाँ जाए यह चुनना, और अपने स्टोरेज से सीधे ओरिजिनल शेयर करना।',
-    laterKeep: 'फ़्री प्लान रहेगा।',
+    laterKeep: 'फ़्री प्लान मुफ़्त ही रहेगा।',
     faqTitle: 'सवाल',
     faq: [
-      { q: 'क्या सच में मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और ओरिजिनल क्वालिटी में 100 GB बैकअप, कैमरा, एडिटर और वेब ऐप पाएँ, बिना कार्ड के।' },
-      { q: '100 GB भर जाए तो क्या होगा?', a: 'हर दोस्त को इनवाइट करने पर +10 GB, या अपना Google Drive, OneDrive, Dropbox, Box, S3 या NAS जोड़ें, नई फ़ोटो वहाँ जाएँगी। ज़्यादा Lens स्टोरेज वाले पेड प्लान आ रहे हैं।' },
+      { q: 'क्या सच में मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और पहले 3 महीने ओरिजिनल क्वालिटी में 40 GB बैकअप, फिर हमेशा 10 GB मुफ़्त पाएँ, साथ में कैमरा, एडिटर और वेब ऐप, बिना कार्ड के।' },
+      { q: 'पहले 3 महीने के बाद क्या होगा?', a: 'आपका मुफ़्त स्टोरेज 10 GB हो जाता है, साथ में इनवाइट से कमाई जगह। कुछ भी डिलीट नहीं होता। सीमा से ऊपर हों तो Lens स्टोरेज में नए बैकअप तब तक रुकते हैं जब तक आप दोस्तों को इनवाइट न करें, जगह ख़ाली न करें या अपना स्टोरेज न जोड़ें।' },
+      { q: 'मुफ़्त में अनलिमिटेड बैकअप कैसे पाएँ?', a: 'अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV स्टोरेज जोड़ें। नए ओरिजिनल वहाँ जाते हैं और Lens अपनी कोई सीमा नहीं लगाता; आपके प्रोवाइडर की जगह लागू होती है।' },
       { q: 'क्या फ़्री प्लान में क्वालिटी कम है?', a: 'नहीं। हर प्लान ठीक वही ओरिजिनल फ़ाइल रखता है। जगह बचाने के लिए कभी कुछ कंप्रेस नहीं होता।' },
-      { q: 'क्या बिना साइन इन आज़मा सकते हैं?', a: 'हाँ। Lens तुरंत 5 GB के साथ चलता है। 100 GB के लिए कभी भी साइन इन करें; आपकी फ़ोटो साथ आती हैं।' },
+      { q: 'क्या बिना साइन इन आज़मा सकते हैं?', a: 'हाँ। Lens तुरंत 5 GB के साथ चलता है। 40 GB वेलकम के लिए कभी भी साइन इन करें; आपकी फ़ोटो साथ आती हैं।' },
+      { q: 'पेड प्लान की कीमत क्या होगी?', a: 'ज़्यादा Lens स्टोरेज वाले पेड प्लान आ रहे हैं, और हम सबसे पहले यहीं बताएँगे। फ़्री प्लान मुफ़्त ही रहेगा।' },
     ],
   },
 }[lang];
@@ -107,6 +138,8 @@ const c = {
       <div class="pr-plan-main">
         <p class="pr-plan-name">{c.planName}</p>
         <p class="pr-size">{c.planSize}</p>
+        <p class="pr-sub">{c.planSub}</p>
+        <p class="pr-then">{c.planThen}</p>
         <p class="pr-note">{c.planNote}</p>
         <div class="actions">
           <a class="btn btn-primary" href={href(lang, 'download')}>{c.get}</a>
@@ -122,6 +155,14 @@ const c = {
     </div>
   </section>
 
+  <section class="kn-wide">
+    <h2 class="kn-display-md">{c.ladderTitle}</h2>
+    <div class="kn-big-stats pr-ladder">
+      {c.ladder.map(([v, l]) => <div><strong>{v}</strong><span>{l}</span></div>)}
+    </div>
+    <p class="kn-text kn-measure-sm pr-own">{c.ownText}</p>
+  </section>
+
   <section class="kn-band">
     <div class="kn-split">
       <div class="kn-frame pr-invite-photo">
@@ -135,6 +176,11 @@ const c = {
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="kn-wide">
+    <h2 class="kn-display-md kn-measure">{c.endsTitle}</h2>
+    <p class="kn-text kn-measure-sm">{c.endsText}</p>
   </section>
 
   <section class="kn-wide">

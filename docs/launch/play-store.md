@@ -21,13 +21,29 @@ on 2026-10-15 (see "Gaps fixed before review").
 
 ## Store listing (draft)
 
-- **App name (30):** Lens: Camera & Cloud Photos
-- **Short description (80):** A pro camera that backs up every photo and video, full quality, the moment you shoot.
+- **App name (30):** Lens: Camera & Photo Backup
+- **Short description (80):** Phone storage full? Photo backup in full quality, 40 GB free cloud storage.
 - **Full description:**
 
-  Lens is a camera and a photo library in one. Every photo and video you take is backed
-  up at full quality, to Lens storage or to your own Google Drive, Dropbox, OneDrive, Box,
-  S3 or WebDAV, while you keep shooting.
+  Phone storage full? Lost a phone full of memories? Photos ruined by WhatsApp compression?
+  Lens is a camera and a photo backup in one: every photo and video you take is backed up
+  in full quality, the moment you shoot, and your phone frees itself.
+
+  FREE CLOUD STORAGE, FULL QUALITY
+  • 40 GB free for your first 3 months, then 10 GB free forever
+  • +10 GB for every friend who joins and backs up (up to 10 friends)
+  • Unlimited and free when you back up to your own Google Drive, Dropbox, OneDrive,
+    Box, S3 or WebDAV
+  • Original quality, never compressed. Every upload is checked
+  • Phone storage full? Free up space safely: only photos already backed up leave your phone,
+    and sharp previews stay so your gallery works offline
+  • Nothing is deleted when the welcome ends: everything stays viewable and downloadable
+
+  SHARE WITHOUT COMPRESSION
+  • Share links send the original photo or video, even to people without Lens
+  • Links expire after 1, 7 or 30 days; anyone with the link, or only one person
+  • Wedding photos with a QR code: make an event album, guests scan it and add their photos
+    from the browser, no app needed
 
   CAMERA
   • Night mode, Portrait with adjustable blur, RAW and Ultra HDR photos
@@ -38,17 +54,19 @@ on 2026-10-15 (see "Gaps fixed before review").
 
   LIBRARY
   • Your photos grouped by date, place and people (face grouping stays on your phone)
-  • Share albums with a link or QR code, even with people who don't have Lens
-  • Event albums: guests add their photos from their own phone
   • Recaps: short films of your trips and days
-  • Free up space: remove photos from the phone once they're safely backed up
+  • Web app: your whole library on any computer
+  • Deleted something by mistake? Recover it for up to a year
 
   PRIVATE BY DESIGN
-  • No ads, no tracking, no selling your data
-  • Delete your account and everything in it from the app
+  • No ads, no selling your data, no training AI on your photos
+  • Stored encrypted with Amazon Web Services
+  • Download everything, or delete your account and everything in it, from the app
 
-  Guest use: 5 GB free. Sign in with email or Google: 100 GB.
-- **Category:** Photography. **Tags:** camera, photo backup, cloud storage.
+  Guests can try Lens with 5 GB, no account needed. Paid plans with more storage are coming;
+  the free plan stays free.
+- **Category:** Photography. **Tags:** camera, photo backup, cloud storage, photo sharing.
+- Storage facts: owner decision 2026-10-21 (40 GB welcome for 3 months, then 10 GB free; invites +10 GB; own storage no Lens limit). Never put a price here until paid plans exist.
 - **Contact:** website `https://lens.instagrowapp.com/contact/` (Play also requires an email address: owner to choose).
 
 ## Data safety answers

@@ -1,5 +1,7 @@
 ---
 // Home: the "Keynote" design (canvas board Keynote.dc.html, picked 2026-10-10).
+// Problem-first (2026-10-21): hero → the problems → how Lens solves them →
+// event albums, full-quality sharing → the camera → trust → specs → get it.
 // Cinematic video hero, one big idea per section, real photos. Media lives in
 // public/media (WebP + short silent MP4 loops with WebP posters).
 import Faq from './Faq.astro';
@@ -15,18 +17,54 @@ const site = Astro.site!.origin;
 
 const copy = {
   en: {
-    title: 'Lens: the pro camera with the cloud built in. 100 GB free, original quality.',
+    title: 'Lens: full-quality photo backup and a pro camera. 40 GB free.',
     description:
-      'Shoot endlessly, your phone never fills up. A pro camera with Night and Portrait, 4K video, and every photo backed up at original quality: 100 GB free, plus a web app.',
+      'Phone storage full? Lens backs up every photo and video at original quality, frees your phone, and shares without compression. 40 GB free to start, 10 GB free forever.',
     kicker: 'Lens',
-    h1: 'Every shot. Full quality. Forever.',
-    lead: 'The pro camera with the cloud built in. 100 GB free.',
+    h1: 'Phone full? Shoot everything.',
+    lead: 'Lens backs up every photo and video in full quality and frees your phone. 40 GB free to start.',
     get: 'Get Lens',
     web: 'Use it on the web',
-    statementDim: 'Shoot without limits.',
-    statementOn: 'Every photo and video is backed up at original quality the moment you take it.',
-    statementDim2: 'Then your phone frees itself.',
-    statementOn2: 'No compression. No full storage. No lost memories.',
+    statementDim: 'Storage full, again. A lost phone with years of photos. Wedding pictures crushed by group chats.',
+    statementOn: 'Lens keeps every original safe, frees your phone, and shares at full quality.',
+    problemsTitle: 'Sound familiar?',
+    problems: [
+      ['Phone storage full', 'Lens backs up every shot, then frees the space safely. Your gallery still works offline.', 'use-cases/phone-storage-full'],
+      ['Lost or broken phone', 'Everything backed up is waiting in your account. Sign in on a new phone and it’s all there.', 'features/free-cloud-backup'],
+      ['Blurry on WhatsApp', 'Chat apps compress. A Lens link sends the original file, even to people without Lens.', 'guides/send-full-quality-photos-whatsapp'],
+      ['Everyone’s event photos', 'One QR code collects every guest’s photos in one album. No app needed.', 'guides/collect-wedding-photos-qr-code'],
+      ['Google storage full', '40 GB free to start, just for your photos, and never compressed.', 'compare/google-photos'],
+    ],
+    problemsMore: 'Read more',
+    backupTitle: 'Backed up before you lower your phone.',
+    backupText: 'Every original is uploaded, verified and safe. Lens then clears full-size copies from your phone and keeps sharp previews, so your gallery still works offline.',
+    backupStats: [
+      ['40 GB', 'free for your first 3 months'],
+      ['10 GB', 'free forever after that'],
+      ['+10 GB', 'for every friend who joins'],
+      ['No limit', 'with your own Drive or Dropbox'],
+    ],
+    eventKicker: 'Event albums',
+    eventTitle: 'Everyone’s wedding photos.',
+    eventTitleOn: 'One QR code.',
+    eventText: 'Make an event album and show its QR code. Guests scan it with any phone camera and add their photos from the browser, no app needed. Everyone sees everything, in the original quality.',
+    eventSteps: ['Make an album, tap Invite with QR', 'Guests scan and add photos', 'Turn the link off when you’re done'],
+    eventChip: 'Scan to add your photos',
+    eventAlt: 'A crowd at an evening concert, lit by stage lights',
+    eventLink: 'How event albums work',
+    shareTitle: 'Send the original.',
+    shareTitleOn: 'Not a copy.',
+    shareText: 'WhatsApp and other chat apps shrink your photos, even in HD. A Lens share link sends the exact file your camera made. Friends open it in any browser and save the original.',
+    shareStats: [
+      ['Original', 'file, never re-compressed'],
+      ['1 · 7 · 30', 'days, you choose'],
+      ['No app', 'needed to open it'],
+    ],
+    shareChat: 'Chat app',
+    shareLens: 'Lens · original',
+    shareAlt: 'The same photo twice: compressed by a chat app, and the sharp original',
+    shareLink: 'Send full-quality photos on WhatsApp',
+    cameraTitle: 'And a camera worth backing up.',
     nightTitle: 'Night mode.',
     nightText: 'Several exposures merged into one clean, detailed shot.',
     nightTextOn: 'Even when it’s nearly dark.',
@@ -43,47 +81,87 @@ const copy = {
       ['HDR', 'where supported'],
       ['0 s', 'wait to upload'],
     ],
-    backupTitle: 'Backed up before you lower your phone.',
-    backupText: 'Every original is uploaded, verified and safe. Lens then clears full-size copies from your phone and keeps sharp previews, so your gallery still works offline.',
-    backupStats: [
-      ['100 GB', 'free when you sign in'],
-      ['Original', 'quality, checksum-verified'],
-      ['+10 GB', 'for every friend you invite'],
-    ],
     webTitle: 'Now on the big screen.',
     webText: 'Open lens.instagrowapp.com, scan the code with your phone and your whole library is there. Upload from your computer and it syncs back to your phone.',
     webNav: ['Library', 'Shared', 'Trash'],
+    trustTitle: 'Your memories, in safe hands.',
+    trust: [
+      ['Originals, untouched', 'The exact file your camera made, checked on arrival, never re-compressed.'],
+      ['Yours to take', 'Download everything, keep it in your own storage, or delete your account any time.'],
+      ['Nothing lost', 'Deleted by mistake? Recover it for a year. When the welcome ends, nothing is deleted.'],
+      ['No ads. Ever.', 'We don’t sell your data and we don’t train AI on your photos.'],
+    ],
+    trustLink: 'Why you can trust Lens',
     specsTitle: 'Tech specs',
     specs: [
       ['Camera', ['Automatic Night in low light', 'Portrait with adjustable blur', 'Pro mode: ISO, shutter, focus, white balance', 'RAW and Ultra HDR, 13 looks']],
       ['Video', ['Up to 4K at 60 fps', 'HDR and stabilization', 'Upload while recording', 'Streaming up to 4K']],
-      ['Storage', ['100 GB free when you sign in', 'Original quality, verified', 'Google Drive, OneDrive, Dropbox, Box, S3, NAS', 'Trash 30 days, Archive 1 year']],
+      ['Storage', ['40 GB free for 3 months, then 10 GB free', 'Original quality, verified', 'Google Drive, OneDrive, Dropbox, Box, S3, NAS', 'Trash 30 days, Archive 1 year']],
+      ['Sharing', ['Share links: 1, 7 or 30 days', 'Event albums with a QR code', 'Send to friends in Lens', 'Recaps and People']],
       ['Platforms', ['Android 7 and later', 'Web app in any browser', 'iPhone coming soon']],
     ],
     finale: 'Never delete a memory again.',
     finaleGet: 'Get Lens free',
     faqTitle: 'Questions',
     faq: [
-      { q: 'Is Lens free?', a: 'Yes. Sign in with your email or Google account and you get 100 GB of backup free. Without signing in you can try Lens with 5 GB. Paid plans with more storage will come later.' },
+      { q: 'Is Lens free?', a: 'Yes. Sign in with your email or Google account and you get 40 GB of backup free for your first 3 months, then 10 GB free forever, always at original quality. Without signing in you can try Lens with 5 GB. Paid plans with more storage will come later; the free plan stays free.' },
+      { q: 'What happens when the 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays viewable and downloadable. If you are above the free limit, only new backups to Lens storage pause, until you invite friends, free space, or switch to your own storage. Lens reminds you 14, 3 and 1 days before.' },
+      { q: 'Can I back up without a limit?', a: 'Yes, for free: connect your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV storage and your originals go there. Lens keeps only small previews.' },
       { q: 'Will my photos lose quality?', a: 'No. Lens stores the exact original file. Previews are extra, for speed. When you open, share or save a photo you get the original.' },
+      { q: 'Do my guests need Lens to add photos to an event album?', a: 'No. They scan the QR code with their phone camera and add photos from the browser. Videos need the app.' },
       { q: 'Which phones does Lens work on?', a: 'Android 7 and newer, from budget phones to flagships. Lens adapts to what your phone’s camera can do. An iPhone version is built and coming later.' },
-      { q: 'Can I see my photos on a computer?', a: 'Yes. Open this website, scan the QR code with your phone, and your library is on your computer, in sync with your phone.' },
-      { q: 'Where are my photos stored?', a: 'With Amazon Web Services, encrypted at rest. Or in your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS if you connect one.' },
+      { q: 'Where are my photos stored?', a: 'With Amazon Web Services in Mumbai (India), encrypted at rest. Or in your own Google Drive, OneDrive, Dropbox, Box, S3 or NAS if you connect one.' },
     ],
   },
   hi: {
-    title: 'Lens: क्लाउड वाला प्रो कैमरा। 100 GB मुफ़्त, ओरिजिनल क्वालिटी।',
+    title: 'Lens: फ़ुल क्वालिटी फ़ोटो बैकअप और प्रो कैमरा। 40 GB मुफ़्त।',
     description:
-      'जितनी चाहें फ़ोटो लें, फ़ोन कभी फ़ुल नहीं होगा। नाइट और पोर्ट्रेट वाला प्रो कैमरा, 4K वीडियो, और हर फ़ोटो का ओरिजिनल क्वालिटी में बैकअप: 100 GB मुफ़्त, साथ में वेब ऐप।',
+      'फ़ोन स्टोरेज फ़ुल? Lens हर फ़ोटो और वीडियो का ओरिजिनल क्वालिटी में बैकअप लेता है, फ़ोन ख़ाली करता है, और बिना कंप्रेशन शेयर करता है। शुरुआत में 40 GB मुफ़्त, हमेशा 10 GB मुफ़्त।',
     kicker: 'Lens',
-    h1: 'हर शॉट। पूरी क्वालिटी। हमेशा।',
-    lead: 'क्लाउड के साथ बना प्रो कैमरा। 100 GB मुफ़्त।',
+    h1: 'फ़ोन फ़ुल? सब कुछ शूट करें।',
+    lead: 'Lens हर फ़ोटो और वीडियो का पूरी क्वालिटी में बैकअप लेता है और फ़ोन ख़ाली करता है। शुरुआत में 40 GB मुफ़्त।',
     get: 'Lens पाएँ',
     web: 'वेब पर इस्तेमाल करें',
-    statementDim: 'बिना रुके फ़ोटो लें।',
-    statementOn: 'हर फ़ोटो और वीडियो का लेते ही ओरिजिनल क्वालिटी में बैकअप होता है।',
-    statementDim2: 'फिर फ़ोन ख़ुद ख़ाली हो जाता है।',
-    statementOn2: 'कोई कंप्रेशन नहीं। फ़ुल स्टोरेज नहीं। कोई याद नहीं खोती।',
+    statementDim: 'फिर से स्टोरेज फ़ुल। सालों की फ़ोटो वाला खोया फ़ोन। ग्रुप चैट में धुँधली हुई शादी की फ़ोटो।',
+    statementOn: 'Lens हर ओरिजिनल सुरक्षित रखता है, फ़ोन ख़ाली करता है, और पूरी क्वालिटी में शेयर करता है।',
+    problemsTitle: 'जाना-पहचाना लगता है?',
+    problems: [
+      ['फ़ोन स्टोरेज फ़ुल', 'Lens हर शॉट का बैकअप लेता है, फिर सुरक्षित तरीके से जगह ख़ाली करता है। गैलरी ऑफ़लाइन भी चलती है।', 'use-cases/phone-storage-full'],
+      ['फ़ोन खोया या टूटा', 'जो बैकअप हो चुका है वह आपके अकाउंट में इंतज़ार कर रहा है। नए फ़ोन पर साइन इन करें और सब वहाँ है।', 'features/free-cloud-backup'],
+      ['WhatsApp पर धुँधली फ़ोटो', 'चैट ऐप कंप्रेस करते हैं। Lens लिंक ओरिजिनल फ़ाइल भेजता है, उन्हें भी जिनके पास Lens नहीं।', 'guides/send-full-quality-photos-whatsapp'],
+      ['इवेंट की सबकी फ़ोटो', 'एक QR कोड हर मेहमान की फ़ोटो एक एल्बम में इकट्ठा करता है। ऐप की ज़रूरत नहीं।', 'guides/collect-wedding-photos-qr-code'],
+      ['Google स्टोरेज फ़ुल', 'शुरुआत में 40 GB मुफ़्त, सिर्फ़ आपकी फ़ोटो के लिए, और कभी कंप्रेस नहीं।', 'compare/google-photos'],
+    ],
+    problemsMore: 'और पढ़ें',
+    backupTitle: 'फ़ोन नीचे करने से पहले बैकअप।',
+    backupText: 'हर ओरिजिनल अपलोड, जाँचा और सुरक्षित। फिर Lens फ़ोन से बड़ी फ़ाइलें हटाता है और साफ़ प्रीव्यू रखता है, ताकि गैलरी ऑफ़लाइन भी चले।',
+    backupStats: [
+      ['40 GB', 'पहले 3 महीने मुफ़्त'],
+      ['10 GB', 'उसके बाद हमेशा मुफ़्त'],
+      ['+10 GB', 'जुड़ने वाले हर दोस्त पर'],
+      ['कोई सीमा नहीं', 'अपने Drive या Dropbox के साथ'],
+    ],
+    eventKicker: 'इवेंट एल्बम',
+    eventTitle: 'शादी की सबकी फ़ोटो।',
+    eventTitleOn: 'एक QR कोड।',
+    eventText: 'इवेंट एल्बम बनाएँ और उसका QR कोड दिखाएँ। मेहमान किसी भी फ़ोन कैमरा से स्कैन करके ब्राउज़र से अपनी फ़ोटो जोड़ते हैं, ऐप की ज़रूरत नहीं। सब सब कुछ देखते हैं, ओरिजिनल क्वालिटी में।',
+    eventSteps: ['एल्बम बनाएँ, Invite with QR दबाएँ', 'मेहमान स्कैन करके फ़ोटो जोड़ें', 'काम पूरा होने पर लिंक बंद करें'],
+    eventChip: 'अपनी फ़ोटो जोड़ने के लिए स्कैन करें',
+    eventAlt: 'शाम के कॉन्सर्ट में भीड़, स्टेज लाइटों से रोशन',
+    eventLink: 'इवेंट एल्बम कैसे काम करते हैं',
+    shareTitle: 'ओरिजिनल भेजें।',
+    shareTitleOn: 'कॉपी नहीं।',
+    shareText: 'WhatsApp और दूसरे चैट ऐप आपकी फ़ोटो छोटी कर देते हैं, HD में भी। Lens शेयर लिंक वही फ़ाइल भेजता है जो आपके कैमरे ने बनाई। दोस्त उसे किसी भी ब्राउज़र में खोलकर ओरिजिनल सेव करते हैं।',
+    shareStats: [
+      ['ओरिजिनल', 'फ़ाइल, कभी दोबारा कंप्रेस नहीं'],
+      ['1 · 7 · 30', 'दिन, आप चुनें'],
+      ['ऐप नहीं', 'खोलने के लिए चाहिए'],
+    ],
+    shareChat: 'चैट ऐप',
+    shareLens: 'Lens · ओरिजिनल',
+    shareAlt: 'एक ही फ़ोटो दो बार: चैट ऐप से कंप्रेस हुई, और साफ़ ओरिजिनल',
+    shareLink: 'WhatsApp पर फ़ुल क्वालिटी फ़ोटो भेजें',
+    cameraTitle: 'और ऐसा कैमरा जिसका बैकअप बनता है।',
     nightTitle: 'नाइट मोड।',
     nightText: 'कई एक्सपोज़र मिलकर एक साफ़, बारीक फ़ोटो बनाते हैं।',
     nightTextOn: 'लगभग अँधेरे में भी।',
@@ -100,32 +178,36 @@ const copy = {
       ['HDR', 'जहाँ सपोर्ट हो'],
       ['0 s', 'अपलोड का इंतज़ार'],
     ],
-    backupTitle: 'फ़ोन नीचे करने से पहले बैकअप।',
-    backupText: 'हर ओरिजिनल अपलोड, जाँचा और सुरक्षित। फिर Lens फ़ोन से बड़ी फ़ाइलें हटाता है और साफ़ प्रीव्यू रखता है, ताकि गैलरी ऑफ़लाइन भी चले।',
-    backupStats: [
-      ['100 GB', 'साइन इन पर मुफ़्त'],
-      ['ओरिजिनल', 'क्वालिटी, जाँची हुई'],
-      ['+10 GB', 'हर बुलाए दोस्त पर'],
-    ],
     webTitle: 'अब बड़ी स्क्रीन पर।',
     webText: 'lens.instagrowapp.com खोलें, फ़ोन से कोड स्कैन करें और पूरी लाइब्रेरी वहाँ है। कंप्यूटर से अपलोड करें, फ़ोन पर सिंक हो जाता है।',
     webNav: ['लाइब्रेरी', 'शेयर किए', 'ट्रैश'],
+    trustTitle: 'आपकी यादें, सुरक्षित हाथों में।',
+    trust: [
+      ['ओरिजिनल, जैसे थे वैसे', 'वही फ़ाइल जो आपके कैमरे ने बनाई, पहुँचते ही जाँची हुई, कभी दोबारा कंप्रेस नहीं।'],
+      ['आपका, जब चाहें ले जाएँ', 'सब कुछ डाउनलोड करें, अपने स्टोरेज में रखें, या कभी भी अकाउंट डिलीट करें।'],
+      ['कुछ नहीं खोता', 'ग़लती से डिलीट हो गया? एक साल तक वापस लाएँ। वेलकम ख़त्म होने पर कुछ डिलीट नहीं होता।'],
+      ['कोई विज्ञापन नहीं। कभी नहीं।', 'हम आपका डेटा नहीं बेचते और आपकी फ़ोटो पर AI ट्रेन नहीं करते।'],
+    ],
+    trustLink: 'Lens पर भरोसा क्यों करें',
     specsTitle: 'तकनीकी जानकारी',
     specs: [
       ['कैमरा', ['कम रोशनी में अपने-आप नाइट', 'बदलने लायक ब्लर वाला पोर्ट्रेट', 'प्रो मोड: ISO, शटर, फ़ोकस, व्हाइट बैलेंस', 'RAW और Ultra HDR, 13 लुक्स']],
       ['वीडियो', ['60 fps पर 4K तक', 'HDR और स्टेबिलाइज़ेशन', 'रिकॉर्ड करते हुए अपलोड', '4K तक स्ट्रीमिंग']],
-      ['स्टोरेज', ['साइन इन पर 100 GB मुफ़्त', 'ओरिजिनल क्वालिटी, जाँची हुई', 'Google Drive, OneDrive, Dropbox, Box, S3, NAS', 'ट्रैश 30 दिन, आर्काइव 1 साल']],
+      ['स्टोरेज', ['3 महीने 40 GB मुफ़्त, फिर 10 GB मुफ़्त', 'ओरिजिनल क्वालिटी, जाँची हुई', 'Google Drive, OneDrive, Dropbox, Box, S3, NAS', 'ट्रैश 30 दिन, आर्काइव 1 साल']],
+      ['शेयरिंग', ['शेयर लिंक: 1, 7 या 30 दिन', 'QR कोड वाले इवेंट एल्बम', 'Lens में दोस्तों को भेजें', 'रीकैप और People']],
       ['प्लेटफ़ॉर्म', ['Android 7 और नए', 'किसी भी ब्राउज़र में वेब ऐप', 'iPhone जल्द']],
     ],
     finale: 'अब कोई याद डिलीट न करें।',
     finaleGet: 'Lens मुफ़्त पाएँ',
     faqTitle: 'सवाल',
     faq: [
-      { q: 'क्या Lens मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और 100 GB बैकअप मुफ़्त पाएँ। बिना साइन इन के 5 GB के साथ आज़माएँ। ज़्यादा स्टोरेज वाले पेड प्लान बाद में आएँगे।' },
+      { q: 'क्या Lens मुफ़्त है?', a: 'हाँ। ईमेल या Google अकाउंट से साइन इन करें और पहले 3 महीने 40 GB बैकअप मुफ़्त, फिर हमेशा 10 GB मुफ़्त पाएँ, हमेशा ओरिजिनल क्वालिटी में। बिना साइन इन के 5 GB के साथ आज़माएँ। ज़्यादा स्टोरेज वाले पेड प्लान बाद में आएँगे; फ़्री प्लान मुफ़्त ही रहेगा।' },
+      { q: '40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर हों तो सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। Lens 14, 3 और 1 दिन पहले याद दिलाता है।' },
+      { q: 'क्या बिना सीमा के बैकअप कर सकते हैं?', a: 'हाँ, मुफ़्त: अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV स्टोरेज जोड़ें और आपके ओरिजिनल वहाँ जाएँगे। Lens सिर्फ़ छोटे प्रीव्यू रखता है।' },
       { q: 'क्या मेरी फ़ोटो की क्वालिटी कम होगी?', a: 'नहीं। Lens ठीक वही ओरिजिनल फ़ाइल रखता है। प्रीव्यू सिर्फ़ तेज़ी के लिए हैं। फ़ोटो खोलने, शेयर या सेव करने पर ओरिजिनल मिलता है।' },
+      { q: 'क्या इवेंट एल्बम में फ़ोटो जोड़ने के लिए मेहमानों को Lens चाहिए?', a: 'नहीं। वे फ़ोन कैमरा से QR कोड स्कैन करके ब्राउज़र से फ़ोटो जोड़ते हैं। वीडियो के लिए ऐप चाहिए।' },
       { q: 'Lens किन फ़ोन पर चलता है?', a: 'Android 7 और नए, बजट फ़ोन से फ़्लैगशिप तक। Lens आपके फ़ोन के कैमरे के हिसाब से ढल जाता है। iPhone वर्शन बना हुआ है और बाद में आएगा।' },
-      { q: 'क्या कंप्यूटर पर फ़ोटो देख सकते हैं?', a: 'हाँ। यह वेबसाइट खोलें, फ़ोन से QR कोड स्कैन करें, और लाइब्रेरी कंप्यूटर पर, फ़ोन के साथ सिंक।' },
-      { q: 'मेरी फ़ोटो कहाँ स्टोर होती हैं?', a: 'Amazon Web Services में, एन्क्रिप्टेड। या आपके अपने Google Drive, OneDrive, Dropbox, Box, S3 या NAS में, अगर आप जोड़ते हैं।' },
+      { q: 'मेरी फ़ोटो कहाँ स्टोर होती हैं?', a: 'Amazon Web Services के मुंबई (भारत) रीजन में, एन्क्रिप्टेड। या आपके अपने Google Drive, OneDrive, Dropbox, Box, S3 या NAS में, अगर आप जोड़ते हैं।' },
     ],
   },
 }[lang];
@@ -169,8 +251,83 @@ const appSchema = {
   <section class="kn-statement">
     <p>
       {copy.statementDim} <span>{copy.statementOn}</span>
-      {copy.statementDim2} <span>{copy.statementOn2}</span>
     </p>
+  </section>
+
+  <section class="kn-wide hp-problems">
+    <h2 class="kn-display-md">{copy.problemsTitle}</h2>
+    <div class="grid">
+      {
+        copy.problems.map(([h, p, link]) => (
+          <a class="card hp-problem" href={href(lang, link)}>
+            <h3>{h}</h3>
+            <p>{p}</p>
+            <span class="hp-more">{copy.problemsMore} ›</span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="kn-band">
+    <div class="kn-wide kn-flush">
+      <h2 class="kn-display-md kn-measure">{copy.backupTitle}</h2>
+      <p class="kn-text kn-measure-sm">{copy.backupText}</p>
+      <div class="kn-mosaic">
+        {mosaic.map((m) => <img src={`/media/${m}.webp`} alt="" loading="lazy" decoding="async" />)}
+      </div>
+      <div class="kn-big-stats">
+        {copy.backupStats.map(([v, l]) => <div><strong>{v}</strong><span>{l}</span></div>)}
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-band hp-plain">
+    <div class="kn-split">
+      <div class="kn-frame hp-event">
+        <img src="/media/feat-wedding-and-event-photos.webp" alt={copy.eventAlt} width="1200" height="900" loading="lazy" decoding="async" />
+        <div class="hp-qr-chip">
+          <span class="hp-qr" aria-hidden="true"></span>
+          <span>{copy.eventChip}</span>
+        </div>
+      </div>
+      <div class="kn-split-copy">
+        <p class="kn-kicker">{copy.eventKicker}</p>
+        <h2 class="kn-display-md">{copy.eventTitle}<br /><span>{copy.eventTitleOn}</span></h2>
+        <p>{copy.eventText}</p>
+        <ol class="hp-steps">
+          {copy.eventSteps.map((st) => <li>{st}</li>)}
+        </ol>
+        <a class="hp-link" href={href(lang, 'guides/collect-wedding-photos-qr-code')}>{copy.eventLink} ›</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-band">
+    <div class="kn-split">
+      <div class="kn-split-copy">
+        <h2 class="kn-display-md">{copy.shareTitle}<br /><span>{copy.shareTitleOn}</span></h2>
+        <p>{copy.shareText}</p>
+        <div class="kn-stats">
+          {copy.shareStats.map(([v, l]) => <div><strong>{v}</strong><span>{l}</span></div>)}
+        </div>
+        <a class="hp-link hp-link-gap" href={href(lang, 'guides/send-full-quality-photos-whatsapp')}>{copy.shareLink} ›</a>
+      </div>
+      <div class="hp-compare" role="img" aria-label={copy.shareAlt}>
+        <div class="kn-frame hp-compare-shot">
+          <img class="hp-crushed" src="/media/mosaic-3.webp" alt="" width="600" height="813" loading="lazy" decoding="async" />
+          <span class="hp-tag">{copy.shareChat}</span>
+        </div>
+        <div class="kn-frame hp-compare-shot">
+          <img src="/media/mosaic-3.webp" alt="" width="600" height="813" loading="lazy" decoding="async" />
+          <span class="hp-tag hp-tag-on">{copy.shareLens}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kn-statement hp-camera-intro">
+    <p><span>{copy.cameraTitle}</span></p>
   </section>
 
   <section class="kn-wide">
@@ -218,19 +375,6 @@ const appSchema = {
     </div>
   </section>
 
-  <section class="kn-band">
-    <div class="kn-wide kn-flush">
-      <h2 class="kn-display-md kn-measure">{copy.backupTitle}</h2>
-      <p class="kn-text kn-measure-sm">{copy.backupText}</p>
-      <div class="kn-mosaic">
-        {mosaic.map((m) => <img src={`/media/${m}.webp`} alt="" loading="lazy" decoding="async" />)}
-      </div>
-      <div class="kn-big-stats">
-        {copy.backupStats.map(([v, l]) => <div><strong>{v}</strong><span>{l}</span></div>)}
-      </div>
-    </div>
-  </section>
-
   <section class="kn-wide kn-centered">
     <h2 class="kn-display-md">{copy.webTitle}</h2>
     <p class="kn-text kn-measure-sm kn-auto">{copy.webText}</p>
@@ -247,6 +391,23 @@ const appSchema = {
         </div>
       </div>
       <div class="kn-laptop-base"></div>
+    </div>
+  </section>
+
+  <section class="kn-band">
+    <div class="kn-wide kn-flush">
+      <h2 class="kn-display-md kn-measure">{copy.trustTitle}</h2>
+      <div class="kn-spec-grid hp-trust">
+        {
+          copy.trust.map(([h, p]) => (
+            <div>
+              <h3>{h}</h3>
+              <p>{p}</p>
+            </div>
+          ))
+        }
+      </div>
+      <a class="hp-link hp-link-gap" href={href(lang, 'trust')}>{copy.trustLink} ›</a>
     </div>
   </section>
 
