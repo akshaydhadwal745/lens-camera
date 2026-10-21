@@ -1,0 +1,117 @@
+---
+// /qr-card/?u=<event album link>&n=<album name>: a printable card for tables and entrances at
+// weddings, trips and parties. Guests scan it with any phone camera, see the album and add their
+// photos from the browser (no app needed). Opened from the app (event album → Print QR card).
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout lang="en" path="qr-card" title="Event QR card" description="Print a QR code so everyone can add their photos to your event album." noindex>
+  <section class="qc-wrap">
+    <div class="qc-tools">
+      <p class="muted">Print this card (A6 or A5) and put it on tables or at the entrance. Guests scan it with their phone camera.</p>
+      <button class="btn btn-primary" id="qc-print" type="button">Print</button>
+    </div>
+    <article class="qc-card" id="qc-card" hidden>
+      <p class="qc-kicker">Our photos, all in one place</p>
+      <h1 class="qc-name" id="qc-name">Our event</h1>
+      <div class="qc-qr" id="qc-qr" role="img" aria-label="QR code for the event album"></div>
+      <ol class="qc-steps">
+        <li>Open your phone camera and point it at the code</li>
+        <li>Tap the link: see everyone’s photos</li>
+        <li>Add yours, in full quality. No app needed</li>
+      </ol>
+      <p class="qc-foot">Shared with Lens · lens.instagrowapp.com</p>
+    </article>
+    <p class="status error" id="qc-error" hidden>This card link is incomplete. Open it again from the event album in the Lens app.</p>
+  </section>
+  <script>
+    import '../../scripts/qr-card.ts';
+  </script>
+</Layout>
+
+<style>
+  .qc-wrap {
+    width: min(100% - 2.5rem, 760px);
+    margin: 0 auto;
+    padding: 3rem 0 4rem;
+  }
+  .qc-tools {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .qc-tools p {
+    margin: 0;
+    max-width: 30rem;
+  }
+  .qc-card {
+    background: #fff;
+    color: #111;
+    border-radius: 28px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+  .qc-kicker {
+    margin: 0 0 0.4rem;
+    color: #555;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .qc-name {
+    color: #111;
+    font-size: clamp(1.8rem, 1.3rem + 2vw, 2.4rem);
+    margin: 0 0 1.4rem;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+  }
+  .qc-qr {
+    width: min(100%, 280px);
+    margin: 0 auto 1.5rem;
+  }
+  .qc-qr svg {
+    width: 100%;
+    height: auto;
+  }
+  .qc-steps {
+    text-align: left;
+    margin: 0 auto 1.4rem;
+    padding-left: 1.3rem;
+    max-width: 22rem;
+    color: #222;
+    line-height: 1.55;
+  }
+  .qc-foot {
+    margin: 0;
+    color: #777;
+    font-size: 0.85rem;
+  }
+  @media print {
+    @page {
+      size: A6;
+      margin: 8mm;
+    }
+    :global(body) {
+      background: #fff !important;
+    }
+    :global(.site-header),
+    :global(.site-footer),
+    :global(.skip),
+    .qc-tools {
+      display: none !important;
+    }
+    .qc-wrap {
+      padding: 0;
+      width: 100%;
+    }
+    .qc-card {
+      border-radius: 0;
+      padding: 0;
+      max-width: none;
+    }
+  }
+</style>

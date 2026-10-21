@@ -3,7 +3,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { QrCode } from '@/components/QrCode';
@@ -77,6 +77,16 @@ export default function EventCodeScreen() {
             <Text style={styles.buttonText}>Copy</Text>
           </Pressable>
         </View>
+        <Pressable
+          style={[styles.button, { alignSelf: 'stretch', marginTop: 10 }]}
+          onPress={() => {
+            // A card to print for tables and entrances (website /qr-card/, same site as the link).
+            const card = `${new URL(url).origin}/qr-card/?u=${encodeURIComponent(url)}&n=${encodeURIComponent(params.name ?? '')}`;
+            void Linking.openURL(card);
+          }}
+        >
+          <Text style={styles.buttonText}>Print a QR card</Text>
+        </Pressable>
         <Pressable onPress={() => void turnOff()} disabled={busy} style={styles.off}>
           <Text style={styles.offText}>Turn the link off</Text>
         </Pressable>

@@ -5,5 +5,6 @@ Disallow: /api/
 Disallow: /signin/
 Disallow: /hi/signin/
 Disallow: /l/
+Disallow: /qr-card/
 
 Sitemap: https://lens.instagrowapp.com/sitemap-index.xml
