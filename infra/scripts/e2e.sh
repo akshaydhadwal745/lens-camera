@@ -668,6 +668,24 @@ CST=$(capi GET /notifications | j ".campaigns.find(c=>c.id==='$CID')")
 WU=$(call GET /me "$TA" | j .welcomeUntil)
 aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$(( WU - 13 * DAY - DAY / 2 )),\"onlyOwner\":\"$IA\"}}" "$TMP/l.json" >/dev/null
 [[ $(aws dynamodb get-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IA\"},\"sk\":{\"S\":\"NL#welcome14-$WU\"}}" --query 'Item.at.N' --output text) =~ ^[0-9]+$ ]] && ok "welcome ending: the 14-day notice is decided once"
+# Paid plans (console tools until Razorpay is live): grant → grace → back to free/welcome.
+[[ $(capi POST "/users/$IA/plan" -d '{"action":"grant","planId":"plus50","months":1}' | j .plan.status) == active && $(call GET /me "$TA" | j .plan) == plus50 && $(call GET /me "$TA" | j .quotaBytes) == $((50*GB)) ]] && ok "a paid plan gives its 50 GB"
+[[ $(capi POST "/users/$IA/plan" -d '{"action":"payment-failed"}' | j .plan.status) == grace && $(call GET /me "$TA" | j .plan) == grace && $(call GET /me "$TA" | j .quotaBytes) == $((50*GB)) ]] && ok "failed payment: 7-day grace keeps 50 GB"
+[[ $(capi POST "/users/$IA/plan" -d '{"action":"end"}' | j .plan.status) == lapsed && $(call GET /me "$TA" | j .quotaBytes) == $((40*GB)) ]] && ok "plan ended: back to the welcome/free storage, nothing deleted"
+# Over the limit for 5 months: what's above it is deleted, most recent first, and nothing more.
+OL=$(newphone "$(openssl rand -hex 32)"); TOL=$(echo "$OL" | j .token); IOL=$(echo "$OL" | j .id); signin "$TOL" "ol$(date +%s%N)@e2e.lens.invalid" >/dev/null
+NOWMS2=$(date +%s%3N)
+olitem() { aws dynamodb put-item --profile lens --region ap-south-1 --table-name Lens --item "{\"pk\":{\"S\":\"D#$IOL\"},\"sk\":{\"S\":\"M#ol$1\"},\"id\":{\"S\":\"ol$1\"},\"key\":{\"S\":\"m/$IOL/ol$1.jpg\"},\"status\":{\"S\":\"ready\"},\"kind\":{\"S\":\"photo\"},\"size\":{\"N\":\"$GB\"},\"createdAt\":{\"N\":\"$2\"},\"uploadedAt\":{\"N\":\"$2\"}}" >/dev/null; }
+olitem 1 $((NOWMS2 - 3000)); olitem 2 $((NOWMS2 - 2000)); olitem 3 $((NOWMS2 - 1000))
+aws dynamodb update-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IOL\"},\"sk\":{\"S\":\"PROFILE\"}}" --update-expression 'SET usedBytes = :u, welcomeUntil = :w' --expression-attribute-values "{\":u\":{\"N\":\"$((11*GB))\"},\":w\":{\"N\":\"$((NOWMS2 - 30*DAY))\"}}" >/dev/null
+aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$NOWMS2,\"onlyOwner\":\"$IOL\"}}" "$TMP/ol.json" >/dev/null
+[[ $(call GET /me "$TOL" | j '.overLimit && .overLimit.deletionAt - .overLimit.since === 150*86400000') == true ]] && ok "over the limit: the 5-month clock starts"
+[[ $(call GET /storage "$TOL" | j '.lens.overLimit.since > 0') == true ]] && ok "storage screen gets the over-limit date"
+aws dynamodb update-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IOL\"},\"sk\":{\"S\":\"PROFILE\"}}" --update-expression 'SET overLimitSince = :s' --expression-attribute-values "{\":s\":{\"N\":\"$((NOWMS2 - 151*DAY))\"}}" >/dev/null
+aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$NOWMS2,\"onlyOwner\":\"$IOL\"}}" "$TMP/ol.json" >/dev/null
+olhas() { aws dynamodb get-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IOL\"},\"sk\":{\"S\":\"M#ol$1\"}}" --query 'Item.id.S' --output text; }
+[[ $(olhas 3) == None && $(olhas 2) == ol2 && $(olhas 1) == ol1 ]] && ok "after 5 months: only what's above the limit is deleted, most recent first"
+[[ $(call GET /me "$TOL" | j .usedBytes) == $((10*GB)) ]] && ok "… and the account is exactly within its 10 GB again"
 # Screenshots attached to feedback: own uploads only, shown only in the console (and audited).
 printf '\xff\xd8\xff\xe0e2e-screenshot' > "$TMP/shot.jpg"; SHOTSIZE=$(stat -c %s "$TMP/shot.jpg")
 SLOT=$(call POST /feedback/attachments "$TA" -d "{\"contentType\":\"image/jpeg\",\"size\":$SHOTSIZE}")

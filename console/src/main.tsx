@@ -47,7 +47,7 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
 
   let page: React.ReactNode;
   if (pathname === '/account') page = <Account />;
-  else if (pathname.startsWith('/users/') && me.permissions.includes('users')) page = <UserDetail id={decodeURIComponent(pathname.slice(7))} />;
+  else if (pathname.startsWith('/users/') && me.permissions.includes('users')) page = <UserDetail id={decodeURIComponent(pathname.slice(7))} canWrite={me.permissions.includes('users.write')} />;
   else if (!active) page = allowed[0] ? <NotFound to={allowed[0].path} /> : <NoAccess />;
   else {
     page = {

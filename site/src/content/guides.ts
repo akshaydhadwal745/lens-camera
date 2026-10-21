@@ -194,7 +194,7 @@ export const guidePages: GuidePage[] = [
         faq: [
           { q: 'Will my photos be deleted when Google storage is full?', a: 'Google stops backing up new photos when you are over the limit. Check Google’s current policy for accounts that stay over the limit for a long time.' },
           { q: 'Does Lens use my Google storage?', a: 'Not unless you choose to connect your Google Drive. By default, Lens stores your photos in its own storage, separate from Google.' },
-          { q: 'What happens when the Lens 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays viewable and downloadable. Only new backups to Lens storage pause above the free 10 GB, until you invite friends, free space, or switch to your own storage. You get reminders 14, 3 and 1 days before.' },
+          { q: 'What happens when the Lens 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays viewable and downloadable. Only new backups to Lens storage pause above the free 10 GB, until you invite friends, free space, or switch to your own storage. You get reminders 14, 3 and 1 days before. If you stay above the limit for 5 months, what is above it is deleted (most recent first), with reminders 90, 30, 7 and 1 days before.' },
         ],
       },
       hi: {
@@ -239,7 +239,7 @@ export const guidePages: GuidePage[] = [
         faq: [
           { q: 'Google स्टोरेज फ़ुल होने पर क्या मेरी फ़ोटो डिलीट हो जाएँगी?', a: 'सीमा से ऊपर होने पर Google नई फ़ोटो का बैकअप रोक देता है। लंबे समय तक सीमा से ऊपर रहने वाले अकाउंट के लिए Google की मौजूदा पॉलिसी देखें।' },
           { q: 'क्या Lens मेरा Google स्टोरेज इस्तेमाल करता है?', a: 'नहीं, जब तक आप अपना Google Drive न जोड़ें। डिफ़ॉल्ट रूप से Lens आपकी फ़ोटो अपने स्टोरेज में रखता है, Google से अलग।' },
-          { q: 'Lens का 40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ देख और डाउनलोड कर सकते हैं। मुफ़्त 10 GB से ऊपर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। 14, 3 और 1 दिन पहले याद दिलाया जाता है।' },
+          { q: 'Lens का 40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ देख और डाउनलोड कर सकते हैं। मुफ़्त 10 GB से ऊपर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। 14, 3 और 1 दिन पहले याद दिलाया जाता है। अगर आप 5 महीने तक सीमा से ऊपर रहते हैं, तो सीमा से ऊपर का कंटेंट डिलीट होता है (सबसे हाल का पहले), 90, 30, 7 और 1 दिन पहले याद दिलाकर।' },
         ],
       },
     },
@@ -568,7 +568,7 @@ export const guidePages: GuidePage[] = [
               'Keep your originals in your own storage, so you’re never locked in',
               'Delete your account and everything in it at any time, from the app or the website',
               'Deleted something by mistake? In Lens storage it can be recovered for a year (Trash, then Archive)',
-              'If the welcome storage ends or you go over the free limit, nothing is deleted',
+              'If the welcome storage ends or you go over the free limit, nothing is deleted; only after 5 months above the limit, with four reminders, is what’s above it removed',
             ],
           },
           {
@@ -606,7 +606,7 @@ export const guidePages: GuidePage[] = [
               'अपने ओरिजिनल अपने स्टोरेज में रखें, ताकि आप कभी बँधे न रहें',
               'कभी भी अपना अकाउंट और उसकी हर चीज़ डिलीट करें, ऐप या वेबसाइट से',
               'ग़लती से कुछ डिलीट हो गया? Lens स्टोरेज में एक साल तक वापस ला सकते हैं (ट्रैश, फिर आर्काइव)',
-              'वेलकम स्टोरेज ख़त्म हो या आप मुफ़्त सीमा से ऊपर जाएँ, कुछ भी डिलीट नहीं होता',
+              'वेलकम स्टोरेज ख़त्म हो या आप मुफ़्त सीमा से ऊपर जाएँ, कुछ भी डिलीट नहीं होता; सिर्फ़ 5 महीने सीमा से ऊपर रहने पर, चार बार याद दिलाकर, सीमा से ऊपर का हिस्सा हटाया जाता है',
             ],
           },
           {

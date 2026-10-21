@@ -1,14 +1,18 @@
 // Lifecycle notifications (docs/design/notifications.md): useful reminders, each sent once, at
 // about 10:00 on the phone's clock, within the limits in push.ts (deliver):
 //   welcome_ending   14, 3 and 1 days before the 40 GB welcome ends (account; + email at 14 and 1)
-//   backups_paused   once, when the welcome ended and Lens storage is over the free limit (account)
+//   payment_failed   grace day 0, 3 and 6; plan_ended once (account, + email)
+//   landing_ending   3 days before the soft landing ends, if backups would pause (account)
+//   over_limit       monthly while over the limit; deletion_notice 90/30/7/1 days before (account)
 //   weekly_summary   Sundays, if something was backed up that week (summary)
 //   on_this_day      photos from this date in earlier years, at most weekly (memories)
 //   recap_ready      a trip or event recap just finished (memories)
 // Sent markers: D#<id> NL#<name> { at }.
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 
-import { ddb, env, inWelcome, PLAN_CHANGE_WELCOME_UNTIL, quotaFor } from './lib';
+import { ddb, env, LANDING_MS, PLAN_CHANGE_WELCOME_UNTIL, quotaFor } from './lib';
+import { deleteAboveLimit, trackOverLimit } from './over-limit';
+import { deletionAt, planActive, PLANS, PlanState } from './plans';
 import { bumpStat, deliver, localHour } from './push';
 import { findRecaps, RecapInput } from './recap-detect';
 import { notify as email } from './referrals';
@@ -20,7 +24,7 @@ const SEND_HOUR = 10;
 const GB = 1024 ** 3;
 
 const FIELDS = [
-  'pk', 'sk', 'email', 'createdAt', 'usedBytes', 'bonusBytes', 'welcomeUntil', 'test', 'emulator', 'guestId', 'tz',
+  'pk', 'sk', 'email', 'createdAt', 'usedBytes', 'bonusBytes', 'welcomeUntil', 'plan', 'overLimitSince', 'test', 'emulator', 'guestId', 'tz',
   'kind', 'status', 'deletedAt', 'size', 'uploadedAt', 'place', 'width', 'height', 'recap', 'previewReady', 'ownerHidden', 'at',
 ];
 
@@ -76,30 +80,83 @@ export async function runLifecycle(now: number, deadline: number, onlyOwner?: st
     const p = a.profile;
     const local = new Date(now + (a.tz ?? 330) * 60_000);
 
-    // ---- storage plan (account notices) ----
+    // ---- storage plan (account notices: can't be turned off; push + email) ----
     if (p.email) {
       const welcomeUntil = p.welcomeUntil ?? PLAN_CHANGE_WELCOME_UNTIL;
-      const left = welcomeUntil - now;
+      p.welcomeUntil = welcomeUntil;
+      const plan = p.plan as PlanState | undefined;
+      const paid = planActive(plan, now);
       const free = env.freeQuotaBytes + Math.min(env.maxBonusBytes, p.bonusBytes ?? 0);
       const used = p.usedBytes ?? 0;
-      for (const days of [14, 3, 1]) {
-        const name = `welcome${days}-${welcomeUntil}`;
-        if (left > (days - 1) * DAY && left <= days * DAY && !a.marks.has(name)) {
-          const over = used > free;
-          const title = days === 1 ? 'Your 40 GB welcome ends tomorrow' : `Your 40 GB welcome ends on ${dateText(welcomeUntil)}`;
-          const body = over
-            ? `You use ${gb(used)}. After that you keep ${gb(free)} free: nothing is deleted, but new backups pause until you invite friends (+10 GB each) or back up to your own storage.`
-            : `After that you keep ${gb(free)} free, forever. You're using ${gb(used)}, so nothing changes for you. Nothing is ever deleted.`;
-          if ((await send(a, 'welcome_ending', name, 'account', { title, body, route: '/storage' }, now)) === 'sent') count('welcome_ending');
-          if (days !== 3) await email(p.email, title, `${body}\n\nSee your storage in Lens: Settings → Storage.\n\n— Lens`).catch(() => {});
-          break;
-        }
+      const notice = async (name: string, markName: string, title: string, body: string, withEmail: boolean) => {
+        if (a.marks.has(markName)) return false;
+        const r = await send(a, name, markName, 'account', { title, body, route: '/storage' }, now);
+        if (withEmail) await email(p.email, title, `${body}\n\nSee your storage in Lens: Settings → Storage.\n\n— Lens`).catch(() => {});
+        if (r === 'sent') count(name);
+        return true;
+      };
+
+      // Payment didn't go through: 7 days of grace, reminders on day 0, 3 and 6.
+      if (plan?.status === 'grace' && plan.graceUntil && plan.graceUntil > now) {
+        const left = plan.graceUntil - now;
+        const step = left > 6 * DAY ? 0 : left > 3 * DAY && left <= 4 * DAY ? 3 : left <= DAY ? 6 : -1;
+        const planName = PLANS[plan.id]?.name ?? 'your plan';
+        if (step >= 0 &&
+          (await notice('payment_failed', `pay${step}-${plan.graceUntil}`, step === 6 ? 'Last day to keep your extra storage' : 'Your payment didn’t go through',
+            `${planName} keeps working until ${dateText(plan.graceUntil)}. Update your payment to keep it. If not, you go back to ${gb(free)} free: nothing is deleted, but new backups pause above it.`, true)))
+          continue;
       }
-      const name = `paused-${welcomeUntil}`;
-      if (!inWelcome({ welcomeUntil }, now) && used > free && !a.marks.has(name)) {
-        const body = `Your welcome storage ended. Everything you backed up is safe and viewable. New photos stay on your phone until you invite friends (+10 GB each) or switch new backups to your own storage.`;
-        if ((await send(a, 'backups_paused', name, 'account', { title: 'New backups to Lens are paused', body, route: '/storage' }, now)) === 'sent') count('backups_paused');
-        continue; // one notice a day is enough
+      // A paid plan ended: once.
+      if (plan?.status === 'lapsed' && plan.lapsedAt &&
+        (await notice('plan_ended', `lapsed-${plan.lapsedAt}`, 'Your paid storage ended',
+          used > free
+            ? `You're back to ${gb(free)} free and use ${gb(used)}. Everything stays viewable and downloadable; new backups pause until you pay again, invite friends (+10 GB each) or back up to your own storage.`
+            : `You're back to ${gb(free)} free and use ${gb(used)}, so backups carry on. You can pay again any time.`, true)))
+        continue;
+
+      if (!paid) {
+        // Welcome ending: 14, 3 and 1 days before (then 14 more days of backups: the soft landing).
+        const left = welcomeUntil - now;
+        for (const days of [14, 3, 1]) {
+          if (left > (days - 1) * DAY && left <= days * DAY) {
+            const title = days === 1 ? 'Your 40 GB welcome ends tomorrow' : `Your 40 GB welcome ends on ${dateText(welcomeUntil)}`;
+            const body = used > free
+              ? `You use ${gb(used)}. Backups keep going for 14 more days, then pause above ${gb(free)} free. Nothing is deleted. To keep backing up: get more space, invite friends (+10 GB each), or back up to your own Google Drive.`
+              : `After that you keep ${gb(free)} free, forever. You use ${gb(used)}, so nothing changes for you.`;
+            if (await notice('welcome_ending', `welcome${days}-${welcomeUntil}`, title, body, days !== 3)) break;
+          }
+        }
+        // End of the soft landing (3 days before), only if it will pause backups.
+        const landingLeft = welcomeUntil + LANDING_MS - now;
+        if (landingLeft > 2 * DAY && landingLeft <= 3 * DAY && used > free &&
+          (await notice('landing_ending', `landing-${welcomeUntil}`, `Backups pause above ${gb(free)} on ${dateText(welcomeUntil + LANDING_MS)}`,
+            `You use ${gb(used)}. Get more space, invite friends (+10 GB each), or switch new backups to your own storage, and nothing stops. Nothing is ever deleted without months of notice.`, true)))
+          continue;
+      }
+
+      // Over the limit: the clock, monthly reminders, notices before deletion, and deletion.
+      const state = await trackOverLimit(a.id, p, now);
+      if (state === 'over' && p.overLimitSince) {
+        const since = p.overLimitSince as number;
+        const delAt = deletionAt(since);
+        const daysLeft = Math.ceil((delAt - now) / DAY);
+        if (now >= delAt) {
+          const r = await deleteAboveLimit(a.id, now);
+          if (r.deleted) {
+            count('deleted_above_limit');
+            await notice('deleted_above_limit', `deleted-${since}-${new Date(now).toISOString().slice(0, 10)}`, `We removed ${r.deleted} items above your free storage`,
+              `As we told you since ${dateText(since)}, ${r.deleted} items (${gb(r.bytes)}) above your ${gb(free)} free storage were deleted, the most recent first. Everything else is safe, and backups work again.`, true);
+          }
+          continue;
+        }
+        const pre = [90, 30, 7, 1].find((d) => daysLeft <= d && daysLeft > (d === 1 ? 0 : d === 7 ? 1 : d === 30 ? 7 : 30));
+        if (pre && (await notice('deletion_notice', `del${pre}-${since}`, pre === 1 ? 'Tomorrow: photos above your free storage will be deleted' : `In ${pre} days, photos above your free storage will be deleted`,
+          `You use ${gb(used)} of ${gb(free)} free since ${dateText(since)}. On ${dateText(delAt)} we'll delete what's above it, your most recent backups first. To keep everything: get more space, invite friends (+10 GB each), move photos to your own Google Drive, or download them.`, true)))
+          continue;
+        const month = Math.floor((now - since) / (30 * DAY));
+        if (await notice('over_limit', `over-${since}-m${month}`, month === 0 ? 'New backups to Lens are paused' : 'Your photos are waiting to be backed up',
+          `You use ${gb(used)} of ${gb(free)} free. Everything you have stays safe and viewable; new photos wait on your phone. Get more space, invite friends (+10 GB each), or back up new photos to your own storage.`, month === 0))
+          continue;
       }
     }
 

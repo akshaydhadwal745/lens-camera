@@ -11,6 +11,7 @@ import {
   json,
   inWelcome,
   PLAN_CHANGE_WELCOME_UNTIL,
+  welcomeStorage,
   quotaFor,
   randomId,
   rateLimit,
@@ -22,6 +23,7 @@ import {
   withCookies,
 } from './lib';
 import { markActive } from './usage';
+import { deletionAt, planActive } from './plans';
 import { suggestFlags } from './people';
 import { randomName } from './names';
 import { realNames } from './real-names';
@@ -41,6 +43,10 @@ export type Identity = {
   bonusBytes?: number;
   /** Signed-in accounts: when the 40 GB welcome period ends (ms). */
   welcomeUntil?: number;
+  /** A paid plan (plans.ts), if any. */
+  plan?: import('./plans').PlanState;
+  /** Over the storage limit since (over-limit.ts): new backups paused, deletion countdown. */
+  overLimitSince?: number;
   /** Invited by a friend and not rewarded or rejected yet: uploads re-check the reward. */
   referralPending?: boolean;
 };
@@ -275,6 +281,8 @@ export async function authenticate(req: Req): Promise<Identity> {
     googleName: profile.Item.googleName,
     // Accounts from before the plan change (owner decision 2026-10-21) start their welcome on that day.
     welcomeUntil: profile.Item.welcomeUntil ?? (profile.Item.email ? PLAN_CHANGE_WELCOME_UNTIL : undefined),
+    plan: profile.Item.plan,
+    overLimitSince: profile.Item.overLimitSince,
     referralPending: profile.Item.attribution?.program === 'referral' && !['rewarded', 'rejected', 'held'].includes(profile.Item.referral) ? true : undefined,
   };
 }
@@ -287,7 +295,18 @@ export function me(identity: Identity): Res {
     quotaBytes: quotaFor(identity),
     signedInQuotaBytes: env.quotaBytes,
     freeQuotaBytes: env.freeQuotaBytes,
-    plan: !identity.email ? 'guest' : inWelcome(identity) ? 'welcome' : 'free',
+    plan: !identity.email
+      ? 'guest'
+      : planActive(identity.plan)
+        ? identity.plan!.status === 'grace'
+          ? 'grace'
+          : identity.plan!.id
+        : inWelcome(identity)
+          ? 'welcome'
+          : welcomeStorage(identity)
+            ? 'landing'
+            : 'free',
+    overLimit: identity.overLimitSince ? { since: identity.overLimitSince, deletionAt: deletionAt(identity.overLimitSince) } : undefined,
   });
 }
 

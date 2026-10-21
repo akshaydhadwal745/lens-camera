@@ -378,6 +378,24 @@ export const selectWaitingForWifi = (s: State) =>
 export const selectFailedCount = (s: State) => s.entries.filter((e) => !e.uploadedAt && e.error).length;
 /** Uploads stopped because free guest storage is full (signing in lifts the limit). */
 export const selectGuestFull = (s: State) => s.entries.some((e) => !e.uploadedAt && e.errorCode === 'guest-quota');
+/** Signed in and over the free (or plan) storage: how many photos wait on the phone. */
+export const selectQuotaWaiting = (s: State) => s.entries.filter((e) => !e.uploadedAt && (e.errorCode === 'free-quota' || e.errorCode === 'quota')).length;
+
+const QUOTA_CODES = new Set(['quota', 'free-quota', 'guest-quota']);
+
+/**
+ * New storage numbers. When there's room again (paid, invites, deleted things), uploads that were
+ * held because storage was full start again by themselves: no "tap to retry".
+ */
+function setUsage(usage: { usedBytes: number; quotaBytes: number }) {
+  set({ usage });
+  if (usage.usedBytes >= usage.quotaBytes) return;
+  const held = state.entries.filter((e) => !e.uploadedAt && e.errorCode && QUOTA_CODES.has(e.errorCode));
+  if (!held.length) return;
+  const ids = new Set(held.map((e) => e.id));
+  setEntries(state.entries.map((e) => (ids.has(e.id) ? { ...e, error: undefined, errorCode: undefined, attempts: 0, nextAttemptAt: undefined } : e)));
+  kickSync();
+}
 
 let usageMemo: { entries: LocalEntry[]; out: ReturnType<typeof computeLocalUsage> } | null = null;
 
@@ -701,7 +719,7 @@ export function refreshRemote(): Promise<void> {
       saveRemoteCache(all);
       api
         .me()
-        .then((me) => set({ usage: { usedBytes: me.usedBytes, quotaBytes: me.quotaBytes } }))
+        .then((me) => setUsage({ usedBytes: me.usedBytes, quotaBytes: me.quotaBytes }))
         .catch(() => {});
       void refreshStorage();
     } catch {
@@ -1346,7 +1364,8 @@ export function refreshStorage(): Promise<void> {
   return api
     .storage()
     .then((storage) => {
-      set({ storage, usage: { usedBytes: storage.lens.usedBytes, quotaBytes: storage.lens.quotaBytes } });
+      set({ storage });
+      setUsage({ usedBytes: storage.lens.usedBytes, quotaBytes: storage.lens.quotaBytes });
       void checkStorages();
     })
     .catch(() => {});

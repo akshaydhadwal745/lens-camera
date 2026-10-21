@@ -144,6 +144,11 @@ export function withCookies(res: Res, cookies: string[]): Res {
 /** Signed-in accounts made before the new storage plan (2026-10-22): their welcome ends 3 months after it. */
 export const PLAN_CHANGE_WELCOME_UNTIL = Date.UTC(2026, 9, 22) + 90 * 86_400_000;
 
+/** After the welcome, backups keep their 40 GB for this long (soft landing, with reminders). */
+export const LANDING_MS = 14 * 86_400_000;
+/** Welcome storage still applies: the welcome period or its 14-day soft landing. */
+export const welcomeStorage = (identity: { welcomeUntil?: number }, now = Date.now()) => (identity.welcomeUntil ?? 0) + LANDING_MS > now;
+
 /** Is this signed-in account still in its welcome period? */
 export const inWelcome = (identity: { welcomeUntil?: number }, now = Date.now()) => (identity.welcomeUntil ?? 0) > now;
 
@@ -153,23 +158,36 @@ export const inWelcome = (identity: { welcomeUntil?: number }, now = Date.now())
  * top. Backups to the user's own storage don't count. Nothing is ever deleted when the limit
  * drops: new Lens backups just pause above it.
  */
-export function quotaFor(identity: { email?: string; bonusBytes?: number; welcomeUntil?: number }, now = Date.now()): number {
+export function quotaFor(
+  identity: { email?: string; bonusBytes?: number; welcomeUntil?: number; plan?: { status: string; bytes: number; periodEnd: number; graceUntil?: number } },
+  now = Date.now(),
+): number {
   const bonus = Math.min(env.maxBonusBytes, Math.max(0, identity.bonusBytes ?? 0));
   if (!identity.email) return env.guestQuotaBytes + bonus;
-  return (inWelcome(identity, now) ? env.quotaBytes : env.freeQuotaBytes) + bonus;
+  // A paid plan (plans.ts): its storage while active or in its 7-day grace.
+  const p = identity.plan;
+  const paid = p && ((p.status === 'active' && p.periodEnd + 86_400_000 > now) || (p.status === 'grace' && (p.graceUntil ?? 0) > now));
+  if (paid) return Math.max(p.bytes, welcomeStorage(identity, now) ? env.quotaBytes : 0) + bonus;
+  return (welcomeStorage(identity, now) ? env.quotaBytes : env.freeQuotaBytes) + bonus;
 }
 
 /** Throws 413 if `bytes` more would exceed this identity's Lens storage. */
-export function checkQuota(identity: { email?: string; bonusBytes?: number; usedBytes: number; welcomeUntil?: number }, bytes: number, what = 'Lens storage is full') {
+export function checkQuota(
+  identity: { email?: string; bonusBytes?: number; usedBytes: number; welcomeUntil?: number; plan?: { status: string; bytes: number; periodEnd: number; graceUntil?: number } },
+  bytes: number,
+  what = 'Lens storage is full',
+) {
   if (bytes <= 0 || identity.usedBytes + bytes <= quotaFor(identity)) return;
   if (!identity.email) {
     const gb = Math.round(env.guestQuotaBytes / 1024 ** 3);
     const full = Math.round(env.quotaBytes / 1024 ** 3);
     throw new HttpError(413, `Your free ${gb} GB guest storage is full. Sign in to get ${full} GB free for 3 months.`, 'guest-quota');
   }
-  if (!inWelcome(identity) && identity.usedBytes > env.freeQuotaBytes) {
-    const free = Math.round(env.freeQuotaBytes / 1024 ** 3);
-    throw new HttpError(413, `Your ${free} GB free storage is full. Everything you have stays safe. Invite friends for more space, or back up to your own storage.`, 'free-quota');
+  const p = identity.plan;
+  const paid = p && ((p.status === 'active' && p.periodEnd + 86_400_000 > Date.now()) || (p.status === 'grace' && (p.graceUntil ?? 0) > Date.now()));
+  if (!paid && !welcomeStorage(identity)) {
+    // Free (after the welcome or a paid plan): nothing is deleted, new backups wait (over-limit.ts).
+    throw new HttpError(413, 'Your free storage is full. Everything you have stays safe; new photos wait on your phone. Get more space, invite friends, or back up to your own storage.', 'free-quota');
   }
   throw new HttpError(413, what, 'quota');
 }

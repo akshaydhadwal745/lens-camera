@@ -36,6 +36,7 @@ import {
   selectShared,
   isHot,
   selectGuestFull,
+  selectQuotaWaiting,
   selectStorageIndicator,
   selectStorageStuck,
   selectWaitingForWifi,
@@ -185,6 +186,7 @@ export default function GalleryScreen() {
   const signedOut = useStore((s) => s.signedOut);
   const hot = useStore((s) => isHot(s.thermal));
   const guestFull = useStore(selectGuestFull);
+  const quotaWaiting = useStore(selectQuotaWaiting);
   const isGuest = useStore((s) => !!s.identity && !s.identity.email);
   const [nudgeDismissed, setNudgeDismissed] = useState(() => loadDoc('signin-nudge-dismissed', false));
   const online = useStore((s) => s.online);
@@ -374,6 +376,14 @@ export default function GalleryScreen() {
     <Pressable style={styles.banner} onPress={() => router.push('/signin')}>
       <Ionicons name="cloud-outline" size={18} color={palette.accent} />
       <Text style={styles.bannerText}>Free guest storage is full. Tap to sign in: 40 GB free for 3 months</Text>
+    </Pressable>
+  ) : quotaWaiting && !isWeb ? (
+    // Over the storage limit: nothing is lost, new photos wait on the phone (server over-limit.ts).
+    <Pressable style={styles.banner} onPress={() => router.push('/storage')}>
+      <Ionicons name="pause-circle-outline" size={18} color={palette.accent} />
+      <Text style={styles.bannerText}>
+        Backups paused: {quotaWaiting} {quotaWaiting === 1 ? 'photo waits' : 'photos wait'} on this phone. Your Lens storage is full. Tap for options
+      </Text>
     </Pressable>
   ) : hot && !isWeb ? (
     <View style={styles.banner}>

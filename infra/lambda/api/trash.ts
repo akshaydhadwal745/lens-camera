@@ -96,6 +96,8 @@ export async function deleteAllVersions(prefix: string, bucket = env.bucket) {
 }
 
 /** Permanently removes an item: all object versions, derivatives, record and shares. */
+export const destroyMedia = (item: MediaRecord) => destroy(item);
+
 async function destroy(item: MediaRecord) {
   const ownerId = ownerOf(item);
   if (item.uploadId) {

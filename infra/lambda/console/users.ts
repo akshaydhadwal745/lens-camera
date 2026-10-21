@@ -2,7 +2,8 @@
 // sizes, dates, devices and program status. Opening an account is audited (index.ts).
 import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
-import { ddb, env, HttpError, json, Req, Res } from '../api/lib';
+import { ddb, env, HttpError, json, quotaFor, Req, Res } from '../api/lib';
+import { activatePlan, deletionAt, lapsePlan, paymentFailed, PLANS } from '../api/plans';
 import { testAccounts } from './overview';
 
 const TEST_EMAIL = '@e2e.lens.invalid';
@@ -99,6 +100,13 @@ export async function userDetail(id: string): Promise<Res> {
     user: summary(p),
     attribution: p.attribution ? { program: p.attribution.program, source: p.attribution.source, at: p.attribution.at } : null,
     referral: p.referral ?? null,
+    storage: {
+      quotaBytes: quotaFor(p),
+      welcomeUntil: p.welcomeUntil ?? null,
+      plan: p.plan ?? null,
+      overLimitSince: p.overLimitSince ?? null,
+      deletionAt: p.overLimitSince ? deletionAt(p.overLimitSince) : null,
+    },
     media: {
       items: live.length,
       photos: live.filter((m) => m.kind === 'photo').length,
@@ -120,4 +128,26 @@ export async function userDetail(id: string): Promise<Res> {
       invitesByState: referrals.reduce<Record<string, number>>((m, r) => ((m[r.state ?? 'unknown'] = (m[r.state ?? 'unknown'] ?? 0) + 1), m), {}),
     },
   });
+}
+
+/**
+ * POST /api/users/<id>/plan {action: 'grant' | 'payment-failed' | 'end', planId?, months?}
+ * Support tools (and testing before payments go live): give a plan for N months (no charge),
+ * simulate a failed renewal (7-day grace), or end a plan (back to Free; nothing is deleted).
+ */
+export async function changePlan(id: string, by: string, req: Req): Promise<Res> {
+  if (!ID.test(id)) throw new HttpError(404, 'Not found');
+  const p = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${id}`, sk: 'PROFILE' } }))).Item;
+  if (!p?.email) throw new HttpError(400, 'Plans are for signed-in accounts');
+  const action = req.body?.action;
+  if (action === 'grant') {
+    const planId = String(req.body?.planId ?? 'plus50');
+    if (!PLANS[planId]) throw new HttpError(400, 'Unknown plan');
+    const months = Math.max(1, Math.min(12, Math.round(Number(req.body?.months) || 1)));
+    const plan = await activatePlan(id, { id: planId, periodEnd: Date.now() + months * 30 * 86_400_000, provider: 'manual', ref: `console:${by}` }, `console:${by}`);
+    return json(200, { plan });
+  }
+  if (action === 'payment-failed') return json(200, { plan: (await paymentFailed(id, `console:${by}`)) ?? null });
+  if (action === 'end') return json(200, { plan: (await lapsePlan(id, `console:${by}`)) ?? null });
+  throw new HttpError(400, 'action must be grant, payment-failed or end');
 }

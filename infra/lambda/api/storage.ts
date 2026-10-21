@@ -6,7 +6,8 @@
 import { DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
-import { ddb, env, HttpError, json, quotaFor, Req, Res } from './lib';
+import { ddb, env, HttpError, json, LANDING_MS, quotaFor, Req, Res } from './lib';
+import { deletionAt, PLANS } from './plans';
 
 export const PROVIDERS = ['gdrive', 'dropbox', 'onedrive', 'box', 's3', 'webdav', 'icloud'] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -88,6 +89,10 @@ export async function getStorage(identity: Identity): Promise<Res> {
       freeQuotaBytes: env.freeQuotaBytes,
       welcomeUntil: identity.email ? identity.welcomeUntil : undefined,
       bonusBytes: identity.bonusBytes ?? 0,
+      // Paid plan and over-limit state (plans.ts, over-limit.ts), for Settings → Storage.
+      paidPlan: identity.plan ? { id: identity.plan.id, name: PLANS[identity.plan.id]?.name, status: identity.plan.status, periodEnd: identity.plan.periodEnd, graceUntil: identity.plan.graceUntil, cancelled: identity.plan.cancelled } : undefined,
+      landingUntil: identity.email && identity.welcomeUntil ? identity.welcomeUntil + LANDING_MS : undefined,
+      overLimit: identity.overLimitSince ? { since: identity.overLimitSince, deletionAt: deletionAt(identity.overLimitSince) } : undefined,
     },
     signedIn: !!identity.email,
     storages: storages.sort((a, b) => a.createdAt - b.createdAt).map(toClient),

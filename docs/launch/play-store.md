@@ -37,7 +37,7 @@ on 2026-10-15 (see "Gaps fixed before review").
   • Original quality, never compressed. Every upload is checked
   • Phone storage full? Free up space safely: only photos already backed up leave your phone,
     and sharp previews stay so your gallery works offline
-  • Nothing is deleted when the welcome ends: everything stays viewable and downloadable
+  • Nothing is deleted when the welcome ends: everything stays viewable and downloadable (only after 5 months above the limit, with reminders, is what's above it removed)
 
   SHARE WITHOUT COMPRESSION
   • Share links send the original photo or video, even to people without Lens

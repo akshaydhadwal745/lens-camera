@@ -33,7 +33,7 @@ import {
   totpSetup,
   totpVerify,
 } from './session';
-import { userDetail, userSearch } from './users';
+import { changePlan, userDetail, userSearch } from './users';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
   try {
@@ -82,6 +82,13 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       return await userDetail(decodeURIComponent(seg[1]));
     }
 
+    if (seg[0] === 'users' && seg.length === 3 && seg[2] === 'plan' && method === 'POST') {
+      need('users.write');
+      const id = decodeURIComponent(seg[1]);
+      const res = await changePlan(id, email, req);
+      await log({ entity: `user:${id}`, action: `plan.${req.body?.action}`, actor: `console:${email}`, data: { planId: req.body?.planId, months: req.body?.months } });
+      return res;
+    }
     if (route === 'GET /feedback') return await allowed('feedback', () => listFeedback(req));
     if (seg[0] === 'feedback' && seg.length === 3 && seg[2] === 'done' && method === 'POST') {
       need('feedback.write');

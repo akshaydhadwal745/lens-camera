@@ -75,7 +75,7 @@ export const pages: ContentPage[] = [
         ],
         faq: [
           { q: 'Does Lens compress my photos?', a: 'No. The original file is stored exactly as your camera saved it. Lens only makes small previews for fast browsing, in addition to the original.' },
-          { q: 'What happens when the 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays in your library, viewable and downloadable. Only new backups to Lens storage pause while you are above the free limit, until you invite friends, free some space, or switch to your own storage. Lens reminds you 14, 3 and 1 days before.' },
+          { q: 'What happens when the 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays in your library, viewable and downloadable. Only new backups to Lens storage pause while you are above the free limit, until you invite friends, free some space, or switch to your own storage. Lens reminds you 14, 3 and 1 days before. If you stay above the limit for 5 months, what is above it is deleted (most recent first), with reminders 90, 30, 7 and 1 days before.' },
           { q: 'Can I get unlimited backup?', a: 'Yes, free: connect your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV storage and your originals go there. Lens keeps only small previews, so they don’t count against a Lens limit.' },
           { q: 'Does backup use my mobile data?', a: 'You choose: everything, small files only, or Wi-Fi only. Upload while recording is Wi-Fi only by default.' },
         ],
@@ -124,7 +124,7 @@ export const pages: ContentPage[] = [
         ],
         faq: [
           { q: 'क्या Lens मेरी फ़ोटो कंप्रेस करता है?', a: 'नहीं। ओरिजिनल फ़ाइल ठीक वैसी ही रखी जाती है जैसी कैमरे ने सेव की। Lens सिर्फ़ तेज़ ब्राउज़िंग के लिए छोटे प्रीव्यू अलग से बनाता है।' },
-          { q: '40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ आपकी लाइब्रेरी में रहता है, देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर होने पर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, कुछ जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। Lens 14, 3 और 1 दिन पहले याद दिलाता है।' },
+          { q: '40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ आपकी लाइब्रेरी में रहता है, देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर होने पर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, कुछ जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। Lens 14, 3 और 1 दिन पहले याद दिलाता है। अगर आप 5 महीने तक सीमा से ऊपर रहते हैं, तो सीमा से ऊपर का कंटेंट डिलीट होता है (सबसे हाल का पहले), 90, 30, 7 और 1 दिन पहले याद दिलाकर।' },
           { q: 'क्या अनलिमिटेड बैकअप मिल सकता है?', a: 'हाँ, मुफ़्त: अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV स्टोरेज जोड़ें और आपके ओरिजिनल वहाँ जाएँगे। Lens सिर्फ़ छोटे प्रीव्यू रखता है, इसलिए वे Lens की सीमा में नहीं गिने जाते।' },
           { q: 'क्या बैकअप मेरा मोबाइल डेटा इस्तेमाल करता है?', a: 'आप चुनें: सब कुछ, सिर्फ़ छोटी फ़ाइलें, या सिर्फ़ Wi-Fi। रिकॉर्डिंग के दौरान अपलोड डिफ़ॉल्ट रूप से सिर्फ़ Wi-Fi पर होता है।' },
         ],

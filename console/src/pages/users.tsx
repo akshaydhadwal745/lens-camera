@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 
-import { get } from '../api';
+import { get, post } from '../api';
 import { Badge, bytes, Card, date, Empty, Link, Loaded, n, Page, useLoad, when } from '../ui';
 
 type User = { id: string; name: string; email?: string; signedIn: boolean; createdAt: number; usedBytes: number; bonusBytes: number; logins: string[]; test: boolean };
@@ -74,14 +74,27 @@ type Detail = {
   user: User;
   attribution: { program: string; source?: string; at?: number } | null;
   referral: string | null;
+  storage: {
+    quotaBytes: number;
+    welcomeUntil: number | null;
+    plan: { id: string; status: 'active' | 'grace' | 'lapsed'; provider: string; periodEnd: number; graceUntil?: number; lapsedAt?: number; cancelled?: boolean } | null;
+    overLimitSince: number | null;
+    deletionAt: number | null;
+  };
   media: { items: number; photos: number; videos: number; pending: number; inTrash: number; archived: number; lensBytes: number; ownStorageItems: number; lastUploadAt: number | null };
   devices: { name: string; web: boolean; since: number; lastUsedAt: number }[];
   sharing: { links: number; albums: number };
   programs: { affiliate: string | null; invites: number; invitesByState: Record<string, number> };
 };
 
-export function UserDetail({ id }: { id: string }) {
+export function UserDetail({ id, canWrite }: { id: string; canWrite: boolean }) {
   const state = useLoad(() => get<Detail>(`/users/${encodeURIComponent(id)}`), [id]);
+  const planAction = async (action: 'grant' | 'payment-failed' | 'end', extra: Record<string, unknown> = {}) => {
+    const what = action === 'grant' ? `Give ${extra.months} month(s) of ${extra.planId} free?` : action === 'payment-failed' ? 'Mark the renewal as failed (7-day grace starts)?' : 'End the plan now (back to Free, nothing deleted)?';
+    if (!confirm(what)) return;
+    await post(`/users/${encodeURIComponent(id)}/plan`, { action, ...extra }).catch((e: Error) => alert(e.message));
+    state.reload();
+  };
   return (
     <Page title="Account" actions={<Link to="/users">← All users</Link>}>
       <p className="muted small">Account facts only. Photos and videos are never shown in the console. Opening this page is recorded in the activity log.</p>
@@ -135,6 +148,56 @@ export function UserDetail({ id }: { id: string }) {
                   {n(d.sharing.links)} · {n(d.sharing.albums)}
                 </dd>
               </dl>
+            </Card>
+            <Card title="Storage plan">
+              <dl className="facts">
+                <dt>Storage now</dt>
+                <dd>{bytes(d.storage.quotaBytes)}</dd>
+                <dt>Paid plan</dt>
+                <dd>
+                  {d.storage.plan ? (
+                    <>
+                      {d.storage.plan.id} <Badge tone={d.storage.plan.status === 'active' ? 'good' : d.storage.plan.status === 'grace' ? 'warn' : 'plain'}>{d.storage.plan.status}</Badge>
+                      <div className="muted small">
+                        {d.storage.plan.status === 'grace' ? `grace until ${date(d.storage.plan.graceUntil)}` : d.storage.plan.status === 'lapsed' ? `ended ${date(d.storage.plan.lapsedAt)}` : `renews ${date(d.storage.plan.periodEnd)}`}
+                        {d.storage.plan.cancelled ? ' · cancelled' : ''} · {d.storage.plan.provider}
+                      </div>
+                    </>
+                  ) : (
+                    'none'
+                  )}
+                </dd>
+                <dt>Welcome (40 GB)</dt>
+                <dd>{d.storage.welcomeUntil ? `until ${date(d.storage.welcomeUntil)}` : '—'}</dd>
+                <dt>Over the limit</dt>
+                <dd>
+                  {d.storage.overLimitSince ? (
+                    <>
+                      since {date(d.storage.overLimitSince)}
+                      <div className="muted small">above-limit items deleted {date(d.storage.deletionAt)}</div>
+                    </>
+                  ) : (
+                    'no'
+                  )}
+                </dd>
+              </dl>
+              {canWrite && !!d.user.email && (
+                <div className="btns" style={{ marginTop: 12, justifyContent: 'flex-start' }}>
+                  <button className="btn" onClick={() => planAction('grant', { planId: 'plus50', months: 1 })}>
+                    Give 1 month · 50 GB
+                  </button>
+                  {d.storage.plan?.status === 'active' && (
+                    <button className="btn" onClick={() => planAction('payment-failed')}>
+                      Mark payment failed
+                    </button>
+                  )}
+                  {d.storage.plan && d.storage.plan.status !== 'lapsed' && (
+                    <button className="btn danger" onClick={() => planAction('end')}>
+                      End plan
+                    </button>
+                  )}
+                </div>
+              )}
             </Card>
             <Card title="Devices">
               {d.devices.length ? (

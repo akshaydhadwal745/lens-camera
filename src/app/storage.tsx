@@ -18,7 +18,7 @@ import {
 } from '@/lib/storage';
 import { PROVIDERS, providerInfo } from '@/lib/storage/providers';
 import { checkStorages, kickSync, refreshStorage, requestProvider, useStore } from '@/lib/store';
-import { ConnectedStorage, ProviderId } from '@/lib/types';
+import { ConnectedStorage, ProviderId, StorageOverview } from '@/lib/types';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const RECENT_COLOR = colors.link;
@@ -34,32 +34,45 @@ function Section({ title, children, footer }: { title: string; children: ReactNo
   );
 }
 
-/** Welcome period, then free forever: always says what happens next (nothing is ever deleted). */
-function PlanNote({ lens }: { lens: { welcomeUntil?: number; freeQuotaBytes?: number; bonusBytes?: number; usedBytes: number } }) {
-  const free = (lens.freeQuotaBytes ?? 10 * 1024 ** 3) + (lens.bonusBytes ?? 0);
-  const until = lens.welcomeUntil ?? 0;
+/** Where this account stands and what happens next (plans.ts, over-limit.ts on the server). */
+function PlanNote({ lens }: { lens: StorageOverview['lens'] }) {
   const [now] = useState(() => Date.now());
-  const welcome = until > now;
-  const date = new Date(until).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const free = (lens.freeQuotaBytes ?? 10 * 1024 ** 3) + (lens.bonusBytes ?? 0);
+  const day = (t?: number) => (t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  const paid = lens.paidPlan;
+  let icon: keyof typeof Ionicons.glyphMap = 'calendar-outline';
+  let color: string = colors.link;
+  let head = '';
+  let text = '';
+  if (lens.overLimit) {
+    icon = 'pause-circle-outline';
+    color = '#FACC15';
+    head = 'New backups to Lens are paused.';
+    text = `You use ${formatBytes(lens.usedBytes)} of ${formatBytes(lens.quotaBytes)}. Everything you have stays safe and viewable; new photos wait on your phone. If you're still over on ${day(lens.overLimit.deletionAt)}, what's above it is deleted (most recent first), so get more space, invite friends (+10 GB each), move photos to your own storage, or download them before then.`;
+  } else if (paid?.status === 'grace' && (paid.graceUntil ?? 0) > now) {
+    icon = 'card-outline';
+    color = '#FACC15';
+    head = 'Your payment didn’t go through.';
+    text = `${paid.name ?? 'Your plan'} keeps working until ${day(paid.graceUntil)}. Update your payment to keep it; otherwise you go back to ${formatBytes(free)} free. Nothing is deleted.`;
+  } else if (paid?.status === 'active') {
+    head = `${paid.name ?? 'Your plan'}.`;
+    text = paid.cancelled ? `Ends on ${day(paid.periodEnd)}, then ${formatBytes(free)} free. Nothing is deleted.` : `Renews on ${day(paid.periodEnd)}.`;
+  } else if ((lens.welcomeUntil ?? 0) > now) {
+    head = `Welcome storage until ${day(lens.welcomeUntil)}.`;
+    text = `Then you keep ${formatBytes(free)} free, including invite storage. Backups keep going for 14 more days either way, and nothing you back up is ever deleted without months of notice.`;
+  } else if ((lens.landingUntil ?? 0) > now && lens.usedBytes > free) {
+    icon = 'time-outline';
+    head = `Backups continue until ${day(lens.landingUntil)}.`;
+    text = `Your welcome ended. After that, new backups pause above ${formatBytes(free)}. Get more space, invite friends (+10 GB each), or back up to your own storage to keep going.`;
+  } else {
+    head = `${formatBytes(free)} free forever`;
+    text = ', including invite storage. Invite friends for +10 GB each.';
+  }
   return (
     <View style={styles.legendRow}>
-      <Ionicons name="calendar-outline" size={14} color={colors.link} />
+      <Ionicons name={icon} size={14} color={color} />
       <Text style={styles.legendText}>
-        {welcome ? (
-          <>
-            <Text style={styles.legendName}>Welcome storage until {date}.</Text> After that you keep {formatBytes(free)} free (incl. invites). Everything you
-            back up stays safe and viewable; only new backups pause above it.
-          </>
-        ) : lens.usedBytes > free ? (
-          <>
-            <Text style={styles.legendName}>New backups to Lens are paused</Text> (free: {formatBytes(free)}). Everything you have stays safe. Invite friends for +10
-            GB each, or back up new photos to your own storage.
-          </>
-        ) : (
-          <>
-            <Text style={styles.legendName}>{formatBytes(free)} free forever</Text>, including invite storage. Invite friends for +10 GB each.
-          </>
-        )}
+        <Text style={styles.legendName}>{head}</Text> {text}
       </Text>
     </View>
   );
@@ -102,7 +115,7 @@ function LensStorageCard() {
           </Text>
         </Pressable>
       )}
-      {storage.signedIn && !!storage.lens.welcomeUntil && <PlanNote lens={storage.lens} />}
+      {storage.signedIn && <PlanNote lens={storage.lens} />}
       <View style={styles.legendRow}>
         <Ionicons name="shield-checkmark-outline" size={14} color="#4ADE80" />
         <Text style={styles.legendText}>
