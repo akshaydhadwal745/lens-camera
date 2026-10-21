@@ -5,6 +5,7 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 
 import { Identity } from './identity';
+import { recordPhone } from './phones';
 import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res, s3 } from './lib';
 
 /**
@@ -120,7 +121,7 @@ const MAX_DIAGNOSTICS_BYTES = 32 * 1024;
  */
 export async function saveDiagnostics(identity: Identity, req: Req): Promise<Res> {
   await rateLimit(`diag#${identity.id}`, 60);
-  const { device, build, events } = req.body ?? {};
+  const { device, build, events, phone } = req.body ?? {};
   if (!device || typeof device !== 'object' || !Array.isArray(events) || events.length === 0 || events.length > 20) {
     throw new HttpError(400, 'device and 1–20 events required');
   }
@@ -137,5 +138,7 @@ export async function saveDiagnostics(identity: Identity, req: Req): Promise<Res
       ContentType: 'application/json',
     }),
   );
+  // Admin → Phones: this month's summary of the phone (anonymous monthly ID; infra/lambda/api/phones.ts).
+  await recordPhone({ device, build, events, phone }).catch((e) => console.error('phones summary', e));
   return json(200, { ok: true });
 }

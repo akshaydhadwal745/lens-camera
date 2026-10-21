@@ -99,6 +99,19 @@ async function flush() {
   }
 }
 
+/**
+ * A random ID for this phone, new every month (Admin → Phones counts phones, not reports).
+ * Not the account, not the Android ID: it can't be linked to a person or across months.
+ */
+function monthlyPhoneId(): string {
+  const month = new Date().toISOString().slice(0, 7);
+  const saved = loadDoc<{ month?: string; id?: string }>('diagnostics-phone', {});
+  if (saved.month === month && saved.id) return saved.id;
+  const id = Array.from({ length: 16 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
+  saveDoc('diagnostics-phone', { month, id });
+  return id;
+}
+
 /** The diagnostics API takes ≤ 32 KB per request; camera reports are 3–8 KB. */
 const MAX_CAPABILITIES_BYTES = 28 * 1024;
 let capabilitiesStarted = false;
@@ -113,13 +126,14 @@ let capabilitiesStarted = false;
 async function reportCapabilities() {
   if (Platform.OS !== 'android' || capabilitiesStarted || !diagnosticsEnabled()) return;
   capabilitiesStarted = true;
-  const key = `${buildInfo().code ?? 'local'}|capabilities`;
+  // Once per app build and at least once a month, so phones that don't update are still counted.
+  const key = `${buildInfo().code ?? 'local'}|${new Date().toISOString().slice(0, 7)}|capabilities`;
   const sent = loadSent();
   if (sent[key]) return;
   try {
     const report = await cameraDeviceReport();
     if (!report || JSON.stringify(report).length > MAX_CAPABILITIES_BYTES) return;
-    await api.diagnostics({ device: device(), build: buildInfo(), events: [{ kind: 'capabilities', at: new Date().toISOString(), details: report }] });
+    await api.diagnostics({ device: device(), build: buildInfo(), phone: monthlyPhoneId(), events: [{ kind: 'capabilities', at: new Date().toISOString(), details: report }] });
     sent[key] = new Date().toISOString().slice(0, 10);
     saveSent();
   } catch {

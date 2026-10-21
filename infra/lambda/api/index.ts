@@ -39,6 +39,7 @@ import { requestAccountDeletion } from './account';
 import { followLink } from './attribution';
 import { closeContact, listContact, submitContact } from './contact';
 import { closeFeedback, listFeedback, submitFeedback } from './feedback';
+import { adminPhones } from './phones';
 import { claimCode, decideReferral, heldReferrals, myReferrals } from './referrals';
 import {
   apply as applyAffiliate,
@@ -154,6 +155,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
       if (route === 'GET /admin/audit') return await auditTrail(req);
       if (route === 'GET /admin/contact') return await listContact(req);
       if (route === 'GET /admin/feedback') return await listFeedback(req);
+      if (route === 'GET /admin/phones') return await adminPhones(req);
       if (seg[2] === 'feedback' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeFeedback(identity.id, decodeURIComponent(seg[3]));
       if (seg[2] === 'contact' && seg.length === 5 && seg[4] === 'done' && method === 'POST') return await closeContact(identity.id, decodeURIComponent(seg[3]));
     }

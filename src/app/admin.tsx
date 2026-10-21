@@ -7,14 +7,14 @@ import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Share, Sty
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AdminAffiliate, AdminPayout, api, ContactMessage, FeedbackItem } from '@/lib/api';
+import { AdminAffiliate, AdminPayout, api, ContactMessage, FeedbackItem, PhoneCount, PhoneStats } from '@/lib/api';
 import { rupees } from '@/lib/format';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
-type Tab = 'inbox' | 'feedback' | 'affiliates' | 'referrals' | 'payouts';
+type Tab = 'inbox' | 'feedback' | 'phones' | 'affiliates' | 'referrals' | 'payouts';
 /** Affiliate approvals and payouts are managed on the website only (lens.instagrowapp.com/app/admin). */
 const WEB_TOOLS = Platform.OS === 'web';
-const TABS: Tab[] = WEB_TOOLS ? ['inbox', 'feedback', 'affiliates', 'referrals', 'payouts'] : ['inbox', 'feedback', 'referrals'];
+const TABS: Tab[] = WEB_TOOLS ? ['inbox', 'feedback', 'phones', 'affiliates', 'referrals', 'payouts'] : ['inbox', 'feedback', 'phones', 'referrals'];
 
 function lastMonth(): string {
   const d = new Date();
@@ -167,6 +167,123 @@ function Feedback() {
             </View>
           </View>
         ))
+      )}
+    </>
+  );
+}
+
+const FEATURE_LABEL: Record<string, string> = {
+  bits64: '64-bit',
+  ois: 'Optical stabilisation (OIS)',
+  flash: 'Flash',
+  video4k: '4K video',
+  hdrVideo: 'HDR video',
+  makerNight: "Maker's Night mode",
+  slowMotion: 'Slow motion (CameraX)',
+  slowMotionCamera2: 'High-speed camera (Camera2)',
+  lowLightBoost: 'Low-light boost',
+  concurrentCameras: 'Front + back at once (Dual)',
+};
+
+function monthsBack(n: number): string[] {
+  const d = new Date();
+  d.setUTCDate(1);
+  return Array.from({ length: n }, (_, i) => {
+    const m = new Date(d);
+    m.setUTCMonth(d.getUTCMonth() - i);
+    return m.toISOString().slice(0, 7);
+  });
+}
+
+function Bars({ title, rows, total }: { title: string; rows: PhoneCount[]; total: number }) {
+  if (!rows.length) return null;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.name}>{title}</Text>
+      {rows.map((r) => {
+        const pct = total ? Math.round((r.count / total) * 100) : 0;
+        return (
+          <View key={r.label} style={{ gap: 3, marginTop: 6 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+              <Text style={[styles.body, { flexShrink: 1 }]} numberOfLines={1} selectable>
+                {r.label}
+              </Text>
+              <Text style={styles.small}>
+                {r.count} · {pct}%
+              </Text>
+            </View>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: `${Math.max(pct, 1)}%` }]} />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Which phones Lens runs on (anonymous camera reports; counts only, never individual phones). */
+function Phones() {
+  const months = monthsBack(4);
+  const [month, setMonth] = useState(months[0]);
+  const [stats, setStats] = useState<PhoneStats | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.admin.phones(month).then(
+      (r) => alive && setStats(r),
+      (e) => notify('Error', errorMessage(e)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [month]);
+  return (
+    <>
+      <View style={styles.chips}>
+        {months.map((m) => (
+          <Pressable
+            key={m}
+            style={[styles.chip, m === month && styles.chipOn]}
+            onPress={() => {
+              if (m === month) return;
+              setStats(null);
+              setMonth(m);
+            }}
+          >
+            <Text style={[styles.chipText, m === month && { color: '#000' }]}>{m}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {!stats ? (
+        <ActivityIndicator color={colors.link} />
+      ) : stats.phones === 0 ? (
+        <Text style={styles.empty}>No phone reports this month yet.</Text>
+      ) : (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.name}>{stats.phones.toLocaleString()} phones</Text>
+            <Text style={styles.small}>
+              Phones that opened the camera this month with diagnostics on (Settings → Camera). Anonymous: a new random ID per phone each month.
+            </Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.name}>What the phones can do</Text>
+            {Object.entries(stats.features).map(([k, v]) => (
+              <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, gap: 8 }}>
+                <Text style={[styles.body, { flexShrink: 1 }]}>{FEATURE_LABEL[k] ?? k}</Text>
+                <Text style={styles.small}>{v.known ? `${Math.round((v.yes / v.known) * 100)}% (${v.yes} of ${v.known})` : 'not reported yet'}</Text>
+              </View>
+            ))}
+          </View>
+          <Bars title="Top models" rows={stats.models} total={stats.phones} />
+          <Bars title="Android version" rows={stats.android} total={stats.phones} />
+          <Bars title="Memory (RAM)" rows={stats.ram} total={stats.phones} />
+          <Bars title="Brands" rows={stats.brands} total={stats.phones} />
+          <Bars title="Lens camera tier" rows={stats.tiers} total={stats.phones} />
+          <Bars title="Back camera level (Camera2)" rows={stats.cameraLevel} total={stats.phones} />
+          <Bars title="Chips" rows={stats.chips} total={stats.phones} />
+          <Bars title="Lens builds" rows={stats.builds} total={stats.phones} />
+        </>
       )}
     </>
   );
@@ -364,6 +481,7 @@ export default function AdminScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, gap: 10 }} keyboardShouldPersistTaps="handled">
         {tab === 'inbox' && <Inbox />}
         {tab === 'feedback' && <Feedback />}
+        {tab === 'phones' && <Phones />}
         {tab === 'affiliates' && WEB_TOOLS && <Affiliates />}
         {tab === 'referrals' && <Referrals />}
         {tab === 'payouts' && WEB_TOOLS && <Payouts />}
@@ -395,4 +513,6 @@ const styles = StyleSheet.create({
   smallButton: { backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 14, minHeight: 40, justifyContent: 'center' },
   smallButtonText: { color: colors.link, fontWeight: '700' },
   input: { color: '#fff', fontSize: 15, backgroundColor: '#2C2C2E', borderRadius: 10, paddingHorizontal: 12, minHeight: 40 },
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: '#2C2C2E', overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3, backgroundColor: colors.link },
 });

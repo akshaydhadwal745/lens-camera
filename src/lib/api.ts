@@ -109,6 +109,22 @@ export type AffiliateDashboard = {
   payouts?: { month: string; grossPaise: number; tdsPaise: number; netPaise: number; status: string; reference?: string }[];
 };
 export type AdminAffiliate = { id: string; status: string; name: string; email: string; channels: string; audience?: string; appliedAt: number; panMasked?: string; upiMasked?: string };
+/** Admin → Phones (infra/lambda/api/phones.ts): counts only. */
+export type PhoneCount = { label: string; count: number };
+export type PhoneStats = {
+  month: string;
+  phones: number;
+  models: PhoneCount[];
+  brands: PhoneCount[];
+  android: PhoneCount[];
+  ram: PhoneCount[];
+  tiers: PhoneCount[];
+  cameraLevel: PhoneCount[];
+  chips: PhoneCount[];
+  builds: PhoneCount[];
+  features: Record<string, { yes: number; known: number }>;
+};
+
 export type FeedbackKind = 'review' | 'issue' | 'idea' | 'other' | 'report';
 export type FeedbackItem = {
   id: string; reference: string; kind: FeedbackKind; source?: string; rating?: number; message: string; email?: string; accountEmail?: string;
@@ -415,13 +431,14 @@ export const api = {
     payouts: (month: string) => request<{ payouts: AdminPayout[] }>('GET', `/admin/payouts?month=${month}`),
     contact: (status: 'new' | 'done') => request<{ messages: ContactMessage[] }>('GET', `/admin/contact?status=${status}`),
     feedback: (status: 'new' | 'done') => request<{ feedback: FeedbackItem[] }>('GET', `/admin/feedback?status=${status}`),
+    phones: (month: string) => request<PhoneStats>('GET', `/admin/phones?month=${month}`),
     closeFeedback: (id: string) => request<{ status: string }>('POST', `/admin/feedback/${encodeURIComponent(id)}/done`),
     closeContact: (id: string) => request<{ status: string }>('POST', `/admin/contact/${encodeURIComponent(id)}/done`),
     markPaid: (affiliateId: string, month: string, reference: string) =>
       request<{ status: string }>('POST', `/admin/payouts/${affiliateId}/${month}/paid`, { reference }),
   },
   /** Anonymous camera diagnostics (src/lib/diagnostics.ts). */
-  diagnostics: (report: { device: Record<string, unknown>; build: unknown; events: unknown[] }) =>
+  diagnostics: (report: { device: Record<string, unknown>; build: unknown; phone?: string; events: unknown[] }) =>
     request<{ ok: boolean }>('POST', '/diagnostics', report),
   // Camera quality R&D (docs/research/camera-quality.md).
   lab: {

@@ -3,6 +3,7 @@ package expo.modules.lenscamera
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
@@ -216,6 +217,8 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
         "hardware" to Build.HARDWARE,
         "board" to Build.BOARD,
         "soc" to if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}" else null,
+        // Front + back at the same time (Dual camera, docs/design/dual-camera.md): Android 11+ feature.
+        "concurrentCameras" to (Build.VERSION.SDK_INT >= 30 && context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_CONCURRENT)),
       ),
       "tier" to tierOf(back),
       "lenses" to backLenses.map { mapOf("id" to it.id, "factor" to it.factor, "via" to if (it.camera != null) "camera ${it.camera.id}" else "zoom") },
