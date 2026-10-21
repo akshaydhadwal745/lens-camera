@@ -5,6 +5,8 @@ import { Identity } from './identity';
 import { ddb, env, HttpError, json, randomId, rateLimit, Req, Res } from './lib';
 import { MediaRecord, mediaKey, toClient } from './media';
 import { notify } from './push';
+import { bonusPut } from './referrals';
+import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 
 // Event albums (docs/design/switch-features.md §3): a wedding, trip or party album
 // that anyone with its link or QR code can join and add their own photos to.
@@ -241,6 +243,7 @@ async function addItems(identity: Identity, ownerId: string, album: Album, req: 
     ),
   ]);
   const count = await refresh(index.ownerId, index.albumId);
+  if (!isOwner && mine === 0) await hostReward(index.ownerId, index.albumId, album.name).catch((e) => console.warn('event reward', (e as Error).message));
   // One notification per person per batch (not per photo); big events: the first 50.
   const body = `${identity.name} added ${fresh.length} ${fresh.length === 1 ? 'photo' : 'photos'}.`;
   await Promise.all(
@@ -249,6 +252,54 @@ async function addItems(identity: Identity, ownerId: string, album: Album, req: 
     ),
   );
   return json(200, { added: fresh.length, count });
+}
+
+const GB = 1024 ** 3;
+/** Hosts get +1 GB for every 10 guests who add photos, up to +5 GB in all (growth plan G2). */
+const HOST_STEP = 10;
+const HOST_MAX_BYTES = 5 * GB;
+
+/**
+ * A guest just added their first photos: at every 10 guests who added something, the host gets
+ * +1 GB (once per step and album; never more than +5 GB from events). Only guests who really add
+ * photos count, so empty fake guests earn nothing.
+ */
+async function hostReward(ownerId: string, albumId: string, albumName: string) {
+  const items = await albumItems(ownerId, albumId);
+  const contributors = new Set(items.map((it) => it.by).filter(Boolean)).size;
+  if (contributors === 0 || contributors % HOST_STEP !== 0) return;
+  const owner = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${ownerId}`, sk: 'PROFILE' }, ProjectionExpression: 'eventBonusBytes' }))).Item;
+  if ((owner?.eventBonusBytes ?? 0) >= HOST_MAX_BYTES) return;
+  try {
+    await ddb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: env.table,
+              Item: { pk: `D#${ownerId}`, sk: `EVR#${albumId}#${contributors}`, at: Date.now() },
+              ConditionExpression: 'attribute_not_exists(pk)',
+            },
+          },
+          // The bonus ledger row (same as invite rewards) and the profile, in one go.
+          bonusPut(ownerId, GB, 'event-host', `${albumId}#${contributors}`)[0],
+          {
+            Update: {
+              TableName: env.table,
+              Key: { pk: `D#${ownerId}`, sk: 'PROFILE' },
+              UpdateExpression: 'ADD bonusBytes :g, eventBonusBytes :g',
+              ConditionExpression: 'attribute_exists(pk) AND (attribute_not_exists(eventBonusBytes) OR eventBonusBytes < :max)',
+              ExpressionAttributeValues: { ':g': GB, ':max': HOST_MAX_BYTES },
+            },
+          },
+        ],
+      }),
+    );
+  } catch (e) {
+    if ((e as { name?: string })?.name === 'TransactionCanceledException') return; // granted already, or at the cap
+    throw e;
+  }
+  await notify(ownerId, 'invites', { title: `+1 GB: ${contributors} guests added photos`, body: `Thanks for bringing people to “${albumName}”. The extra storage is yours, for good.`, route: '/storage' }).catch(() => {});
 }
 
 /** GET /v1/shared-albums/:ownerId/:albumId/mine: a member's own photos in the album (others' come with GET /shared). */

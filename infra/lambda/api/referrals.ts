@@ -221,7 +221,7 @@ async function finish(friendId: string, inviterId: string, state: 'rejected' | '
   await audit({ entity: `referral:${friendId}`, action: `referral.${state}`, actor: 'system', data: { inviterId, ...data } });
 }
 
-function bonusPut(userId: string, bytes: number, reason: string, refId: string) {
+export function bonusPut(userId: string, bytes: number, reason: string, refId: string) {
   return [
     {
       Put: {
