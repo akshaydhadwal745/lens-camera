@@ -17,6 +17,17 @@ type Analytics = {
   retention: { week: string; size: number; weeks: (number | null)[] }[];
   features: Feature[];
   breakdowns: { build: Count; os: Count; tier: Count; region: Count; client: Count };
+  website?: {
+    daily: { day: string; visits: number; pageviews: number; getLens: number }[];
+    visits: number;
+    pageviews: number;
+    getLens: number;
+    getLensRate: number | null;
+    pages: Count;
+    sources: Count;
+    events: Count;
+    getLensFrom: Count;
+  };
 };
 
 /** What each counted feature is (app counts from src/lib/usage.ts, server ones from the database). */
@@ -258,6 +269,41 @@ export function Analytics() {
                 )}
                 <p className="muted small">“server” rows come straight from the database (exact, all app versions). The others are counted by the app (from the update of 21 Oct 2026) while “Help improve Lens” is on.</p>
               </Card>
+
+              {a.website && (
+                <>
+                  <div className="row-head">
+                    <h2>Website (last 30 days)</h2>
+                  </div>
+                  <div className="stats">
+                    <Stat label="Visits" value={n(a.website.visits)} />
+                    <Stat label="Page views" value={n(a.website.pageviews)} />
+                    <Stat label="Get Lens clicks" value={n(a.website.getLens)} sub="download, APK or Play" />
+                    <Stat label="Visits → Get Lens" value={pct(a.website.getLensRate)} />
+                  </div>
+                  <div className="grid2">
+                    <Card>
+                      <Bars caption={<>Visits per day</>} rows={a.website.daily.map((d) => ({ label: d.day, value: d.visits }))} />
+                    </Card>
+                    <Card>
+                      <Bars caption={<>Get Lens clicks per day</>} rows={a.website.daily.map((d) => ({ label: d.day, value: d.getLens }))} />
+                    </Card>
+                    <Card title="Where visits come from">
+                      <Breakdown rows={a.website.sources} />
+                    </Card>
+                    <Card title="Top pages">
+                      <Breakdown rows={a.website.pages} />
+                    </Card>
+                    <Card title="Pages people click Get Lens on">
+                      <Breakdown rows={a.website.getLensFrom} />
+                    </Card>
+                    <Card title="Clicks">
+                      <Breakdown rows={a.website.events} />
+                    </Card>
+                  </div>
+                  <p className="muted small">Counted by our own script: no cookies, no visitor IDs, daily totals only. Search traffic details (queries, positions) are in Google Search Console.</p>
+                </>
+              )}
 
               <div className="row-head">
                 <h2>Who uses Lens (last 30 days)</h2>

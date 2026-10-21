@@ -469,6 +469,13 @@ done; ok "temporary email providers refused (yopmail, mailinator, subdomains)"
 [[ $(call POST /auth/email/start "$TE" -d "{\"email\":\"ok$(date +%s%N)@e2e.lens.invalid\"}" | j .sent) == true ]] && ok "regular addresses still work"
 # --- website sign-in through CloudFront /api (HttpOnly cookie session) ---
 SITE="${SITE:-$(node -p "require('./outputs.json').Lens.WebUrl.replace(/\/$/, '')")}"
+# Our own website analytics: counts only, private parts of addresses cut, bots ignored.
+WDAY=$(date -u +%F); wget_count() { aws dynamodb get-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"WSTAT#$WDAY\"},\"sk\":{\"S\":\"$1\"}}" --query 'Item.count.N' --output text; }
+W0=$(wget_count 'pv#/s/'); [[ $W0 == None ]] && W0=0
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -X POST "$SITE/api/v1/web-events" -H 'content-type: application/json' -A 'Mozilla/5.0 (X11; Linux) e2e' -d '{"p":"/s/AbCdEfGhIjKlMnOpQrStUv?x=1"}') == 204 ]] && ok "website page view accepted"
+[[ $(wget_count 'pv#/s/') == $((W0 + 1)) && $(wget_count 'pv#/s/AbCdEfGhIjKlMnOpQrStUv/') == None ]] && ok "share-link tokens never stored (counted as /s/)"
+curl -sS -o /dev/null -X POST "$SITE/api/v1/web-events" -H 'content-type: application/json' -A 'WhatsApp/2.23' -d '{"p":"/s/x/"}'
+[[ $(wget_count 'pv#/s/') == $((W0 + 1)) ]] && ok "bots and link previews aren't counted"
 WAPI="$SITE/api/v1"
 JAR="$TMP/jar"
 wcall() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$WAPI$p" -b "$JAR" -c "$JAR" -H 'content-type: application/json' -H 'x-lens-web: 1' "$@"; }

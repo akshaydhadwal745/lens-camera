@@ -40,6 +40,7 @@ import { followLink } from './attribution';
 import { submitContact } from './contact';
 import { attachmentUpload, submitFeedback } from './feedback';
 import { saveUsage } from './usage';
+import { webEvent } from './web-events';
 import { claimCode, myReferrals } from './referrals';
 import {
   apply as applyAffiliate,
@@ -76,6 +77,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /health') return json(200, { ok: true });
     if (route === 'GET /updates') return await updateManifest(req);
     if (route === 'POST /contact') return await submitContact(req);
+    if (route === 'POST /web-events') return await webEvent(req);
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
     // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.
     if (seg[1] === 'r' && seg.length === 3 && method === 'GET') return await followLink(req, 'referral', seg[2]);

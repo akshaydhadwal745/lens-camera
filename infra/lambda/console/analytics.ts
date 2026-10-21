@@ -5,7 +5,7 @@
 //   - feature use: people and uses per feature (app counts f_* on ACT# rows + server records)
 //   - breakdowns: app build, Android version, camera tier, region, app vs web
 // Counts only; cached 30 minutes (STATS ANALYTICS#<window>).
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, json, rateLimit, Req, Res } from '../api/lib';
 import { scanAll, testAccounts } from './overview';
@@ -30,6 +30,41 @@ const weekOf = (t: number) => {
   return dayKey(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back));
 };
 const tsOf = (r: Row) => (typeof r.createdAt === 'number' ? r.createdAt : typeof r.at === 'number' ? r.at : typeof r.updatedAt === 'number' ? r.updatedAt : undefined);
+
+/** Website (our own beacon, api/web-events.ts): daily totals for the last 30 days. */
+async function website(now: number) {
+  const days = Array.from({ length: 30 }, (_, i) => dayKey(now - (29 - i) * DAY));
+  const rows = await Promise.all(
+    days.map(async (day) => {
+      const r = await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': `WSTAT#${day}` } }));
+      return { day, items: r.Items ?? [] };
+    }),
+  );
+  const sum = (prefix: string) => {
+    const m = new Map<string, number>();
+    for (const d of rows) for (const i of d.items) if (String(i.sk).startsWith(prefix)) m.set(String(i.sk).slice(prefix.length), (m.get(String(i.sk).slice(prefix.length)) ?? 0) + (i.count ?? 0));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
+  };
+  const daily = rows.map((d) => ({
+    day: d.day,
+    visits: d.items.find((i) => i.sk === 'visit')?.count ?? 0,
+    pageviews: d.items.filter((i) => String(i.sk).startsWith('pv#')).reduce((s, i) => s + (i.count ?? 0), 0),
+    getLens: d.items.filter((i) => ['ev#get_lens', 'ev#apk_download', 'ev#play_store'].includes(String(i.sk))).reduce((s, i) => s + (i.count ?? 0), 0),
+  }));
+  const visits = daily.reduce((s, d) => s + d.visits, 0);
+  const getLens = daily.reduce((s, d) => s + d.getLens, 0);
+  return {
+    daily,
+    visits,
+    pageviews: daily.reduce((s, d) => s + d.pageviews, 0),
+    getLens,
+    getLensRate: visits ? getLens / visits : null,
+    pages: sum('pv#').slice(0, 20),
+    sources: sum('src#').filter((s) => s.label !== 'internal').slice(0, 15),
+    events: sum('ev#'),
+    getLensFrom: sum('evp#get_lens#').slice(0, 10),
+  };
+}
 
 async function compute(windowDays: number) {
   const now = Date.now();
@@ -218,6 +253,7 @@ async function compute(windowDays: number) {
     retention,
     features,
     breakdowns: { build: by('build'), os: by('os'), tier: by('tier'), region: by('region'), client: by('client') },
+    website: await website(now),
   };
 }
 
