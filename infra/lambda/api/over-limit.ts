@@ -9,7 +9,7 @@
 import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { audit } from './audit';
-import { ddb, env, quotaFor } from './lib';
+import { ddb, env, PLAN_CHANGE_WELCOME_UNTIL, quotaFor } from './lib';
 import { destroyMedia } from './trash';
 import type { MediaRecord } from './media';
 import { deletionAt } from './plans';
@@ -24,6 +24,7 @@ type Profile = Record<string, any>;
 /** Starts or clears the over-limit clock for one account. Returns its state after. */
 export async function trackOverLimit(id: string, p: Profile, now = Date.now()): Promise<'over' | 'ok'> {
   if (!p.email) return 'ok';
+  p.welcomeUntil ??= PLAN_CHANGE_WELCOME_UNTIL;
   const over = (p.usedBytes ?? 0) > quotaFor(p, now);
   if (over && !p.overLimitSince) {
     await ddb.send(
@@ -64,6 +65,8 @@ async function mediaOf(id: string): Promise<MediaRecord[]> {
 export async function deleteAboveLimit(id: string, now = Date.now()): Promise<{ deleted: number; bytes: number }> {
   const fresh = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${id}`, sk: 'PROFILE' } }))).Item;
   if (!fresh?.email || !fresh.overLimitSince || now < deletionAt(fresh.overLimitSince)) return { deleted: 0, bytes: 0 };
+  // Accounts from before the plan change keep their welcome date (same fallback as everywhere else).
+  fresh.welcomeUntil ??= PLAN_CHANGE_WELCOME_UNTIL;
   const quota = quotaFor(fresh, now);
   let used = fresh.usedBytes ?? 0;
   if (used <= quota) return { deleted: 0, bytes: 0 };
