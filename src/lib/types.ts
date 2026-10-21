@@ -58,7 +58,7 @@ export interface ConnectedStorage {
 export interface StorageOverview {
   plan: 'free';
   /** Lens storage: newest `recentBytes` are "Recent", the rest "Saver" (all instant). Guests: 5 GB. */
-  lens: { usedBytes: number; quotaBytes: number; recentBytes: number; signedInQuotaBytes: number };
+  lens: { usedBytes: number; quotaBytes: number; recentBytes: number; signedInQuotaBytes: number; freeQuotaBytes?: number; welcomeUntil?: number; bonusBytes?: number };
   signedIn: boolean;
   storages: ConnectedStorage[];
   limits: { storages: number; routing: boolean };

@@ -10,6 +10,10 @@ export const CHANNELS = [
   { id: 'invites', name: 'Invites and rewards', description: 'Friends who joined with your invite (+10 GB)' },
   { id: 'storage', name: 'Storage', description: 'Your Lens storage is nearly full' },
   { id: 'backup', name: 'Backup finished', description: 'All your photos and videos are safe in the cloud' },
+  { id: 'memories', name: 'Memories and recaps', description: 'A trip or event recap is ready; photos from this day in earlier years' },
+  { id: 'summary', name: 'Weekly summary', description: 'What Lens backed up for you this week' },
+  { id: 'news', name: 'News and tips', description: 'New Lens features and tips, at most once a week' },
+  { id: 'account', name: 'Account and storage plan', description: 'Important changes to your storage, like your welcome period ending' },
 ] as const;
 
 let channelsReady: Promise<void> | null = null;

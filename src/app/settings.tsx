@@ -377,9 +377,12 @@ function NotificationsSection() {
     ['shares', 'people-outline', 'Shares', 'Someone wants to share with you, or accepted what you sent.'],
     ['invites', 'gift-outline', 'Invites', 'A friend joined with your invite and you got more storage.'],
     ['storage', 'cloud-outline', 'Storage', 'Your Lens storage is nearly full.'],
+    ['memories', 'images-outline', 'Memories and recaps', 'A trip or event recap is ready, and photos from this day in earlier years.'],
+    ['summary', 'calendar-outline', 'Weekly summary', 'On Sundays: what Lens backed up for you that week.'],
+    ['news', 'megaphone-outline', 'News and tips', 'New features and tips. At most once a week.'],
   ];
   return (
-    <Section title="Notifications" footer="Lens only notifies you about these. No marketing.">
+    <Section title="Notifications" footer="At most 2 a day, only between 9:00 and 21:00. Notices about your storage plan always come.">
       {rows.map(([key, icon, label, hint]) => (
         <View key={key}>
           <SwitchRow icon={icon} label={label} hint={hint} value={prefs ? prefs[key] : true} onChange={(v) => change(key, v)} />
@@ -561,7 +564,7 @@ export default function SettingsScreen() {
             </Text>
             {identity && (
               <Pressable onPress={() => router.push((identity.email ? '/invite' : '/signin') as Href)} hitSlop={8}>
-                <Text style={styles.link}>{identity.email ? 'Get +10 GB' : 'Get 100 GB free'}</Text>
+                <Text style={styles.link}>{identity.email ? 'Get +10 GB' : 'Get 40 GB free'}</Text>
               </Pressable>
             )}
           </View>

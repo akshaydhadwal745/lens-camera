@@ -34,6 +34,37 @@ function Section({ title, children, footer }: { title: string; children: ReactNo
   );
 }
 
+/** Welcome period, then free forever: always says what happens next (nothing is ever deleted). */
+function PlanNote({ lens }: { lens: { welcomeUntil?: number; freeQuotaBytes?: number; bonusBytes?: number; usedBytes: number } }) {
+  const free = (lens.freeQuotaBytes ?? 10 * 1024 ** 3) + (lens.bonusBytes ?? 0);
+  const until = lens.welcomeUntil ?? 0;
+  const [now] = useState(() => Date.now());
+  const welcome = until > now;
+  const date = new Date(until).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  return (
+    <View style={styles.legendRow}>
+      <Ionicons name="calendar-outline" size={14} color={colors.link} />
+      <Text style={styles.legendText}>
+        {welcome ? (
+          <>
+            <Text style={styles.legendName}>Welcome storage until {date}.</Text> After that you keep {formatBytes(free)} free (incl. invites). Everything you
+            back up stays safe and viewable; only new backups pause above it.
+          </>
+        ) : lens.usedBytes > free ? (
+          <>
+            <Text style={styles.legendName}>New backups to Lens are paused</Text> (free: {formatBytes(free)}). Everything you have stays safe. Invite friends for +10
+            GB each, or back up new photos to your own storage.
+          </>
+        ) : (
+          <>
+            <Text style={styles.legendName}>{formatBytes(free)} free forever</Text>, including invite storage. Invite friends for +10 GB each.
+          </>
+        )}
+      </Text>
+    </View>
+  );
+}
+
 function LensStorageCard() {
   const storage = useStore((s) => s.storage);
   if (!storage) return <ActivityIndicator color="#fff" style={{ padding: 24 }} />;
@@ -67,10 +98,11 @@ function LensStorageCard() {
           <Ionicons name="person-circle-outline" size={18} color={colors.link} />
           <Text style={[styles.legendText, { color: '#fff' }]}>
             Guests get {formatBytes(quotaBytes)}. <Text style={{ color: colors.link, fontWeight: '700' }}>Sign in</Text> to get{' '}
-            {formatBytes(storage.lens.signedInQuotaBytes)} free.
+            {formatBytes(storage.lens.signedInQuotaBytes)} free for 3 months, then {formatBytes(storage.lens.freeQuotaBytes ?? 10 * 1024 ** 3)} free forever.
           </Text>
         </Pressable>
       )}
+      {storage.signedIn && !!storage.lens.welcomeUntil && <PlanNote lens={storage.lens} />}
       <View style={styles.legendRow}>
         <Ionicons name="shield-checkmark-outline" size={14} color="#4ADE80" />
         <Text style={styles.legendText}>

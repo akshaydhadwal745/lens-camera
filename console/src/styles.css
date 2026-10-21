@@ -776,3 +776,58 @@ tr:last-child td {
 .spark span.on {
   background: var(--bar);
 }
+
+/* ---------- notifications ---------- */
+
+.form {
+  display: grid;
+  gap: 12px;
+}
+.field-row {
+  display: grid;
+  gap: 4px;
+}
+.field-row > span:first-child {
+  font-weight: 500;
+}
+textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.phone-preview {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: var(--bg);
+  max-width: 360px;
+}
+.pp-app {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pp-title {
+  font-weight: 600;
+  margin-top: 2px;
+}
+.pp-body {
+  color: var(--text);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.audience-size {
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.campaign-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}

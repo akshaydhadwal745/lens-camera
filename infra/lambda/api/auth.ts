@@ -37,6 +37,8 @@ const CODES_PER_HOUR = 5;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 /** Reserved test domain (RFC 2606 .invalid): codes are stored readable for e2e, never emailed. */
 const TEST_DOMAIN = '@e2e.lens.invalid';
+/** A friend's invite adds a month to the welcome period (docs/business/business-model-and-roadmap.md). */
+const REFERRAL_EXTRA_WELCOME_MS = 30 * 86_400_000;
 /** Stop merging before the API's time limit; the app retries to finish. */
 const MERGE_BUDGET_MS = 40_000;
 
@@ -253,14 +255,20 @@ async function linkLogins(accountId: string, logins: { kind: LoginKind; value: s
       if (error?.name !== 'ConditionalCheckFailedException') throw error; // already linked
     }
   }
+  // The first sign-in starts the 40 GB welcome period (3 months; +1 month when a friend invited them).
+  let welcomeUntil: number | undefined;
+  if (email) {
+    const p = (await ddb.send(new GetCommand({ TableName: env.table, Key: profileKey(accountId), ProjectionExpression: 'attribution' }))).Item;
+    welcomeUntil = Date.now() + env.welcomeMs + (p?.attribution?.program === 'referral' ? REFERRAL_EXTRA_WELCOME_MS : 0);
+  }
   await ddb.send(
     new UpdateCommand({
       TableName: env.table,
       Key: profileKey(accountId),
       // loginKeys: exactly which login records point here (to unlink them on account deletion).
-      UpdateExpression: `${email ? 'SET email = if_not_exists(email, :e), signedInAt = if_not_exists(signedInAt, :t) ' : ''}ADD logins :l, loginKeys :k`,
+      UpdateExpression: `${email ? 'SET email = if_not_exists(email, :e), signedInAt = if_not_exists(signedInAt, :t), welcomeUntil = if_not_exists(welcomeUntil, :w) ' : ''}ADD logins :l, loginKeys :k`,
       ExpressionAttributeValues: {
-        ...(email ? { ':e': email, ':t': Date.now() } : {}),
+        ...(email ? { ':e': email, ':t': Date.now(), ':w': welcomeUntil } : {}),
         ':l': new Set(logins.map((l) => l.kind)),
         ':k': new Set(logins.map((l) => loginKey(l.kind, l.value).pk)),
       },

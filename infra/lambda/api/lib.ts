@@ -13,8 +13,14 @@ export const env = {
   cdnDomain: process.env.CDN_DOMAIN!,
   keyPairId: process.env.CF_KEY_PAIR_ID!,
   privateKeyParam: process.env.CF_PRIVATE_KEY_PARAM!,
-  /** Signed-in accounts. */
+  /** Signed-in accounts during their welcome period (owner decision 2026-10-21: 40 GB, 3 months). */
   quotaBytes: Number(process.env.QUOTA_BYTES),
+  /** Signed-in accounts after the welcome period: free forever (10 GB). */
+  freeQuotaBytes: Number(process.env.FREE_QUOTA_BYTES ?? 10 * 1024 ** 3),
+  /** How long the welcome lasts from the first sign-in. */
+  welcomeMs: Number(process.env.WELCOME_DAYS ?? 90) * 86_400_000,
+  /** Referral bonuses count up to this much (docs/business/business-model-and-roadmap.md). */
+  maxBonusBytes: Number(process.env.MAX_BONUS_BYTES ?? 100 * 1024 ** 3),
   /** Guests (not signed in), pooled per device fingerprint. */
   guestQuotaBytes: Number(process.env.GUEST_QUOTA_BYTES ?? 5 * 1024 ** 3),
   maxFileBytes: Number(process.env.MAX_FILE_BYTES),
@@ -133,18 +139,35 @@ export function withCookies(res: Res, cookies: string[]): Res {
   return { ...res, cookies: [...(res.cookies ?? []), ...cookies] };
 }
 
-/** Lens storage limit: guests get less until they sign in; referral bonuses add on top. */
-export function quotaFor(identity: { email?: string; bonusBytes?: number }): number {
-  return (identity.email ? env.quotaBytes : env.guestQuotaBytes) + Math.max(0, identity.bonusBytes ?? 0);
+/** Signed-in accounts made before the new storage plan (2026-10-22): their welcome ends 3 months after it. */
+export const PLAN_CHANGE_WELCOME_UNTIL = Date.UTC(2026, 9, 22) + 90 * 86_400_000;
+
+/** Is this signed-in account still in its welcome period? */
+export const inWelcome = (identity: { welcomeUntil?: number }, now = Date.now()) => (identity.welcomeUntil ?? 0) > now;
+
+/**
+ * Lens storage limit (owner decision 2026-10-21): guests 5 GB; signed in 40 GB for the welcome
+ * period (3 months from the first sign-in), then 10 GB free forever; referral bonuses (≤ 100 GB) on
+ * top. Backups to the user's own storage don't count. Nothing is ever deleted when the limit
+ * drops: new Lens backups just pause above it.
+ */
+export function quotaFor(identity: { email?: string; bonusBytes?: number; welcomeUntil?: number }, now = Date.now()): number {
+  const bonus = Math.min(env.maxBonusBytes, Math.max(0, identity.bonusBytes ?? 0));
+  if (!identity.email) return env.guestQuotaBytes + bonus;
+  return (inWelcome(identity, now) ? env.quotaBytes : env.freeQuotaBytes) + bonus;
 }
 
 /** Throws 413 if `bytes` more would exceed this identity's Lens storage. */
-export function checkQuota(identity: { email?: string; bonusBytes?: number; usedBytes: number }, bytes: number, what = 'Lens storage is full') {
+export function checkQuota(identity: { email?: string; bonusBytes?: number; usedBytes: number; welcomeUntil?: number }, bytes: number, what = 'Lens storage is full') {
   if (bytes <= 0 || identity.usedBytes + bytes <= quotaFor(identity)) return;
   if (!identity.email) {
     const gb = Math.round(env.guestQuotaBytes / 1024 ** 3);
     const full = Math.round(env.quotaBytes / 1024 ** 3);
-    throw new HttpError(413, `Your free ${gb} GB guest storage is full. Sign in to get ${full} GB free.`, 'guest-quota');
+    throw new HttpError(413, `Your free ${gb} GB guest storage is full. Sign in to get ${full} GB free for 3 months.`, 'guest-quota');
+  }
+  if (!inWelcome(identity) && identity.usedBytes > env.freeQuotaBytes) {
+    const free = Math.round(env.freeQuotaBytes / 1024 ** 3);
+    throw new HttpError(413, `Your ${free} GB free storage is full. Everything you have stays safe. Invite friends for more space, or back up to your own storage.`, 'free-quota');
   }
   throw new HttpError(413, what, 'quota');
 }

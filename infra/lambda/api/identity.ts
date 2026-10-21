@@ -9,6 +9,8 @@ import {
   hashSecret,
   HttpError,
   json,
+  inWelcome,
+  PLAN_CHANGE_WELCOME_UNTIL,
   quotaFor,
   randomId,
   rateLimit,
@@ -37,6 +39,10 @@ export type Identity = {
   /** From Google sign-in: only a suggestion for the Settings field. */
   googleName?: string;
   bonusBytes?: number;
+  /** Signed-in accounts: when the 40 GB welcome period ends (ms). */
+  welcomeUntil?: number;
+  /** Invited by a friend and not rewarded or rejected yet: uploads re-check the reward. */
+  referralPending?: boolean;
 };
 
 /** Sessions end after this long without use (sliding; refreshed at most daily). */
@@ -267,12 +273,22 @@ export async function authenticate(req: Req): Promise<Identity> {
     email: profile.Item.email,
     realName: profile.Item.realName,
     googleName: profile.Item.googleName,
+    // Accounts from before the plan change (owner decision 2026-10-21) start their welcome on that day.
+    welcomeUntil: profile.Item.welcomeUntil ?? (profile.Item.email ? PLAN_CHANGE_WELCOME_UNTIL : undefined),
+    referralPending: profile.Item.attribution?.program === 'referral' && !['rewarded', 'rejected', 'held'].includes(profile.Item.referral) ? true : undefined,
   };
 }
 
 export function me(identity: Identity): Res {
-  const { tokenId: _session, googleName, ...profile } = identity;
-  return json(200, { ...profile, suggestedName: googleName, quotaBytes: quotaFor(identity), signedInQuotaBytes: env.quotaBytes });
+  const { tokenId: _session, googleName, referralPending: _r, ...profile } = identity;
+  return json(200, {
+    ...profile,
+    suggestedName: googleName,
+    quotaBytes: quotaFor(identity),
+    signedInQuotaBytes: env.quotaBytes,
+    freeQuotaBytes: env.freeQuotaBytes,
+    plan: !identity.email ? 'guest' : inWelcome(identity) ? 'welcome' : 'free',
+  });
 }
 
 /** GET /v1/users?q=prefix: search identities by name prefix. */

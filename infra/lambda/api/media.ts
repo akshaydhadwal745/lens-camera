@@ -21,6 +21,7 @@ import { Identity } from './identity';
 import { nearestPlace, parseGps, type Place } from './places';
 import { checkQuota, ddb, decodeCursor, encodeCursor, env, HttpError, json, quotaFor, Req, Res, s3, signMediaUrl } from './lib';
 import { notify } from './push';
+import { evaluateReferral, rewardsHook } from './referrals';
 import { listStorages, PROVIDERS, Provider } from './storage';
 
 /** Files up to this size use a single PUT; larger ones use S3 multipart. */
@@ -677,10 +678,12 @@ export async function completeUpload(identity: Identity, id: string, req?: Req):
     if (!item.location && quota > 0 && before < quota * 0.9 && before + item.size >= quota * 0.9) {
       await notify(identity.id, 'storage', {
         title: 'Lens storage is 90% full',
-        body: 'Free up space or get more, so new photos keep backing up.',
+        body: 'Invite a friend for +10 GB, or back up to your own storage, so new photos keep backing up.',
         route: '/storage',
       });
     }
+    // Invited by a friend: the reward needs some real backups (referrals.ts minBackups).
+    if (identity.referralPending) await rewardsHook(() => evaluateReferral(identity.id));
   } catch (error: any) {
     // Another request completed it first; that's fine.
     if (error?.name !== 'TransactionCanceledException') throw error;

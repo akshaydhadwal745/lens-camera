@@ -373,7 +373,7 @@ export default function GalleryScreen() {
   ) : guestFull && !isWeb ? (
     <Pressable style={styles.banner} onPress={() => router.push('/signin')}>
       <Ionicons name="cloud-outline" size={18} color={palette.accent} />
-      <Text style={styles.bannerText}>Free guest storage is full. Tap to sign in and get 100 GB free</Text>
+      <Text style={styles.bannerText}>Free guest storage is full. Tap to sign in: 40 GB free for 3 months</Text>
     </Pressable>
   ) : hot && !isWeb ? (
     <View style={styles.banner}>

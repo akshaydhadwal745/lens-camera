@@ -30,6 +30,7 @@ export const PERMISSIONS = [
   'affiliates',
   'payouts',
   'audit',
+  'notifications',
   'team',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];

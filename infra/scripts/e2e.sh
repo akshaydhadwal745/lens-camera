@@ -23,7 +23,7 @@ otp() { aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\
 MAILA="a$(date +%s%N)@e2e.lens.invalid"
 curl -sS -X POST "$API/auth/email/start" -H "authorization: Bearer $TA" -H 'content-type: application/json' -d "{\"email\":\"$MAILA\"}" >/dev/null
 curl -sS -X POST "$API/auth/email/verify" -H "authorization: Bearer $TA" -H 'content-type: application/json' -d "{\"email\":\"$MAILA\",\"code\":\"$(otp "$MAILA")\"}" >/dev/null
-[[ $(curl -sS "$API/me" -H "authorization: Bearer $TA" | j .quotaBytes) == $((100*1024*1024*1024)) ]] && ok "signed-in account: 100 GB"
+[[ $(curl -sS "$API/me" -H "authorization: Bearer $TA" | j .quotaBytes) == $((40*1024*1024*1024)) && $(curl -sS "$API/me" -H "authorization: Bearer $TA" | j .plan) == welcome ]] && ok "signed-in account: 40 GB welcome"
 [[ $(call GET /me "bad.token.x" -o /dev/null -w '%{http_code}') == 401 ]] && ok "bad token rejected"
 
 # --- single PUT (photo) ---
@@ -342,7 +342,7 @@ call DELETE "/media/$ID2?scope=everyone" "$TA" >/dev/null; call DELETE "/media/$
 [[ $(used) == 0 && $(call GET /media "$TA" | j .items.length) == 0 ]] && ok "delete forever releases quota"
 # --- storage settings ---
 S=$(call GET /storage "$TA")
-[[ $(echo "$S" | j .lens.quotaBytes) == $((100*1024*1024*1024)) && $(echo "$S" | j .lens.recentBytes) == $((20*1024*1024*1024)) ]] && ok "Lens storage: 100 GB, Recent 20 GB"
+[[ $(echo "$S" | j .lens.quotaBytes) == $((40*1024*1024*1024)) && $(echo "$S" | j .lens.recentBytes) == $((20*1024*1024*1024)) ]] && ok "Lens storage: 40 GB, Recent 20 GB"
 [[ $(echo "$S" | j .storages.length) == 0 ]] && ok "no storage connected yet"
 [[ $(call PUT /storages/gdrive-test1 "$TA" -d '{"provider":"gdrive","label":"Google Drive","account":"a@example.com","status":"ok","usedBytes":1000,"totalBytes":16106127360}' | j .storage.provider) == gdrive ]] && ok "storage connected"
 [[ $(call PUT /storages/gdrive-test1 "$TA" -d '{"provider":"gdrive","status":"low"}' | j .storage.account) == a@example.com ]] && ok "health report keeps account details"
@@ -494,7 +494,7 @@ wcall POST /web/auth/email/start -d "{\"email\":\"$MAILA\"}" >/dev/null
 JAR="$TMP/jar3"; MAILW="w$(date +%s%N)@e2e.lens.invalid"
 wcall POST /web/auth/email/start -d "{\"email\":\"$MAILW\"}" >/dev/null
 [[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"$(otp "$MAILW")\"}" | j .email) == "$MAILW" ]] && ok "web sign-up creates an account"
-[[ $(wcall GET /me | j .quotaBytes) == $((100*1024*1024*1024)) ]] && ok "web account gets 100 GB"
+[[ $(wcall GET /me | j .quotaBytes) == $((40*1024*1024*1024)) ]] && ok "web account gets the 40 GB welcome"
 [[ $(wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW\",\"code\":\"000000\"}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "used code refused"
 # --- user referrals: +10 GB per friend who signs in on a new phone ---
 GB=$((1024*1024*1024))
@@ -502,6 +502,9 @@ newphone() { curl -sS -X POST "$API/devices" -H 'content-type: application/json'
 signin() { local t=$1 m=$2; call POST /auth/email/start "$t" -d "{\"email\":\"$m\"}" >/dev/null
   call POST /auth/email/verify "$t" -d "{\"email\":\"$m\",\"code\":\"$(otp "$m")\"}"; }
 quota() { call GET /me "$1" | j .quotaBytes; }
+# A friend's reward needs 20 backed-up items (referrals.ts minBackups): seed them for test friends.
+seed() { local id=$1 items="" i; for i in $(seq 1 20); do items+="${items:+,}{\"PutRequest\":{\"Item\":{\"pk\":{\"S\":\"D#$id\"},\"sk\":{\"S\":\"M#e2eseed$i\"},\"status\":{\"S\":\"ready\"},\"kind\":{\"S\":\"photo\"},\"size\":{\"N\":\"1\"},\"createdAt\":{\"N\":\"$(date +%s%3N)\"}}}}"; done
+  aws dynamodb batch-write-item --profile lens --region ap-south-1 --request-items "{\"Lens\":[$items]}" >/dev/null; }
 FPR=$(openssl rand -hex 32); RR=$(newphone "$FPR"); TR=$(echo "$RR" | j .token)
 [[ $(call GET /referrals "$TR" | j .code) == sign-in ]] && ok "guests can't invite (sign in first)"
 signin "$TR" "r$(date +%s%N)@e2e.lens.invalid" >/dev/null
@@ -513,32 +516,36 @@ R=$(curl -sS -o /dev/null -c "$JAR" -w '%{http_code} %{redirect_url}' "$SITE/r/$
 [[ $(curl -sS -o /dev/null -w '%{redirect_url}' "$SITE/r/ZZZZZZZ") != *invite* ]] && ok "unknown code goes to the home page"
 F1=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"lens_ref=$RCODE&utm_source=x\""); TF1=$(echo "$F1" | j .token)
 [[ $(call GET /referrals "$TR" | j ".friends[0].state") == joined ]] && ok "friend installed from the invite: listed as joined, no reward yet"
-[[ $(quota "$TR") == $((100*GB)) ]] && ok "no storage before the friend signs in"
-MAILF1="f$(date +%s%N)@e2e.lens.invalid"; signin "$TF1" "$MAILF1" >/dev/null
-[[ $(quota "$TR") == $((110*GB)) ]] && ok "friend signed in on a new phone: inviter +10 GB (110 GB)"
+[[ $(quota "$TR") == $((40*GB)) ]] && ok "no storage before the friend signs in"
+MAILF1="f$(date +%s%N)@e2e.lens.invalid"; seed "$(echo "$F1" | j .id)"; signin "$TF1" "$MAILF1" >/dev/null
+[[ $(quota "$TR") == $((50*GB)) ]] && ok "friend signed in and backed up 20: inviter +10 GB (50 GB)"
 [[ $(call GET /referrals "$TR" | j .earnedBytes) == $((10*GB)) ]] && ok "invite screen shows 10 GB earned"
 F2=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"$RCODE\""); signin "$(echo "$F2" | j .token)" "$MAILF1" >/dev/null
-[[ $(quota "$TR") == $((110*GB)) ]] && ok "same person on another phone (existing account): no second reward"
-FPF3=$(openssl rand -hex 32); F3=$(newphone "$FPF3" "\"ref\":\"$RCODE\""); TF3=$(echo "$F3" | j .token)
+[[ $(quota "$TR") == $((50*GB)) ]] && ok "same person on another phone (existing account): no second reward"
+FPF3=$(openssl rand -hex 32); F3=$(newphone "$FPF3" "\"ref\":\"$RCODE\""); TF3=$(echo "$F3" | j .token); seed "$(echo "$F3" | j .id)"
 signin "$TF3" "f3$(date +%s%N)@e2e.lens.invalid" >/dev/null
 F3B=$(newphone "$FPF3" "\"ref\":\"$RCODE\""); signin "$(echo "$F3B" | j .token)" "f3b$(date +%s%N)@e2e.lens.invalid" >/dev/null
-[[ $(quota "$TR") == $((120*GB)) ]] && ok "a second friend: 120 GB; a new account on that same phone earns nothing"
+[[ $(quota "$TR") == $((60*GB)) ]] && ok "a second friend: 60 GB; a new account on that same phone earns nothing"
 F4=$(newphone "$FPR" "\"ref\":\"$RCODE\""); signin "$(echo "$F4" | j .token)" "f4$(date +%s%N)@e2e.lens.invalid" >/dev/null
-[[ $(quota "$TR") == $((120*GB)) ]] && ok "self-referral (inviter's own phone) earns nothing"
+[[ $(quota "$TR") == $((60*GB)) ]] && ok "self-referral (inviter's own phone) earns nothing"
 F5=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"$RCODE\",\"emulator\":true"); signin "$(echo "$F5" | j .token)" "f5$(date +%s%N)@e2e.lens.invalid" >/dev/null
-[[ $(quota "$TR") == $((120*GB)) ]] && ok "emulators earn nothing"
-F6=$(newphone "$(openssl rand -hex 32)"); TF6=$(echo "$F6" | j .token); signin "$TF6" "f6$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(quota "$TR") == $((60*GB)) ]] && ok "emulators earn nothing"
+F6=$(newphone "$(openssl rand -hex 32)"); TF6=$(echo "$F6" | j .token); seed "$(echo "$F6" | j .id)"; signin "$TF6" "f6$(date +%s%N)@e2e.lens.invalid" >/dev/null
 [[ $(call POST /referrals/claim "$TF6" -d '{"code":"BADCODE"}' -o /dev/null -w '%{http_code}') == 404 ]] && ok "wrong typed code refused"
-[[ $(call POST /referrals/claim "$TF6" -d "{\"code\":\"${RCODE,,}\"}" | j .state) == rewarded && $(quota "$TR") == $((130*GB)) ]] && ok "typed code within 7 days: rewarded (130 GB)"
+[[ $(call POST /referrals/claim "$TF6" -d "{\"code\":\"${RCODE,,}\"}" | j .state) == rewarded && $(quota "$TR") == $((70*GB)) ]] && ok "typed code within 7 days: rewarded (70 GB)"
 [[ $(call POST /referrals/claim "$TF6" -d "{\"code\":\"$RCODE\"}" -o /dev/null -w '%{http_code}') == 409 ]] && ok "only one code per person"
 [[ $(call POST /referrals/claim "$TR" -d "{\"code\":\"$RCODE\"}" -o /dev/null -w '%{http_code}') =~ ^(400|409)$ ]] && ok "own code refused"
 # Website sign-up from the invite link (cookie), reward when they sign in on a phone.
 MAILW2="fw$(date +%s%N)@e2e.lens.invalid"
 wcall POST /web/auth/email/start -d "{\"email\":\"$MAILW2\"}" >/dev/null
 wcall POST /web/auth/email/verify -d "{\"email\":\"$MAILW2\",\"code\":\"$(otp "$MAILW2")\"}" >/dev/null
-[[ $(call GET /referrals "$TR" | j ".friends.length") == 7 && $(quota "$TR") == $((130*GB)) ]] && ok "web sign-up from the invite link is attributed; no reward without a phone"
+seed "$(wcall GET /me | j .id)"
+[[ $(call GET /referrals "$TR" | j ".friends.length") == 7 && $(quota "$TR") == $((70*GB)) ]] && ok "web sign-up from the invite link is attributed; no reward without a phone"
 F7=$(newphone "$(openssl rand -hex 32)"); signin "$(echo "$F7" | j .token)" "$MAILW2" >/dev/null
-[[ $(quota "$TR") == $((140*GB)) ]] && ok "…and rewarded when that account signs in on a phone (140 GB)"
+[[ $(quota "$TR") == $((80*GB)) ]] && ok "…and rewarded when that account signs in on a phone (80 GB)"
+F8=$(newphone "$(openssl rand -hex 32)" "\"ref\":\"$RCODE\""); signin "$(echo "$F8" | j .token)" "f8$(date +%s%N)@e2e.lens.invalid" >/dev/null
+[[ $(quota "$TR") == $((80*GB)) && $(call GET /referrals "$TR" | j ".friends.some(f=>f.needsBackups===20)") == true ]] && ok "a friend who hasn't backed up 20 items yet earns nothing (waiting)"
+[[ $(quota "$TF1") == $((40*GB)) && $(call GET /me "$TF1" | j '.welcomeUntil > Date.now() + 115*86400000') == true ]] && ok "an invited friend gets an extra month of welcome (4 months)"
 [[ $(call GET /referrals "$TR" | j ".friends.filter(f=>f.state==='rewarded').length") == 4 ]] && ok "friends list: 4 rewarded"
 IR=$(echo "$RR" | j .id)
 [[ $(aws dynamodb query --profile lens --table-name Lens --key-condition-expression 'pk = :p AND begins_with(sk, :s)' \
@@ -629,6 +636,24 @@ ACTROW=$(aws dynamodb get-item --profile lens --region ap-south-1 --table-name L
 [[ $(echo "$ACTROW" | j '.Item["f_BAD NAME"]') == "" ]] && ok "unknown feature names are dropped"
 [[ $(call POST /usage "$TA" -d '{"batch":"x","days":[]}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "usage needs a batch id"
 [[ $(call POST /usage "$TA" -d '{"batch":"oldbatch123","days":[{"day":"2020-01-01","counts":{"capture_photo":1}}]}' | j .saved) == 0 ]] && ok "old days are ignored"
+# Notifications: categories, opens, campaigns (console) and automatic reminders.
+[[ $(call GET /notifications "$TA" | j '[.shares,.memories,.summary,.news].every(v=>v===true)') == true ]] && ok "notification categories (on by default)"
+[[ $(call PUT /notifications "$TA" -d '{"news":false}' | j .news) == false && $(call GET /notifications "$TA" | j .account) == "" ]] && ok "news can be turned off; account notices aren't a setting"
+call PUT /notifications "$TA" -d '{"news":true}' >/dev/null
+[[ $(call POST /notifications/opened "$TA" -d '{"lifecycle":"weekly_summary"}' | j .ok) == true ]] && ok "opened notifications are counted"
+[[ $(capi POST /notifications/estimate -d '{"audience":{"signedIn":"yes"}}' | j '.matched >= 0 && .reachable >= 0') == true ]] && ok "console estimates the audience"
+[[ $(capi POST /notifications -d '{"title":"x","body":"y"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "campaign needs a headline and a message"
+[[ $(capi POST /notifications -d '{"title":"E2E","body":"Test","test":true}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "test send needs the admin's own Lens account"
+CID=$(capi POST /notifications -d "{\"title\":\"E2E campaign\",\"body\":\"Only for a test account\",\"route\":\"/invite\",\"audience\":{\"only\":[\"$IA\"]}}" | j .campaign.id)
+[[ -n "$CID" && $(capi GET /notifications | j ".campaigns.find(c=>c.id==='$CID')?.status") == scheduled ]] && ok "campaign scheduled"
+aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"runCampaign\":\"$CID\"}" "$TMP/c.json" >/dev/null
+CST=$(capi GET /notifications | j ".campaigns.find(c=>c.id==='$CID')")
+[[ $(echo "$CST" | j .stats.targeted) == 1 ]] && ok "campaign reached its one recipient"
+[[ $(echo "$CST" | j '.status==="sent" ? (.stats["no-device"]===1) : .status==="sending"') == true ]] && ok "no phone: counted as such (or waiting for daytime)"
+[[ $(capi POST "/notifications/$CID/stop" -o /dev/null -w '%{http_code}') =~ ^(200|409)$ ]] && ok "campaigns can be stopped (once)"
+WU=$(call GET /me "$TA" | j .welcomeUntil)
+aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$(( WU - 13 * DAY - DAY / 2 )),\"onlyOwner\":\"$IA\"}}" "$TMP/l.json" >/dev/null
+[[ $(aws dynamodb get-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IA\"},\"sk\":{\"S\":\"NL#welcome14-$WU\"}}" --query 'Item.at.N' --output text) =~ ^[0-9]+$ ]] && ok "welcome ending: the 14-day notice is decided once"
 # Screenshots attached to feedback: own uploads only, shown only in the console (and audited).
 printf '\xff\xd8\xff\xe0e2e-screenshot' > "$TMP/shot.jpg"; SHOTSIZE=$(stat -c %s "$TMP/shot.jpg")
 SLOT=$(call POST /feedback/attachments "$TA" -d "{\"contentType\":\"image/jpeg\",\"size\":$SHOTSIZE}")

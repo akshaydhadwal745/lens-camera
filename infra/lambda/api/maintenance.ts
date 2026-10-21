@@ -5,6 +5,8 @@ import { continueAccountDeletion, pendingDeletions, startBackgroundDeletion } fr
 import { runMaintenance } from './trash';
 import { approveDueCommissions, Purchase, recordPurchase, recordRefund } from './affiliates';
 import { retryFeedbackEmails } from './feedback';
+import { runCampaigns } from './campaigns';
+import { runLifecycle } from './lifecycle';
 
 type Event = {
   now?: unknown;
@@ -15,12 +17,28 @@ type Event = {
   refund?: { orderId: string; at?: number };
   /** Hourly: re-send feedback emails that failed (the feedback itself is already stored). */
   retryFeedbackEmails?: boolean;
+  /** Every 15 minutes: campaigns from the Lens Console, and (once an hour) lifecycle notifications. */
+  notifications?: boolean;
+  /** Tests: one campaign only (never the real ones). */
+  runCampaign?: string;
+  /** Tests: lifecycle notifications for one throwaway account as of `now`. */
+  lifecycle?: { now: number; onlyOwner: string };
   /** Approve commissions as of `now` for one affiliate (tests). */
   approveCommissions?: { now: number; onlyAffiliate: string };
 };
 
 export async function handler(event: Event, context?: { getRemainingTimeInMillis(): number }) {
   if (event?.retryFeedbackEmails) return await retryFeedbackEmails();
+  if (typeof event?.runCampaign === 'string') return { campaigns: await runCampaigns(Date.now(), Date.now() + 60_000, event.runCampaign) };
+  if (event?.notifications || event?.lifecycle) {
+    const until = Date.now() + Math.max(30_000, (context?.getRemainingTimeInMillis() ?? 600_000) - 60_000);
+    if (event.lifecycle) return { lifecycle: await runLifecycle(event.lifecycle.now, until, event.lifecycle.onlyOwner) };
+    const now = Date.now();
+    const campaigns = await runCampaigns(now, until);
+    const lifecycle = new Date(now).getUTCMinutes() < 15 ? await runLifecycle(now, until) : {};
+    console.log('notifications', JSON.stringify({ campaigns, lifecycle }));
+    return { campaigns, lifecycle };
+  }
   if (event?.purchase) return { status: await recordPurchase(event.purchase) };
   if (event?.refund) return { status: await recordRefund(event.refund.orderId, event.refund.at) };
   if (event?.approveCommissions) {

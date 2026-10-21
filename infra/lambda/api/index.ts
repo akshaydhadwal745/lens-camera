@@ -25,7 +25,7 @@ import { checkDuplicate, completeExternal, completeUpload, listMedia, partUrls, 
 import { commitEdit, startEdit } from './edits';
 import { setRealName } from './real-names';
 import { accept, cancel, decline, inbox, listBlocked, removeShared, request as shareRequest, sent, setBlocked, setTrusted, share, sharedWithMe } from './shares';
-import { notificationPrefs, registerPush, unregisterPush } from './push';
+import { notificationOpened, notificationPrefs, registerPush, unregisterPush } from './push';
 import { listPlaces, placeItems, setPlaces } from './places';
 import { nearbyCode, nearbyResolve, nearbySettings } from './nearby';
 import { suggestSettings } from './people';
@@ -227,6 +227,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'PUT /push') return await registerPush(identity, req);
     if (route === 'DELETE /push') return await unregisterPush(identity, req);
     if (route === 'GET /notifications' || route === 'PUT /notifications') return await notificationPrefs(identity, req);
+    if (route === 'POST /notifications/opened') return await notificationOpened(identity, req);
     if (route === 'GET /shared') return await sharedWithMe(identity, req);
     if (seg[1] === 'shared' && seg.length === 4 && method === 'DELETE') return await removeShared(identity, seg[2], seg[3]);
 

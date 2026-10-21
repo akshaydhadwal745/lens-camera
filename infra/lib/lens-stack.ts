@@ -371,7 +371,8 @@ function handler(event) {
     const edgeSecret = fs.existsSync(EDGE_SECRET_FILE) ? fs.readFileSync(EDGE_SECRET_FILE, 'utf8').trim() : '';
 
     // Per-identity storage quota (testing default 100 GB; becomes the free tier later).
-    const quotaGb = Number(this.node.tryGetContext('quotaGb') ?? 100);
+    // Signed-in storage (owner decision 2026-10-21): 40 GB welcome for 3 months, then 10 GB free.
+    const quotaGb = Number(this.node.tryGetContext('quotaGb') ?? 40);
 
     const apiEnv = {
       TABLE: table.tableName,
@@ -384,6 +385,8 @@ function handler(event) {
       CF_KEY_PAIR_ID: publicKey.publicKeyId,
       CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
       QUOTA_BYTES: String(quotaGb * 1024 ** 3),
+      FREE_QUOTA_BYTES: String(Number(this.node.tryGetContext('freeQuotaGb') ?? 10) * 1024 ** 3),
+      WELCOME_DAYS: String(this.node.tryGetContext('welcomeDays') ?? 90),
       // Guests (not signed in) get this much Lens storage, pooled per device fingerprint.
       GUEST_QUOTA_BYTES: String(Number(this.node.tryGetContext('guestQuotaGb') ?? 5) * 1024 ** 3),
       MAX_FILE_BYTES: String(1024 ** 4), // 1 TiB per file
@@ -444,6 +447,11 @@ function handler(event) {
     new events.Rule(this, 'DailyMaintenance', {
       schedule: events.Schedule.rate(Duration.days(1)),
       targets: [new targets.LambdaFunction(maintenance)],
+    });
+    // Notifications: console campaigns every 15 minutes, lifecycle ones hourly (lambda/api/lifecycle.ts).
+    new events.Rule(this, 'Notifications', {
+      schedule: events.Schedule.rate(Duration.minutes(15)),
+      targets: [new targets.LambdaFunction(maintenance, { event: events.RuleTargetInput.fromObject({ notifications: true }) })],
     });
     // Feedback emails that failed are re-sent within the hour (the feedback is stored first).
     new events.Rule(this, 'FeedbackEmailRetry', {

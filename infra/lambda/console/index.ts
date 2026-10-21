@@ -15,6 +15,7 @@ import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
 import { activity, log } from './log';
+import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
 import { overview } from './overview';
 import { Permission, permissionsOf, removeTeamMember, requirePermission, ROLES, setTeamMember, teamMembers } from './roles';
 import {
@@ -117,6 +118,22 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[0] === 'payouts' && seg.length === 4 && seg[3] === 'paid' && method === 'POST') return await allowed('payouts', () => markPaid(email, seg[1], seg[2], req));
     if (route === 'GET /audit') return await allowed('audit', () => auditTrail(req));
     if (route === 'GET /activity') return await allowed('audit', () => activity(req));
+
+    if (route === 'GET /notifications') return await allowed('notifications', () => campaigns());
+    if (route === 'GET /notifications/lifecycle') return await allowed('notifications', () => lifecycleStats(req));
+    if (route === 'POST /notifications/estimate') return await allowed('notifications', () => estimate(req));
+    if (route === 'POST /notifications') {
+      need('notifications');
+      const res = await createNotification(email, req);
+      const body = JSON.parse(String(res.body));
+      await log({ entity: `campaign:${body.campaign?.id}`, action: req.body?.test ? 'notifications.test-sent' : 'notifications.scheduled', actor: `console:${email}`, data: { title: body.campaign?.title, scheduledAt: body.campaign?.scheduledAt } });
+      return res;
+    }
+    if (seg[0] === 'notifications' && seg.length === 3 && seg[2] === 'stop' && method === 'POST') {
+      need('notifications');
+      await log({ entity: `campaign:${seg[1]}`, action: 'notifications.stopped', actor: `console:${email}` });
+      return await stopNotification(seg[1]);
+    }
 
     if (route === 'GET /team') {
       need('team');

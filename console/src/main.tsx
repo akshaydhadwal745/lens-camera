@@ -9,6 +9,7 @@ import { Analytics } from './pages/analytics';
 import { Affiliates, Payouts, Referrals } from './pages/programs';
 import { Feedback, Inbox } from './pages/support';
 import { Overview } from './pages/overview';
+import { Notifications } from './pages/notifications';
 import { Phones } from './pages/phones';
 import { Costs, Errors, Health } from './pages/system';
 import { Team } from './pages/team';
@@ -25,6 +26,7 @@ const SECTIONS: Section[] = [
   { path: '/users', label: 'Users', permission: 'users', group: 'Operate' },
   { path: '/feedback', label: 'Feedback & reports', permission: 'feedback', group: 'Operate' },
   { path: '/inbox', label: 'Inbox', permission: 'inbox', group: 'Operate' },
+  { path: '/notifications', label: 'Notifications', permission: 'notifications', group: 'Operate' },
   { path: '/affiliates', label: 'Affiliates', permission: 'affiliates', group: 'Programs' },
   { path: '/referrals', label: 'Referrals', permission: 'referrals', group: 'Programs' },
   { path: '/payouts', label: 'Payouts', permission: 'payouts', group: 'Programs' },
@@ -55,6 +57,7 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
       '/users': <Users />,
       '/feedback': <Feedback canWrite={me.permissions.includes('feedback.write')} />,
       '/inbox': <Inbox canWrite={me.permissions.includes('inbox.write')} />,
+      '/notifications': <Notifications />,
       '/affiliates': <Affiliates />,
       '/referrals': <Referrals />,
       '/payouts': <Payouts />,

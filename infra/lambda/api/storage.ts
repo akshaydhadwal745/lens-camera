@@ -79,7 +79,16 @@ export async function getStorage(identity: Identity): Promise<Res> {
   return json(200, {
     plan: 'free',
     // Guests: 5 GB until they sign in (then signedInQuotaBytes).
-    lens: { usedBytes: identity.usedBytes, quotaBytes: quotaFor(identity), recentBytes: RECENT_BYTES, signedInQuotaBytes: env.quotaBytes },
+    lens: {
+      usedBytes: identity.usedBytes,
+      quotaBytes: quotaFor(identity),
+      recentBytes: RECENT_BYTES,
+      signedInQuotaBytes: env.quotaBytes,
+      // The welcome (40 GB for 3 months), then free forever (10 GB) + invite storage.
+      freeQuotaBytes: env.freeQuotaBytes,
+      welcomeUntil: identity.email ? identity.welcomeUntil : undefined,
+      bonusBytes: identity.bonusBytes ?? 0,
+    },
     signedIn: !!identity.email,
     storages: storages.sort((a, b) => a.createdAt - b.createdAt).map(toClient),
     limits: { storages: FREE_STORAGE_LIMIT, routing: false },

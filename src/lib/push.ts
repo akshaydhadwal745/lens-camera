@@ -23,9 +23,19 @@ if (supported) {
   });
 }
 
+let lastOpened: string | null = null;
 function open(response: Notifications.NotificationResponse | null) {
-  const route = response?.notification.request.content.data?.route;
+  const data = response?.notification.request.content.data ?? {};
+  const route = data.route;
   if (typeof route === 'string' && route.startsWith('/')) router.push(route as never);
+  // Open rates for the console (campaigns and automatic reminders only; once per notification).
+  const id = response?.notification.request.identifier ?? null;
+  if (id !== lastOpened && (typeof data.campaign === 'string' || typeof data.lifecycle === 'string')) {
+    lastOpened = id;
+    void api
+      .notificationOpened({ campaign: typeof data.campaign === 'string' ? data.campaign : undefined, lifecycle: typeof data.lifecycle === 'string' ? data.lifecycle : undefined })
+      .catch(() => {});
+  }
 }
 
 async function register(token?: string) {
@@ -33,7 +43,8 @@ async function register(token?: string) {
   if (!id) return;
   const value = token ?? (await Notifications.getDevicePushTokenAsync()).data;
   if (typeof value !== 'string') return;
-  const key = `${id}|${value}`;
+  // The time zone is part of it: phones registered before it was sent re-register once, and travellers' reminders follow them.
+  const key = `${id}|${value}|${-new Date().getTimezoneOffset()}`;
   if (key === lastKey) return; // already registered for this identity
   await api.registerPush(value, 'android');
   lastKey = key;

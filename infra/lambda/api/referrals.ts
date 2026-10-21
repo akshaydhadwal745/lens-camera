@@ -33,9 +33,35 @@ export const referralSettings = {
   friendBytes: Number(process.env.REFEREE_BONUS_GB ?? 0) * GB,
   /** Typed codes are accepted this long after the account was created. */
   claimWindowMs: 7 * 86400_000,
-  /** A friend must sign in on a phone within this long of joining. */
-  rewardWindowMs: 30 * 86400_000,
+  /** A friend must sign in on a phone (and back up enough) within this long of joining. */
+  rewardWindowMs: 60 * 86400_000,
+  /** The friend really uses Lens: this many photos/videos backed up (2026-10-21, stops fake sign-ups). */
+  minBackups: Number(process.env.REFERRAL_MIN_BACKUPS ?? 20),
+  /** Invite bonuses stop adding storage past this total (lib.ts maxBonusBytes). */
+  maxBonusBytes: Number(process.env.MAX_BONUS_BYTES ?? 100 * GB),
 };
+
+/** True once this account has at least `need` items backed up (stops counting there). */
+async function hasBackups(id: string, need: number): Promise<boolean> {
+  let count = 0;
+  let start: Record<string, unknown> | undefined;
+  do {
+    const r = await ddb.send(
+      new QueryCommand({
+        TableName: env.table,
+        KeyConditionExpression: 'pk = :p AND begins_with(sk, :m)',
+        FilterExpression: '#s = :ready',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':p': `D#${id}`, ':m': 'M#', ':ready': 'ready' },
+        ProjectionExpression: 'pk',
+        ExclusiveStartKey: start,
+      }),
+    );
+    count += r.Count ?? 0;
+    start = r.LastEvaluatedKey;
+  } while (start && count < need);
+  return count >= need;
+}
 const VELOCITY_PER_DAY = Number(process.env.REFERRAL_VELOCITY_PER_DAY ?? 10);
 
 const ses = new SESv2Client({});
@@ -119,6 +145,7 @@ async function check(friend: Record<string, any>, attribution: Attribution, invi
   const fps: string[] = [...(friend.fps ?? [])];
   if (fps.length === 0) return { ok: false, reason: 'no-phone-yet', final: false };
   if (fps.some((f) => inviterFps.has(f))) return { ok: false, reason: 'self', final: true };
+  if (!(await hasBackups(friend.pk.slice(2), referralSettings.minBackups))) return { ok: false, reason: 'needs-backups', final: false };
   // The first phone that is real and has never earned anyone a reward.
   let emulators = 0;
   for (const fp of fps) {
@@ -216,6 +243,9 @@ function bonusPut(userId: string, bytes: number, reason: string, refId: string) 
 
 async function grant(friend: Record<string, any>, friendId: string, attribution: Attribution, fingerprint: string, actor: string): Promise<string> {
   const inviterId = attribution.ownerId;
+  // Up to +100 GB from invites: past that the friend still counts, but adds no storage.
+  const inviterNow = await getProfile(inviterId);
+  const inviterBytes = Math.max(0, Math.min(referralSettings.inviterBytes, referralSettings.maxBonusBytes - (inviterNow?.bonusBytes ?? 0)));
   const email = canonicalEmail(friend.email);
   const marker = (pk: string) => ({
     Put: {
@@ -239,7 +269,7 @@ async function grant(friend: Record<string, any>, friendId: string, attribution:
               ExpressionAttributeValues: { ':r': 'rewarded' },
             },
           },
-          ...bonusPut(inviterId, referralSettings.inviterBytes, 'referral', friendId),
+          ...(inviterBytes > 0 ? bonusPut(inviterId, inviterBytes, 'referral', friendId) : []),
           ...(referralSettings.friendBytes > 0 ? bonusPut(friendId, referralSettings.friendBytes, 'welcome', inviterId) : []),
         ],
       }),
@@ -260,26 +290,28 @@ async function grant(friend: Record<string, any>, friendId: string, attribution:
       Key: { pk: `D#${inviterId}`, sk: `RF#${friendId}` },
       UpdateExpression: 'SET #s = :s, bytes = :b, rewardedAt = :n, updatedAt = :n REMOVE gsi1pk, gsi1sk, waiting',
       ExpressionAttributeNames: { '#s': 'state' },
-      ExpressionAttributeValues: { ':s': 'rewarded', ':b': referralSettings.inviterBytes, ':n': Date.now() },
+      ExpressionAttributeValues: { ':s': 'rewarded', ':b': inviterBytes, ':n': Date.now() },
     }),
   );
-  await pushNotify(inviterId, 'invites', {
-    title: `+${Math.round(referralSettings.inviterBytes / 1024 ** 3)} GB: ${friend.name ?? 'A friend'} joined Lens`,
-    body: 'Your invite worked. The extra storage is yours.',
-    route: '/invite',
-  });
+  await pushNotify(
+    inviterId,
+    'invites',
+    inviterBytes > 0
+      ? { title: `+${Math.round(inviterBytes / GB)} GB: ${friend.name ?? 'A friend'} joined Lens`, body: 'Your invite worked. The extra storage is yours, for good.', route: '/invite' }
+      : { title: `${friend.name ?? 'A friend'} joined Lens`, body: 'Thank you! You already have the most invite storage (+100 GB).', route: '/invite' },
+  );
   await audit({
     entity: `referral:${friendId}`,
     action: 'referral.rewarded',
     actor,
-    data: { inviterId, code: attribution.code, inviterBytes: referralSettings.inviterBytes, friendBytes: referralSettings.friendBytes },
+    data: { inviterId, code: attribution.code, inviterBytes, friendBytes: referralSettings.friendBytes },
   });
   const inviter = await getProfile(inviterId);
-  if (inviter?.email) {
+  if (inviter?.email && inviterBytes > 0) {
     await notify(
       inviter.email,
-      `+${Math.round(referralSettings.inviterBytes / GB)} GB added to your Lens storage`,
-      `${friend.name ?? 'Your friend'} joined Lens with your invite, so we added ${Math.round(referralSettings.inviterBytes / GB)} GB to your storage. Thank you for spreading the word!\n\nInvite more friends from Settings → Invite friends.`,
+      `+${Math.round(inviterBytes / GB)} GB added to your Lens storage`,
+      `${friend.name ?? 'Your friend'} joined Lens with your invite, so we added ${Math.round(inviterBytes / GB)} GB to your storage, for good. Thank you for spreading the word!\n\nInvite more friends from Settings → Invite friends.`,
     ).catch((e) => console.error('referral email', e));
   }
   return 'rewarded';
@@ -337,6 +369,8 @@ export async function myReferrals(identity: Identity): Promise<Res> {
       // Simple states for the app; internal fraud reasons stay private.
       state: r.state === 'rewarded' ? 'rewarded' : r.state === 'joined' ? 'joined' : r.state === 'rejected' ? 'not-eligible' : 'signed-in',
       bytes: (r.bytes as number) ?? 0,
+      // The one reason worth showing: the reward comes once they've backed up a few photos.
+      ...(r.state !== 'rewarded' && r.waiting === 'needs-backups' ? { needsBackups: referralSettings.minBackups } : {}),
       at: (r.createdAt as number) ?? 0,
     }))
     .sort((a, b) => b.at - a.at);

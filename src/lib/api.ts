@@ -165,7 +165,7 @@ export type ShareRequest = {
   viaLink?: boolean;
 };
 type Page<T> = { items: T[]; cursor: string | null };
-export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean };
+export type NotificationPrefs = { shares: boolean; invites: boolean; storage: boolean; memories: boolean; summary: boolean; news: boolean };
 export type Place = { city: string; region: string; country: string };
 export type PlaceGroup = Place & { key: string; count: number; first: number; last: number; cover: RemoteMedia };
 export type Album = {
@@ -363,7 +363,9 @@ export const api = {
   setBlocked: (userId: string, blocked: boolean) => request<{ blocked: boolean }>(blocked ? 'POST' : 'DELETE', `/blocks/${userId}`),
   setTrusted: (userId: string, trusted: boolean) => request<{ trusted: boolean }>('PUT', `/contacts/${userId}`, { trusted }),
   // Push notifications (FCM token per phone) and which kinds the user wants.
-  registerPush: (token: string, platform: string) => request<{ ok: boolean }>('PUT', '/push', { token, platform }),
+  // tz: minutes east of UTC, so reminders arrive in the daytime (quiet hours, infra/lambda/api/push.ts).
+  registerPush: (token: string, platform: string) => request<{ ok: boolean }>('PUT', '/push', { token, platform, tz: -new Date().getTimezoneOffset() }),
+  notificationOpened: (data: { campaign?: string; lifecycle?: string }) => request<{ ok: boolean }>('POST', '/notifications/opened', data),
   unregisterPush: (token: string) => request<{ ok: boolean }>('DELETE', '/push', { token }),
   notificationPrefs: () => request<NotificationPrefs>('GET', '/notifications'),
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => request<NotificationPrefs>('PUT', '/notifications', prefs),
