@@ -15,6 +15,7 @@ export type Role = (typeof ROLES)[number];
 
 export const PERMISSIONS = [
   'overview',
+  'analytics',
   'users',
   'users.write',
   'feedback',
@@ -36,9 +37,9 @@ export type Permission = (typeof PERMISSIONS)[number];
 const GRANTS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
   admin: PERMISSIONS.filter((p) => p !== 'team'),
-  support: ['overview', 'users', 'users.write', 'feedback', 'feedback.write', 'inbox', 'inbox.write', 'phones', 'health', 'errors'],
-  finance: ['overview', 'referrals', 'affiliates', 'payouts', 'costs', 'audit'],
-  viewer: ['overview', 'phones', 'health'],
+  support: ['overview', 'analytics', 'users', 'users.write', 'feedback', 'feedback.write', 'inbox', 'inbox.write', 'phones', 'health', 'errors'],
+  finance: ['overview', 'analytics', 'referrals', 'affiliates', 'payouts', 'costs', 'audit'],
+  viewer: ['overview', 'analytics', 'phones', 'health'],
 };
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;

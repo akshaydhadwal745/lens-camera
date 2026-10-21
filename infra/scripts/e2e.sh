@@ -619,6 +619,16 @@ FID=$(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.id")
 R=$(call POST /feedback "$TA" -d '{"kind":"review","rating":2,"source":"prompt","message":"[e2e] from the rating card"}'); FREF3=$(echo "$R" | j .reference)
 [[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF3')?.source") == prompt ]] && ok "rating-card answers are tagged with their source"
 [[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF2')?.source") == settings ]] && ok "Settings feedback is tagged settings"
+# Our own analytics: feature counts (counted once per batch) and daily activity.
+UDAY=$(date -u +%F); UB="e2e$(date +%s%N)"
+[[ $(call POST /usage "$TA" -d "{\"batch\":\"$UB\",\"build\":\"dev-0\",\"days\":[{\"day\":\"$UDAY\",\"counts\":{\"capture_photo\":2,\"BAD NAME\":5}}]}" | j .saved) == 1 ]] && ok "usage counts saved"
+call POST /usage "$TA" -d "{\"batch\":\"$UB\",\"days\":[{\"day\":\"$UDAY\",\"counts\":{\"capture_photo\":2}}]}" >/dev/null
+ACTROW=$(aws dynamodb get-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"ACT#$UDAY\"},\"sk\":{\"S\":\"$IA\"}}" --output json)
+[[ $(echo "$ACTROW" | j '.Item.f_capture_photo.N') == 2 ]] && ok "a retried batch counts once"
+[[ $(echo "$ACTROW" | j '.Item.client.S') == app && -n $(echo "$ACTROW" | j '.Item.at.N') ]] && ok "daily activity recorded on use"
+[[ $(echo "$ACTROW" | j '.Item["f_BAD NAME"]') == "" ]] && ok "unknown feature names are dropped"
+[[ $(call POST /usage "$TA" -d '{"batch":"x","days":[]}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "usage needs a batch id"
+[[ $(call POST /usage "$TA" -d '{"batch":"oldbatch123","days":[{"day":"2020-01-01","counts":{"capture_photo":1}}]}' | j .saved) == 0 ]] && ok "old days are ignored"
 # Screenshots attached to feedback: own uploads only, shown only in the console (and audited).
 printf '\xff\xd8\xff\xe0e2e-screenshot' > "$TMP/shot.jpg"; SHOTSIZE=$(stat -c %s "$TMP/shot.jpg")
 SLOT=$(call POST /feedback/attachments "$TA" -d "{\"contentType\":\"image/jpeg\",\"size\":$SHOTSIZE}")

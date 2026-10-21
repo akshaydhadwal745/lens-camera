@@ -11,6 +11,7 @@ import { isProCameraAvailable } from '../../modules/lens-camera';
 import { api, NotificationPrefs, Session, WEB_URL } from '@/lib/api';
 import { buildLabel } from '@/lib/build-info';
 import { diagnosticsEnabled, setDiagnosticsEnabled } from '@/lib/diagnostics';
+import { clearUsage } from '@/lib/usage';
 import { backupNotificationsEnabled, setBackupNotifications } from '@/lib/local-notify';
 import { setSaveLocation as setSaveLocationPref } from '@/lib/location-pref';
 import { nearbySupported, nearbyVisibilityChanged } from '@/lib/nearby';
@@ -714,12 +715,13 @@ export default function SettingsScreen() {
                 <View style={styles.divider} />
                 <SwitchRow
                   icon="pulse-outline"
-                  label="Share camera diagnostics"
-                  hint="Anonymous: your phone model, what its camera can do, and crash reports, so Lens works well on every phone. No photos, no location, not linked to you."
+                  label="Help improve Lens"
+                  hint="Anonymous: your phone model, what its camera can do, crash reports, and how often features are used. No photos, no location, nothing you write."
                   value={shareDiagnostics}
                   onChange={(v) => {
                     setShareDiagnostics(v);
                     setDiagnosticsEnabled(v);
+                    if (!v) clearUsage();
                   }}
                 />
                 <View style={styles.divider} />

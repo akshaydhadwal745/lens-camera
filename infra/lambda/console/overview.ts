@@ -26,7 +26,8 @@ type Row = Record<string, any>;
 // Every name aliased (#f0…): several are DynamoDB reserved words (size, status, location, state…).
 const FIELDS = ['pk', 'sk', 'createdAt', 'email', 'test', 'fingerprint', 'attribution', 'usedBytes', 'bonusBytes', 'kind', 'size', 'status', 'location', 'lastUsedAt', 'at', 'archived', 'deletedAt', 'referral', 'state', 'expiresAt', 'gsi1pk', 'code', 'emulator', 'guestId'];
 
-async function scanAll(): Promise<Row[]> {
+/** The whole table in one parallel pass; `all` = every attribute (analytics needs the f_* counts). */
+export async function scanAll(all = false): Promise<Row[]> {
   const SEGMENTS = 4;
   const parts = await Promise.all(
     Array.from({ length: SEGMENTS }, async (_, segment) => {
@@ -39,8 +40,9 @@ async function scanAll(): Promise<Row[]> {
             Segment: segment,
             TotalSegments: SEGMENTS,
             ExclusiveStartKey: start,
-            ProjectionExpression: FIELDS.map((_, i) => `#f${i}`).join(', '),
-            ExpressionAttributeNames: Object.fromEntries(FIELDS.map((f, i) => [`#f${i}`, f])),
+            ...(all
+              ? {}
+              : { ProjectionExpression: FIELDS.map((_, i) => `#f${i}`).join(', '), ExpressionAttributeNames: Object.fromEntries(FIELDS.map((f, i) => [`#f${i}`, f])) }),
           }),
         );
         out.push(...(r.Items ?? []));

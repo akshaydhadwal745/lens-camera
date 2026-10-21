@@ -39,6 +39,7 @@ import { requestAccountDeletion } from './account';
 import { followLink } from './attribution';
 import { submitContact } from './contact';
 import { attachmentUpload, submitFeedback } from './feedback';
+import { saveUsage } from './usage';
 import { claimCode, myReferrals } from './referrals';
 import {
   apply as applyAffiliate,
@@ -139,6 +140,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     // Admin moved to the Lens Console (infra/lambda/console): its own sign-in and API.
 
 
+    if (route === 'POST /usage') return await saveUsage(identity, req);
     if (route === 'POST /diagnostics') return await saveDiagnostics(identity, req);
     // Camera quality R&D: capability reports + Quality Lab sets.
     if (route === 'POST /lab/probes') return await saveProbe(identity, req);

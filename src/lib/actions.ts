@@ -10,6 +10,7 @@ import { asFileUri } from './content-file';
 import { downloadFromStorage } from './storage';
 import { extensionFor } from './storage/useOriginal';
 import { GalleryItem } from './types';
+import { track } from './usage';
 
 export const saveLabel = 'Save to Photos';
 
@@ -56,6 +57,7 @@ export async function shareMedia(item: GalleryItem): Promise<void> {
   }
   const uri = await outputFileUri(item);
   const ext = uri.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? '';
+  track('share_sheet');
   await Sharing.shareAsync(uri, TYPES[ext] ?? (item.kind === 'video' ? TYPES.mov : TYPES.jpg));
 }
 

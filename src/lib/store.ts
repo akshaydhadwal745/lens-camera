@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
 import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import { api, ApiError, setAuth, SignInResult } from './api';
+import { track } from './usage';
 import { deviceLabel, ensureIdentity, Identity, loadIdentity, saveIdentity } from './identity';
 import {
   captureFile,
@@ -760,6 +761,8 @@ function updateEntry(id: string, patch: Partial<LocalEntry>) {
 /** Saves a fresh capture locally and queues it for upload immediately. */
 export function capture(input: NewCapture): LocalEntry {
   const entry = importCapture(input);
+  track(input.kind === 'video' ? 'capture_video' : 'capture_photo');
+  if (input.edit?.look && input.edit.look !== 'none') track('look_used');
   setEntries([entry, ...state.entries]);
   // Previews are made right away unless the phone is hot (then after it cools).
   if (!isHot(state.thermal)) void ensureDerivatives(entry).finally(kickSync);

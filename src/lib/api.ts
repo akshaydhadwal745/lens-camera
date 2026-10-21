@@ -406,6 +406,9 @@ export const api = {
   createAffiliateLink: (campaign: string) => request<{ code: string; url: string }>('POST', '/affiliates/links', { campaign }),
 
 
+  /** Anonymous feature counts for our analytics (src/lib/usage.ts). */
+  usage: (body: { batch: string; build?: string; os?: string; tier?: string; region?: string; days: { day: string; counts: Record<string, number> }[] }) =>
+    request<{ saved: number }>('POST', '/usage', body),
   /** Anonymous camera diagnostics (src/lib/diagnostics.ts). */
   diagnostics: (report: { device: Record<string, unknown>; build: unknown; phone?: string; events: unknown[] }) =>
     request<{ ok: boolean }>('POST', '/diagnostics', report),

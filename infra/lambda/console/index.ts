@@ -13,6 +13,7 @@ import { feedbackFile } from './attachments';
 import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
+import { analytics } from './analytics';
 import { activity, log } from './log';
 import { overview } from './overview';
 import { Permission, permissionsOf, removeTeamMember, requirePermission, ROLES, setTeamMember, teamMembers } from './roles';
@@ -70,6 +71,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /sessions') return await mySessions(session);
     if (route === 'POST /sessions/end') return await endMySessions(session, req);
 
+    if (route === 'GET /analytics') return await allowed('analytics', () => analytics(req));
     if (route === 'GET /overview') return await allowed('overview', () => overview(req));
 
     if (route === 'GET /users') return await allowed('users', () => userSearch(req));

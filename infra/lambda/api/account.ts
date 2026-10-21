@@ -167,6 +167,11 @@ export async function continueAccountDeletion(id: string, deadline: number): Pro
     fbStart = page.LastEvaluatedKey;
   } while (fbStart);
   await deleteKeys(feedback);
+  // Its daily activity rows (usage.ts): one per day since the account was made (kept ≤ 400 days).
+  const firstDay = Math.max(Number(profile?.createdAt ?? 0), Date.now() - 400 * 86_400_000);
+  const activity: { pk: string; sk: string }[] = [];
+  for (let t = Date.now(); t >= firstDay - 86_400_000; t -= 86_400_000) activity.push({ pk: `ACT#${new Date(t).toISOString().slice(0, 10)}`, sk: id });
+  await deleteKeys(activity);
   // …and the screenshots attached to it.
   if (env.feedbackBucket) await deleteAllVersions(`f/${id}/`, env.feedbackBucket);
 

@@ -56,6 +56,7 @@ import {
   snapshotPreset,
 } from '@/lib/pro-camera';
 import { capture, finishLiveUpload, isHot, selectGallery, selectPendingCount, startLiveUpload, useStore } from '@/lib/store';
+import { track } from '@/lib/usage';
 import { font, glass, palette, radius } from '@/lib/theme';
 import { useCameraKeepAwake } from '@/lib/keep-awake';
 import { displayUri, newId } from '@/lib/types';
@@ -641,6 +642,13 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
   };
 
   const onShutter = () => {
+    // Analytics (counts only): which camera features are used.
+    if (!recording && countdown === null) {
+      track(`mode_${s.mode}`);
+      if (stored.pro) track('mode_pro');
+      if (s.position === 'front') track('front_camera');
+      if (s.timer && s.mode !== 'video' && s.mode !== 'slowmo' && s.mode !== 'timelapse') track('timer_used');
+    }
     if (s.mode === 'video' || s.mode === 'slowmo') return toggleRecording();
     if (s.mode === 'timelapse') return toggleTimeLapse();
     if (countdown !== null) {

@@ -19,6 +19,7 @@ import {
   WEB_COOKIE,
   withCookies,
 } from './lib';
+import { markActive } from './usage';
 import { suggestFlags } from './people';
 import { randomName } from './names';
 import { realNames } from './real-names';
@@ -254,6 +255,9 @@ export async function authenticate(req: Req): Promise<Identity> {
       }),
     );
   }
+  // Used today (Lens Console → Analytics): written once per account per day.
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (profile.Item.activeDay !== today) await markActive(deviceId, today, fromCookie ? 'web' : 'app', now).catch((e) => console.error('activity', e));
   return {
     id: deviceId,
     name: profile.Item.name,

@@ -725,3 +725,54 @@ tr:last-child td {
   color: var(--bad);
   font-weight: 600;
 }
+
+/* ---------- analytics ---------- */
+
+.funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.funnel .b-track {
+  display: block;
+  height: 12px;
+  margin: 4px 0;
+}
+.f-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.retention .cell[data-level='0'] {
+  background: transparent;
+}
+.retention .cell[data-level='1'] {
+  background: color-mix(in srgb, var(--bar) 15%, transparent);
+}
+.retention .cell[data-level='2'] {
+  background: color-mix(in srgb, var(--bar) 32%, transparent);
+}
+.retention .cell[data-level='3'] {
+  background: color-mix(in srgb, var(--bar) 50%, transparent);
+}
+.retention .cell[data-level='4'] {
+  background: color-mix(in srgb, var(--bar) 70%, transparent);
+  color: #fff;
+}
+.spark {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  width: 120px;
+}
+.spark span {
+  flex: 1;
+  background: var(--line);
+  border-radius: 1px;
+}
+.spark span.on {
+  background: var(--bar);
+}

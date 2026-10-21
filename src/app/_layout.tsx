@@ -1,7 +1,7 @@
 import { Sentry, startCrashReporting } from '@/lib/sentry';
 import { recordAppOpen } from '@/lib/review-prompt';
 import { useFonts } from 'expo-font';
-import { router, Stack } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -17,10 +17,40 @@ import { peopleAppStart } from '@/lib/people';
 import { boot, useStore } from '@/lib/store';
 import { fontFiles } from '@/lib/theme';
 import { takePendingShareLink } from '@/lib/share-link';
+import { startUsage, track } from '@/lib/usage';
 
 // First thing, so crashes during start-up are caught too.
 startCrashReporting();
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** First path segment → counted feature (src/lib/usage.ts; labels in console/src/pages/analytics.tsx). */
+const SCREENS: Record<string, string> = {
+  gallery: 'gallery_open',
+  viewer: 'viewer_open',
+  player: 'stream_video',
+  edit: 'edit_open',
+  people: 'people_open',
+  person: 'people_open',
+  places: 'places_open',
+  place: 'places_open',
+  albums: 'albums_open',
+  album: 'albums_open',
+  recaps: 'recap_open',
+  recap: 'recap_open',
+  e: 'event_open',
+  'event-code': 'event_open',
+  invite: 'invite_open',
+  storage: 'storage_open',
+  trash: 'trash_open',
+  feedback: 'feedback_open',
+  links: 'links_open',
+  shares: 'shares_open',
+  share: 'share_open',
+  settings: 'settings_open',
+  scan: 'scan_open',
+  'my-code': 'my_code_open',
+  signin: 'signin_open',
+};
 
 function RootLayout() {
   const status = useStore((s) => s.status);
@@ -43,7 +73,16 @@ function RootLayout() {
     // Feedback loop: counts app opens (src/lib/review-prompt.ts).
     recordAppOpen();
     void startPush();
+    // Our own analytics: anonymous feature counts (src/lib/usage.ts).
+    startUsage();
   }, []);
+
+  // Which screens get used (counted per day, names only).
+  const pathname = usePathname();
+  useEffect(() => {
+    const screen = SCREENS[pathname.split('/')[1] ?? ''];
+    if (screen) track(screen);
+  }, [pathname]);
 
   // Push tokens belong to the identity: re-register after signing in on this phone.
   const identityId = useStore((s) => s.identity?.id);

@@ -258,9 +258,9 @@ async function linkLogins(accountId: string, logins: { kind: LoginKind; value: s
       TableName: env.table,
       Key: profileKey(accountId),
       // loginKeys: exactly which login records point here (to unlink them on account deletion).
-      UpdateExpression: `${email ? 'SET email = if_not_exists(email, :e) ' : ''}ADD logins :l, loginKeys :k`,
+      UpdateExpression: `${email ? 'SET email = if_not_exists(email, :e), signedInAt = if_not_exists(signedInAt, :t) ' : ''}ADD logins :l, loginKeys :k`,
       ExpressionAttributeValues: {
-        ...(email ? { ':e': email } : {}),
+        ...(email ? { ':e': email, ':t': Date.now() } : {}),
         ':l': new Set(logins.map((l) => l.kind)),
         ':k': new Set(logins.map((l) => loginKey(l.kind, l.value).pk)),
       },

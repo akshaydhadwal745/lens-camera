@@ -16,6 +16,7 @@ import { uriFor } from '@/lib/local-store';
 import { extensionFor } from '@/lib/storage/useOriginal';
 import { nearestIndex } from '@/lib/pro-camera';
 import { copyEdit, getState, saveEdit, selectGallery, useStore } from '@/lib/store';
+import { track } from '@/lib/usage';
 import { colors, errorMessage, notify } from '@/lib/ui';
 
 type Tab = 'looks' | 'adjust' | 'crop' | 'portrait';
@@ -109,6 +110,7 @@ export default function EditScreen() {
     setSaving(true);
     try {
       await saveEdit(item.id, nativeRecipe);
+      track('edit_saved');
       router.back();
     } catch (e) {
       notify('Could not save edit', errorMessage(e));
