@@ -192,7 +192,7 @@ Still later: iPhone parity for Android-first features (after Android is validate
 
 ### ⛔ Not doing (for now)
 
-Panorama, dual-camera picture-in-picture, AR/beauty face reshaping: high
+Panorama, AR/beauty face reshaping: high
 effort, uneven or poor results across phones, low value for our users.
 
 ## Test results log
