@@ -1241,7 +1241,7 @@ a.card.hp-problem {
   border-radius: 999px;
 }
 .hp-tag-on {
-  background: var(--brand);
+  background: #0058b8; /* brand blue, darkened for 4.5:1 text contrast */
   border-color: transparent;
 }
 .hp-camera-intro {
