@@ -81,14 +81,18 @@ export type Req = {
   sourceIp?: string;
   /** Approximate city (CloudFront geo header), for "who is signing in" prompts. */
   city?: string;
+  /** The body as sent (webhook signatures are over these exact bytes). */
+  rawBody?: string;
 };
 
 export type Res = APIGatewayProxyStructuredResultV2;
 
 export function parseEvent(event: APIGatewayProxyEventV2): Req {
   let body: unknown = undefined;
+  let rawBody: string | undefined;
   if (event.body) {
     const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+    rawBody = raw;
     try {
       body = JSON.parse(raw);
     } catch {
@@ -117,6 +121,7 @@ export function parseEvent(event: APIGatewayProxyEventV2): Req {
     cookies,
     sourceIp: viewerIp || event.requestContext.http.sourceIp,
     city: city ? decodeURIComponent(city) : undefined,
+    rawBody,
   };
 }
 

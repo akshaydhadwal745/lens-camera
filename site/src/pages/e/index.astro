@@ -13,8 +13,8 @@ import Layout from '../../layouts/Layout.astro';
       <h1 id="event-name">Loading…</h1>
       <p class="lead" id="event-meta"></p>
       <div class="actions" id="event-actions">
-        <label class="btn btn-primary" id="event-add" for="event-files">Add your photos</label>
-        <input id="event-files" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
+        <label class="btn btn-primary" id="event-add" for="event-files">Add photos and videos</label>
+        <input id="event-files" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,.mov,.m4v" multiple hidden />
         <a class="btn" id="open-app" href="/download/">Open in Lens</a>
       </div>
       <p class="note status" id="event-status" role="status" hidden></p>
@@ -23,7 +23,7 @@ import Layout from '../../layouts/Layout.astro';
         or <a href="/signin/">sign in</a>.
       </p>
       <p class="note" id="event-note">
-        Anyone with this link can see the album and add photos. Your photos stay yours: in the Lens app you can remove them, or leave, any time.
+        Anyone with this link can see the album and add photos and videos. Your photos stay yours: in the Lens app you can remove them, or leave, any time.
       </p>
     </div>
     <div class="event-grid" id="event-grid" aria-live="polite"></div>

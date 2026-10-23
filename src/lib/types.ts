@@ -64,6 +64,8 @@ export interface StorageOverview {
     paidPlan?: { id: string; name?: string; status: 'active' | 'grace' | 'lapsed'; periodEnd: number; graceUntil?: number; cancelled?: boolean };
     landingUntil?: number;
     overLimit?: { since: number; deletionAt: number };
+    /** Lens Plus locked in (starts when the welcome ends) or running. */
+    plus?: { status: 'scheduled' | 'active'; chargeAt?: number; cancelled?: boolean };
   };
   signedIn: boolean;
   storages: ConnectedStorage[];

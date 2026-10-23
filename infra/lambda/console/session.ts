@@ -10,6 +10,7 @@
 //   CSESS#<sha256(token)> S          → session { stage: 'mfa' | 'full', email, … }
 //   CADMIN#<email>        TOTP       → { enc (AES-GCM secret), lastStep, at }
 //   CADMIN#<email>        S#<hash>   → session list for "Signed-in devices"
+//   CADMIN#<email>        BACKUP     → { codes: sha256[] } one-time backup codes (lost phone)
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
@@ -252,6 +253,62 @@ export async function totpSetup(s: Session): Promise<Res> {
   return json(200, { secret, uri: otpauthUri(secret, s.email) });
 }
 
+// ---------- Backup codes (lost authenticator) ----------
+// 10 one-time codes (xxxx-xxxx), shown once at set-up and when made again in "Your account".
+// Each works instead of the 6-digit code, once. Only hashes are stored.
+
+const BACKUP_COUNT = 10;
+const BACKUP = /^[a-z2-9]{4}-?[a-z2-9]{4}$/i;
+const backupHash = (email: string, code: string) => sha(`backup:${email}:${code.toLowerCase().replace('-', '')}`);
+
+function makeCodes(): string[] {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from({ length: BACKUP_COUNT }, () => {
+    const b = randomBytes(8);
+    const c = Array.from(b, (x) => alphabet[x % alphabet.length]).join('');
+    return `${c.slice(0, 4)}-${c.slice(4)}`;
+  });
+}
+
+async function newBackupCodes(email: string): Promise<string[]> {
+  const codes = makeCodes();
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `CADMIN#${email}`, sk: 'BACKUP', codes: codes.map((c) => backupHash(email, c)), at: Date.now() } }));
+  return codes;
+}
+
+/** Uses up one backup code; true if it was valid. */
+async function useBackupCode(email: string, code: string): Promise<boolean> {
+  const row = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `CADMIN#${email}`, sk: 'BACKUP' } }))).Item;
+  const list = (row?.codes ?? []) as string[];
+  const i = list.indexOf(backupHash(email, code));
+  if (i < 0) return false;
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: { pk: `CADMIN#${email}`, sk: 'BACKUP' },
+        UpdateExpression: `REMOVE codes[${i}]`,
+        ConditionExpression: `codes[${i}] = :h`,
+        ExpressionAttributeValues: { ':h': list[i] },
+      }),
+    );
+    return true;
+  } catch {
+    return false; // used at the same moment elsewhere
+  }
+}
+
+/** GET /api/auth/backup-codes: how many are left. POST: make 10 new ones (old ones stop working). */
+export async function backupCodes(s: Session, req: Req): Promise<Res> {
+  if (req.method === 'GET') {
+    const row = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `CADMIN#${s.email}`, sk: 'BACKUP' } }))).Item;
+    return json(200, { left: (row?.codes ?? []).length, at: row?.at });
+  }
+  const codes = await newBackupCodes(s.email);
+  await log({ entity: `console:${s.email}`, action: 'console.backup-codes.new', actor: `console:${s.email}` });
+  return json(200, { codes });
+}
+
 /** POST /api/auth/totp {code}: finishes sign-in; a fresh session token replaces the pending one. */
 export async function totpVerify(s: Session, req: Req): Promise<Res> {
   if (s.stage !== 'mfa') throw new HttpError(400, 'Already signed in');
@@ -273,15 +330,21 @@ export async function totpVerify(s: Session, req: Req): Promise<Res> {
     throw new HttpError(401, 'Too many wrong codes. Sign in again.');
   }
   const enrolled = await totpRow(s.email);
+  // Lost phone: a backup code instead of the authenticator (only once one is set up).
+  const usedBackup = !!enrolled && BACKUP.test(code) && (await useBackupCode(s.email, code));
   const secret = enrolled ? await open(enrolled.enc) : row.pendingSecret ? await open(row.pendingSecret) : null;
   if (!secret) throw new HttpError(400, 'Set up your authenticator first');
-  const step = verify(secret, code, enrolled?.lastStep ?? 0);
+  const step = usedBackup ? (enrolled!.lastStep as number) : verify(secret, code, enrolled?.lastStep ?? 0);
+  if (usedBackup) await log({ entity: `console:${s.email}`, action: 'console.mfa.backup-code', actor: `console:${s.email}`, data: { ip: ipKey(req) } });
   if (step === null) {
     await log({ entity: `console:${s.email}`, action: 'console.mfa.failed', actor: `console:${s.email}`, data: { ip: ipKey(req), tries: row.tries } });
     throw new HttpError(401, `That code didn’t match. ${MAX_CODE_TRIES - row.tries} tries left.`);
   }
   // Each code works once (also against two sign-ins racing with the same code).
-  if (enrolled) {
+  let firstCodes: string[] | undefined;
+  if (usedBackup) {
+    // Already used up above.
+  } else if (enrolled) {
     try {
       await ddb.send(
         new UpdateCommand({
@@ -304,6 +367,7 @@ export async function totpVerify(s: Session, req: Req): Promise<Res> {
       }),
     );
     await log({ entity: `console:${s.email}`, action: 'console.mfa.enrolled', actor: `console:${s.email}` });
+    firstCodes = await newBackupCodes(s.email);
   }
 
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `CSESS#${s.hash}`, sk: 'S' } }));
@@ -315,7 +379,7 @@ export async function totpVerify(s: Session, req: Req): Promise<Res> {
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `CSESS#${hash}`, sk: 'S', stage: 'full', email: s.email, createdAt: now, lastSeen: now, ...device, ttl } }));
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `CADMIN#${s.email}`, sk: `S#${hash}`, createdAt: now, lastSeen: now, ...device, ttl } }));
   await log({ entity: `console:${s.email}`, action: 'console.login', actor: `console:${s.email}`, data: { ip: device.ip, city: device.city } });
-  return withCookies(json(200, { ok: true }), [cookie(COOKIE, token)]);
+  return withCookies(json(200, { ok: true, backupCodes: firstCodes }), [cookie(COOKIE, token)]);
 }
 
 /** POST /api/auth/logout */
@@ -362,7 +426,10 @@ export async function endMySessions(s: Session, req: Req): Promise<Res> {
 /** Owners: sign someone out everywhere (and optionally make them set up a new authenticator). */
 export async function signOutMember(by: Session, email: string, resetAuthenticator: boolean) {
   for (const x of await sessionsOf(email)) await endSession(x.hash, email);
-  if (resetAuthenticator) await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `CADMIN#${email}`, sk: 'TOTP' } }));
+  if (resetAuthenticator) {
+    await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `CADMIN#${email}`, sk: 'TOTP' } }));
+    await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `CADMIN#${email}`, sk: 'BACKUP' } }));
+  }
   await log({ entity: `console:${email}`, action: resetAuthenticator ? 'console.mfa.reset' : 'console.sessions.ended', actor: `console:${by.email}` });
 }
 

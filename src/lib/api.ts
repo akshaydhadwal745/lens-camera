@@ -69,6 +69,51 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+export type PlusKind = 'plus50-month' | 'plus50-year';
+export type PlusStatus = {
+  available: boolean;
+  testMode: boolean;
+  signedIn: boolean;
+  plan?: { id: string; name?: string; status: 'active' | 'grace'; periodEnd: number; cancelled?: boolean; provider: string };
+  subscription?: { kind: PlusKind; status: 'created' | 'scheduled' | 'active'; chargeAt?: number; cancelled?: boolean; firstPaise: number; paise: number; period: 'month' | 'year' };
+  offer: {
+    bytes: number;
+    /** Lock-in: nothing charged today; the subscription starts when the welcome ends. */
+    startsAt?: number;
+    monthly: { kind: PlusKind; paise: number; firstPaise: number };
+    yearly: { kind: PlusKind; paise: number; firstPaise: number };
+  };
+};
+export type MoveJob = {
+  status: 'awaiting-payment' | 'running' | 'done' | 'paused' | 'cancelled';
+  storageId: string;
+  payUrl?: string;
+  pricePaise: number;
+  totalItems: number;
+  totalBytes: number;
+  movedItems: number;
+  movedBytes: number;
+  failed: string[];
+  reason?: 'drive-full' | 'signed-out' | 'allowance' | 'error';
+  startedAt: number;
+  finishedAt?: number;
+};
+export type MoveStatus = {
+  quote: { items: number; bytes: number; freeLeftBytes: number; creditBytes: number; payGb: number; pricePaise: number; pricePerGbPaise: number; freeBytes: number };
+  job?: MoveJob;
+};
+export type ExportStatus = {
+  status: 'building' | 'ready' | 'failed' | 'expired';
+  totalItems: number;
+  totalBytes: number;
+  doneItems: number;
+  startedAt: number;
+  readyAt?: number;
+  expiresAt?: number;
+  nextAllowedAt: number;
+  files: { name: string; bytes: number; items: number; url: string }[];
+};
+
 export type IdentityResponse = { id: string; name: string; token: string; email?: string };
 /** Sign-in outcome. `token` is set when this phone switched to an existing account. */
 export type SignInResult = {
@@ -421,6 +466,17 @@ export const api = {
     createSet: (files: { name: string; bytes: number; md5: string }[], meta: Record<string, unknown>) =>
       request<{ setId: string; urls: Record<string, string> }>('POST', '/lab/sets', { files, meta }),
   },
+  // Lens Plus (Razorpay subscription; website + APK), moving originals to Google Drive, export.
+  plus: () => request<PlusStatus>('GET', '/plus'),
+  plusCheckout: (kind: PlusKind) => request<{ url: string; id: string }>('POST', '/plus/checkout', { kind }),
+  plusRefresh: () => request<PlusStatus>('POST', '/plus/refresh'),
+  plusCancel: () => request<PlusStatus>('POST', '/plus/cancel'),
+  move: () => request<MoveStatus>('GET', '/move'),
+  startMove: (body: { storageId: string; refreshToken: string; folderId?: string }) => request<{ job: MoveJob }>('POST', '/move', body),
+  moveRefresh: () => request<MoveStatus>('POST', '/move/refresh'),
+  moveCancel: () => request<MoveStatus>('POST', '/move/cancel'),
+  exportStatus: () => request<{ export?: ExportStatus }>('GET', '/export'),
+  startExport: () => request<{ export?: ExportStatus }>('POST', '/export'),
   /** Website: end this browser's session (clears the cookie). */
   signOutThisBrowser: () => request<{ signedOut: boolean }>('DELETE', '/web-sessions/current'),
 };

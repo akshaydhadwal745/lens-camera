@@ -5,6 +5,8 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleShee
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { razorpayHere } from '@/lib/pay-channel';
+import { loadDoc, saveDoc } from '@/lib/local-store';
 import { api } from '@/lib/api';
 import { ConnectCancelled } from '@/lib/storage';
 import { sendSignInCode, signInWithCode, signInWithGoogle, useStore } from '@/lib/store';
@@ -43,6 +45,17 @@ export default function SignInScreen() {
     notify('Signed in', 'Your photos are tied to your account now. Sign in on any phone to get them back.');
     if (router.canGoBack()) router.back();
     else router.replace('/');
+    // The welcome starts now: offer to lock in Lens Plus (₹0 today), once, where Razorpay is allowed.
+    if (razorpayHere && !loadDoc<{ shown?: boolean }>('plus-signin', {}).shown) {
+      api
+        .plus()
+        .then((s) => {
+          if (!s.available || s.subscription || s.plan || !s.offer.startsAt) return;
+          saveDoc('plus-signin', { shown: true });
+          setTimeout(() => router.push('/plus?from=signin' as never), 600);
+        })
+        .catch(() => {});
+    }
   };
 
   const send = async () => {

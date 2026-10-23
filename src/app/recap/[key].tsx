@@ -10,12 +10,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/Text';
 import { api, Recap } from '@/lib/api';
+import { markRecapSeen } from '@/lib/plus-prompt';
 import { refreshRemote } from '@/lib/store';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
 
 const GAP = 3;
 
 export default function RecapScreen() {
+  useEffect(() => markRecapSeen(), []);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { key } = useLocalSearchParams<{ key: string }>();

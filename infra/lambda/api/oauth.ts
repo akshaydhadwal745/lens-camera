@@ -290,3 +290,14 @@ export async function googleLoginClaims(identity: Identity | null, req: Req) {
     name: typeof claims.name === 'string' ? claims.name : undefined,
   };
 }
+
+/**
+ * Server-side access token for a storage the person handed over for a job (drive-move.ts: moving
+ * Lens originals to their Google Drive). Throws 'signed-out' when access was revoked.
+ */
+export async function serverAccessToken(p: 'gdrive', refreshToken: string): Promise<{ accessToken: string; expiresAt: number; refreshToken?: string }> {
+  const res = await tokenRequest(p, { grant_type: 'refresh_token', refresh_token: refreshToken });
+  const data = JSON.parse(String(res.body ?? '{}'));
+  if (res.statusCode !== 200) throw new HttpError(res.statusCode ?? 502, data.error ?? 'Storage sign-in failed', data.code);
+  return data;
+}

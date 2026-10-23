@@ -89,3 +89,15 @@ Total ≈ 10 working days. Each phase ships and is usable on its own.
 - Test traffic: `infra/scripts/e2e.sh` sends `x-lens-test: 1`; new accounts from it get `test: true`. Older test guests are inferred (created within 4 min of an e2e account).
 
 Next: remove Admin from the camera app + old `/v1/admin` routes once the console is live; screenshot attachments in feedback; health/errors/costs (P3); user actions (P2).
+
+## Added 2026-10-23
+- **Backup codes:** 10 one-time codes (`xxxx-xxxx`) shown once when the authenticator is set up, and again from
+  Your account → Backup codes → Make new codes (old ones stop). Each works once instead of the 6-digit code
+  ("Lost your phone? Use a backup code" on the sign-in screen). Stored as hashes in `CADMIN#<email>/BACKUP`;
+  removed with "Reset authenticator" or when someone is removed.
+- **Second owner:** the main owner (ADMIN_EMAILS) can give the `owner` role in Team. Only the main owner can add,
+  change, sign out, reset or remove an owner.
+- **Alerts (hourly, EventBridge → console Lambda `{ alerts: true }`, `alerts.ts`):** email to all owners when a
+  Health check is red (again every 12 h while red, then "fine again"), on an app error spike (a new Sentry issue
+  with ≥ 10 events in its first 6 hours, or today ≥ 100 and > 3× the 14-day daily average), and for user reports
+  not handled within 24 h (repeated daily). State in `STATS/ALERTS`.

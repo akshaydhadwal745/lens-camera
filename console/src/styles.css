@@ -831,3 +831,11 @@ textarea {
   flex-wrap: wrap;
   margin-bottom: 8px;
 }
+
+.secret.codes {
+  white-space: pre;
+  columns: 2;
+  line-height: 1.8;
+  font-size: 15px;
+  user-select: all;
+}

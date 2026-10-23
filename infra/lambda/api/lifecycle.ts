@@ -2,6 +2,7 @@
 // about 10:00 on the phone's clock, within the limits in push.ts (deliver):
 //   welcome_ending   14, 3 and 1 days before the 40 GB welcome ends (account; + email at 14 and 1)
 //   payment_failed   grace day 0, 3 and 6; plan_ended once (account, + email)
+//   plus_first_charge 3 days before a locked-in Lens Plus is first charged (account, + email; RBI e-mandate)
 //   landing_ending   3 days before the soft landing ends, if backups would pause (account)
 //   over_limit       monthly while over the limit; deletion_notice 90/30/7/1 days before (account)
 //   weekly_summary   Sundays, if something was backed up that week (summary)
@@ -13,6 +14,7 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, env, LANDING_MS, PLAN_CHANGE_WELCOME_UNTIL, quotaFor } from './lib';
 import { deleteAboveLimit, trackOverLimit } from './over-limit';
 import { deletionAt, planActive, PLANS, PlanState } from './plans';
+import { OFFERS, SubState } from './payments';
 import { bumpStat, deliver, localHour } from './push';
 import { findRecaps, RecapInput } from './recap-detect';
 import { notify as email } from './referrals';
@@ -24,7 +26,7 @@ const SEND_HOUR = 10;
 const GB = 1024 ** 3;
 
 const FIELDS = [
-  'pk', 'sk', 'email', 'createdAt', 'usedBytes', 'bonusBytes', 'welcomeUntil', 'plan', 'overLimitSince', 'test', 'emulator', 'guestId', 'tz',
+  'pk', 'sk', 'email', 'createdAt', 'usedBytes', 'bonusBytes', 'welcomeUntil', 'plan', 'sub', 'overLimitSince', 'test', 'emulator', 'guestId', 'tz',
   'kind', 'status', 'deletedAt', 'size', 'uploadedAt', 'place', 'width', 'height', 'recap', 'previewReady', 'ownerHidden', 'at',
 ];
 
@@ -96,6 +98,18 @@ export async function runLifecycle(now: number, deadline: number, onlyOwner?: st
         return true;
       };
 
+      // Lens Plus locked in during the welcome: 3 days before the first charge (Razorpay also sends
+      // its own pre-debit notice 24 h before). Cancel is one tap.
+      const sub = p.sub as SubState | undefined;
+      if (sub?.status === 'scheduled' && !sub.cancelled && sub.chargeAt && sub.chargeAt - now > 2 * DAY && sub.chargeAt - now <= 3 * DAY) {
+        const o = OFFERS[sub.kind];
+        const first = sub.intro ? o.introPaise ?? o.paise : o.paise;
+        const rupees = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
+        if (await notice('plus_first_charge', `plus-charge-${sub.id}`, `Lens Plus starts on ${dateText(sub.chargeAt)}`,
+          `Your 40 GB welcome ends then and Lens Plus (50 GB) begins: ${rupees(first)} on ${dateText(sub.chargeAt)}${sub.intro ? `, then ${rupees(o.paise)} a ${o.period}` : ` each ${o.period}`}. Don't want it? Cancel in one tap in Settings → Lens Plus, and nothing is charged.`, true))
+          continue;
+      }
+
       // Payment didn't go through: 7 days of grace, reminders on day 0, 3 and 6.
       if (plan?.status === 'grace' && plan.graceUntil && plan.graceUntil > now) {
         const left = plan.graceUntil - now;
@@ -121,7 +135,7 @@ export async function runLifecycle(now: number, deadline: number, onlyOwner?: st
           if (left > (days - 1) * DAY && left <= days * DAY) {
             const title = days === 1 ? 'Your 40 GB welcome ends tomorrow' : `Your 40 GB welcome ends on ${dateText(welcomeUntil)}`;
             const body = used > free
-              ? `You use ${gb(used)}. Backups keep going for 14 more days, then pause above ${gb(free)} free. Nothing is deleted. To keep backing up: get more space, invite friends (+10 GB each), or back up to your own Google Drive.`
+              ? `You use ${gb(used)}. Backups keep going for 14 more days, then pause above ${gb(free)} free. Nothing is deleted. To keep backing up: Lens Plus (50 GB, from ₹59 a month), invite friends (+10 GB each), or back up to your own Google Drive.`
               : `After that you keep ${gb(free)} free, forever. You use ${gb(used)}, so nothing changes for you.`;
             if (await notice('welcome_ending', `welcome${days}-${welcomeUntil}`, title, body, days !== 3)) break;
           }

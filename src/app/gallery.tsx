@@ -5,7 +5,7 @@ import { useNearbyPeople } from '@/lib/nearby';
 import { peopleSupported } from '@/lib/people';
 import { api } from '@/lib/api';
 import { SharesStrip } from '@/components/SharesStrip';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -54,6 +54,9 @@ import { confirmAndDelete } from '@/lib/delete-flow';
 import { loadDoc, saveDoc } from '@/lib/local-store';
 import { nextPrompt, PromptKind } from '@/lib/review-prompt';
 import { FeedbackPrompt } from '@/components/FeedbackPrompt';
+import { PlusOffer } from '@/components/PlusOffer';
+import { razorpayHere } from '@/lib/pay-channel';
+import { nextPlusOffer, PlusReason } from '@/lib/plus-prompt';
 import { isBurstExtra } from '@/lib/edits';
 import { providerInfo } from '@/lib/storage/providers';
 import { GalleryItem } from '@/lib/types';
@@ -244,9 +247,27 @@ export default function GalleryScreen() {
   function isGuestBanner() {
     return isGuest && !isWeb && !nudgeDismissed && mine.length >= 3;
   }
+  // Lens Plus at natural moments (src/lib/plus-prompt-rules.ts): before the feedback card, one card at a time.
+  const [plusReason, setPlusReason] = useState<PlusReason | null>(null);
+  const plusChosen = useRef(false);
+  const storageInfo = useStore((s) => s.storage);
   useEffect(() => {
-    if (isWeb || prompt || !calm) return;
-    const t = setTimeout(() => setPrompt(nextPrompt({ photos: mine.length, calm })), 1500);
+    if (plusReason || prompt || !calm || !storageInfo?.signedIn) return;
+    const lens = storageInfo.lens;
+    const paid = lens.paidPlan && lens.paidPlan.status !== 'lapsed';
+    const t = setTimeout(() => {
+      const reason = nextPlusOffer({ eligible: razorpayHere && !paid && !lens.plus, usedBytes: lens.usedBytes, quotaBytes: lens.quotaBytes, welcomeUntil: lens.welcomeUntil, backups: mine.length });
+      if (reason) {
+        plusChosen.current = true;
+        setPlusReason(reason);
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calm, storageInfo]);
+  useEffect(() => {
+    if (isWeb || prompt || plusReason || !calm) return;
+    const t = setTimeout(() => !plusChosen.current && setPrompt(nextPrompt({ photos: mine.length, calm })), 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calm]);
@@ -489,6 +510,8 @@ export default function GalleryScreen() {
     </View>
   ) : showCameraOffer && mine.length >= 3 && tab === 'mine' && !selecting ? (
     <CameraBackupOffer onClose={() => setShowCameraOffer(false)} />
+  ) : plusReason && tab === 'mine' && !selecting ? (
+    <PlusOffer reason={plusReason} onClose={() => setPlusReason(null)} />
   ) : prompt && tab === 'mine' && !selecting ? (
     <FeedbackPrompt kind={prompt} onClose={() => setPrompt(null)} />
   ) : null;

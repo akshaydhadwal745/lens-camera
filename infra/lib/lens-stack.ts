@@ -75,6 +75,8 @@ export class LensStack extends Stack {
         { noncurrentVersionExpiration: Duration.days(30), expiredObjectDeleteMarker: true },
         // Streaming copies (HLS) are re-made on demand: keep them 90 days.
         { prefix: 'h/', expiration: Duration.days(90) },
+        // "Download everything" ZIPs (lambda/api/export.ts): links work 6 days, files go after 7.
+        { prefix: 'x/', expiration: Duration.days(7), noncurrentVersionExpiration: Duration.days(1) },
         // Anonymous camera diagnostics: kept one year (privacy policy says so).
         { prefix: 'diag/', expiration: Duration.days(365) },
       ],
@@ -280,10 +282,10 @@ function handler(event) {
         responseHeadersPolicy: securityHeaders,
         functionAssociations: [{ function: spaRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
-      // m/* originals, d/* derivatives (thumbnail/preview): both private, signed URLs only.
+      // m/* originals, d/* derivatives (thumbnail/preview), x/* export ZIPs: private, signed URLs only.
       additionalBehaviors: {
         ...Object.fromEntries(
-          ['m/*', 'd/*'].map((pattern) => [
+          ['m/*', 'd/*', 'x/*'].map((pattern) => [
             pattern,
             {
               origin: mediaOrigin,
@@ -501,6 +503,8 @@ function handler(event) {
           `arn:aws:ssm:${this.region}:${this.account}:parameter${STREAM_KEY_PARAM}`,
           // Firebase Cloud Messaging service account for push notifications (lambda/api/push.ts).
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/fcm/*`,
+          // Razorpay keys, plan ids, webhook secret, intro offer (lambda/api/razorpay.ts).
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/razorpay/*`,
         ],
         }),
       );

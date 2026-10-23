@@ -823,4 +823,47 @@ RA=$(call POST "/recaps/$RK/album" "$TG" -d '{}' | j .albumId)
 [[ $(call POST "/recaps/$RK/album" "$TG" -d '{}' | j .albumId) == "$RA" ]] && ok "saving twice keeps one album"
 call POST "/recaps/$RK/dismiss" "$TG" >/dev/null
 [[ $(call GET "/recaps?tz=330" "$TG" | j .recaps.length) == 0 ]] && ok "dismissed recaps aren't suggested again"
+# --- Lens Plus (Razorpay test mode), Move to Google Drive (quote), Download everything ---
+H=$(curl -sS -X POST "$API/devices"); TH=$(echo "$H" | j .token); IH=$(echo "$H" | j .id)
+[[ $(call GET /plus "$TH" | j .available) == false && $(call POST /plus/checkout "$TH" -d '{"kind":"plus50-month"}' -o /dev/null -w '%{http_code}') == 403 ]] && ok "guests can't buy Lens Plus (sign in first)"
+MAILH="h$(date +%s%N)@e2e.lens.invalid"
+call POST /auth/email/start "$TH" -d "{\"email\":\"$MAILH\"}" >/dev/null
+call POST /auth/email/verify "$TH" -d "{\"email\":\"$MAILH\",\"code\":\"$(otp "$MAILH")\"}" >/dev/null
+R=$(call GET /plus "$TH")
+[[ $(echo "$R" | j .available) == true && $(echo "$R" | j .testMode) == true && $(echo "$R" | j .offer.monthly.paise) == 5900 && $(echo "$R" | j .offer.yearly.paise) == 49900 ]] && ok "Lens Plus offer: ₹59/month or ₹499/year (Razorpay test mode)" || fail "plus: $R"
+[[ $(echo "$R" | j '.offer.startsAt > Date.now() + 80*86400000') == true ]] && ok "during the welcome it's a lock-in: first charge when the welcome ends"
+R=$(call POST /plus/checkout "$TH" -d '{"kind":"plus50-month"}'); SUBID=$(echo "$R" | j .id)
+[[ $SUBID == sub_* && $(echo "$R" | j .url) == https://* ]] && ok "checkout: Razorpay subscription + hosted payment page ($SUBID)" || fail "checkout: $R"
+[[ $(call POST /plus/checkout "$TH" -d '{"kind":"plus50-month"}' | j .id) == "$SUBID" ]] && ok "an unfinished checkout is reused"
+[[ $(call POST /plus/refresh "$TH" | j .subscription.status) == created && $(call GET /storage "$TH" | j .lens.plus) == "" ]] && ok "not paid yet: no plan, nothing shown as locked in"
+WHS=$(aws ssm get-parameter --profile lens --name /lens/razorpay/webhook-secret --with-decryption --query Parameter.Value --output text)
+WB="{\"event\":\"subscription.authenticated\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"$SUBID\"}}}}"
+[[ $(curl -sS -X POST "$API/razorpay/webhook" -H 'content-type: application/json' -H 'x-razorpay-signature: 00ff' -d "$WB" -o /dev/null -w '%{http_code}') == 401 ]] && ok "webhook with a wrong signature refused"
+[[ $(curl -sS -X POST "$API/razorpay/webhook" -H 'content-type: application/json' -H "x-razorpay-signature: $(printf '%s' "$WB" | openssl dgst -sha256 -hmac "$WHS" -hex | sed 's/^.*= //')" -d "$WB" -o /dev/null -w '%{http_code}') == 200 ]] && ok "signed webhook accepted (re-reads the subscription from Razorpay)"
+[[ $(call POST /plus/cancel "$TH" | j .subscription) == "" ]] && ok "one-tap cancel before any charge ends it"
+[[ $(call POST /plus/checkout "$TH" -d '{"kind":"gold"}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "unknown plan refused"
+# Two photos in Lens storage for the move quote and the export.
+for k in 1 2; do
+  head -c $((200000 + k)) /dev/urandom > "$TMP/h$k.jpg"; HM=$(md5b64 "$TMP/h$k.jpg"); HID="$(node -p "Date.now().toString(36).padStart(8,'0')")-hexp$k"
+  R=$(call POST /media "$TH" -d "{\"id\":\"$HID\",\"contentType\":\"image/jpeg\",\"size\":$((200000 + k)),\"kind\":\"photo\",\"md5\":\"$HM\"}")
+  curl -sS -X PUT "$(echo "$R" | j .url)" -H 'content-type: image/jpeg' -H "content-md5: $HM" --data-binary @"$TMP/h$k.jpg" -o /dev/null
+  call POST "/media/$HID/complete" "$TH" >/dev/null
+done
+R=$(call GET /move "$TH")
+[[ $(echo "$R" | j .quote.items) == 2 && $(echo "$R" | j .quote.pricePaise) == 0 && $(echo "$R" | j .quote.freeBytes) == $((10*1024*1024*1024)) && $(echo "$R" | j .quote.pricePerGbPaise) == 1500 ]] && ok "move quote: 2 items, free (first 10 GB free, then ₹15/GB)" || fail "move: $R"
+[[ $(call POST /move "$TH" -d '{"storageId":"none-1234","refreshToken":"x123456789012"}' | j .code) == no-drive ]] && ok "moving needs a connected Google Drive"
+R=$(call POST /export "$TH"); [[ $(echo "$R" | j .export.status) == building && $(echo "$R" | j .export.totalItems) == 2 ]] && ok "download everything: started (2 items)" || fail "export: $R"
+for _ in $(seq 1 40); do R=$(call GET /export "$TH"); [[ $(echo "$R" | j .export.status) == ready ]] && break; sleep 5; done
+[[ $(echo "$R" | j .export.status) == ready && $(echo "$R" | j .export.files.length) == 1 ]] && ok "export ready: 1 ZIP" || fail "export not ready: $R"
+curl -sS "$(echo "$R" | j '.export.files[0].url')" -o "$TMP/export.zip"
+unzip -tq "$TMP/export.zip" >/dev/null && [[ $(unzip -Z1 "$TMP/export.zip" | wc -l) == 2 ]] && ok "the ZIP is valid and holds both originals" || fail "bad zip"
+unzip -p "$TMP/export.zip" "$(unzip -Z1 "$TMP/export.zip" | head -1)" | cmp -s - "$TMP/h1.jpg" && ok "… byte for byte (oldest first, folder by year)" || unzip -p "$TMP/export.zip" "$(unzip -Z1 "$TMP/export.zip" | head -1)" | cmp -s - "$TMP/h2.jpg" && ok "… byte for byte (folder by year)"
+[[ $(call POST /export "$TH" | j .code) == too-soon ]] && ok "one export a week"
+# Console: backup codes for a lost authenticator (shown once, stored as hashes).
+R=$(capi POST /auth/backup-codes); [[ $(echo "$R" | j .codes.length) == 10 && $(echo "$R" | j '.codes[0]') =~ ^[a-z2-9]{4}-[a-z2-9]{4}$ ]] && ok "console: 10 backup codes made" || fail "backup codes: $R"
+[[ $(capi GET /auth/backup-codes | j .left) == 10 ]] && ok "console: backup codes left = 10"
+[[ $(aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}" --output json | grep -c "$(echo "$R" | j '.codes[0]')") == 0 ]] && ok "console: only hashes are stored"
+[[ $(capi PUT /team -d '{"email":"x@example.com","role":"owner"}' -o /dev/null -w '%{http_code}') == 404 ]] && ok "console: an admin can't add owners (Team is owners-only)"
+ddbdel "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}"
+call DELETE /account "$TH" -d '{"confirm":"DELETE"}' >/dev/null
 echo "ALL PASSED"

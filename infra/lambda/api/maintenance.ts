@@ -9,6 +9,10 @@ import { runCampaigns } from './campaigns';
 import { runLifecycle } from './lifecycle';
 import { advancePlans } from './plans';
 import { scanTable } from './table-scan';
+import { reconcileDue } from './payments';
+import { resumeStalled, runMove, settleAwaiting } from './drive-move';
+import { resumeExports, runExport } from './export';
+import { lambdaContinue } from './continue';
 
 type Event = {
   now?: unknown;
@@ -25,23 +29,44 @@ type Event = {
   runCampaign?: string;
   /** Tests: lifecycle notifications for one throwaway account as of `now`. */
   lifecycle?: { now: number; onlyOwner: string };
+  /** Move one account's Lens originals to its Google Drive (drive-move.ts); continues itself. */
+  driveMove?: unknown;
+  /** Build one account's "download everything" ZIPs (export.ts); continues itself. */
+  exportFor?: unknown;
   /** Approve commissions as of `now` for one affiliate (tests). */
   approveCommissions?: { now: number; onlyAffiliate: string };
 };
 
 export async function handler(event: Event, context?: { getRemainingTimeInMillis(): number }) {
   if (event?.retryFeedbackEmails) return await retryFeedbackEmails();
+  if (typeof event?.driveMove === 'string' || typeof event?.exportFor === 'string') {
+    const deadline = Date.now() + Math.max(30_000, (context?.getRemainingTimeInMillis() ?? 600_000) - 60_000);
+    const move = typeof event.driveMove === 'string';
+    const id = (move ? event.driveMove : event.exportFor) as string;
+    const done = move ? await runMove(id, deadline) : await runExport(id, deadline);
+    if (!done) await lambdaContinue(move ? { driveMove: id } : { exportFor: id });
+    console.log(move ? 'drive move' : 'export', id, done ? 'stopped' : 'continues');
+    return { done };
+  }
   if (typeof event?.runCampaign === 'string') return { campaigns: await runCampaigns(Date.now(), Date.now() + 60_000, event.runCampaign) };
   if (event?.notifications || event?.lifecycle) {
     const until = Date.now() + Math.max(30_000, (context?.getRemainingTimeInMillis() ?? 600_000) - 60_000);
     if (event.lifecycle) return { lifecycle: await runLifecycle(event.lifecycle.now, until, event.lifecycle.onlyOwner) };
     const now = Date.now();
     // Paid plans: renewals that never came → 7-day grace; grace or cancelled plans that ran out → Free.
+    const rows = await scanTable(['pk', 'sk', 'plan', 'sub', 'status', 'updatedAt', 'linkId']);
+    // Razorpay first: a renewal that went through moves periodEnd before advancePlans looks at it.
+    const subs = rows.filter((r) => r.sk === 'PROFILE' && r.sub).map((r) => ({ id: String(r.pk).slice(2), sub: r.sub, plan: r.plan }));
+    const reconciled = await reconcileDue(subs, now).catch((e) => (console.error('reconcile', e), -1));
+    const jobs = rows.filter((r) => r.sk === 'MOVE' || r.sk === 'EXPORT') as { pk: string; sk: string; status?: string; updatedAt?: number; linkId?: string }[];
+    await settleAwaiting(jobs, now).catch((e) => console.error('settle', e));
+    await resumeStalled(jobs, now).catch((e) => console.error('moves', e));
+    await resumeExports(jobs, now).catch((e) => console.error('exports', e));
     const withPlans = (await scanTable(['pk', 'sk', 'plan'])).filter((r) => r.sk === 'PROFILE' && r.plan).map((r) => ({ id: String(r.pk).slice(2), plan: r.plan }));
     const planChanges = await advancePlans(withPlans, now);
     const campaigns = await runCampaigns(now, until);
     const lifecycle = new Date(now).getUTCMinutes() < 15 ? await runLifecycle(now, until) : {};
-    console.log('notifications', JSON.stringify({ planChanges, campaigns, lifecycle }));
+    console.log('notifications', JSON.stringify({ planChanges, reconciled, campaigns, lifecycle }));
     return { planChanges, campaigns, lifecycle };
   }
   if (event?.purchase) return { status: await recordPurchase(event.purchase) };

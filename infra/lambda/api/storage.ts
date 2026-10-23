@@ -2,7 +2,8 @@
 // own connected storages (Google Drive, Dropbox, …). The phone talks to the
 // providers directly; this API only keeps what Lens needs to know: which
 // storages are connected, their health (as last reported), and requests for
-// providers we don't support yet. Free plan: sign-ins never reach the server.
+// providers we don’t support yet. Sign-ins stay on the phone; the one exception is a "Move to my
+// Google Drive" job the person starts (drive-move.ts: sealed, deleted when the move stops).
 import { DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Identity } from './identity';
@@ -92,6 +93,8 @@ export async function getStorage(identity: Identity): Promise<Res> {
       // Paid plan and over-limit state (plans.ts, over-limit.ts), for Settings → Storage.
       paidPlan: identity.plan ? { id: identity.plan.id, name: PLANS[identity.plan.id]?.name, status: identity.plan.status, periodEnd: identity.plan.periodEnd, graceUntil: identity.plan.graceUntil, cancelled: identity.plan.cancelled } : undefined,
       landingUntil: identity.email && identity.welcomeUntil ? identity.welcomeUntil + LANDING_MS : undefined,
+      // Lens Plus locked in / running through Razorpay (payments.ts), so the app doesn't offer it again.
+      plus: identity.sub && identity.sub.status !== 'ended' && identity.sub.status !== 'created' ? { status: identity.sub.status, chargeAt: identity.sub.chargeAt, cancelled: identity.sub.cancelled } : undefined,
       overLimit: identity.overLimitSince ? { since: identity.overLimitSince, deletionAt: deletionAt(identity.overLimitSince) } : undefined,
     },
     signedIn: !!identity.email,

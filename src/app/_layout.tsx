@@ -119,6 +119,7 @@ function RootLayout() {
         <Stack.Screen name="blocked" />
         <Stack.Screen name="links" />
         <Stack.Screen name="storage" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="plus" options={{ presentation: 'modal' }} />
         <Stack.Screen name="camera-info" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lab" />
         <Stack.Screen name="selftest" />

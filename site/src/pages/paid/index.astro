@@ -1,0 +1,20 @@
+---
+// /paid/: where Razorpay sends people after paying (Lens Plus or moving photos to Google Drive).
+// The app and the website check the payment with Razorpay themselves; this page only says what next.
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout lang="en" path="paid" title="Payment received" description="Your Lens payment went through." noindex>
+  <section class="block">
+    <div class="narrow">
+      <p class="kicker">Lens</p>
+      <h1>Thank you, payment received</h1>
+      <p class="lead">Go back to the Lens app: it picks up the payment by itself within a minute. On a computer, open Lens on the web.</p>
+      <p>
+        <a class="btn btn-primary" id="open-app" href="lens://storage">Open Lens</a>
+        <a class="btn" href="/app/storage">Lens on the web</a>
+      </p>
+      <p class="note">A receipt is on its way from Razorpay to your email. Questions? <a href="/contact/?topic=support">Contact us</a>.</p>
+    </div>
+  </section>
+</Layout>

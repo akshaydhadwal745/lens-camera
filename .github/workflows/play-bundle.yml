@@ -110,6 +110,8 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+          # Play Store build: no Razorpay inside (Play's payments policy; src/lib/pay-channel.ts).
+          EXPO_PUBLIC_STORE: play
           # Crash reports (src/lib/sentry.ts): upload source maps when the token secret exists.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}

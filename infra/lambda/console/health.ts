@@ -70,7 +70,7 @@ function hourly(xs: { t: number; v: number }[] | undefined) {
   });
 }
 
-async function compute() {
+export async function compute() {
   const fns = FUNCTIONS.map(pair);
   const lambdaQ: Q[] = fns.flatMap((f, i) => [
     { id: `inv${i}`, ns: 'AWS/Lambda', metric: 'Invocations', dims: { FunctionName: f.name }, stat: 'Sum', period: 3600 },

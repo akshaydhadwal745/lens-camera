@@ -5,7 +5,9 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { Text, TextInput } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MoveToDrive, DownloadEverything } from '@/components/StorageJobs';
 import { api } from '@/lib/api';
+import { razorpayHere } from '@/lib/pay-channel';
 import { formatBytes } from '@/lib/format';
 import {
   connectorFor,
@@ -116,6 +118,19 @@ function LensStorageCard() {
         </Pressable>
       )}
       {storage.signedIn && <PlanNote lens={storage.lens} />}
+      {storage.signedIn && razorpayHere && (
+        <Pressable style={styles.plusRow} onPress={() => router.push('/plus?from=storage' as never)} accessibilityRole="button">
+          <Ionicons name="sparkles-outline" size={18} color={colors.link} />
+          <Text style={[styles.legendText, { color: '#fff' }]}>
+            {storage.lens.plus?.status === 'scheduled'
+              ? 'Lens Plus is locked in. Manage'
+              : storage.lens.paidPlan && storage.lens.paidPlan.status !== 'lapsed'
+                ? 'Manage Lens Plus'
+                : 'Lens Plus · 50 GB from ₹59 a month'}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color="#86868B" />
+        </Pressable>
+      )}
       <View style={styles.legendRow}>
         <Ionicons name="shield-checkmark-outline" size={14} color="#4ADE80" />
         <Text style={styles.legendText}>
@@ -477,6 +492,18 @@ export default function StorageScreen() {
           )}
         </Section>
 
+        {storage?.signedIn && own?.provider === 'gdrive' && (
+          <Section title="Move to my Google Drive">
+            <MoveToDrive drive={own} />
+          </Section>
+        )}
+
+        {storage?.signedIn && (
+          <Section title="Download everything">
+            <DownloadEverything />
+          </Section>
+        )}
+
         <Section title="Don’t see yours?" footer="Tell us which storage you use. We add the most requested ones first.">
           <RequestProvider />
         </Section>
@@ -501,6 +528,7 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   legendText: { color: '#A1A1A6', fontSize: 13, lineHeight: 18, flex: 1 },
   legendName: { color: '#fff', fontWeight: '700' },
+  plusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2C2C2E', borderRadius: 10, padding: 10 },
   guestNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2C2C2E', borderRadius: 10, padding: 10 },
   providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   providerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 56 },

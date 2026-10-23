@@ -12,6 +12,8 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_dynamodb as dynamodb,
+  aws_events as events,
+  aws_events_targets as targets,
   aws_iam as iam,
   aws_lambda as lambda,
   aws_lambda_nodejs as nodejs,
@@ -55,7 +57,7 @@ export class ConsoleStack extends Stack {
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
       memorySize: 1024,
-      timeout: Duration.seconds(30),
+      timeout: Duration.seconds(60), // the hourly alerts run reads Health and Sentry
       logGroup: new logs.LogGroup(this, 'ConsoleApiLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: RemovalPolicy.DESTROY }),
       environment: {
         TABLE: props.tableName,
@@ -99,6 +101,11 @@ export class ConsoleStack extends Stack {
     );
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`] }));
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
+    // Hourly: email the owners about red health checks, app error spikes, unhandled reports (alerts.ts).
+    new events.Rule(this, 'ConsoleAlerts', {
+      schedule: events.Schedule.rate(Duration.hours(1)),
+      targets: [new targets.LambdaFunction(fn, { event: events.RuleTargetInput.fromObject({ alerts: true }) })],
+    });
 
     // ---------- Site ----------
     const site = new s3.Bucket(this, 'ConsoleSite', {

@@ -17,7 +17,7 @@ import { analytics } from './analytics';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
 import { overview } from './overview';
-import { Permission, permissionsOf, removeTeamMember, requirePermission, ROLES, setTeamMember, teamMembers } from './roles';
+import { Permission, permissionsOf, removeTeamMember, requirePermission, ROLES, roleOf, setTeamMember, teamMembers } from './roles';
 import {
   activeSessions,
   currentSession,
@@ -32,10 +32,15 @@ import {
   startGoogle,
   totpSetup,
   totpVerify,
+  backupCodes,
 } from './session';
 import { changePlan, userDetail, userSearch } from './users';
+import { runAlerts } from './alerts';
 
-export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
+export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }): Promise<Res> {
+  // Hourly owner alerts (EventBridge, not HTTP; console-stack.ts).
+  if ('alerts' in event && event.alerts === true) return (await runAlerts()) as unknown as Res;
+  event = event as APIGatewayProxyEventV2;
   try {
     // Only the console's CloudFront knows the edge secret: direct calls to the function URL stop here.
     if (!env.edgeSecret || !safeEqual(event.headers?.['x-lens-edge'] ?? '', env.edgeSecret)) return json(403, { error: 'Forbidden' });
@@ -69,6 +74,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     };
 
     if (route === 'GET /me') return json(200, { email, role, permissions: permissionsOf(role) });
+    if (route === 'GET /auth/backup-codes' || route === 'POST /auth/backup-codes') return await backupCodes(session, req);
     if (route === 'GET /sessions') return await mySessions(session);
     if (route === 'POST /sessions/end') return await endMySessions(session, req);
 
@@ -159,6 +165,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[0] === 'team' && seg.length === 3 && seg[2] === 'sign-out' && method === 'POST') {
       need('team');
       const who = decodeURIComponent(seg[1]).toLowerCase();
+      // Owners are signed out or reset only by the main owner (from the server configuration).
+      if ((await roleOf(who)) === 'owner' && who !== email && !env.adminEmails.includes(email.toLowerCase())) throw new HttpError(403, 'Only the main owner can do this for an owner');
       await signOutMember(session, who, req.body?.resetAuthenticator === true);
       return json(200, { ok: true });
     }

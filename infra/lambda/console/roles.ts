@@ -1,5 +1,7 @@
 // Console team and roles. Owners are ADMIN_EMAILS (CDK context `adminEmails`): fixed, can't be
-// removed here. Everyone else is added by an owner in Team:
+// removed here. A fixed owner can add a second owner in Team (so a lost phone or account never
+// locks the business out); only fixed owners can add or remove owners. Everyone else is added by
+// an owner in Team:
 //
 //   ADMIN#<email>  ROLE    → { role, addedBy, at }   (lookup)
 //   ADMINS         <email> → { email, role, … }       (team list)
@@ -60,7 +62,7 @@ export async function roleOf(email: string): Promise<Role | null> {
   if (env.adminEmails.includes(e)) return 'owner';
   const r = await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `ADMIN#${e}`, sk: 'ROLE' } }));
   const role = r.Item?.role as Role | undefined;
-  return role && ROLES.includes(role) && role !== 'owner' ? role : null;
+  return role && ROLES.includes(role) ? role : null;
 }
 
 export async function teamMembers() {
@@ -82,8 +84,11 @@ export async function setTeamMember(by: string, req: Req): Promise<Res> {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   const role = req.body?.role as Role;
   if (!EMAIL.test(email)) throw new HttpError(400, 'Enter the person’s Google email address');
-  if (!ADDABLE.includes(role)) throw new HttpError(400, 'Choose a role: admin, support, finance or viewer');
+  const fixedOwner = env.adminEmails.includes(by.toLowerCase());
+  if (!ADDABLE.includes(role) && !(role === 'owner' && fixedOwner)) throw new HttpError(400, 'Choose a role: admin, support, finance or viewer');
   if (env.adminEmails.includes(email)) throw new HttpError(400, 'That person is an owner already');
+  const current = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `ADMIN#${email}`, sk: 'ROLE' } }))).Item;
+  if (current?.role === 'owner' && !fixedOwner) throw new HttpError(403, 'Only the main owner can change another owner');
   const at = Date.now();
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `ADMIN#${email}`, sk: 'ROLE', role, addedBy: by, at } }));
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'ADMINS', sk: email, email, role, addedBy: by, at } }));
@@ -95,9 +100,12 @@ export async function setTeamMember(by: string, req: Req): Promise<Res> {
 export async function removeTeamMember(by: string, rawEmail: string): Promise<Res> {
   const email = rawEmail.trim().toLowerCase();
   if (env.adminEmails.includes(email)) throw new HttpError(400, 'Owners can’t be removed here');
+  const current = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `ADMIN#${email}`, sk: 'ROLE' } }))).Item;
+  if (current?.role === 'owner' && !env.adminEmails.includes(by.toLowerCase())) throw new HttpError(403, 'Only the main owner can remove another owner');
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `ADMIN#${email}`, sk: 'ROLE' } }));
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: 'ADMINS', sk: email } }));
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `CADMIN#${email}`, sk: 'TOTP' } }));
+  await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: `CADMIN#${email}`, sk: 'BACKUP' } }));
   await log({ entity: `console:${email}`, action: 'team.removed', actor: `console:${by}` });
   return json(200, { removed: email });
 }

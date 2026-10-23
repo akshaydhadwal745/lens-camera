@@ -1,5 +1,5 @@
 // /e/<code>/: an event album link (docs/design/switch-features.md §3).
-// Anyone can see the album's previews; "Add your photos" works without the app:
+// Anyone can see the album's previews; "Add your photos" (and videos) works without the app:
 // the browser gets a guest session (HttpOnly cookie, like a new phone gets a
 // guest name), joins, and uploads each photo the way the app does: thumbnail +
 // preview made here, every byte MD5-checked by the cloud on arrival.
@@ -9,12 +9,15 @@ type EventInfo = {
   event: { name: string; ownerName: string; count: number; people: number; joined: boolean; isOwner: boolean };
   items: { id: string; kind: string; thumbUrl?: string }[];
 };
-type Plan = { mode: 'single' | 'multipart' | 'done' | 'external'; url?: string; contentType?: string; derivativeUrls?: { thumb?: string; preview?: string } };
+type Plan = { mode: 'single' | 'multipart' | 'done' | 'external'; url?: string; contentType?: string; partSize?: number; derivativeUrls?: { thumb?: string; preview?: string } };
 
 const API = '/api/v1';
 const MAX_FILES = 50;
 const MAX_BYTES = 16 * 1024 * 1024;
+/** Videos from the browser (guests have 5 GB in all): big ones go up in parts, 3 at a time. */
+const MAX_VIDEO_BYTES = 2 * 1024 ** 3;
 const TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const VIDEO_TYPES = ['video/mp4', 'video/quicktime'];
 
 const code = location.pathname.split('/')[2] ?? '';
 const valid = /^[A-Za-z0-9_-]{10,16}$/.test(code);
@@ -168,15 +171,114 @@ async function uploadPhoto(file: File): Promise<string> {
   return id;
 }
 
+/** MD5 of a big file without holding it all in memory (8 MiB slices). */
+async function md5OfBlob(blob: Blob): Promise<string> {
+  const spark = new SparkMD5.ArrayBuffer();
+  for (let at = 0; at < blob.size; at += 8 * 1024 * 1024) spark.append(await blob.slice(at, at + 8 * 1024 * 1024).arrayBuffer());
+  const hex = spark.end();
+  let bin = '';
+  for (let i = 0; i < hex.length; i += 2) bin += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+  return btoa(bin);
+}
+
+/** A frame from the middle of the first second(s) for the thumbnail and preview, plus size and length. */
+async function videoFrame(file: File): Promise<{ thumb: Blob; preview: Blob; width: number; height: number; duration: number } | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = url;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error('unreadable'));
+    });
+    video.currentTime = Math.min(1, video.duration / 2 || 0);
+    await new Promise<void>((resolve) => (video.onseeked = () => resolve()));
+    const frame = async (max: number, quality: number) => {
+      const ratio = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(video.videoWidth * ratio));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * ratio));
+      canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('preview'))), 'image/jpeg', quality));
+    };
+    return { thumb: await frame(400, 0.8), preview: await frame(2048, 0.85), width: video.videoWidth, height: video.videoHeight, duration: video.duration };
+  } catch {
+    return null; // this browser can't decode it: the video still goes up, the cloud makes the stream
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** One video: previews first, then the original (one PUT, or parts for big files). */
+async function uploadVideo(file: File, progress: (fraction: number) => void): Promise<string> {
+  const contentType = file.type === 'video/quicktime' ? 'video/quicktime' : 'video/mp4';
+  const shot = await videoFrame(file);
+  const thumbBytes = shot ? await shot.thumb.arrayBuffer() : null;
+  const previewBytes = shot ? await shot.preview.arrayBuffer() : null;
+  const derivatives =
+    thumbBytes && previewBytes
+      ? { thumb: { md5: md5Base64(thumbBytes), size: thumbBytes.byteLength }, preview: { md5: md5Base64(previewBytes), size: previewBytes.byteLength } }
+      : undefined;
+  const small = file.size <= 64 * 1024 * 1024;
+  const md5 = small ? await md5OfBlob(file) : undefined;
+  const id = newId();
+  const plan = await call<Plan>('POST', '/media', {
+    id,
+    kind: 'video',
+    contentType,
+    size: file.size,
+    md5,
+    ...(shot ? { width: shot.width, height: shot.height, duration: shot.duration } : {}),
+    createdAt: file.lastModified || Date.now(),
+    derivatives,
+  });
+  if (derivatives && plan.derivativeUrls?.thumb && plan.derivativeUrls.preview) {
+    await put(plan.derivativeUrls.thumb, thumbBytes!, 'image/jpeg', derivatives.thumb.md5);
+    await put(plan.derivativeUrls.preview, previewBytes!, 'image/jpeg', derivatives.preview.md5);
+    await call('POST', `/media/${id}/previews`);
+  }
+  if (plan.mode === 'done') return id;
+  if (plan.mode === 'single' && plan.url) {
+    await put(plan.url, file, plan.contentType ?? contentType, md5 ?? (await md5OfBlob(file)));
+  } else if (plan.mode === 'multipart' && plan.partSize) {
+    const partSize = plan.partSize;
+    const total = Math.ceil(file.size / partSize);
+    let next = 1;
+    let done = 0;
+    const worker = async () => {
+      while (next <= total) {
+        const n = next++;
+        const part = file.slice((n - 1) * partSize, Math.min(file.size, n * partSize));
+        const partMd5 = md5Base64(await part.arrayBuffer());
+        const { urls } = await call<{ urls: Record<number, string> }>('POST', `/media/${id}/parts`, { parts: [{ n, md5: partMd5 }] });
+        const res = await fetch(urls[n], { method: 'PUT', body: part, headers: { 'content-md5': partMd5 } });
+        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+        progress(++done / total);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, total) }, worker));
+  } else {
+    throw new Error('This video can’t be added from a browser. Use the Lens app.');
+  }
+  await call('POST', `/media/${id}/complete`);
+  return id;
+}
+
 const input = $('event-files') as HTMLInputElement;
 input.addEventListener('change', async () => {
   const files = [...(input.files ?? [])];
   input.value = '';
   if (!files.length) return;
-  const usable = files.filter((f) => TYPES.includes(f.type) && f.size > 0 && f.size <= MAX_BYTES).slice(0, MAX_FILES);
+  const isVideo = (f: File) => VIDEO_TYPES.includes(f.type) || /\.(mp4|m4v|mov)$/i.test(f.name);
+  const usable = files
+    .filter((f) => f.size > 0 && (isVideo(f) ? f.size <= MAX_VIDEO_BYTES : TYPES.includes(f.type) && f.size <= MAX_BYTES))
+    .slice(0, MAX_FILES);
   const skipped = files.length - usable.length;
   if (!usable.length) {
-    say('Choose photos (JPEG, PNG, WebP or HEIC, up to 16 MB each). Videos: use the Lens app.', true);
+    say('Choose photos (JPEG, PNG, WebP or HEIC, up to 16 MB each) or videos (MP4 or MOV, up to 2 GB).', true);
     return;
   }
   const label = $('event-add');
@@ -190,7 +292,12 @@ input.addEventListener('change', async () => {
     for (let i = 0; i < usable.length; i++) {
       say(`Adding ${i + 1} of ${usable.length}…`);
       try {
-        added.push(await uploadPhoto(usable[i]));
+        const f = usable[i];
+        added.push(
+          isVideo(f)
+            ? await uploadVideo(f, (x) => say(`Adding ${i + 1} of ${usable.length} (video ${Math.round(x * 100)}%)… keep this page open.`))
+            : await uploadPhoto(f),
+        );
       } catch (error) {
         failed.push(`${usable[i].name}: ${error instanceof Error ? error.message : 'failed'}`);
       }
@@ -198,8 +305,8 @@ input.addEventListener('change', async () => {
     // Into the album in batches (the API takes up to 100 at a time).
     for (let i = 0; i < added.length; i += 100) await call('POST', `/events/${code}/items`, { mediaIds: added.slice(i, i + 100) });
     const notes = [
-      added.length ? `Added ${added.length} ${added.length === 1 ? 'photo' : 'photos'} as ${name}.` : '',
-      skipped ? `${skipped} skipped (only photos up to 16 MB; ${MAX_FILES} at a time).` : '',
+      added.length ? `Added ${added.length} as ${name}.` : '',
+      skipped ? `${skipped} skipped (photos up to 16 MB, videos up to 2 GB; ${MAX_FILES} at a time).` : '',
       failed.length ? `Not added: ${failed.join('; ')}` : '',
     ].filter(Boolean);
     say(notes.join(' '), !added.length);

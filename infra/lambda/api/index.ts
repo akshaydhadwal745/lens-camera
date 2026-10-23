@@ -61,6 +61,9 @@ import {
   webVerifyEmail,
   webVerifyGoogle,
 } from './auth';
+import { cancelPlus, checkout as plusCheckout, getPlus, refreshPlus, webhook as razorpayWebhook } from './payments';
+import { cancelMove, getMove, refreshMove, startMove } from './drive-move';
+import { getExport, startExport } from './export';
 import { createLink as createShareLink, linkInfo, linkPage, listLinks, openLink, revokeLink } from './links';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
@@ -79,6 +82,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /contact') return await submitContact(req);
     if (route === 'POST /web-events') return await webEvent(req);
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
+    // Razorpay → Lens (signed with the dashboard webhook secret; payments.ts).
+    if (route === 'POST /razorpay/webhook') return await razorpayWebhook(req);
     // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.
     if (seg[1] === 'r' && seg.length === 3 && method === 'GET') return await followLink(req, 'referral', seg[2]);
     if (seg[1] === 'go' && seg.length === 3 && method === 'GET') return await followLink(req, 'affiliate', seg[2]);
@@ -200,6 +205,18 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (seg[1] === 'media' && seg.length === 5 && seg[3] === 'edit' && seg[4] === 'commit' && method === 'POST') {
       return await commitEdit(identity, seg[2], req);
     }
+
+    // Lens Plus (Razorpay subscriptions), moving originals to Google Drive, download everything.
+    if (route === 'GET /plus') return await getPlus(identity);
+    if (route === 'POST /plus/checkout') return await plusCheckout(identity, req);
+    if (route === 'POST /plus/refresh') return await refreshPlus(identity);
+    if (route === 'POST /plus/cancel') return await cancelPlus(identity);
+    if (route === 'GET /move') return await getMove(identity);
+    if (route === 'POST /move') return await startMove(identity, req);
+    if (route === 'POST /move/refresh') return await refreshMove(identity);
+    if (route === 'POST /move/cancel') return await cancelMove(identity);
+    if (route === 'GET /export') return await getExport(identity);
+    if (route === 'POST /export') return await startExport(identity);
 
     if (route === 'POST /stream') return await requestStream(identity, req);
     if (route === 'GET /storage') return await getStorage(identity);

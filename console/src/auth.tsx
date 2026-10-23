@@ -44,6 +44,8 @@ export function Verify({ email, enrolled, onDone }: { email: string; enrolled: b
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [useBackup, setUseBackup] = useState(false);
+  const [codes, setCodes] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!enrolled) post<{ secret: string; uri: string }>('/auth/totp/setup').then(setSetup, (err: Error) => setError(err.message));
@@ -54,8 +56,10 @@ export function Verify({ email, enrolled, onDone }: { email: string; enrolled: b
     setBusy(true);
     setError('');
     try {
-      await post('/auth/totp', { code });
-      onDone();
+      const r = await post<{ backupCodes?: string[] }>('/auth/totp', { code });
+      // First set-up: show the backup codes once before going in.
+      if (r.backupCodes?.length) setCodes(r.backupCodes);
+      else onDone();
     } catch (err) {
       setError((err as Error).message);
       setCode('');
@@ -63,6 +67,29 @@ export function Verify({ email, enrolled, onDone }: { email: string; enrolled: b
     } finally {
       setBusy(false);
     }
+  }
+
+  const ok = useBackup ? /^[a-z2-9]{4}-?[a-z2-9]{4}$/i.test(code.trim()) : code.replace(/\s/g, '').length === 6;
+
+  if (codes) {
+    return (
+      <main className="auth">
+        <div className="auth-card">
+          <Brand />
+          <h1>Save your backup codes</h1>
+          <p className="muted">
+            If you lose your phone, each of these works once instead of the 6-digit code. Keep them somewhere safe (a password manager or on paper). They are shown only now; you can make new ones in Your account.
+          </p>
+          <pre className="secret codes">{codes.join('\n')}</pre>
+          <button type="button" className="btn wide" onClick={() => navigator.clipboard?.writeText(codes.join('\n'))}>
+            Copy
+          </button>
+          <button type="button" className="btn primary wide" onClick={onDone}>
+            I saved them
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -93,23 +120,42 @@ export function Verify({ email, enrolled, onDone }: { email: string; enrolled: b
             )}
           </>
         )}
-        <label className="field">
-          <span>6-digit code</span>
-          <input
-            autoFocus
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            pattern="[0-9 ]{6,7}"
-            maxLength={7}
-            value={code}
-            onChange={(ev) => setCode(ev.target.value.replace(/[^0-9 ]/g, ''))}
-            required
-          />
-        </label>
+        {useBackup ? (
+          <label className="field">
+            <span>Backup code</span>
+            <input autoFocus autoComplete="off" placeholder="xxxx-xxxx" maxLength={9} value={code} onChange={(ev) => setCode(ev.target.value.replace(/[^a-zA-Z0-9-]/g, ''))} required />
+          </label>
+        ) : (
+          <label className="field">
+            <span>6-digit code</span>
+            <input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9 ]{6,7}"
+              maxLength={7}
+              value={code}
+              onChange={(ev) => setCode(ev.target.value.replace(/[^0-9 ]/g, ''))}
+              required
+            />
+          </label>
+        )}
         {error && <div className="notice error">{error}</div>}
-        <button className="btn primary wide" disabled={busy || code.replace(/\s/g, '').length !== 6}>
+        <button className="btn primary wide" disabled={busy || !ok}>
           {busy ? 'Checking…' : 'Verify'}
         </button>
+        {enrolled && (
+          <button
+            type="button"
+            className="btn ghost wide"
+            onClick={() => {
+              setUseBackup(!useBackup);
+              setCode('');
+            }}
+          >
+            {useBackup ? 'Use the authenticator code' : 'Lost your phone? Use a backup code'}
+          </button>
+        )}
         <button type="button" className="btn ghost wide" onClick={() => post('/auth/logout').finally(() => location.assign('/login'))}>
           Use another account
         </button>

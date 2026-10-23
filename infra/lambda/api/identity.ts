@@ -45,6 +45,8 @@ export type Identity = {
   welcomeUntil?: number;
   /** A paid plan (plans.ts), if any. */
   plan?: import('./plans').PlanState;
+  /** Lens Plus through Razorpay (payments.ts): checkout, locked in, running. */
+  sub?: import('./payments').SubState;
   /** Over the storage limit since (over-limit.ts): new backups paused, deletion countdown. */
   overLimitSince?: number;
   /** Invited by a friend and not rewarded or rejected yet: uploads re-check the reward. */
@@ -283,12 +285,13 @@ export async function authenticate(req: Req): Promise<Identity> {
     welcomeUntil: profile.Item.welcomeUntil ?? (profile.Item.email ? PLAN_CHANGE_WELCOME_UNTIL : undefined),
     plan: profile.Item.plan,
     overLimitSince: profile.Item.overLimitSince,
+    sub: profile.Item.sub,
     referralPending: profile.Item.attribution?.program === 'referral' && !['rewarded', 'rejected', 'held'].includes(profile.Item.referral) ? true : undefined,
   };
 }
 
 export function me(identity: Identity): Res {
-  const { tokenId: _session, googleName, referralPending: _r, ...profile } = identity;
+  const { tokenId: _session, googleName, referralPending: _r, sub: _sub, ...profile } = identity;
   return json(200, {
     ...profile,
     suggestedName: googleName,

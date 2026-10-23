@@ -7,6 +7,7 @@ type Member = { email: string; role: string; fixed: boolean; addedBy?: string; a
 type RoleInfo = { role: string; permissions: string[] };
 
 const ABOUT: Record<string, string> = {
+  owner: 'Everything, including the team (a second owner, so you are never locked out)',
   admin: 'Everything except the team',
   support: 'Users, feedback, reports, inbox, phones, health',
   finance: 'Affiliates, referrals, payouts, costs, audit',
@@ -18,6 +19,9 @@ export function Team({ me }: { me: string }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('support');
   const [error, setError] = useState('');
+  // Only the main owner (from the server configuration) can add or change owners.
+  const mainOwner = state.data?.team.some((m) => m.fixed && m.email === me) ?? false;
+  const roles = Object.keys(ABOUT).filter((r) => r !== 'owner' || mainOwner);
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -39,13 +43,13 @@ export function Team({ me }: { me: string }) {
   return (
     <Page title="Team">
       <p className="muted small">
-        People who can open the console. Each signs in with their own Google account plus an authenticator code. Owners are set in the server configuration and can’t be removed here.
+        People who can open the console. Each signs in with their own Google account plus an authenticator code. The main owner is set in the server configuration; they can add a second owner here.
       </p>
       <Card title="Add someone">
         <form className="toolbar" onSubmit={add}>
           <input className="search" type="email" required placeholder="Their Google email" value={email} onChange={(e) => setEmail(e.target.value)} />
           <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">
-            {Object.keys(ABOUT).map((r) => (
+            {roles.map((r) => (
               <option key={r} value={r}>
                 {r} — {ABOUT[r]}
               </option>
@@ -81,7 +85,7 @@ export function Team({ me }: { me: string }) {
                           <Badge tone="good">owner</Badge>
                         ) : (
                           <select value={m.role} onChange={(e) => change(m, e.target.value)} aria-label={`Role of ${m.email}`}>
-                            {Object.keys(ABOUT).map((r) => (
+                            {(roles.includes(m.role) ? roles : [...roles, m.role]).map((r) => (
                               <option key={r}>{r}</option>
                             ))}
                           </select>
@@ -104,7 +108,7 @@ export function Team({ me }: { me: string }) {
                             Reset authenticator
                           </Confirm>
                         )}
-                        {!m.fixed && (
+                        {!m.fixed && (m.role !== 'owner' || mainOwner) && (
                           <Confirm danger text={`Remove ${m.email}? Their access ends immediately.`} onYes={() => api('DELETE', `/team/${encodeURIComponent(m.email)}`).then(state.reload)}>
                             Remove
                           </Confirm>
