@@ -53,8 +53,11 @@ Shows plan, welcome, over-limit date and deletion date; support can give N month
 ### Owner steps (dashboard, Test Mode)
 1. **Offer for ₹19 first month:** Subscriptions → Offers → Create offer: discount ₹40 flat, applies to the first 1 billing
    cycle, plan "Lens Plus 50 GB (monthly)". Give the offer id (`offer_…`) → stored as `/lens/razorpay/intro-offer-id`.
-2. **Webhook:** Settings → Webhooks → Add: URL `https://lens.instagrowapp.com/api/v1/razorpay/webhook`, secret = SSM
-   `/lens/razorpay/webhook-secret`, events: subscription.* (authenticated, activated, charged, pending, halted, cancelled,
-   completed) and payment_link.paid.
+2. **Webhook: DONE via API 2026-10-23** (test mode, id `TrHCY979djWg17`, `POST /v1/webhooks` with `events` as an
+   object `{name: true}`): URL `https://lens.instagrowapp.com/api/v1/razorpay/webhook`, secret = SSM
+   `/lens/razorpay/webhook-secret`, subscription.* (authenticated, activated, charged, pending, halted, cancelled,
+   completed) + payment_link.paid. Repeat with live keys at launch.
+   Offers can't be created by API (`POST /v1/offers` → 405). Plan switching (`PATCH /subscriptions`) only works once a
+   subscription is authenticated and Razorpay limits it for UPI mandates, so the ₹19 month needs the dashboard offer.
 3. Live later: enable Subscriptions on the live account, then repeat with live keys (new plan ids, offer, webhook).
    Update the website pricing page (still "Paid plans are coming") when live.
