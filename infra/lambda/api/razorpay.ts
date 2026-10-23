@@ -2,7 +2,6 @@
 //   /lens/razorpay/key-id, /key-secret      API keys (test keys until the owner switches to live)
 //   /lens/razorpay/plans                    {"plus50-month": "plan_…", "plus50-year": "plan_…"}
 //   /lens/razorpay/webhook-secret           the secret set on the dashboard webhook
-//   /lens/razorpay/intro-offer-id           optional: dashboard offer that makes the 1st month ₹19
 // Card/UPI details never touch Lens: people pay on Razorpay's own hosted pages (short_url).
 import { createHmac } from 'node:crypto';
 
@@ -40,10 +39,6 @@ export async function rzp<T = any>(method: 'GET' | 'POST' | 'PATCH', path: strin
 export async function planIds(): Promise<Record<string, string>> {
   const raw = await getParam('/lens/razorpay/plans');
   return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-}
-
-export async function introOfferId(): Promise<string | undefined> {
-  return (await getParam('/lens/razorpay/intro-offer-id'))?.trim() || undefined;
 }
 
 /** Webhook: HMAC-SHA256 of the exact body with the dashboard webhook secret. */

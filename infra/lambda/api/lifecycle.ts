@@ -103,10 +103,9 @@ export async function runLifecycle(now: number, deadline: number, onlyOwner?: st
       const sub = p.sub as SubState | undefined;
       if (sub?.status === 'scheduled' && !sub.cancelled && sub.chargeAt && sub.chargeAt - now > 2 * DAY && sub.chargeAt - now <= 3 * DAY) {
         const o = OFFERS[sub.kind];
-        const first = sub.intro ? o.introPaise ?? o.paise : o.paise;
         const rupees = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
         if (await notice('plus_first_charge', `plus-charge-${sub.id}`, `Lens Plus starts on ${dateText(sub.chargeAt)}`,
-          `Your 40 GB welcome ends then and Lens Plus (50 GB) begins: ${rupees(first)} on ${dateText(sub.chargeAt)}${sub.intro ? `, then ${rupees(o.paise)} a ${o.period}` : ` each ${o.period}`}. Don't want it? Cancel in one tap in Settings → Lens Plus, and nothing is charged.`, true))
+          `Your 40 GB welcome ends then and Lens Plus (50 GB) begins: ${rupees(o.paise)} on ${dateText(sub.chargeAt)}, then each ${o.period}. Don't want it? Cancel in one tap in Settings → Lens Plus, and nothing is charged.`, true))
           continue;
       }
 

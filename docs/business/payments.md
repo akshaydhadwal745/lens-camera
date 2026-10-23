@@ -27,8 +27,8 @@ Guests 5 GB → sign-in: 40 GB for 3 months (+1 month if invited) → 14-day sof
 Shows plan, welcome, over-limit date and deletion date; support can give N months of a plan, mark a payment failed, or end a plan (audited). Used for testing until Razorpay is live.
 
 ## Razorpay + the "Lock in" offer (decided 2026-10-21 night; BUILT 2026-10-23, test mode)
-- **Option A:** after the free 3-month welcome, the 4th month of Lens Plus (50 GB) costs **₹19**, then **₹59/month** (or ₹499/year).
-- **Offered at the start, optional:** a "Lock in Lens Plus" screen at sign-in and after the first 20 backups → Razorpay **UPI Autopay / card mandate, ₹0 today**, subscription starts when the welcome ends (₹19 first charge). "Not now" keeps the free welcome; the offer comes back at 80% storage, after a trip recap and in the last welcome week; the ₹19 price ends with the welcome.
+- **Option A, revised 2026-10-23 (owner): no ₹19 intro.** After the free 3-month welcome, Lens Plus (50 GB) is **₹59/month** (or ₹499/year) from the first charge.
+- **Offered at the start, optional:** a "Lock in Lens Plus" screen at sign-in and after the first 20 backups → Razorpay **UPI Autopay / card mandate, ₹0 today**, subscription starts when the welcome ends (first charge ₹59). "Not now" keeps the free welcome; the offer comes back at 80% storage, after a trip recap and in the last welcome week.
 - RBI e-mandate: Razorpay's pre-debit notice + our reminder 3 days before the first charge; one-tap cancel in the app and on the website.
 - Razorpay webhooks → `activatePlan` (paid/renewed), `paymentFailed` (7-day grace), `cancelPlan` (ends at period end).
 - Where: website + APK. The Play Store app must use Google Play Billing (intro price / free trial) or Google's user choice billing (Razorpay beside Play, 11% fee).
@@ -48,16 +48,15 @@ Shows plan, welcome, over-limit date and deletion date; support can give N month
 
 ### SSM (`/lens/razorpay/*`, test mode today)
 `key-id`, `key-secret` (test keys, 2026-10-23), `plans` = `{"plus50-month":"plan_TrFZwv07VVHeGh","plus50-year":"plan_TrFah1Zm8WzSLo"}`,
-`webhook-secret` (generated; paste into the dashboard webhook), `intro-offer-id` (not set yet → first month shows ₹59).
+`webhook-secret` (used by the webhook created through the API).
 
 ### Owner steps (dashboard, Test Mode)
-1. **Offer for ₹19 first month:** Subscriptions → Offers → Create offer: discount ₹40 flat, applies to the first 1 billing
-   cycle, plan "Lens Plus 50 GB (monthly)". Give the offer id (`offer_…`) → stored as `/lens/razorpay/intro-offer-id`.
+1. ~~Offer for ₹19 first month~~: dropped by the owner 2026-10-23 (offers can't be made by API).
 2. **Webhook: DONE via API 2026-10-23** (test mode, id `TrHCY979djWg17`, `POST /v1/webhooks` with `events` as an
    object `{name: true}`): URL `https://lens.instagrowapp.com/api/v1/razorpay/webhook`, secret = SSM
    `/lens/razorpay/webhook-secret`, subscription.* (authenticated, activated, charged, pending, halted, cancelled,
    completed) + payment_link.paid. Repeat with live keys at launch.
    Offers can't be created by API (`POST /v1/offers` → 405). Plan switching (`PATCH /subscriptions`) only works once a
-   subscription is authenticated and Razorpay limits it for UPI mandates, so the ₹19 month needs the dashboard offer.
+   subscription is authenticated and Razorpay limits it for UPI mandates.
 3. Live later: enable Subscriptions on the live account, then repeat with live keys (new plan ids, offer, webhook).
    Update the website pricing page (still "Paid plans are coming") when live.

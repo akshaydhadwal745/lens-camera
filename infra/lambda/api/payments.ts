@@ -2,12 +2,12 @@
 // option A; docs/business/payments.md). Website + APK only: the Play Store app must use Play Billing.
 //
 //   During the welcome: UPI Autopay / card mandate today, nothing charged; the subscription starts
-//   when the welcome ends. First month ₹19 (dashboard offer, only while the welcome lasts), then
+//   when the welcome ends (owner decision 2026-10-23: no intro price), then
 //   ₹59/month, or ₹499/year. Razorpay sends its pre-debit notice; we remind 3 days before the
 //   first charge (lifecycle.ts) and cancelling is one tap (POST /v1/plus/cancel).
 //   After the welcome: the subscription starts at once (first charge today, no intro price).
 //
-// State: PROFILE.sub = { id, kind, status: created | scheduled | active | ended, chargeAt?, intro?,
+// State: PROFILE.sub = { id, kind, status: created | scheduled | active | ended, chargeAt?,
 // paidCount, createdAt, updatedAt }; RZP#<subscription id>/SUB → { accountId } for webhooks.
 // Razorpay is the source of truth: the app, the webhook and the 15-minute Maintenance tick all call
 // reconcile(), which reads the subscription from Razorpay and moves the plan (plans.ts).
@@ -19,13 +19,13 @@ import { audit } from './audit';
 import { Identity } from './identity';
 import { ddb, env, HttpError, inWelcome, json, Req, Res } from './lib';
 import { activatePlan, cancelPlan, getPlan, paymentFailed, planActive, PLANS } from './plans';
-import { introOfferId, planIds, razorpayConfigured, RzpInvoice, RzpSubscription, rzp, testMode, verifyWebhook } from './razorpay';
+import { planIds, razorpayConfigured, RzpInvoice, RzpSubscription, rzp, testMode, verifyWebhook } from './razorpay';
 
 const DAY = 86_400_000;
 
 export const OFFERS = {
-  'plus50-month': { plan: 'plus50', paise: 5_900, period: 'month' as const, introPaise: 1_900 },
-  'plus50-year': { plan: 'plus50', paise: 49_900, period: 'year' as const, introPaise: undefined },
+  'plus50-month': { plan: 'plus50', paise: 5_900, period: 'month' as const },
+  'plus50-year': { plan: 'plus50', paise: 49_900, period: 'year' as const },
 };
 export type OfferKind = keyof typeof OFFERS;
 
@@ -35,8 +35,6 @@ export type SubState = {
   status: 'created' | 'scheduled' | 'active' | 'ended';
   /** When the first (or next) charge happens (ms). */
   chargeAt?: number;
-  /** The first month is ₹19 (lock-in during the welcome, offer configured). */
-  intro?: boolean;
   paidCount: number;
   cancelled?: boolean;
   createdAt: number;
@@ -70,7 +68,7 @@ const lockInStart = (identity: Pick<Identity, 'welcomeUntil'>, now: number) =>
 function subForClient(sub: SubState | undefined) {
   if (!sub || sub.status === 'ended') return undefined;
   const o = OFFERS[sub.kind];
-  return { kind: sub.kind, status: sub.status, chargeAt: sub.chargeAt, cancelled: sub.cancelled, firstPaise: sub.intro && sub.paidCount === 0 ? o.introPaise : o.paise, paise: o.paise, period: o.period };
+  return { kind: sub.kind, status: sub.status, chargeAt: sub.chargeAt, cancelled: sub.cancelled, firstPaise: o.paise, paise: o.paise, period: o.period };
 }
 
 /** GET /v1/plus: the offer as it applies to this account, and its subscription. */
@@ -78,7 +76,6 @@ export async function getPlus(identity: Identity): Promise<Res> {
   const now = Date.now();
   const available = !!identity.email && (await razorpayConfigured());
   const startsAt = lockInStart(identity, now);
-  const intro = !!startsAt && !!(await introOfferId());
   const plan = identity.plan;
   return json(200, {
     available,
@@ -90,7 +87,7 @@ export async function getPlus(identity: Identity): Promise<Res> {
       bytes: PLANS.plus50.bytes,
       // Lock-in: nothing charged today, the first charge when the welcome ends.
       startsAt,
-      monthly: { kind: 'plus50-month', paise: OFFERS['plus50-month'].paise, firstPaise: intro ? OFFERS['plus50-month'].introPaise : OFFERS['plus50-month'].paise },
+      monthly: { kind: 'plus50-month', paise: OFFERS['plus50-month'].paise, firstPaise: OFFERS['plus50-month'].paise },
       yearly: { kind: 'plus50-year', paise: OFFERS['plus50-year'].paise, firstPaise: OFFERS['plus50-year'].paise },
     },
   });
@@ -123,21 +120,19 @@ export async function checkout(identity: Identity, req: Req): Promise<Res> {
   // A plan that's cancelled but still paid for: the new one starts when it ends.
   const paidUntil = planActive(identity.plan, now) ? identity.plan!.periodEnd : undefined;
   const startAt = Math.max(startsAt ?? 0, paidUntil ?? 0) || undefined;
-  const offerId = startsAt && kind === 'plus50-month' ? await introOfferId() : undefined;
   const s = await rzp<RzpSubscription>('POST', '/subscriptions', {
     plan_id: planId,
     // Renews until cancelled (Razorpay needs a count): 10 years of months, or 10 years.
     total_count: OFFERS[kind].period === 'month' ? 120 : 10,
     customer_notify: 1,
     ...(startAt ? { start_at: Math.floor(startAt / 1000) } : {}),
-    ...(offerId ? { offer_id: offerId } : {}),
     ...(identity.email.endsWith('@e2e.lens.invalid') ? {} : { notify_info: { notify_email: identity.email } }),
     notes: { app: 'lens', account: identity.id, kind },
   });
   if (!s.short_url) throw new HttpError(502, 'The payment service didn’t answer. Try again in a minute.', 'payments-error');
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `RZP#${s.id}`, sk: 'SUB', accountId: identity.id, createdAt: now } }));
-  await saveSub(identity.id, { id: s.id, kind, status: 'created', chargeAt: startAt, intro: !!offerId, paidCount: 0, createdAt: now, updatedAt: now });
-  await audit({ entity: `plan:${identity.id}`, action: 'plus.checkout', actor: identity.id, data: { kind, subscription: s.id, startAt, intro: !!offerId } });
+  await saveSub(identity.id, { id: s.id, kind, status: 'created', chargeAt: startAt, paidCount: 0, createdAt: now, updatedAt: now });
+  await audit({ entity: `plan:${identity.id}`, action: 'plus.checkout', actor: identity.id, data: { kind, subscription: s.id, startAt } });
   return json(200, { url: s.short_url, id: s.id });
 }
 
