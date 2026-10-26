@@ -126,7 +126,10 @@ data class CameraConfig(
         (position == "front" && mirrorFront != old.mirrorFront) || autoLowLight != old.autoLowLight))
 }
 
-class CameraException(message: String) : Exception(message)
+open class CameraException(message: String) : Exception(message)
+
+/** The maker's mode (Night) never answered: the watchdog switched this camera to Lens's own. */
+class HungExtensionException(message: String) : CameraException(message)
 
 /**
  * CameraX + Camera2 interop. Preview + ImageCapture in photo modes and
@@ -1039,10 +1042,16 @@ class CameraController(private val context: Context) {
         hungPrefs.edit().putStringSet("hungExtension", hungExtension.toSet()).apply()
         bind()
       }
-      done(Result.failure(CameraException(
-        if (extension == "night") "Night took too long on this phone. Lens switched to its own Night: tap the shutter again."
-        else "The photo took too long. Tap the shutter again.",
-      )))
+      done(Result.failure(
+        if (extension != null && camId != null) {
+          HungExtensionException(
+            if (extension == "night") "Night took too long on this phone. Lens switched to its own Night: tap the shutter again."
+            else "The photo took too long. Tap the shutter again.",
+          )
+        } else {
+          CameraException("The photo took too long. Tap the shutter again.")
+        },
+      ))
     }
     val handler = android.os.Handler(android.os.Looper.getMainLooper())
     handler.postDelayed(watchdog, if (extension != null) EXTENSION_TIMEOUT_MS else PHOTO_TIMEOUT_MS)
@@ -1125,9 +1134,18 @@ class CameraController(private val context: Context) {
    * itself). Otherwise a burst of [frames] shots merged by [NightMerge].
    */
   fun takeNightPhoto(frames: Int, hot: Boolean, done: (Result<Map<String, Any?>>) -> Unit) {
-    if (nightExtension) return takePhoto("off", null, done = done)
     // A hot phone does less work: fewer frames.
-    mergedShots((if (hot) minOf(frames, 3) else frames).coerceIn(1, 8), emptyMap(), done)
+    val count = (if (hot) minOf(frames, 3) else frames).coerceIn(1, 8)
+    if (nightExtension) {
+      return takePhoto("off", null) { r ->
+        // The maker's Night never answered (Pixel 8a on Test Lab, dev-152): the watchdog already
+        // rebound this camera without it, so take the same photo with Lens Night instead of asking
+        // the person to tap again. Later Night photos on this camera use Lens Night straight away.
+        if (r.exceptionOrNull() is HungExtensionException) main.execute { mergedShots(count, mapOf("nightFallback" to true), done) }
+        else done(r)
+      }
+    }
+    mergedShots(count, emptyMap(), done)
   }
 
   /**

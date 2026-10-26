@@ -458,6 +458,8 @@ export function ProCamera({ onUnavailable }: { onUnavailable?: (message: string)
       } else {
         photo = await cameraRef.current.takePhoto({ raw: s.raw && !!caps?.raw && s.mode === 'photo', flash: s.flash });
       }
+      // The phone's own Night didn't answer: Lens took it with its own Night (and will from now on).
+      if (photo.nightFallback) showNotice('Taken with Lens Night · this phone’s Night mode didn’t respond');
       const recipe = captureRecipe(photo.depth, 'photo', photo.autoAperture, photo);
       if (recipe?.crop?.straighten) showNotice(`Horizon straightened ${Math.abs(recipe.crop.straighten).toFixed(1)}°`);
       // Portrait only blurs around a person; say so instead of a silent plain photo.

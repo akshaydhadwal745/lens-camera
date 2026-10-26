@@ -34,9 +34,10 @@ import {
   StepOutcome,
   summarize,
 } from '@/lib/self-test';
-import { peopleSelfTest } from '@/lib/people-selftest';
+import { isNetworkError, peopleSelfTest } from '@/lib/people-selftest';
 import { deleteSet, keepFile, newSet, uploadSet } from '@/lib/quality-lab';
 import { capture as saveCapture, getState, isHot } from '@/lib/store';
+import { ensureIdentity } from '@/lib/identity';
 import { colors, errorMessage } from '@/lib/ui';
 
 /** The shutter-path quality set upload (4 full-size photos) may take this long on a slow network. */
@@ -170,9 +171,19 @@ export default function SelfTestScreen() {
         const timedOut = new Promise<null>((resolve) => {
           timer = setTimeout(() => resolve(null), UPLOAD_SET_TIMEOUT_MS);
         });
-        const setId = await Promise.race([uploadSet(set, (await cameraDeviceReport()) as Record<string, unknown>, () => {}), timedOut]).finally(() => clearTimeout(timer));
+        // The upload needs this phone's Lens identity: right after install (or when registering
+        // failed on a bad network) there may be none yet (Pixel 8a, dev-152: "Missing or malformed token").
+        const upload = async () => {
+          await ensureIdentity();
+          return uploadSet(set, (await cameraDeviceReport()) as Record<string, unknown>, () => {});
+        };
+        const setId = await Promise.race([upload(), timedOut]).finally(() => clearTimeout(timer));
         if (setId === null) return done('warn', `quality samples not uploaded within ${UPLOAD_SET_TIMEOUT_MS / 60000} min (slow network)`);
         return done('pass', `set ${setId} (${present.map((id) => names[id]).join(', ')})`, { setId, files: present.map((id) => names[id]) });
+      } catch (e) {
+        // No network on the test phone is a warning; anything else (a server error) is a real failure.
+        if (isNetworkError(e)) return done('warn', `quality samples not uploaded: no connection to Lens (${errorMessage(e)})`);
+        throw e;
       } finally {
         deleteSet(set.localId);
       }
@@ -506,6 +517,11 @@ export default function SelfTestScreen() {
         }
         return { ...base, status: check.status, ms: Date.now() - t0, message: check.message, details };
       } catch (e) {
+        // Quality Lab forces the maker's mode here; when it never answers Lens switches that camera to
+        // its own mode for good, which is the designed outcome (normal Night retakes the photo by itself).
+        if (step.id.startsWith('maker-') && /switched to its own/.test(errorMessage(e))) {
+          return { ...base, status: 'warn', ms: Date.now() - t0, message: `the phone's ${step.props.extension} mode didn't answer in 25 s: Lens uses its own on this camera now` };
+        }
         return { ...base, status: 'fail', ms: Date.now() - t0, message: errorMessage(e) };
       }
     },

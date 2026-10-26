@@ -213,6 +213,8 @@ export type PhotoResult = {
   raw: boolean;
   depth?: boolean;
   frames?: number;
+  /** Android Night: the maker's Night didn't answer, so this was taken with Lens Night instead. */
+  nightFallback?: boolean;
   /** Android Portrait: f-number chosen from the subject's size (Normal camera uses it). */
   autoAperture?: number | null;
   /** Android: the photo carries a motion clip (Motion on, Photo mode). */

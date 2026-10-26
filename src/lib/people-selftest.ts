@@ -4,7 +4,7 @@
 // (site/public/people/test, made by research/faces/testphotos.py).
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { LensPeople, PeopleBenchmark } from '../../modules/lens-camera';
+import { LensImaging, LensPeople, PeopleBenchmark } from '../../modules/lens-camera';
 import { WEB_URL } from './api';
 
 const MODEL = { path: 'people/sface-v1.tflite', size: 9863952, md5: 'b1e69f79361fa65db3113dbccfcba0e5' };
@@ -23,16 +23,52 @@ export type PeopleCheck = { status: 'pass' | 'warn' | 'fail' | 'skip'; message: 
 const dot = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * b[i], 0);
 const best = (a: number[], list: number[][]) => Math.max(-1, ...list.map((b) => dot(a, b)));
 
+/** A failed connection (no network, DNS, timeout), as opposed to an answer from the server. */
+export function isNetworkError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return /network|timeout|timed out|unable to resolve host|failed to connect|connection|socket|unreachable|ENOTFOUND|ECONN/i.test(m);
+}
+
 async function fetchFile(dir: Directory, remote: string, name: string): Promise<File> {
   const f = new File(dir, name);
-  if (!f.exists) await File.downloadFileAsync(`${WEB_URL}/${remote}`, f);
+  // One retry: test-lab racks drop connections now and then.
+  for (let attempt = 0; !f.exists; attempt++) {
+    try {
+      await File.downloadFileAsync(`${WEB_URL}/${remote}`, f);
+    } catch (e) {
+      if (attempt >= 1 || !isNetworkError(e)) throw e;
+    }
+  }
   return f;
 }
+
+/**
+ * People needs two things Google Play services delivers itself (not in the APK): ML Kit's face
+ * module and the LiteRT runtime. A phone that hasn't received them yet (test-lab phones often
+ * can't download them; dev-152: "Waiting for the face module to be downloaded") waits instead of
+ * grouping, and the charging job tries again later. That's not a Lens failure: say so at once.
+ */
+const WAITING_FOR_PLAY = 'Google Play services hasn’t installed its face module on this phone yet; People starts by itself once it arrives';
 
 export async function peopleSelfTest(): Promise<PeopleCheck> {
   if (!LensPeople) return { status: 'skip', message: 'needs the APK with People (dev-81 or newer)' };
   if (!LensPeople.available()) return { status: 'warn', message: 'no Google Play services: People will be hidden on this phone' };
   if (!WEB_URL) return { status: 'skip', message: 'no website URL in this build' };
+  if (LensImaging?.mlModules) {
+    const m = await LensImaging.mlModules(false, 15000).catch(() => null);
+    const faces = (m?.faces as { state?: string } | undefined)?.state;
+    if (faces && faces !== 'present' && faces !== 'downloaded') return { status: 'warn', message: WAITING_FOR_PLAY, details: { faces } };
+  }
+  try {
+    return await groupingCheck();
+  } catch (e) {
+    if (isNetworkError(e)) return { status: 'warn', message: `test photos couldn’t download on this phone’s network (${e instanceof Error ? e.message : String(e)})` };
+    throw e;
+  }
+}
+
+async function groupingCheck(): Promise<PeopleCheck> {
+  if (!LensPeople) return { status: 'skip', message: 'needs the APK with People (dev-81 or newer)' };
   const dir = new Directory(Paths.cache, 'people-selftest');
   if (!dir.exists) dir.create();
   const t0 = Date.now();
@@ -46,6 +82,8 @@ export async function peopleSelfTest(): Promise<PeopleCheck> {
   const downloadMs = Date.now() - t0;
 
   const r: PeopleBenchmark = await LensPeople.benchmark(model.uri, photos.map((p) => p.uri));
+  // LiteRT also comes from Play services (same wait as the face module above).
+  if (!r.ok && r.error === 'LiteRT not available') return { status: 'warn', message: WAITING_FOR_PLAY.replace('its face module', 'the LiteRT runtime'), details: { ...r } };
   if (!r.ok || !r.results) return { status: 'fail', message: r.error ?? 'benchmark failed', details: { ...r } };
   const [b21, b13, o12, fam] = r.results.map((x) => x.embeddings);
   const details: Record<string, unknown> = {
