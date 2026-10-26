@@ -5,4 +5,7 @@ import { Platform } from 'react-native';
 
 export const razorpayHere = Platform.OS === 'web' || (Platform.OS === 'android' && process.env.EXPO_PUBLIC_STORE !== 'play');
 
-export const rupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: paise % 100 ? 2 : 0 })}`;
+export const rupees = (paise: number) => {
+  const digits = paise % 100 ? 2 : 0;
+  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+};

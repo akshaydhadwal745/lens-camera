@@ -80,14 +80,21 @@ export function ExtraStorage() {
           {on && (
             <View style={styles.usage}>
               <Text style={styles.big}>
-                {formatBytes(s.extraBytes)} <Text style={styles.muted}>of {s.capGB} GB extra in use</Text>
+                {s.extraBytes > 0 ? (
+                  <>
+                    {formatBytes(s.extraBytes)} <Text style={styles.muted}>of {s.capGB} GB extra in use</Text>
+                  </>
+                ) : (
+                  <Text style={styles.muted}>Nothing above {formatBytes(s.baseBytes)} yet · up to {s.capGB} GB</Text>
+                )}
               </Text>
               <View style={styles.bar}>
                 <View style={{ width: `${Math.min(100, (s.extraBytes / (s.capGB * 1024 ** 3)) * 100)}%`, backgroundColor: colors.link }} />
               </View>
               <Text style={styles.muted}>
                 This month so far {rupees(s.soFarPaise)}
-                {s.period?.chargeAt ? ` · about ${rupees(s.estimatePaise)} with your payment on ${day(s.period.chargeAt)}` : ''} · at most {rupees(s.maxPaise)}
+                {s.period?.chargeAt && s.estimatePaise > 0 ? ` · about ${rupees(s.estimatePaise)} with your payment on ${day(s.period.chargeAt)}` : ''} · at most{' '}
+                {rupees(s.maxPaise)}
               </Text>
             </View>
           )}
@@ -146,8 +153,8 @@ const styles = StyleSheet.create({
   big: { color: '#fff', fontSize: 20, fontWeight: '700' },
   bar: { height: 8, borderRadius: 4, backgroundColor: '#2C2C2E', overflow: 'hidden', flexDirection: 'row' },
   label: { color: '#A1A1A6', fontSize: 13, fontWeight: '600', textTransform: 'uppercase' },
-  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  option: { backgroundColor: '#2C2C2E', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, minWidth: 76, minHeight: 44, borderWidth: 2, borderColor: '#2C2C2E' },
+  options: { flexDirection: 'row', gap: 6 },
+  option: { flex: 1, backgroundColor: '#2C2C2E', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 6, minHeight: 44, alignItems: 'center', borderWidth: 2, borderColor: '#2C2C2E' },
   optionOn: { borderColor: colors.link },
   optionGb: { color: '#fff', fontSize: 15, fontWeight: '700' },
   optionMax: { color: '#86868B', fontSize: 12 },

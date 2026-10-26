@@ -93,7 +93,7 @@ function LensStorageCard() {
         {formatBytes(usedBytes)}{' '}
         <Text style={styles.muted}>
           {storage.lens.extraCapGB
-            ? `of ${formatBytes(quotaBytes - storage.lens.extraCapGB * 1024 ** 3)} + up to ${storage.lens.extraCapGB} GB extra`
+            ? `of ${formatBytes(quotaBytes)} (${formatBytes(quotaBytes - storage.lens.extraCapGB * 1024 ** 3)} + ${storage.lens.extraCapGB} GB extra)`
             : `of ${formatBytes(quotaBytes)} ${storage.lens.paidPlan && storage.lens.paidPlan.status !== 'lapsed' ? 'storage' : 'free storage'}`}
         </Text>
       </Text>

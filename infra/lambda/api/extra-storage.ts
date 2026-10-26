@@ -71,7 +71,7 @@ type Profile = { email?: string; usedBytes?: number; bonusBytes?: number; welcom
 
 const profileKey = (id: string) => ({ pk: `D#${id}`, sk: 'PROFILE' });
 const istDay = (t: number) => new Date(t + 330 * 60_000).toISOString().slice(0, 10);
-const rupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: paise % 100 ? 2 : 0 })}`;
+const rupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: paise % 100 ? 2 : 0 })}`;
 const gbText = (b: number) => `${(b / GB).toFixed(b >= 10 * GB ? 0 : 1)} GB`;
 const dateText = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' });
 
