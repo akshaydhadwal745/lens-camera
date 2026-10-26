@@ -84,6 +84,25 @@ export type PlusStatus = {
     yearly: { kind: PlusKind; paise: number; firstPaise: number };
   };
 };
+/** Extra storage above Lens Plus (GET/POST /v1/extra): ₹3 per GB-month, opt-in with a cap. */
+export type ExtraStatus = {
+  available: boolean;
+  testMode: boolean;
+  ok: boolean;
+  reason?: 'sign-in' | 'needs-plus' | 'yearly' | 'cancelled' | 'grace' | 'other-provider';
+  message?: string;
+  paisePerGB: number;
+  options: number[];
+  capGB: number;
+  maxPaise: number;
+  baseBytes: number;
+  usedBytes: number;
+  extraBytes: number;
+  period?: { from: number; billAt?: number; chargeAt?: number };
+  soFarPaise: number;
+  estimatePaise: number;
+  bills: { from: number; to: number; gbMonths: number; paise: number; chargeAt: number; status: 'upcoming' | 'charged' | 'not-charged' }[];
+};
 export type MoveJob = {
   status: 'awaiting-payment' | 'running' | 'done' | 'paused' | 'cancelled';
   storageId: string;
@@ -471,6 +490,8 @@ export const api = {
   plusCheckout: (kind: PlusKind) => request<{ url: string; id: string }>('POST', '/plus/checkout', { kind }),
   plusRefresh: () => request<PlusStatus>('POST', '/plus/refresh'),
   plusCancel: () => request<PlusStatus>('POST', '/plus/cancel'),
+  extra: () => request<ExtraStatus>('GET', '/extra'),
+  setExtra: (capGB: number, agree = false) => request<ExtraStatus>('POST', '/extra', { capGB, agree }),
   move: () => request<MoveStatus>('GET', '/move'),
   startMove: (body: { storageId: string; refreshToken: string; folderId?: string }) => request<{ job: MoveJob }>('POST', '/move', body),
   moveRefresh: () => request<MoveStatus>('POST', '/move/refresh'),

@@ -47,6 +47,8 @@ export type Identity = {
   plan?: import('./plans').PlanState;
   /** Lens Plus through Razorpay (payments.ts): checkout, locked in, running. */
   sub?: import('./payments').SubState;
+  /** Extra storage above the plan, paid per GB used (extra-storage.ts). */
+  extra?: import('./extra-storage').ExtraState;
   /** Over the storage limit since (over-limit.ts): new backups paused, deletion countdown. */
   overLimitSince?: number;
   /** Invited by a friend and not rewarded or rejected yet: uploads re-check the reward. */
@@ -284,6 +286,7 @@ export async function authenticate(req: Req): Promise<Identity> {
     // Accounts from before the plan change (owner decision 2026-10-21) start their welcome on that day.
     welcomeUntil: profile.Item.welcomeUntil ?? (profile.Item.email ? PLAN_CHANGE_WELCOME_UNTIL : undefined),
     plan: profile.Item.plan,
+    extra: profile.Item.extra,
     overLimitSince: profile.Item.overLimitSince,
     sub: profile.Item.sub,
     referralPending: profile.Item.attribution?.program === 'referral' && !['rewarded', 'rejected', 'held'].includes(profile.Item.referral) ? true : undefined,
@@ -291,10 +294,11 @@ export async function authenticate(req: Req): Promise<Identity> {
 }
 
 export function me(identity: Identity): Res {
-  const { tokenId: _session, googleName, referralPending: _r, sub: _sub, ...profile } = identity;
+  const { tokenId: _session, googleName, referralPending: _r, sub: _sub, extra, ...profile } = identity;
   return json(200, {
     ...profile,
     suggestedName: googleName,
+    extraCapGB: extra?.capGB || undefined,
     quotaBytes: quotaFor(identity),
     signedInQuotaBytes: env.quotaBytes,
     freeQuotaBytes: env.freeQuotaBytes,

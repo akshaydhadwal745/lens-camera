@@ -3,6 +3,8 @@
 //   welcome_ending   14, 3 and 1 days before the 40 GB welcome ends (account; + email at 14 and 1)
 //   payment_failed   grace day 0, 3 and 6; plan_ended once (account, + email)
 //   plus_first_charge 3 days before a locked-in Lens Plus is first charged (account, + email; RBI e-mandate)
+//   extra_alert      extra storage at 50 / 80 / 100 % of the cap the person set (account; + email at 100 %)
+//   extra_bill       3 days before the Lens Plus renewal: the extra storage amount added to it (account + email)
 //   landing_ending   3 days before the soft landing ends, if backups would pause (account)
 //   over_limit       monthly while over the limit; deletion_notice 90/30/7/1 days before (account)
 //   weekly_summary   Sundays, if something was backed up that week (summary)
@@ -12,6 +14,7 @@
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, LANDING_MS, PLAN_CHANGE_WELCOME_UNTIL, quotaFor } from './lib';
+import { dailyExtra } from './extra-storage';
 import { deleteAboveLimit, trackOverLimit } from './over-limit';
 import { deletionAt, planActive, PLANS, PlanState } from './plans';
 import { OFFERS, SubState } from './payments';
@@ -26,7 +29,7 @@ const SEND_HOUR = 10;
 const GB = 1024 ** 3;
 
 const FIELDS = [
-  'pk', 'sk', 'email', 'createdAt', 'usedBytes', 'bonusBytes', 'welcomeUntil', 'plan', 'sub', 'overLimitSince', 'test', 'emulator', 'guestId', 'tz',
+  'pk', 'sk', 'email', 'createdAt', 'usedBytes', 'bonusBytes', 'welcomeUntil', 'plan', 'sub', 'extra', 'overLimitSince', 'test', 'emulator', 'guestId', 'tz',
   'kind', 'status', 'deletedAt', 'size', 'uploadedAt', 'place', 'width', 'height', 'recap', 'previewReady', 'ownerHidden', 'at',
 ];
 
@@ -97,6 +100,15 @@ export async function runLifecycle(now: number, deadline: number, onlyOwner?: st
         if (r === 'sent') count(name);
         return true;
       };
+
+      // Extra storage above Lens Plus: daily reading, cap alerts, the bill 3 days before the renewal.
+      if (p.extra) {
+        const r = await dailyExtra(a.id, p, now, notice).catch((e) => (console.error('extra', a.id, e), undefined));
+        if (r) {
+          count(r === 'billed' ? 'extra_bill' : 'extra_alert');
+          continue;
+        }
+      }
 
       // Lens Plus locked in during the welcome: 3 days before the first charge (Razorpay also sends
       // its own pre-debit notice 24 h before). Cancel is one tap.

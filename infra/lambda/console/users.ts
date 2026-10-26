@@ -3,6 +3,7 @@
 import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, quotaFor, Req, Res } from '../api/lib';
+import { extraForConsole } from '../api/extra-storage';
 import { activatePlan, deletionAt, lapsePlan, paymentFailed, PLANS } from '../api/plans';
 import { testAccounts } from './overview';
 
@@ -85,13 +86,14 @@ export async function userDetail(id: string): Promise<Res> {
   if (!ID.test(id)) throw new HttpError(404, 'Not found');
   const p = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${id}`, sk: 'PROFILE' } }))).Item;
   if (!p) throw new HttpError(404, 'No such account');
-  const [media, sessions, affiliate, referrals, links, albums] = await Promise.all([
+  const [media, sessions, affiliate, referrals, links, albums, extra] = await Promise.all([
     all(`D#${id}`, 'M#', 'kind, #size, #status, createdAt, deletedAt, archived, #loc', { '#size': 'size', '#status': 'status', '#loc': 'location' }),
     all(`D#${id}`, 'T#', 'device, browser, createdAt, lastUsedAt'),
     ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `D#${id}`, sk: 'AFFILIATE' }, ProjectionExpression: '#s, appliedAt', ExpressionAttributeNames: { '#s': 'status' } })),
     all(`D#${id}`, 'RF#', '#st, updatedAt', { '#st': 'state' }),
     all(`D#${id}`, 'LKO#', 'createdAt'),
     all(`D#${id}`, 'AL#', 'createdAt, code'),
+    extraForConsole(id),
   ]);
   const live = media.filter((m) => !m.deletedAt);
   const ready = live.filter((m) => m.status === 'ready');
@@ -104,6 +106,10 @@ export async function userDetail(id: string): Promise<Res> {
       quotaBytes: quotaFor(p),
       welcomeUntil: p.welcomeUntil ?? null,
       plan: p.plan ?? null,
+      // Extra storage above Lens Plus (₹3 per GB-month): cap, use now, this period, bills.
+      extra: extra?.capGB || extra?.bills.length
+        ? { capGB: extra.capGB, extraBytes: extra.extraBytes, soFarPaise: extra.soFarPaise, estimatePaise: extra.estimatePaise, bills: extra.bills.slice(0, 6) }
+        : null,
       overLimitSince: p.overLimitSince ?? null,
       deletionAt: p.overLimitSince ? deletionAt(p.overLimitSince) : null,
     },

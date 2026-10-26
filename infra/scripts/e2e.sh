@@ -859,6 +859,45 @@ curl -sS "$(echo "$R" | j '.export.files[0].url')" -o "$TMP/export.zip"
 unzip -tq "$TMP/export.zip" >/dev/null && [[ $(unzip -Z1 "$TMP/export.zip" | wc -l) == 2 ]] && ok "the ZIP is valid and holds both originals" || fail "bad zip"
 unzip -p "$TMP/export.zip" "$(unzip -Z1 "$TMP/export.zip" | head -1)" | cmp -s - "$TMP/h1.jpg" && ok "… byte for byte (oldest first, folder by year)" || unzip -p "$TMP/export.zip" "$(unzip -Z1 "$TMP/export.zip" | head -1)" | cmp -s - "$TMP/h2.jpg" && ok "… byte for byte (folder by year)"
 [[ $(call POST /export "$TH" | j .code) == too-soon ]] && ok "one export a week"
+# Extra storage above Lens Plus: ₹3 per GB-month, opt-in with a cap, billed as a Razorpay add-on.
+R=$(call GET /extra "$TH"); [[ $(echo "$R" | j .ok) == false && $(echo "$R" | j .reason) == needs-plus && $(echo "$R" | j .paisePerGB) == 300 ]] && ok "extra storage: needs Lens Plus first (₹3 per GB)" || fail "extra: $R"
+[[ $(call POST /extra "$TH" -d '{"capGB":20,"agree":true}' | j .code) == needs-plus ]] && ok "extra storage can't be turned on without Lens Plus"
+SUBX=$(call POST /plus/checkout "$TH" -d '{"kind":"plus50-month"}' | j .id)
+NOWX=$(date +%s%3N); PEX=$(( NOWX + 2 * DAY + DAY / 2 ))
+xupd() { aws dynamodb update-item --profile lens --region ap-south-1 --table-name Lens --key "{\"pk\":{\"S\":\"D#$IH\"},\"sk\":{\"S\":\"PROFILE\"}}" "$@" >/dev/null; }
+xlife() { aws lambda invoke --profile lens --function-name "$FN" --cli-binary-format raw-in-base64-out --payload "{\"lifecycle\":{\"now\":$1,\"onlyOwner\":\"$IH\"}}" "$TMP/xl.json" >/dev/null; }
+# A paid, running monthly Plus (as after the first Razorpay charge), renewing in 2.5 days.
+xupd --update-expression 'SET #p = :p, #s = :s' --expression-attribute-names '{"#p":"plan","#s":"sub"}' --expression-attribute-values "{\":p\":{\"M\":{\"id\":{\"S\":\"plus50\"},\"bytes\":{\"N\":\"$((50*GB))\"},\"status\":{\"S\":\"active\"},\"provider\":{\"S\":\"razorpay\"},\"ref\":{\"S\":\"$SUBX\"},\"periodEnd\":{\"N\":\"$PEX\"},\"startedAt\":{\"N\":\"$NOWX\"},\"updatedAt\":{\"N\":\"$NOWX\"}}},\":s\":{\"M\":{\"id\":{\"S\":\"$SUBX\"},\"kind\":{\"S\":\"plus50-month\"},\"status\":{\"S\":\"active\"},\"paidCount\":{\"N\":\"1\"},\"createdAt\":{\"N\":\"$NOWX\"},\"updatedAt\":{\"N\":\"$NOWX\"}}}}"
+[[ $(call GET /extra "$TH" | j .ok) == true ]] && ok "extra storage: monthly Lens Plus can turn it on"
+[[ $(call POST /extra "$TH" -d '{"capGB":20}' | j .code) == agree ]] && ok "extra storage needs the price confirmed first"
+[[ $(call POST /extra "$TH" -d '{"capGB":15,"agree":true}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "only 10/20/50/100 GB caps"
+R=$(call POST /extra "$TH" -d '{"capGB":20,"agree":true}')
+[[ $(echo "$R" | j .capGB) == 20 && $(echo "$R" | j .maxPaise) == 6000 && $(call GET /me "$TH" | j .quotaBytes) == $((70*GB)) ]] && ok "cap 20 GB: storage 50 + 20 GB, at most ₹60 a month" || fail "extra on: $R"
+# The account holds ~0.4 MB; +55 GB puts 5 GB above the 50 GB plan.
+xupd --update-expression 'SET usedBytes = usedBytes + :x' --expression-attribute-values "{\":x\":{\"N\":\"$((55*GB))\"}}"
+R=$(call GET /extra "$TH"); EXB=$(echo "$R" | j .extraBytes)
+(( EXB >= 5*GB && EXB < 5*GB + 10*1024*1024 )) && ok "5 GB above the plan counted as extra" || fail "extra used: $R"
+[[ $(call POST /extra "$TH" -d '{"capGB":0}' | j .code) == extra-in-use ]] && ok "can't turn off below what's kept above the plan (free up space first)"
+# 150 GB-days already this period; the daily reading adds today's 5 GB → 155 GB-days → ₹15.50.
+xupd --update-expression 'SET #e.gbDays = :g' --expression-attribute-names '{"#e":"extra"}' --expression-attribute-values '{":g":{"N":"150"}}'
+xlife "$NOWX"
+XB=$(aws dynamodb query --profile lens --region ap-south-1 --table-name Lens --key-condition-expression 'pk = :p AND begins_with(sk, :b)' --expression-attribute-values "{\":p\":{\"S\":\"D#$IH\"},\":b\":{\"S\":\"XB#\"}}" --output json)
+[[ $(echo "$XB" | j .Count) == 1 && $(echo "$XB" | j '.Items[0].paise.N') == 1550 && $(echo "$XB" | j '.Items[0].addonId.S') == ao_* ]] && ok "bill 3 days before renewal: ₹15.50 added to the Plus payment (Razorpay add-on)" || fail "bill: $XB"
+R=$(call GET /extra "$TH"); [[ $(echo "$R" | j '.bills[0].paise') == 1550 && $(echo "$R" | j '.bills[0].status') == upcoming && $(echo "$R" | j .soFarPaise) == 0 ]] && ok "the bill shows as upcoming; the new period starts at ₹0" || fail "after bill: $R"
+xlife "$((NOWX + 3600000))"
+[[ $(aws dynamodb query --profile lens --region ap-south-1 --table-name Lens --key-condition-expression 'pk = :p AND begins_with(sk, :b)' --expression-attribute-values "{\":p\":{\"S\":\"D#$IH\"},\":b\":{\"S\":\"XB#\"}}" --query Count) == 1 ]] && ok "never billed twice for the same renewal"
+# 17 GB above the plan of a 20 GB cap → the 80 % alert.
+xupd --update-expression 'SET usedBytes = usedBytes + :x, #e.lastDay = :d' --expression-attribute-names '{"#e":"extra"}' --expression-attribute-values "{\":x\":{\"N\":\"$((12*GB))\"},\":d\":{\"S\":\"2000-01-01\"}}"
+xlife "$((NOWX + 7200000))"
+[[ $(aws dynamodb query --profile lens --region ap-south-1 --table-name Lens --key-condition-expression 'pk = :p AND begins_with(sk, :n)' --expression-attribute-values "{\":p\":{\"S\":\"D#$IH\"},\":n\":{\"S\":\"NL#extra80-\"}}" --query Count) == 1 ]] && ok "alert at 80 % of the cap"
+[[ $(call POST /extra "$TH" -d '{"capGB":10}' | j .code) == extra-in-use && $(call POST /extra "$TH" -d '{"capGB":50,"agree":true}' | j .capGB) == 50 ]] && ok "can raise the cap (with consent), not lower it below what's used"
+# Lens Plus ended → extra storage switches off; nothing unbilled is charged.
+xupd --update-expression 'SET #p.#st = :l, #p.lapsedAt = :n' --expression-attribute-names '{"#p":"plan","#st":"status"}' --expression-attribute-values "{\":l\":{\"S\":\"lapsed\"},\":n\":{\"N\":\"$NOWX\"}}"
+xlife "$((NOWX + 3 * 3600000))"
+[[ $(call GET /extra "$TH" | j .capGB) == 0 ]] && ok "plan ended: extra storage off (turning it on again asks again)"
+xupd --update-expression 'SET usedBytes = usedBytes - :x REMOVE #p, #s' --expression-attribute-names '{"#p":"plan","#s":"sub"}' --expression-attribute-values "{\":x\":{\"N\":\"$((67*GB))\"}}"
+RZK=$(aws ssm get-parameter --profile lens --name /lens/razorpay/key-id --query Parameter.Value --output text):$(aws ssm get-parameter --profile lens --name /lens/razorpay/key-secret --with-decryption --query Parameter.Value --output text)
+curl -sS -u "$RZK" -X POST "https://api.razorpay.com/v1/subscriptions/$SUBX/cancel" -H 'content-type: application/json' -d '{"cancel_at_cycle_end":0}' >/dev/null
 # Console: backup codes for a lost authenticator (shown once, stored as hashes).
 R=$(capi POST /auth/backup-codes); [[ $(echo "$R" | j .codes.length) == 10 && $(echo "$R" | j '.codes[0]') =~ ^[a-z2-9]{4}-[a-z2-9]{4}$ ]] && ok "console: 10 backup codes made" || fail "backup codes: $R"
 [[ $(capi GET /auth/backup-codes | j .left) == 10 ]] && ok "console: backup codes left = 10"

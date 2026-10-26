@@ -78,6 +78,13 @@ type Detail = {
     quotaBytes: number;
     welcomeUntil: number | null;
     plan: { id: string; status: 'active' | 'grace' | 'lapsed'; provider: string; periodEnd: number; graceUntil?: number; lapsedAt?: number; cancelled?: boolean } | null;
+    extra: {
+      capGB: number;
+      extraBytes: number;
+      soFarPaise: number;
+      estimatePaise: number;
+      bills: { from: number; to: number; gbMonths: number; paise: number; chargeAt: number; status: 'upcoming' | 'charged' | 'not-charged' }[];
+    } | null;
     overLimitSince: number | null;
     deletionAt: number | null;
   };
@@ -165,6 +172,24 @@ export function UserDetail({ id, canWrite }: { id: string; canWrite: boolean }) 
                     </>
                   ) : (
                     'none'
+                  )}
+                </dd>
+                <dt>Extra storage</dt>
+                <dd>
+                  {d.storage.extra ? (
+                    <>
+                      {d.storage.extra.capGB ? `up to ${d.storage.extra.capGB} GB` : 'off'} · using {bytes(d.storage.extra.extraBytes)}
+                      <div className="muted small">
+                        this period ₹{(d.storage.extra.soFarPaise / 100).toFixed(2)} so far, about ₹{(d.storage.extra.estimatePaise / 100).toFixed(2)} at the next bill
+                      </div>
+                      {d.storage.extra.bills.map((b) => (
+                        <div key={b.chargeAt} className="muted small">
+                          {date(b.chargeAt)}: ₹{(b.paise / 100).toFixed(2)} ({b.gbMonths} GB-months) · {b.status}
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    'off'
                   )}
                 </dd>
                 <dt>Welcome (40 GB)</dt>

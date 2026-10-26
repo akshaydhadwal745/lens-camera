@@ -13,6 +13,11 @@ before what's above it is deleted.
 
 Paying again → active immediately, no back payment. The 15-minute Maintenance tick moves states on time.
 
+## Extra storage above Lens Plus (2026-10-26)
+₹3 per GB-month for what's kept above 50 GB, opt-in with a limit (10/20/50/100 GB) that is also the
+most it can cost. Measured daily, billed as a Razorpay add-on on the next monthly Plus payment, with
+a 3-day notice. Monthly Razorpay Plus only. Details: [features/extra-storage.md](../features/extra-storage.md).
+
 ## Free model (welcome, soft landing)
 Guests 5 GB → sign-in: 40 GB for 3 months (+1 month if invited) → 14-day soft landing (still 40 GB, reminders) → 10 GB free forever + invite storage (+10 GB per friend, ≤ +100 GB; event hosts +1 GB per 10 contributing guests, ≤ +5 GB).
 

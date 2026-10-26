@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ExtraStorage } from '@/components/ExtraStorage';
 import { Text } from '@/components/ui/Text';
 import { api, PlusKind, PlusStatus } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
@@ -156,6 +157,14 @@ export default function PlusScreen() {
         )}
       </View>
     );
+    // Extra storage above 50 GB: only for a running Lens Plus paid through Razorpay.
+    if (razorpayHere && sub?.status === 'active' && plan?.provider === 'razorpay')
+      body = (
+        <>
+          {body}
+          <ExtraStorage />
+        </>
+      );
   } else if (!razorpayHere || !status.available) {
     body = (
       <Text style={styles.muted}>

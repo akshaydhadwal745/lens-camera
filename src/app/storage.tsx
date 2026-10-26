@@ -90,7 +90,12 @@ function LensStorageCard() {
   return (
     <View style={{ padding: 16, gap: 12 }}>
       <Text style={styles.big}>
-        {formatBytes(usedBytes)} <Text style={styles.muted}>of {formatBytes(quotaBytes)} free storage</Text>
+        {formatBytes(usedBytes)}{' '}
+        <Text style={styles.muted}>
+          {storage.lens.extraCapGB
+            ? `of ${formatBytes(quotaBytes - storage.lens.extraCapGB * 1024 ** 3)} + up to ${storage.lens.extraCapGB} GB extra`
+            : `of ${formatBytes(quotaBytes)} ${storage.lens.paidPlan && storage.lens.paidPlan.status !== 'lapsed' ? 'storage' : 'free storage'}`}
+        </Text>
       </Text>
       <View style={styles.bar}>
         <View style={{ width: pct(recent), backgroundColor: RECENT_COLOR }} />

@@ -64,6 +64,7 @@ import {
 import { cancelPlus, checkout as plusCheckout, getPlus, refreshPlus, webhook as razorpayWebhook } from './payments';
 import { cancelMove, getMove, refreshMove, startMove } from './drive-move';
 import { getExport, startExport } from './export';
+import { getExtra, setExtra } from './extra-storage';
 import { createLink as createShareLink, linkInfo, linkPage, listLinks, openLink, revokeLink } from './links';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
@@ -211,6 +212,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /plus/checkout') return await plusCheckout(identity, req);
     if (route === 'POST /plus/refresh') return await refreshPlus(identity);
     if (route === 'POST /plus/cancel') return await cancelPlus(identity);
+    if (route === 'GET /extra') return await getExtra(identity);
+    if (route === 'POST /extra') return await setExtra(identity, req);
     if (route === 'GET /move') return await getMove(identity);
     if (route === 'POST /move') return await startMove(identity, req);
     if (route === 'POST /move/refresh') return await refreshMove(identity);

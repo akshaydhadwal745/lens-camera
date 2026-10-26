@@ -62,6 +62,8 @@ export interface StorageOverview {
     welcomeUntil?: number;
     bonusBytes?: number;
     paidPlan?: { id: string; name?: string; status: 'active' | 'grace' | 'lapsed'; periodEnd: number; graceUntil?: number; cancelled?: boolean };
+    /** Extra storage above Lens Plus the person allowed (GB; included in quotaBytes). */
+    extraCapGB?: number;
     landingUntil?: number;
     overLimit?: { since: number; deletionAt: number };
     /** Lens Plus locked in (starts when the welcome ends) or running. */
