@@ -110,9 +110,7 @@ export function ExtraStorage() {
                   disabled={busy || (!s.ok && gb > s.capGB)}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}>
-                  <Text style={styles.optionGb} numberOfLines={1} adjustsFontSizeToFit>
-                    +{gb} GB
-                  </Text>
+                  <Text style={styles.optionGb}>+{gb} GB</Text>
                   <Text style={styles.optionMax}>max {rupees(gb * s.paisePerGB)}</Text>
                 </Pressable>
               );
@@ -155,11 +153,12 @@ const styles = StyleSheet.create({
   big: { color: '#fff', fontSize: 20, fontWeight: '700' },
   bar: { height: 8, borderRadius: 4, backgroundColor: '#2C2C2E', overflow: 'hidden', flexDirection: 'row' },
   label: { color: '#A1A1A6', fontSize: 13, fontWeight: '600', textTransform: 'uppercase' },
-  options: { flexDirection: 'row', gap: 6 },
-  option: { flex: 1, backgroundColor: '#2C2C2E', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 6, minHeight: 44, alignItems: 'center', borderWidth: 2, borderColor: '#2C2C2E' },
+  // 2 × 2: the labels fit on one line from the smallest phones (320 pt) up.
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  option: { flexBasis: '47%', flexGrow: 1, backgroundColor: '#2C2C2E', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, minHeight: 44, borderWidth: 2, borderColor: '#2C2C2E' },
   optionOn: { borderColor: colors.link },
-  optionGb: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  optionMax: { color: '#86868B', fontSize: 11 },
+  optionGb: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  optionMax: { color: '#86868B', fontSize: 12 },
   linkButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   link: { color: colors.link, fontSize: 15, fontWeight: '600' },
   fine: { color: '#86868B', fontSize: 12, lineHeight: 17 },
