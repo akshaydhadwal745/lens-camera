@@ -110,7 +110,9 @@ export function ExtraStorage() {
                   disabled={busy || (!s.ok && gb > s.capGB)}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}>
-                  <Text style={styles.optionGb}>+{gb} GB</Text>
+                  <Text style={styles.optionGb} numberOfLines={1} adjustsFontSizeToFit>
+                    +{gb} GB
+                  </Text>
                   <Text style={styles.optionMax}>max {rupees(gb * s.paisePerGB)}</Text>
                 </Pressable>
               );
@@ -156,8 +158,8 @@ const styles = StyleSheet.create({
   options: { flexDirection: 'row', gap: 6 },
   option: { flex: 1, backgroundColor: '#2C2C2E', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 6, minHeight: 44, alignItems: 'center', borderWidth: 2, borderColor: '#2C2C2E' },
   optionOn: { borderColor: colors.link },
-  optionGb: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  optionMax: { color: '#86868B', fontSize: 12 },
+  optionGb: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  optionMax: { color: '#86868B', fontSize: 11 },
   linkButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   link: { color: colors.link, fontSize: 15, fontWeight: '600' },
   fine: { color: '#86868B', fontSize: 12, lineHeight: 17 },
