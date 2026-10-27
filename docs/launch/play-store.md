@@ -9,9 +9,9 @@ on 2026-10-15 (see "Gaps fixed before review").
 | # | Step | Who | State |
 |---|---|---|---|
 | 1 | Signing key backed up offline (`infra/keys/android/lens-release.jks` + password) | owner | ✅ 2026-10-15 |
-| 2 | Play Console developer account ($25 once): personal (ID check, then a closed test with 12 testers for 14 days before production) or organization (D-U-N-S number) | owner | submitted 2026-10-19, waiting for Google |
+| 2 | Play Console developer account ($25 once): personal (ID check, then a closed test with 12 testers for 14 days before production) or organization (D-U-N-S number) | owner | ✅ approved; app created 2026-10-27 (all 12 setup tasks done) |
 | 3 | App signing: **"Use my own key"** — upload `lens-release.jks` via Play's PEPK tool, so Play installs and website APKs carry the same certificate (SHA-256 `BD:D5:7B:…:3B`) and update each other | owner + Claude | – |
-| 4 | Bundle: Actions → **Play bundle** → build = N → artifact `Lens-play-dev-N` (.aab, 64 + 32-bit, versionCode N, release key checked) | Claude | ✅ workflow |
+| 4 | Bundle: Actions → **Play bundle** → build = N → artifact `Lens-play-dev-N` (.aab, 64 + 32-bit, versionCode N, release key checked, runtime `…-play` = its own update channel) | Claude | ✅ `Lens-play-dev-157.aab` (2026-10-27) |
 | 5 | Store listing (below), screenshots (phone 1080×1920+, 2–8), feature graphic 1024×500, icon 512×512 | Claude drafts, owner approves | draft |
 | 6 | Data safety form (below), content rating questionnaire, target audience (13+), ads: **No** | owner fills from this doc | draft |
 | 7 | Privacy policy URL `https://lens.instagrowapp.com/privacy/`, account deletion URL `https://lens.instagrowapp.com/delete-account/` (check it exists) | Claude | – |
