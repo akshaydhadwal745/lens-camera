@@ -4,12 +4,17 @@ Users connect Google Drive, Dropbox, OneDrive and Box by signing in. For that,
 Lens must be registered once with each provider as a **web application**. All
 registrations are free. S3-compatible and WebDAV need no setup.
 
-Every provider gets the **same redirect URI**: the Lens API's callback. Print
-it with:
+Every provider gets the **same redirect URI**, on our own domain (the website
+forwards `/api/*` to the API, and Google only approves addresses on a verified
+domain):
 
-```bash
-cd infra && node -p "require('./outputs.json').Lens.ApiUrl.replace(/\/$/, '') + '/v1/oauth/callback'"
 ```
+https://lens.instagrowapp.com/api/v1/oauth/callback
+```
+
+Until 2026-10-27 the Lambda Function URL (`https://<id>.lambda-url.ap-south-1.on.aws/v1/oauth/callback`)
+was used; it is still registered everywhere as a fallback and can be removed once
+the new address has worked in real sign-ins for a while.
 
 After registering, save the client ID + secret (stored encrypted in AWS SSM;
 no deploy needed; a changed secret takes effect when the API next restarts):
@@ -30,9 +35,10 @@ Storage). Until then it shows "Soon".
    - **Data access / Scopes** → add `.../auth/drive.file` (and `openid`,
      `email`). `drive.file` only lets Lens see files Lens created, so no
      Google security assessment is needed.
-   - **Audience** → stay in **Testing** and add the Google accounts that
-     will test (up to 100). Going public later needs a privacy policy URL and a
-     domain you own.
+   - **Audience** → **Testing** allows only listed test users and their
+     sign-ins expire after 7 days; **Publish app** (production) for everyone.
+     Branding (logo, home/privacy/terms links, authorized domain
+     `instagrowapp.com`) set 2026-10-27; the logo triggers a short brand check.
 4. **Clients → Create client → Web application**, name "Lens API".
    - **Authorized redirect URIs:** the callback URI above.
 5. Copy the client ID + secret → `scripts/set-oauth-client.sh gdrive …`.
@@ -45,7 +51,9 @@ Storage). Until then it shows "Soon".
    `files.content.write`, `files.content.read` → **Submit**.
 4. **Settings** tab → **Redirect URIs** → add the callback URI.
 5. App key = client ID, App secret = client secret → `scripts/set-oauth-client.sh dropbox …`.
-6. In development mode up to 50 users can connect; apply for production later.
+6. In development mode up to 500 users can connect. Production was requested on
+   2026-10-27 (Dropbox reviews once ~50 users are linked; after 50 users you have
+   2 weeks to be approved).
 
 ## OneDrive (Microsoft)
 
@@ -58,6 +66,8 @@ Storage). Until then it shows "Soon".
 5. **API permissions → Add → Microsoft Graph → Delegated:**
    `Files.ReadWrite.AppFolder`, `User.Read`, `offline_access`.
 6. Application (client) ID + secret value → `scripts/set-oauth-client.sh onedrive …`.
+7. Personal Microsoft accounts work as is. Work/school accounts need **publisher
+   verification** (Microsoft Partner ID + verified domain): not done yet.
 
 ## Box
 

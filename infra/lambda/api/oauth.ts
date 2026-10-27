@@ -85,8 +85,10 @@ async function credentials(p: OAuthProvider) {
   return { clientId, clientSecret };
 }
 
-/** This API's public callback URL (the Function URL host the request came in on). */
+/** This API's public callback URL: on the website's domain (the website forwards /api/* here), so
+ * the address providers verify is ours; the Function URL host only without a website. */
 function callbackUrl(req: Req): string {
+  if (env.webOrigin) return `${env.webOrigin}/api/v1/oauth/callback`;
   const host = req.headers.host ?? req.headers.Host;
   if (!host) throw new HttpError(500, 'Missing host');
   return `https://${host}/v1/oauth/callback`;

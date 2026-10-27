@@ -387,6 +387,9 @@ LOC=$(loc "$API/oauth/callback?error=access_denied")
 LOC=$(loc "$API/oauth/callback?code=x&state=forged.state")
 [[ "$LOC" == lens://oauth?error=* ]] && ok "forged state rejected"
 [[ $(call POST /oauth/nope/start "$TA" -d '{}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "unknown provider rejected"
+for P in gdrive dropbox onedrive box; do
+  [[ $(call POST /oauth/$P/start "$TA" -d '{"codeChallenge":"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"}' | j .url) == *redirect_uri=https%3A%2F%2Flens.instagrowapp.com%2Fapi%2Fv1%2Foauth%2Fcallback* ]] && ok "$P sign-in returns via our own domain"
+done
 # --- accounts: email code sign-in, merge on a second phone, sessions ---
 MAIL="user$(date +%s)@e2e.lens.invalid"
 C=$(curl -sS -X POST "$API/devices" -H 'content-type: application/json' -d '{"device":"Pixel 8"}'); TC=$(echo "$C" | j .token); IC=$(echo "$C" | j .id)
