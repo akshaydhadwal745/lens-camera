@@ -90,6 +90,8 @@ jobs:
         run: npx expo prebuild --platform android --clean --no-install
         env:
           CI: 1
+          # Play runtime ("…-play", app.config.js): written into the native project here.
+          EXPO_PUBLIC_STORE: play
 
       - name: Release keystore
         env:
@@ -129,8 +131,11 @@ jobs:
           echo "versionCode: $CODE"
           test "$CODE" = "${{ inputs.build }}"
           unzip -l "$AAB" | grep -q 'base/lib/arm64-v8a/' && unzip -l "$AAB" | grep -q 'base/lib/armeabi-v7a/'
-          RUNTIME=$(npx expo config --json --type public | jq -r .runtimeVersion)
+          RUNTIME=$(EXPO_PUBLIC_STORE=play npx expo config --json --type public | jq -r .runtimeVersion)
           echo "runtime: $RUNTIME"
+          # Its own update channel: never the website APK's runtime (that one shows Razorpay).
+          case "$RUNTIME" in *-play) ;; *) echo "runtime must end in -play"; exit 1 ;; esac
+          grep -q "$RUNTIME" android/app/src/main/res/values/strings.xml
           cp "$AAB" "Lens-play-dev-${{ inputs.build }}.aab"
           ls -lh Lens-play-dev-*.aab
 

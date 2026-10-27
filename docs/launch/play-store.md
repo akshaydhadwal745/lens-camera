@@ -22,7 +22,8 @@ on 2026-10-15 (see "Gaps fixed before review").
 ## Store listing (draft)
 
 - **App name (30):** Lens: Camera & Photo Backup
-- **Short description (80):** Phone storage full? Photo backup in full quality, 40 GB free cloud storage.
+- **Short description (80):** Camera + full-quality photo backup. 40 GB free for 3 months, then 10 GB free.
+  (2026-10-27: the old "40 GB free cloud storage" left out the 3 months; Play rejects misleading claims.)
 - **Full description:**
 
   Phone storage full? Lost a phone full of memories? Photos ruined by WhatsApp compression?
@@ -164,13 +165,17 @@ a parent's consent. *Appeals to children?* No.
 
 ### Permission declarations
 
-**Photo and video permissions (READ_MEDIA_IMAGES / READ_MEDIA_VIDEO):**
-> Lens is a camera and a cloud photo library: backing up and managing the user's photos is its
-> core feature. Photos are added through the system photo picker. READ_MEDIA_* is used only for
-> "Free up space": after a photo or video the user imported is safely backed up, Lens finds that
-> exact file in the phone's gallery (checked byte for byte against the cloud copy) and asks Android
-> to delete it with the system confirmation dialog. The photo picker can't do this: it gives no
-> MediaStore item to delete. Lens never uploads or reads gallery items the user didn't pick.
+**Photo and video permissions (READ_MEDIA_IMAGES / READ_MEDIA_VIDEO):** (updated 2026-10-27 for camera backup)
+> Lens is a camera and a cloud photo backup: backing up the user's photos and videos in full quality is
+> its core feature. It reads the photo library for two things the photo picker can't do:
+> 1. **"Back up my phone's camera too"** (off until the user turns it on in Settings → Uploads): photos
+>    and videos the user takes with the phone's own camera app (camera folders) are backed up to their
+>    Lens or own cloud storage automatically, like other backup apps. This needs ongoing access to new
+>    camera photos; picking them one by one would defeat a backup.
+> 2. **"Free up space"**: after a photo or video is safely backed up, Lens finds that exact file in the
+>    gallery (checked byte for byte against the cloud copy) and asks Android to delete it with the system
+>    confirmation dialog. The photo picker gives no item that can be deleted.
+> Photos are only uploaded to the user's own account; Lens doesn't read other media types for any other purpose.
 
 **Foreground service (type `dataSync`, `BackupService`):**
 > Uploads (backs up) the photos and videos the user just took to the user's chosen cloud storage

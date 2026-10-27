@@ -358,6 +358,17 @@ jobs:
           SENTRY_PROJECT: lens-app
           SENTRY_URL: https://sentry.io/
 
+      # Play Store installs: their own runtime ("-play"), JS built without Razorpay (pay-channel.ts).
+      - name: Publish Android update (Play build)
+        run: node scripts/ota-publish.mjs android
+        env:
+          OTA_PRIVATE_KEY: ${{ secrets.OTA_PRIVATE_KEY }}
+          WEB_BUCKET: ${{ vars.WEB_BUCKET }}
+          WEB_ORIGIN: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_WEB_URL: ${{ vars.EXPO_PUBLIC_WEB_URL }}
+          EXPO_PUBLIC_STORE: play
+
   # Published as soon as Android is ready (the usual test path); iOS adds its
   # .ipa to the same release in ios-release.
   release:

@@ -22,7 +22,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 import { createIdentity, Identity, issueToken, webSignIn } from './identity';
-import { ddb, derivedKey, env, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
+import { ddb, derivedKey, env, getParam, hashSecret, HttpError, json, rateLimit as limit, Req, Res, safeEqual } from './lib';
 import { googleLoginClaims } from './oauth';
 import { cleanRealName } from './real-names';
 import { isDisposableEmail } from './disposable';
@@ -69,7 +69,11 @@ export async function startEmail(identity: Identity | null, req: Req): Promise<R
   // Per network for the website: loose (CGNAT puts many people behind one IP).
   else if (req.sourceIp) await limit(`webcode#${req.sourceIp}`, 200, 'Too many codes requested from this network. Try again in an hour.');
 
-  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  // Google Play review (SSM /lens/review/login {"email","code"}): reviewers can't receive email,
+  // so this one address has a fixed code and no email is sent. Same attempt limits as everyone.
+  const review = await reviewLogin();
+  const reviewer = !!review && email === review.email;
+  const code = reviewer ? review.code : String(randomInt(0, 1_000_000)).padStart(6, '0');
   const isTest = email.endsWith(TEST_DOMAIN);
   await ddb.send(
     new PutCommand({
@@ -85,7 +89,7 @@ export async function startEmail(identity: Identity | null, req: Req): Promise<R
       },
     }),
   );
-  if (!isTest) {
+  if (!isTest && !reviewer) {
     if (!env.codeSender) throw new HttpError(503, 'Email sign-in isn’t available yet');
     await ses.send(
       new SendEmailCommand({
@@ -105,6 +109,17 @@ export async function startEmail(identity: Identity | null, req: Req): Promise<R
     );
   }
   return json(200, { sent: true, expiresInSeconds: CODE_TTL_MS / 1000 });
+}
+
+async function reviewLogin(): Promise<{ email: string; code: string } | undefined> {
+  const raw = await getParam('/lens/review/login').catch(() => undefined);
+  if (!raw) return undefined;
+  try {
+    const r = JSON.parse(raw) as { email?: string; code?: string };
+    return r.email && /^\d{6}$/.test(r.code ?? '') ? { email: normalizeEmail(r.email), code: r.code! } : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Checks and consumes an emailed code; returns the email. */

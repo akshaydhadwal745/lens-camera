@@ -29,6 +29,9 @@ let lastCheck = 0;
 /** A newer APK this phone should install, or null (up to date, store install, offline…). */
 export async function checkForNewApk(force = false): Promise<AvailableUpdate | null> {
   if (Platform.OS !== 'android' || !WEB_URL) return null;
+  // Play Store builds (and their over-the-air updates, built with the same flag) update through
+  // Play only (Play policy: apps must not update themselves).
+  if (process.env.EXPO_PUBLIC_STORE === 'play') return null;
   if (!force && Date.now() - lastCheck < CHECK_EVERY_MS) return null;
   lastCheck = Date.now();
   const installed = Number(Application.nativeBuildVersion ?? 0);

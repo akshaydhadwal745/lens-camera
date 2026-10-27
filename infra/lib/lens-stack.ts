@@ -505,6 +505,8 @@ function handler(event) {
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/fcm/*`,
           // Razorpay keys, plan ids, webhook secret, intro offer (lambda/api/razorpay.ts).
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/razorpay/*`,
+          // Google Play review sign-in: one email with a fixed code (lambda/api/auth.ts reviewLogin).
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/review/*`,
         ],
         }),
       );

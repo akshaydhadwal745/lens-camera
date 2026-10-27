@@ -41,4 +41,9 @@ function withBuildNumber(config) {
   return { ...config, android: { ...config.android, versionCode: build } };
 }
 
-module.exports = ({ config }) => ({ ...withBuildNumber(config), runtimeVersion: nativeRuntimeVersion() });
+// The Play Store build (EXPO_PUBLIC_STORE=play, play-bundle.yml) gets its own runtime, so its
+// over-the-air updates are built separately, without Razorpay (Play's payments policy): an update
+// made for the website APK can never reach a Play install.
+const storeSuffix = process.env.EXPO_PUBLIC_STORE === 'play' ? '-play' : '';
+
+module.exports = ({ config }) => ({ ...withBuildNumber(config), runtimeVersion: nativeRuntimeVersion() + storeSuffix });
