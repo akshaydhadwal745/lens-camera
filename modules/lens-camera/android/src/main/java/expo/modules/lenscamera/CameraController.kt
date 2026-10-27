@@ -37,6 +37,7 @@ import androidx.camera.core.UseCaseGroup
 import androidx.camera.extensions.ExtensionMode
 import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionFilter
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -130,6 +131,13 @@ open class CameraException(message: String) : Exception(message)
 
 /** The maker's mode (Night) never answered: the watchdog switched this camera to Lens's own. */
 class HungExtensionException(message: String) : CameraException(message)
+
+/** Long side / short side within 1.5 % of [ratio] (4:3 sensors are often a few pixels off). */
+internal fun nearRatio(w: Int, h: Int, ratio: Float): Boolean {
+  if (w <= 0 || h <= 0) return false
+  val r = maxOf(w, h).toFloat() / minOf(w, h)
+  return kotlin.math.abs(r - ratio) / ratio < 0.015f
+}
 
 /**
  * CameraX + Camera2 interop. Preview + ImageCapture in photo modes and
@@ -522,6 +530,7 @@ class CameraController(private val context: Context) {
             ResolutionSelector.Builder()
               .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
               .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+              .setResolutionFilter(largestNear(16f / 9f))
               .build(),
           )
           .setTargetRotation(targetRotation)
@@ -583,10 +592,22 @@ class CameraController(private val context: Context) {
       ResolutionSelector.Builder()
         .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
         .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+        .setResolutionFilter(largestNear(4f / 3f))
         .build(),
     )
     .setTargetRotation(targetRotation)
     .build()
+
+  /**
+   * Full resolution even when the sensor's size isn't exactly 4:3. CameraX only counts exact
+   * matches as 4:3, so the Pixel 8a's full 4624×3472 (1.332:1) lost to 4032×3024 and photos were
+   * 12 of 16 MP (Device Farm, dev-155). Sizes within 1.5 % of [ratio] go first, largest first; the
+   * rest keep CameraX's order (its fallbacks, and what it checks the phone can stream together).
+   */
+  private fun largestNear(ratio: Float) = ResolutionFilter { sizes, _ ->
+    val near = sizes.filter { nearRatio(it.width, it.height, ratio) }.sortedByDescending { it.width.toLong() * it.height }
+    near + sizes.filterNot { nearRatio(it.width, it.height, ratio) }
+  }
 
   /**
    * Replaces only the photo use case (the viewfinder keeps running): smart burst
@@ -865,6 +886,10 @@ class CameraController(private val context: Context) {
       // the hardware level and whether binding needed a fallback.
       "maxPhotoSize" to f.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
         ?.getOutputSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }?.let { "${it.width}x${it.height}" },
+      // The largest photo of the shape Lens saves (4:3, within 1.5 %): what photos should match.
+      "maxPhoto43Size" to f.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        ?.getOutputSizes(ImageFormat.JPEG)?.filter { nearRatio(it.width, it.height, 4f / 3f) }
+        ?.maxByOrNull { it.width.toLong() * it.height }?.let { "${it.width}x${it.height}" },
       "previewSize" to preview?.resolutionInfo?.resolution?.let { "${it.width}x${it.height}" },
       "level" to DeviceProfile.levelName(f.hardwareLevel),
       "bindAttempt" to bindAttempt,

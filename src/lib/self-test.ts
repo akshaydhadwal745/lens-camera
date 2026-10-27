@@ -159,22 +159,23 @@ export function area(size: string | null | undefined): number {
 }
 
 /**
- * Photo check against the largest JPEG the camera lists. Under half = fail (the
- * Galaxy S8 bug saved 1.5 of 12 MP); 50–90 % = warn (Pixel 8a: CameraX keeps
- * 12 of 16 MP because 16 MP isn't guaranteed alongside a live preview). Maker
- * modes (extensions) produce their own sizes, so they only warn.
+ * Photo check against the largest 4:3 JPEG the camera lists (the shape Lens saves; a phone
+ * whose largest size is 16:9, like the Redmi Note 13's 4000×2256, isn't a loss). Under half =
+ * fail (the Galaxy S8 bug saved 1.5 of 12 MP); 50–90 % = warn. Maker modes (extensions)
+ * produce their own sizes, so they only warn. Older APKs without maxPhoto43Size: the largest of any shape.
  */
 export function checkPhoto(
   photo: { width: number; height: number },
   caps: Capabilities,
 ): { status: 'pass' | 'warn' | 'fail'; message?: string; details: Record<string, unknown> } {
   const got = photo.width * photo.height;
-  const max = area(caps.maxPhotoSize);
+  const maxSize = caps.maxPhoto43Size ?? caps.maxPhotoSize;
+  const max = area(maxSize);
   const ratio = max ? got / max : null;
-  const details = { saved: `${photo.width}x${photo.height}`, max: caps.maxPhotoSize ?? null, bound: caps.photoSize ?? null, ratio };
+  const details = { saved: `${photo.width}x${photo.height}`, max: maxSize ?? null, maxAnyShape: caps.maxPhotoSize ?? null, bound: caps.photoSize ?? null, ratio };
   if (!photo.width || !photo.height) return { status: 'fail', message: 'photo has no size', details };
   if (ratio !== null && ratio < 0.9) {
-    const message = `photo ${photo.width}×${photo.height} is ${Math.round(ratio * 100)}% of the camera's ${caps.maxPhotoSize}`;
+    const message = `photo ${photo.width}×${photo.height} is ${Math.round(ratio * 100)}% of the camera's ${maxSize}`;
     const maker = caps.extension && caps.extension !== 'none';
     return { status: ratio < 0.5 && !maker ? 'fail' : 'warn', message: maker ? `${message} (maker mode's own size)` : message, details };
   }

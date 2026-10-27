@@ -56,6 +56,8 @@ export type Capabilities = {
   /** Android diagnostics: photo size bound vs the largest the camera offers, e.g. "4032x3024". */
   photoSize?: string | null;
   maxPhotoSize?: string | null;
+  /** Android: the largest 4:3 photo (within 1.5 %), the shape Lens saves (dev-156+). */
+  maxPhoto43Size?: string | null;
   previewSize?: string | null;
   /** Camera2 hardware level (LEGACY / LIMITED / FULL / LEVEL_3 / EXTERNAL). */
   level?: string;
