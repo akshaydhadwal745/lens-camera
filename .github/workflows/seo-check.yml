@@ -27,13 +27,19 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: site/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+
+      # The site's tsconfig extends expo/tsconfig.base from the app's packages (no install scripts needed).
+      - name: Install app packages
+        run: npm ci --no-audit --no-fund --ignore-scripts
 
       - name: Build the website
         working-directory: site
         run: |
           npm ci --no-audit --no-fund
-          npx astro build
+          npm run build
 
       - name: SEO check
         working-directory: site
