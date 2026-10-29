@@ -218,6 +218,8 @@ class CameraController(private val context: Context) {
     val plainPhoto: Boolean = false,
     /** Video: last resort without the full-resolution photo stream (photos then come from video frames). */
     val noStill: Boolean = false,
+    /** Photo last resort: only the normal size list, no slower high-resolution sizes. */
+    val normalSizes: Boolean = false,
   )
 
   // Latest per-frame metadata from the camera, for the HUD and manual WB anchoring.
@@ -361,7 +363,7 @@ class CameraController(private val context: Context) {
         BoundVideo(false, 30, false, noStill = true),
       ).distinct()
     } else {
-      listOf(BoundVideo(), BoundVideo(plainPhoto = true))
+      listOf(BoundVideo(), BoundVideo(plainPhoto = true), BoundVideo(plainPhoto = true, normalSizes = true))
     }
     var lastError: Exception? = null
     val baseSelector = cam.info.cameraSelector
@@ -399,7 +401,7 @@ class CameraController(private val context: Context) {
         // "Never below the original": a maker Night mode that saves far smaller photos than the
         // camera can (Pixel 8a: 5 of 16 MP) loses to our own full-resolution Night merge.
         val photo = imageCapture?.resolutionInfo?.resolution
-        val max = cam.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.getOutputSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }
+        val max = cam.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.allSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }
         if (nightExtension && !makerNightBigEnough(photo?.width ?: 0, photo?.height ?: 0, max?.width ?: 0, max?.height ?: 0)) {
           Log.i(TAG, "maker Night saves $photo of $max: using Lens Night on camera ${cam.id}")
           smallNightExtension += cam.id
@@ -553,7 +555,7 @@ class CameraController(private val context: Context) {
         latency -> "latency"
         else -> "quality"
       }
-      imageCapture = stillCapture(latency, photoFormat, zsl).also { group.addUseCase(it) }
+      imageCapture = stillCapture(latency, photoFormat, zsl, video.normalSizes).also { group.addUseCase(it) }
       videoCapture = null
     }
     return group.build()
@@ -577,7 +579,7 @@ class CameraController(private val context: Context) {
   }
 
   /** The photo use case: full resolution, 4:3, JPEG 95; [latency] = the phone's quick capture path. */
-  private fun stillCapture(latency: Boolean, format: Int, zsl: Boolean = false): ImageCapture = ImageCapture.Builder()
+  private fun stillCapture(latency: Boolean, format: Int, zsl: Boolean = false, normalSizes: Boolean = bound.normalSizes): ImageCapture = ImageCapture.Builder()
     .setCaptureMode(
       when {
         zsl -> ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG
@@ -593,6 +595,10 @@ class CameraController(private val context: Context) {
         .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
         .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
         .setResolutionFilter(largestNear(4f / 3f))
+        // The sensor's full size can sit in the "high resolution" list (slower than 20 fps):
+        // without this the Galaxy A15 saved 1440×1080 of 4080×3060 (Firebase + Device Farm,
+        // dev-156). Zero shutter lag and maker modes can't use those sizes.
+        .apply { if (!zsl && !normalSizes && boundExtension == "none") setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE) }
         .build(),
     )
     .setTargetRotation(targetRotation)
@@ -885,10 +891,10 @@ class CameraController(private val context: Context) {
       // Diagnostics: the largest JPEG this camera can give, what the preview got,
       // the hardware level and whether binding needed a fallback.
       "maxPhotoSize" to f.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        ?.getOutputSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }?.let { "${it.width}x${it.height}" },
+        ?.allSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }?.let { "${it.width}x${it.height}" },
       // The largest photo of the shape Lens saves (4:3, within 1.5 %): what photos should match.
       "maxPhoto43Size" to f.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        ?.getOutputSizes(ImageFormat.JPEG)?.filter { nearRatio(it.width, it.height, 4f / 3f) }
+        ?.allSizes(ImageFormat.JPEG)?.filter { nearRatio(it.width, it.height, 4f / 3f) }
         ?.maxByOrNull { it.width.toLong() * it.height }?.let { "${it.width}x${it.height}" },
       "previewSize" to preview?.resolutionInfo?.resolution?.let { "${it.width}x${it.height}" },
       "level" to DeviceProfile.levelName(f.hardwareLevel),

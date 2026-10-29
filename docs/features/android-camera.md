@@ -137,6 +137,10 @@ viewfinder, so they match. Android only for now (iPhone shows Natural).
 - **RAW (DNG)** on cameras that support it (**RAW** button in Photo mode).
   The unprocessed sensor data, for editing elsewhere; previews are made by Lens's
   imaging engine.
+- Photos are saved at the camera's **largest size**:
+  - Sizes within 1.5 % of 4:3 count as 4:3. CameraX only counts exact matches, so the Pixel 8a lost 4 MP before this.
+  - Sizes from the camera's slower **high-resolution list** count too. The Galaxy A15 lists its full 4080×3060 only there, and saved 1440×1080 before this.
+  - If a phone refuses the big size when the camera starts, the last try uses the normal sizes.
 - Night is merged at **full resolution** on every phone.
 - If a phone refuses Ultra HDR or RAW when the camera starts, it falls back to plain JPEG.
 

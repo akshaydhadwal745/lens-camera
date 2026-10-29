@@ -30,6 +30,14 @@ import kotlin.math.roundToInt
 import kotlin.math.tan
 
 /**
+ * Every size the camera can save in [format], including the "high resolution" list: phones that
+ * can burst at 20 fps put their slower full-size modes there instead (Galaxy A15: 2336×1080 in the
+ * normal list, the sensor's 4080×3060 only in the high-resolution one).
+ */
+internal fun android.hardware.camera2.params.StreamConfigurationMap.allSizes(format: Int): List<android.util.Size> =
+  getOutputSizes(format).orEmpty().toList() + runCatching { getHighResolutionOutputSizes(format).orEmpty().toList() }.getOrDefault(emptyList())
+
+/**
  * What this phone's cameras can do, read from Camera2 characteristics.
  *
  * Android phones differ wildly: a 2017 budget phone may be "LEGACY" (auto only),
@@ -275,7 +283,7 @@ class DeviceProfile(private val context: Context, private val provider: ProcessC
   private fun streams(c: CameraFacts): Map<String, Any?>? {
     val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
     fun entry(format: Int): Map<String, Any?>? = runCatching {
-      val size = map.getOutputSizes(format)?.maxByOrNull { it.width.toLong() * it.height } ?: return@runCatching null
+      val size = map.allSizes(format).maxByOrNull { it.width.toLong() * it.height } ?: return@runCatching null
       val frameNs = map.getOutputMinFrameDuration(format, size)
       val stallNs = map.getOutputStallDuration(format, size)
       mapOf(
