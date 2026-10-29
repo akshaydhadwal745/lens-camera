@@ -10,6 +10,7 @@ import { runLifecycle } from './lifecycle';
 import { advancePlans } from './plans';
 import { scanTable } from './table-scan';
 import { reconcileDue } from './payments';
+import { sweepPlay } from './play-billing';
 import { resumeStalled, runMove, settleAwaiting } from './drive-move';
 import { resumeExports, runExport } from './export';
 import { lambdaContinue } from './continue';
@@ -62,6 +63,11 @@ export async function handler(event: Event, context?: { getRemainingTimeInMillis
     await settleAwaiting(jobs, now).catch((e) => console.error('settle', e));
     await resumeStalled(jobs, now).catch((e) => console.error('moves', e));
     await resumeExports(jobs, now).catch((e) => console.error('exports', e));
+    // Google Play: once a day re-read every Play subscription still giving storage (lost notifications).
+    if (new Date(now).getUTCHours() === 21 && new Date(now).getUTCMinutes() < 15) {
+      const playRows = (await scanTable(['pk', 'sk', 'plan', 'extra', 'playTokens'])).filter((r) => r.sk === 'PROFILE' && r.playTokens);
+      await sweepPlay(playRows.map((r) => ({ id: String(r.pk).slice(2), plan: r.plan, extra: r.extra, playTokens: r.playTokens }))).catch((e) => console.error('play sweep', e));
+    }
     const withPlans = (await scanTable(['pk', 'sk', 'plan'])).filter((r) => r.sk === 'PROFILE' && r.plan).map((r) => ({ id: String(r.pk).slice(2), plan: r.plan }));
     const planChanges = await advancePlans(withPlans, now);
     const campaigns = await runCampaigns(now, until);

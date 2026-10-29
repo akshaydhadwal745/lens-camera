@@ -507,6 +507,8 @@ function handler(event) {
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/razorpay/*`,
           // Google Play review sign-in: one email with a fixed code (lambda/api/auth.ts reviewLogin).
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/review/*`,
+          // Google Play Billing: service account, Pub/Sub push audience + account (lambda/api/play.ts).
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/play/*`,
         ],
         }),
       );

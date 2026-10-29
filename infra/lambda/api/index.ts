@@ -65,6 +65,7 @@ import { cancelPlus, checkout as plusCheckout, getPlus, refreshPlus, webhook as 
 import { cancelMove, getMove, refreshMove, startMove } from './drive-move';
 import { getExport, startExport } from './export';
 import { getExtra, setExtra } from './extra-storage';
+import { getPlay, postPurchase as playPurchase, rtdn as playRtdn } from './play-billing';
 import { createLink as createShareLink, linkInfo, linkPage, listLinks, openLink, revokeLink } from './links';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
@@ -85,6 +86,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
     // Razorpay → Lens (signed with the dashboard webhook secret; payments.ts).
     if (route === 'POST /razorpay/webhook') return await razorpayWebhook(req);
+    // Google Play → Lens (Pub/Sub push, Google-signed OIDC token; play-billing.ts).
+    if (route === 'POST /play/rtdn') return await playRtdn(req);
     // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.
     if (seg[1] === 'r' && seg.length === 3 && method === 'GET') return await followLink(req, 'referral', seg[2]);
     if (seg[1] === 'go' && seg.length === 3 && method === 'GET') return await followLink(req, 'affiliate', seg[2]);
@@ -212,6 +215,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'POST /plus/checkout') return await plusCheckout(identity, req);
     if (route === 'POST /plus/refresh') return await refreshPlus(identity);
     if (route === 'POST /plus/cancel') return await cancelPlus(identity);
+    if (route === 'GET /play') return await getPlay(identity);
+    if (route === 'POST /play/purchase') return await playPurchase(identity, req);
     if (route === 'GET /extra') return await getExtra(identity);
     if (route === 'POST /extra') return await setExtra(identity, req);
     if (route === 'GET /move') return await getMove(identity);

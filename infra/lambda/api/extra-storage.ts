@@ -3,7 +3,8 @@
 //   ₹3 per GB per month for what's kept above the plan (50 GB), measured once a day:
 //   each day adds (GB above the plan) to `gbDays`; the bill is gbDays × ₹3 / 30 (10 paise a GB-day).
 //
-//   The person opts in and picks a monthly cap (10 / 20 / 50 / 100 GB). The cap is also the storage
+//   The person opts in and picks a monthly cap: a quick pick (10 / 20 / 50 / 100 GB) or any whole
+//   number of GB (owner 2026-10-29: "choice + amount"). The cap is also the storage
 //   limit: backups above plan + cap pause (lib.ts checkQuota 'extra-cap'), so the bill can never be
 //   more than cap × ₹3. Alerts at 50, 80 and 100 % of the cap (push; email at 100 %).
 //
@@ -12,8 +13,9 @@
 //   total first (push + email). Below ₹1 it carries over to the next month. If they cancel Lens Plus,
 //   the last month's extra storage isn't charged.
 //
-//   Website + website APK (Razorpay, monthly Plus) only. Play app: +10 GB packs once Play Billing
-//   exists; yearly Plus: not yet (no monthly charge to add to).
+//   Website + website APK (Razorpay, monthly Plus). Play app: the person picks a size and Google bills
+//   GB × ₹3 a month as a subscription (play-billing.ts; extra.provider = 'play': no metering here).
+//   Yearly Plus on Razorpay: not yet (no monthly charge to add to).
 //
 // Never: charging without the opt-in, charging above the cap, or blocking/deleting photos because of
 // a bill. A failed payment is the normal Lens Plus grace (plans.ts): extra storage keeps working.
@@ -32,7 +34,9 @@ const DAY = 86_400_000;
 const GB = 1024 ** 3;
 /** ₹3 per GB-month, GST included. */
 export const PAISE_PER_GB_MONTH = 300;
+/** Quick picks; any whole number from 1 to MAX_CAP_GB works too. */
 export const CAP_OPTIONS = [10, 20, 50, 100] as const;
+export const MAX_CAP_GB = 1000;
 /** Bills are added this long before the renewal (Razorpay's pre-debit notice goes out ~24 h before). */
 export const BILL_BEFORE_MS = 3 * DAY;
 const MIN_BILL_PAISE = 100;
@@ -51,6 +55,9 @@ export type ExtraState = {
   /** Renewal (plan.periodEnd) the last bill was made for. */
   billedFor?: number;
   agreedAt?: number;
+  /** Bought in the Play app: Google bills it (no metering, no add-ons); `ref` = its purchase. */
+  provider?: 'play';
+  ref?: string;
   updatedAt: number;
 };
 
@@ -112,6 +119,8 @@ function view(p: Profile, history: ExtraBill[], now: number) {
   return {
     paisePerGB: PAISE_PER_GB_MONTH,
     options: CAP_OPTIONS,
+    maxCapGB: MAX_CAP_GB,
+    provider: e?.provider,
     capGB: cap,
     maxPaise: cap * PAISE_PER_GB_MONTH,
     baseBytes: baseQuota(p, now),
@@ -151,8 +160,9 @@ export async function getExtra(identity: Identity): Promise<Res> {
 export async function setExtra(identity: Identity, req: Req): Promise<Res> {
   const now = Date.now();
   const capGB = Number(req.body?.capGB);
-  if (!(capGB === 0 || (CAP_OPTIONS as readonly number[]).includes(capGB))) throw new HttpError(400, 'Choose 10, 20, 50 or 100 GB');
+  if (!Number.isInteger(capGB) || capGB < 0 || capGB > MAX_CAP_GB) throw new HttpError(400, `Choose a whole number of GB from 1 to ${MAX_CAP_GB}`);
   const before = identity.extra;
+  if (before?.provider === 'play' && before.capGB) throw new HttpError(409, 'Your extra storage is managed in Google Play: change it in the Lens app from Google Play.', 'play-managed');
   const current = before?.capGB ?? 0;
   if (capGB === current) return getExtra(identity);
   const usedGB = extraUsedBytes(identity, now) / GB;
@@ -202,6 +212,8 @@ type Notice = (name: string, markName: string, title: string, body: string, with
 export async function dailyExtra(id: string, p: Profile, now: number, notice: Notice): Promise<'billed' | 'alert' | undefined> {
   const e = p.extra;
   if (!e || (!e.capGB && !e.gbDays)) return undefined;
+  // Bought on Play: Google bills it and play-billing.ts follows its state; nothing to meter.
+  if (e.provider === 'play') return undefined;
   const plan = p.plan;
   const paid = !!plan && planActive(plan, now);
   const today = istDay(now);

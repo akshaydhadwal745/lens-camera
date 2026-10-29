@@ -49,6 +49,8 @@ export type Identity = {
   sub?: import('./payments').SubState;
   /** Extra storage above the plan, paid per GB used (extra-storage.ts). */
   extra?: import('./extra-storage').ExtraState;
+  /** Google Play subscriptions giving storage now (play-billing.ts). */
+  playTokens?: { plus?: string; extra?: string };
   /** Over the storage limit since (over-limit.ts): new backups paused, deletion countdown. */
   overLimitSince?: number;
   /** Invited by a friend and not rewarded or rejected yet: uploads re-check the reward. */
@@ -287,6 +289,7 @@ export async function authenticate(req: Req): Promise<Identity> {
     welcomeUntil: profile.Item.welcomeUntil ?? (profile.Item.email ? PLAN_CHANGE_WELCOME_UNTIL : undefined),
     plan: profile.Item.plan,
     extra: profile.Item.extra,
+    playTokens: profile.Item.playTokens,
     overLimitSince: profile.Item.overLimitSince,
     sub: profile.Item.sub,
     referralPending: profile.Item.attribution?.program === 'referral' && !['rewarded', 'rejected', 'held'].includes(profile.Item.referral) ? true : undefined,
@@ -294,7 +297,7 @@ export async function authenticate(req: Req): Promise<Identity> {
 }
 
 export function me(identity: Identity): Res {
-  const { tokenId: _session, googleName, referralPending: _r, sub: _sub, extra, ...profile } = identity;
+  const { tokenId: _session, googleName, referralPending: _r, sub: _sub, extra, playTokens: _play, ...profile } = identity;
   return json(200, {
     ...profile,
     suggestedName: googleName,
