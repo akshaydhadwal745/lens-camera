@@ -22,20 +22,24 @@ storage, grace, lapse, reminders, the console and the affiliates work the same w
 | Product id | Type | Base plan / price | What it gives |
 |---|---|---|---|
 | `lens_plus` | subscription | `monthly` ₹59 (auto-renew), `yearly` ₹499 (auto-renew); offer `welcome-trial` = 1 month free, new customers only | plan `plus50` (50 GB) |
-| `lens_extra` | subscription | one base plan per size, price = GB × ₹3 a month: `gb4` ₹12, `gb5` ₹15 … `gb10` ₹30, `gb15` ₹45, `gb20` ₹60, `gb25` ₹75, `gb30` ₹90, `gb40` ₹120, `gb50` ₹150, `gb75` ₹225, `gb100` ₹300 | extra storage cap above Plus (needs active Plus) |
+| `lens_extra` | subscription | one base plan per GB from 4 to 100 (`gb4` … `gb100`, 97 base plans, created via the API), price = GB × ₹3 a month (`gb4` ₹12 … `gb100` ₹300) | extra storage cap above Plus (needs active Plus) |
 | `move_25gb` | one-time (consumable) | ₹375 | 25 GB of "Move to Google Drive" credit |
 | `move_100gb` | one-time (consumable) | ₹1,500 | 100 GB of move credit |
 
 ## Extras (proposal)
 
 **Extra storage (owner 2026-10-29: "one plan, then the user decides how much to add, 1 or 10 or
-100 GB, and the cost is calculated").** The website meters use per day (₹3 per GB a month, up to the
-chosen limit). Play has no metered or free-quantity subscriptions, so on Play the person **picks a
-size and pays exactly GB × ₹3 a month**: one `lens_extra` subscription with a base plan per size
-(4–10 GB in 1 GB steps, then 15, 20, 25, 30, 40, 50, 75, 100 GB; Play allows far more base plans if
-needed). The app shows it as one picker with the live total. Smallest is 4 GB because Play has a
-minimum subscription price (about ₹10); on the website any size from 1 GB works. Changing the size is
-a Play plan change (prorated by Google). The pack is the quota (`PROFILE.extra.capGB`, same field the
+100 GB, and the cost is calculated"; "choice + amount").** Lens Plus = the free 10 GB + 40 GB = 50 GB
+for ₹59. Above it the person adds what they want at ₹3 per GB a month. The screen is the same on
+every channel: quick picks (+10, +20, +50, +100 GB) **and** a custom amount box with the live price
+(e.g. 7 GB → ₹21 a month).
+- Website/APK: any whole number from 1 GB (metered per day up to that limit, as now; `CAP_OPTIONS`
+  becomes "1–1,000, any whole number" instead of 10/20/50/100).
+- Play app: Play has no metered or free-quantity subscriptions, so `lens_extra` has **one base plan
+  per GB from 4 to 100** (Play's minimum subscription price is about ₹10, so 1–3 GB can't exist on
+  Play). Any amount in that range works; above 100 the app asks them to contact support. Changing the
+  amount is a Play plan change (prorated by Google).
+The pack is the quota (`PROFILE.extra.capGB`, same field the
 website uses), with `extra.provider = 'play'` so the daily meter (`dailyExtra`) skips it: nothing to
 bill, Google already charged. If Plus lapses, the pack's storage stops with it (as on the website) and
 the app asks them to cancel the pack in Play (we can't cancel it for them; we can **revoke** it with a
