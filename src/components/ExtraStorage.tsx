@@ -1,11 +1,12 @@
 // Extra storage above Lens Plus (docs/features/extra-storage.md): ₹3 per GB a month for what's kept
 // above 50 GB, measured daily, added to the monthly Lens Plus payment. The person picks the most it
-// can cost (the cap); turning it on or raising it always shows the price and asks first.
+// can cost (the cap): a quick pick or any whole number of GB (owner 2026-10-29: "choice + amount");
+// turning it on or raising it always shows the price and asks first.
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/ui/Text';
+import { Text, TextInput } from '@/components/ui/Text';
 import { api, ExtraStatus } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { rupees } from '@/lib/pay-channel';
@@ -19,6 +20,7 @@ const BILL_STATUS = { upcoming: 'with your next payment', charged: 'paid', 'not-
 export function ExtraStorage() {
   const [s, setS] = useState<ExtraStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [amount, setAmount] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -116,6 +118,33 @@ export function ExtraStorage() {
               );
             })}
           </View>
+          <Text style={styles.label}>Or your own amount</Text>
+          <View style={styles.customRow}>
+            <TextInput
+              style={styles.input}
+              value={amount}
+              onChangeText={(t) => setAmount(t.replace(/[^0-9]/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              placeholder={`1–${s.maxCapGB ?? 100}`}
+              placeholderTextColor="#636366"
+              accessibilityLabel="Extra storage limit in GB"
+              returnKeyType="done"
+            />
+            <Text style={styles.unit}>GB</Text>
+            {(() => {
+              const gb = Number(amount);
+              const valid = Number.isInteger(gb) && gb >= 1 && gb <= (s.maxCapGB ?? 100) && gb !== s.capGB;
+              return (
+                <Pressable
+                  style={[styles.setButton, (!valid || busy || (!s.ok && gb > s.capGB)) && { opacity: 0.5 }]}
+                  onPress={() => valid && void change(gb).then(() => setAmount(''))}
+                  disabled={!valid || busy || (!s.ok && gb > s.capGB)}
+                  accessibilityRole="button">
+                  <Text style={styles.setText}>{valid ? `At most ${rupees(gb * s.paisePerGB)} a month` : 'Set limit'}</Text>
+                </Pressable>
+              );
+            })()}
+          </View>
           {busy && <ActivityIndicator color="#fff" />}
           {on && (
             <Pressable style={styles.linkButton} onPress={() => change(0)} disabled={busy}>
@@ -159,6 +188,11 @@ const styles = StyleSheet.create({
   optionOn: { borderColor: colors.link },
   optionGb: { color: '#fff', fontSize: 15, fontWeight: '700' },
   optionMax: { color: '#86868B', fontSize: 12 },
+  customRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  input: { width: 80, minHeight: 44, backgroundColor: '#2C2C2E', borderRadius: 12, color: '#fff', fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  unit: { color: '#A1A1A6', fontSize: 15, fontWeight: '600' },
+  setButton: { flex: 1, minHeight: 44, borderRadius: 12, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  setText: { color: colors.link, fontSize: 14, fontWeight: '700' },
   linkButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   link: { color: colors.link, fontSize: 15, fontWeight: '600' },
   fine: { color: '#86868B', fontSize: 12, lineHeight: 17 },

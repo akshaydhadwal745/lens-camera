@@ -84,6 +84,20 @@ export type PlusStatus = {
     yearly: { kind: PlusKind; paise: number; firstPaise: number };
   };
 };
+/** What the Play Store app can sell (GET /v1/play; infra/lambda/api/play-billing.ts). */
+export type PlayStatus = {
+  available: boolean;
+  signedIn: boolean;
+  /** Sent to Google with every purchase (obfuscatedAccountId) so it can't land on another account. */
+  accountHash: string;
+  plus: { productId: string; basePlans: string[]; trialOffer?: string };
+  extra: { capGB: number };
+  move: Record<string, number>;
+  plan?: { id: string; status: 'active' | 'grace'; periodEnd: number; cancelled?: boolean; provider: string };
+  /** Lens Plus bought on the website: the Play app doesn't sell a second one. */
+  otherProvider?: string;
+  tokens?: { plus?: string; extra?: string };
+};
 /** Extra storage above Lens Plus (GET/POST /v1/extra): ₹3 per GB-month, opt-in with a cap. */
 export type ExtraStatus = {
   available: boolean;
@@ -93,6 +107,9 @@ export type ExtraStatus = {
   message?: string;
   paisePerGB: number;
   options: number[];
+  maxCapGB?: number;
+  /** 'play': bought in the Play app (Google bills it). */
+  provider?: 'play';
   capGB: number;
   maxPaise: number;
   baseBytes: number;
@@ -490,6 +507,8 @@ export const api = {
   plusCheckout: (kind: PlusKind) => request<{ url: string; id: string }>('POST', '/plus/checkout', { kind }),
   plusRefresh: () => request<PlusStatus>('POST', '/plus/refresh'),
   plusCancel: () => request<PlusStatus>('POST', '/plus/cancel'),
+  play: () => request<PlayStatus>('GET', '/play'),
+  playPurchase: (productId: string, purchaseToken: string) => request<unknown>('POST', '/play/purchase', { productId, purchaseToken }),
   extra: () => request<ExtraStatus>('GET', '/extra'),
   setExtra: (capGB: number, agree = false) => request<ExtraStatus>('POST', '/extra', { capGB, agree }),
   move: () => request<MoveStatus>('GET', '/move'),

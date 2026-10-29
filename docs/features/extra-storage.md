@@ -13,7 +13,7 @@ video user. These figures are through Razorpay, on AWS as it is today.
 
 | | |
 |---|---|
-| Who | Lens Plus **monthly** paid through Razorpay (website and website APK), running and not cancelled. Yearly Plus: not yet (no monthly payment to add to). Play app: +10 GB packs for ₹30 a month once Play Billing exists. |
+| Who | Lens Plus **monthly** paid through Razorpay (website and website APK), running and not cancelled. Yearly Plus: not yet (no monthly payment to add to). Play app: the person picks any size from 4 to 100 GB and Google Play bills GB × ₹3 a month (branch `feat/play-billing`, [design/play-billing.md](../design/play-billing.md)). |
 | Price | ₹3 per GB-month, GST included = 10 paise per GB per day |
 | Measuring | Once a day (lifecycle tick, ~10:00 on the phone): GB above plan + invite storage, added to `gbDays` (capped at the limit) |
 | Limit (cap) | 10 / 20 / 50 / 100 GB, chosen by the person. The limit is also the storage limit: backups above 50 GB + limit pause (413 `extra-cap`). So the most a month can cost is limit × ₹3 (₹30 / ₹60 / ₹150 / ₹300). |
@@ -45,4 +45,5 @@ video user. These figures are through Razorpay, on AWS as it is today.
   - create the subscription with a higher mandate maximum (Razorpay support), or
   - bill extra storage separately.
 - Update the website pricing page (Plus + extra storage) together with the Lens Plus go-live.
-- Play: +10 GB packs (₹30/month subscription products) when Play Billing is built.
+- Play: pick any size 4–100 GB, billed by Google Play at GB × ₹3 a month (`lens_extra_a`/`_b`, one base plan per GB); built on branch `feat/play-billing`.
+- Website/APK limit: quick picks 10/20/50/100 GB **or any whole number from 1 to 1,000 GB** (owner 2026-10-29: "choice + amount").

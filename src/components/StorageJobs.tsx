@@ -9,7 +9,8 @@ import { ActivityIndicator, AppState, Linking, Platform, Pressable, StyleSheet, 
 import { Text } from '@/components/ui/Text';
 import { api, ExportStatus, MoveStatus } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
-import { razorpayHere, rupees } from '@/lib/pay-channel';
+import { playBillingHere, razorpayHere, rupees } from '@/lib/pay-channel';
+import { buyMovePack, movePackPrices, MOVE_PACKS, packsFor } from '@/lib/play-billing';
 import { loadSaved } from '@/lib/storage/vault';
 import { refreshStorage } from '@/lib/store';
 import { ConnectedStorage } from '@/lib/types';
@@ -75,10 +76,53 @@ export function MoveToDrive({ drive }: { drive: ConnectedStorage }) {
       notify('Use the Lens app', 'Moving needs your Google Drive sign-in, which stays on your phone. Open Lens on your phone → Settings → Storage.');
       return;
     }
-    if (q.pricePaise > 0 && !razorpayHere) {
+    if (q.pricePaise > 0 && !razorpayHere && !playBillingHere) {
       notify('Not available in this version yet', 'Moving more than the free amount is coming soon.');
       return;
     }
+    // Play Store app: buy move credit through Google Play first (packs of 25 / 100 GB at ₹15 a GB);
+    // with the credit on the account the move itself costs nothing more.
+    if (q.pricePaise > 0 && playBillingHere) {
+      if (!(await buyPlayCredit(q.payGb))) return;
+      const fresh = await api.move();
+      setValue(fresh);
+      if (fresh.quote.pricePaise > 0) {
+        notify('Almost there', 'Google Play confirmed the payment, but the credit hasn’t arrived yet. Try again in a minute.');
+        return;
+      }
+      return startNow(fresh);
+    }
+    return startNow(s!);
+  };
+
+  /** Google Play: the packs covering `gb`, one Google sheet each. False if they stopped. */
+  const buyPlayCredit = async (gb: number) => {
+    const packs = packsFor(gb);
+    const prices = await movePackPrices().catch(() => ({}) as Record<string, string>);
+    const total = packs.reduce((n, p) => n + MOVE_PACKS[p], 0);
+    const list = packs.map((p) => `${MOVE_PACKS[p]} GB${prices[p] ? ` (${prices[p]})` : ''}`).join(' + ');
+    const ok = await confirmDestructive(
+      `Move ${gb} GB above the free amount?`,
+      `Moving costs ₹15 per GB above the free ${formatBytes(q!.freeBytes)} (it covers the internet transfer). You buy move credit in Google Play: ${list}. Unused credit stays for your next move.`,
+      packs.length > 1 ? `Buy ${total} GB of credit` : `Buy ${total} GB · ${prices[packs[0]] ?? rupees(total * 1_500)}`,
+    );
+    if (!ok) return false;
+    const status = await api.play();
+    setBusy(true);
+    try {
+      for (const p of packs) await buyMovePack(p, status);
+      track(`move_play_credit_${total}`);
+      return true;
+    } catch (e) {
+      if (!(e as { cancelled?: boolean }).cancelled) notify('Couldn’t finish the payment', errorMessage(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startNow = async (current: MoveStatus) => {
+    const q = current.quote;
     const price = q.pricePaise > 0 ? `${rupees(q.pricePaise)} (${q.payGb} GB above the free ${formatBytes(q.freeLeftBytes + q.creditBytes)})` : 'Free';
     const ok = await confirmDestructive(
       `Move ${q.items} items to Google Drive?`,

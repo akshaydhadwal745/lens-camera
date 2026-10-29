@@ -36,7 +36,7 @@ Shows plan, welcome, over-limit date and deletion date; support can give N month
 - **Offered at the start, optional:** a "Lock in Lens Plus" screen at sign-in and after the first 20 backups → Razorpay **UPI Autopay / card mandate, ₹0 today**, subscription starts when the welcome ends (first charge ₹59). "Not now" keeps the free welcome; the offer comes back at 80% storage, after a trip recap and in the last welcome week.
 - RBI e-mandate: Razorpay's pre-debit notice + our reminder 3 days before the first charge; one-tap cancel in the app and on the website.
 - Razorpay webhooks → `activatePlan` (paid/renewed), `paymentFailed` (7-day grace), `cancelPlan` (ends at period end).
-- Where: website + APK. The Play Store app must use Google Play Billing (intro price / free trial) or Google's user choice billing (Razorpay beside Play, 11% fee).
+- Where: website + APK. The Play Store app uses Google Play Billing (built on branch `feat/play-billing`, 2026-10-29: same ₹59/₹499, a free month in the last 30 days of the welcome instead of the lock-in, extra storage 4–100 GB at GB × ₹3, move credit packs at ₹15/GB; [design/play-billing.md](../design/play-billing.md)).
 - Keys: the owner's account is LIVE-only → its dashboard **Test Mode** switch for test keys (Key ID + Secret in `~/Downloads/razorpay-test.txt`, stored in SSM `/lens/razorpay/*`); live needs the account's Subscriptions feature enabled.
 
 ### What's built (2026-10-23)

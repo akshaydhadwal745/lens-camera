@@ -147,7 +147,8 @@
           "organization": "instagrowapp",
           "project": "lens-app"
         }
-      ]
+      ],
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,

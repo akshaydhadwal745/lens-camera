@@ -14,6 +14,7 @@ import { ToastHost } from '@/components/Toast';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { identityChanged, startPush } from '@/lib/push';
 import { peopleAppStart } from '@/lib/people';
+import { restorePlayPurchases } from '@/lib/play-billing';
 import { boot, useStore } from '@/lib/store';
 import { fontFiles } from '@/lib/theme';
 import { takePendingShareLink } from '@/lib/share-link';
@@ -88,6 +89,8 @@ function RootLayout() {
   const identityId = useStore((s) => s.identity?.id);
   useEffect(() => {
     if (identityId) identityChanged();
+    // Play Store app: purchases Google finished but our server never confirmed (crash, no network).
+    if (identityId) void restorePlayPurchases();
   }, [identityId]);
 
   // A fresh install that came from a share link: open what was shared, once (src/lib/share-link.ts).

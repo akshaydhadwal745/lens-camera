@@ -1,18 +1,22 @@
 // Lens Plus (docs/business/payments.md): the "Lock in Lens Plus" offer during the welcome (₹0 today,
 // first charge when the welcome ends), or Lens Plus now after it; status and one-tap cancel.
-// Payment happens on Razorpay's own page (UPI Autopay / card); we only learn the result.
+// Website + website APK: Razorpay's own page (UPI Autopay / card). Play Store app: Google Play
+// Billing (docs/design/play-billing.md): Google's sheet, a free month near the end of the welcome,
+// and "Manage in Google Play" instead of our cancel button.
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExtraStorage } from '@/components/ExtraStorage';
+import { PlayExtraStorage } from '@/components/PlayExtraStorage';
 import { Text } from '@/components/ui/Text';
-import { api, PlusKind, PlusStatus } from '@/lib/api';
+import { api, PlayStatus, PlusKind, PlusStatus } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
-import { razorpayHere, rupees } from '@/lib/pay-channel';
+import { playBillingHere, razorpayHere, rupees } from '@/lib/pay-channel';
+import { buyPlus, manageUrl, plusPrices, type PlusPrice } from '@/lib/play-billing';
 import { markPlusNever } from '@/lib/plus-prompt';
 import { refreshStorage } from '@/lib/store';
 import { colors, confirmDestructive, errorMessage, notify } from '@/lib/ui';
@@ -37,6 +41,20 @@ export default function PlusScreen() {
   const [kind, setKind] = useState<PlusKind>('plus50-month');
   const [busy, setBusy] = useState(false);
   const waiting = useRef(false);
+  // Play Store build: what Google sells and its prices.
+  const [play, setPlay] = useState<PlayStatus | null>(null);
+  const [playPrices, setPlayPrices] = useState<PlusPrice[] | null>(null);
+
+  const loadPlay = useCallback(async () => {
+    if (!playBillingHere) return;
+    try {
+      const p = await api.play();
+      setPlay(p);
+      if (p.available && !p.plan) setPlayPrices(await plusPrices(p.plus.trialOffer));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }, []);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -55,10 +73,13 @@ export default function PlusScreen() {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => void load(), 0);
+    const t = setTimeout(() => {
+      void load();
+      void loadPlay();
+    }, 0);
     track(`plus_open_${from ?? 'settings'}`);
     return () => clearTimeout(t);
-  }, [load, from]);
+  }, [load, loadPlay, from]);
 
   // Back from Razorpay's page (browser tab closed / app in front again): ask Razorpay where it stands.
   useEffect(() => {
@@ -82,6 +103,23 @@ export default function PlusScreen() {
       }
     } catch (e) {
       notify('Couldn’t start the payment', errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const payPlay = async () => {
+    const price = playPrices?.find((p) => p.basePlan === (kind === 'plus50-month' ? 'monthly' : 'yearly'));
+    if (busy || !price || !play) return;
+    setBusy(true);
+    try {
+      track(`plus_play_${price.basePlan}${price.trial ? '_trial' : ''}`);
+      await buyPlus(price, play);
+      await load();
+      await loadPlay();
+      void refreshStorage();
+    } catch (e) {
+      if (!(e as { cancelled?: boolean }).cancelled) notify('Couldn’t finish the payment', errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -147,9 +185,16 @@ export default function PlusScreen() {
             : plan?.cancelled || sub?.cancelled
               ? `Cancelled. Works until ${day(plan?.periodEnd)}, then free storage. Nothing is deleted.`
               : plan?.status === 'grace'
-                ? 'The last payment didn’t go through. Razorpay tries again; you keep Plus meanwhile.'
-                : `Renews on ${day(plan?.periodEnd)}${sub ? ` · ${rupees(sub.paise)} a ${sub.period}` : ''}.`}
+                ? plan.provider === 'play'
+                  ? 'Google Play couldn’t take the last payment. Fix it in Google Play; you keep Plus meanwhile.'
+                  : 'The last payment didn’t go through. Razorpay tries again; you keep Plus meanwhile.'
+                : `Renews on ${day(plan?.periodEnd)}${sub ? ` · ${rupees(sub.paise)} a ${sub.period}` : plan?.provider === 'play' ? ' through Google Play' : ''}.`}
         </Text>
+        {plan?.provider === 'play' && (
+          <Pressable style={styles.smallButton} onPress={() => void Linking.openURL(manageUrl())}>
+            <Text style={styles.smallButtonText}>{plan.status === 'grace' ? 'Fix payment in Google Play' : 'Manage in Google Play'}</Text>
+          </Pressable>
+        )}
         {sub && !sub.cancelled && !plan?.cancelled && (
           <Pressable style={[styles.smallButton, styles.dangerButton]} onPress={cancel} disabled={busy}>
             <Text style={[styles.smallButtonText, { color: colors.danger }]}>Cancel Lens Plus</Text>
@@ -165,6 +210,57 @@ export default function PlusScreen() {
           <ExtraStorage />
         </>
       );
+    // Play Store app: extra storage is a Google Play subscription next to Lens Plus.
+    else if (playBillingHere && play && plan?.provider === 'play' && plan.status === 'active' && !plan.cancelled)
+      body = (
+        <>
+          {body}
+          <PlayExtraStorage status={play} onChange={loadPlay} />
+        </>
+      );
+  } else if (playBillingHere) {
+    const price = playPrices?.find((p) => p.basePlan === (kind === 'plus50-month' ? 'monthly' : 'yearly'));
+    const trial = !!price?.trial;
+    body = !play || (play.available && !playPrices) ? (
+      <ActivityIndicator color="#fff" style={{ padding: 24 }} />
+    ) : !play.available || !playPrices?.length ? (
+      <Text style={styles.muted}>Lens Plus isn’t available in Google Play yet. Your storage and backups keep working as they are.</Text>
+    ) : (
+      <>
+        <View style={styles.choices}>
+          {(['plus50-month', 'plus50-year'] as const).map((k) => {
+            const p = playPrices.find((x) => x.basePlan === (k === 'plus50-month' ? 'monthly' : 'yearly'));
+            if (!p) return null;
+            const on = kind === k;
+            return (
+              <Pressable key={k} style={[styles.choice, on && styles.choiceOn]} onPress={() => setKind(k)} accessibilityRole="radio" accessibilityState={{ selected: on }}>
+                <Text style={styles.choiceName}>{k === 'plus50-month' ? 'Monthly' : 'Yearly'}</Text>
+                <Text style={styles.choicePrice}>
+                  {p.price}
+                  <Text style={styles.muted}>{k === 'plus50-month' ? ' / month' : ' / year'}</Text>
+                </Text>
+                <Text style={styles.choiceNote}>{p.trial ? 'First month free' : k === 'plus50-year' ? 'Save 30%' : 'Cancel any time'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable style={[styles.button, (busy || !price) && { opacity: 0.6 }]} onPress={payPlay} disabled={busy || !price} accessibilityRole="button">
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{trial ? 'Start your free month' : `Get Lens Plus · ${price?.price ?? ''}`}</Text>}
+        </Pressable>
+        <Text style={styles.fine}>
+          {trial ? `Free for 1 month, then ${price!.price} a ${per} through Google Play. ` : `${price?.price ?? ''} a ${per} through Google Play, starting today. `}
+          Renews until you cancel; cancel any time in Google Play → Payments & subscriptions. Prices include GST.
+        </Text>
+        <Pressable style={styles.linkButton} onPress={() => notNow(false)}>
+          <Text style={styles.link}>Not now</Text>
+        </Pressable>
+        {from && from !== 'settings' && (
+          <Pressable style={styles.linkButton} onPress={() => notNow(true)}>
+            <Text style={[styles.link, { color: colors.muted }]}>Don’t show this again</Text>
+          </Pressable>
+        )}
+      </>
+    );
   } else if (!razorpayHere || !status.available) {
     body = (
       <Text style={styles.muted}>
@@ -229,7 +325,7 @@ export default function PlusScreen() {
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: insets.bottom + 32, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
-        {status?.testMode && (
+        {status?.testMode && !playBillingHere && (
           <View style={styles.test}>
             <Ionicons name="flask-outline" size={16} color="#FACC15" />
             <Text style={styles.testText}>Test mode: no real money is charged.</Text>
