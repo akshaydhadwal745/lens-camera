@@ -22,7 +22,7 @@ storage, grace, lapse, reminders, the console and the affiliates work the same w
 | Product id | Type | Base plan / price | What it gives |
 |---|---|---|---|
 | `lens_plus` | subscription | `monthly` ₹59 (auto-renew), `yearly` ₹499 (auto-renew); offer `welcome-trial` = 1 month free, new customers only | plan `plus50` (50 GB) |
-| `lens_extra` | subscription | one base plan per GB from 4 to 100 (`gb4` … `gb100`, 97 base plans, created via the API), price = GB × ₹3 a month (`gb4` ₹12 … `gb100` ₹300) | extra storage cap above Plus (needs active Plus) |
+| `lens_extra_a`, `lens_extra_b` | subscriptions | one base plan per GB, price = GB × ₹3 a month: `_a` = 4–50 GB (`gb4` ₹12 … `gb50` ₹150, 47 plans), `_b` = 51–100 GB (`gb51` … `gb100` ₹300, 50 plans). Play allows at most 50 active base plans + offers per subscription, hence two products; created via the API | extra storage cap above Plus (needs active Plus) |
 | `move_25gb` | one-time (consumable) | ₹375 | 25 GB of "Move to Google Drive" credit |
 | `move_100gb` | one-time (consumable) | ₹1,500 | 100 GB of move credit |
 
@@ -35,8 +35,9 @@ every channel: quick picks (+10, +20, +50, +100 GB) **and** a custom amount box 
 (e.g. 7 GB → ₹21 a month).
 - Website/APK: any whole number from 1 GB (metered per day up to that limit, as now; `CAP_OPTIONS`
   becomes "1–1,000, any whole number" instead of 10/20/50/100).
-- Play app: Play has no metered or free-quantity subscriptions, so `lens_extra` has **one base plan
-  per GB from 4 to 100** (Play's minimum subscription price is about ₹10, so 1–3 GB can't exist on
+- Play app: Play has no metered or free-quantity subscriptions, so `lens_extra_a`/`_b` have **one base
+  plan per GB from 4 to 100** (two products: Play allows 50 active base plans per subscription;
+  moving between them is a normal Play replacement) (Play's minimum subscription price is about ₹10, so 1–3 GB can't exist on
   Play). Any amount in that range works; above 100 the app asks them to contact support. Changing the
   amount is a Play plan change (prorated by Google).
 The pack is the quota (`PROFILE.extra.capGB`, same field the
