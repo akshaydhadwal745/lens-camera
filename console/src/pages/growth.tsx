@@ -28,12 +28,43 @@ type Report = {
   facts: Fact[];
   rules: Finding[];
   notes?: string[];
-  ai?: { summary: string; findings: Finding[]; recommendations: Rec[]; reviewOfPrevious: { id: string; verdict: string; facts: string[] }[] };
+  ai?: { summary: string; findings: Finding[]; recommendations: Rec[]; reviewOfPrevious: { id: string; verdict: string; facts: string[] }[]; seoInvestigations?: Investigation[] };
+  commit?: string;
+  toolCalls?: number;
   aiProblems?: string[];
   aiError?: string;
   model?: string;
 };
-type GrowthData = { dates: string[]; report: Report | null; recommendations: Rec[]; running: { at: number; by: string } | null };
+type Investigation = {
+  title: string;
+  evidence: 'measured' | 'likely-cause' | 'hypothesis';
+  data: string;
+  cause: string;
+  codeLocations: { file: string; line: number; excerpt: string }[];
+  recommendation: string;
+  validation: string;
+  measurement: string;
+  facts: string[];
+};
+type Proposal = { id: string; title: string; evidence: string; files: string[]; change: string; validation: string; measurement: string; status: string; report: string; decidedBy?: string; note?: string };
+type Watch = { path: string; reason: string; since: string };
+type Activity = { at: number; tool: string; level?: number; args: Record<string, unknown>; ok: boolean; refused?: boolean; error?: string; ms: number; report: string };
+type GrowthData = {
+  dates: string[];
+  report: Report | null;
+  recommendations: Rec[];
+  proposals: Proposal[];
+  watching: Watch[];
+  activity: Activity[];
+  tools: { available: string[]; enabled: string[] };
+  running: { at: number; by: string } | null;
+};
+const EVIDENCE: Record<string, { label: string; tone: 'good' | 'warn' | 'plain' }> = {
+  measured: { label: 'measured', tone: 'good' },
+  'likely-cause': { label: 'likely cause', tone: 'warn' },
+  hypothesis: { label: 'hypothesis', tone: 'plain' },
+};
+const REPO = 'https://github.com/akshaydhadwal745/lens-camera/blob';
 
 const STATUSES = ['proposed', 'approved', 'shipped', 'measured', 'kept', 'dropped'];
 const AREAS: Record<string, string> = { search: 'Google search', website: 'Website', app: 'App', channels: 'Install channels', money: 'Money', loops: 'Growth loops' };
@@ -81,6 +112,19 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
     } finally {
       setBusy(false);
     }
+  };
+  const decide = async (id: string, decision: 'approved' | 'rejected') => {
+    const note = prompt(decision === 'approved' ? 'Approve: any note for the change?' : 'Reject: why? (helps the analyst learn)') ?? undefined;
+    await api('PUT', `/growth/proposals/${encodeURIComponent(id)}`, { decision, ...(note ? { note } : {}) });
+    setReload((r) => r + 1);
+  };
+  const setTools = async (enabled: string[]) => {
+    await api('PUT', '/growth/tools', { enabled });
+    setReload((r) => r + 1);
+  };
+  const unwatch = async (path: string) => {
+    await api('DELETE', '/growth/watch', { path });
+    setReload((r) => r + 1);
   };
   const setStatus = async (id: string, status: string) => {
     const note = status === 'kept' || status === 'dropped' || status === 'measured' ? (prompt('Note (optional): what happened?') ?? undefined) : undefined;
@@ -139,6 +183,84 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
                 <Card title="Summary">
                   <p className="muted">The AI analysis didn’t run for this report{r.aiError ? `: ${r.aiError}` : ''}. The rule-based findings below still apply.</p>
                 </Card>
+              )}
+
+              {(r.ai?.seoInvestigations ?? []).length > 0 && (
+                <>
+                  <div className="row-head">
+                    <h2>SEO investigations</h2>
+                  </div>
+                  {r.ai!.seoInvestigations!.map((x, i) => (
+                    <Card key={i} title={x.title}>
+                      <p>
+                        <Badge tone={EVIDENCE[x.evidence]?.tone ?? 'plain'}>{EVIDENCE[x.evidence]?.label ?? x.evidence}</Badge>
+                      </p>
+                      <dl className="kv">
+                        <dt>Data</dt>
+                        <dd>{x.data}</dd>
+                        <dt>Cause</dt>
+                        <dd>{x.cause}</dd>
+                        <dt>Code</dt>
+                        <dd>
+                          {x.codeLocations.length
+                            ? x.codeLocations.map((l, k) => (
+                                <div key={k} className="small">
+                                  <a href={`${REPO}/${r.commit ?? 'main'}/${l.file}#L${l.line}`} target="_blank" rel="noreferrer">
+                                    {l.file}:{l.line}
+                                  </a>{' '}
+                                  <code>{l.excerpt}</code>
+                                </div>
+                              ))
+                            : '—'}
+                        </dd>
+                        <dt>Recommendation</dt>
+                        <dd>{x.recommendation}</dd>
+                        <dt>Validate</dt>
+                        <dd>{x.validation}</dd>
+                        <dt>Measure</dt>
+                        <dd>{x.measurement}</dd>
+                      </dl>
+                      <FactChips ids={x.facts} facts={facts} />
+                    </Card>
+                  ))}
+                </>
+              )}
+
+              {g.proposals.some((p) => p.status === 'proposed') && (
+                <>
+                  <div className="row-head">
+                    <h2>Changes waiting for your approval</h2>
+                  </div>
+                  {g.proposals
+                    .filter((p) => p.status === 'proposed')
+                    .map((p) => (
+                      <Card key={p.id} title={p.title}>
+                        <dl className="kv">
+                          <dt>Evidence</dt>
+                          <dd>{p.evidence}</dd>
+                          <dt>Files</dt>
+                          <dd className="small">{p.files.join(', ')}</dd>
+                          <dt>Change</dt>
+                          <dd>{p.change}</dd>
+                          <dt>Validate</dt>
+                          <dd>{p.validation}</dd>
+                          <dt>Measure</dt>
+                          <dd>{p.measurement}</dd>
+                        </dl>
+                        {canWrite && (
+                          <div className="actions">
+                            <button className="btn" onClick={() => void decide(p.id, 'approved')}>
+                              Approve
+                            </button>{' '}
+                            <button className="btn ghost" onClick={() => void decide(p.id, 'rejected')}>
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                        <p className="muted small">Approving records your decision; the change is made as a pull request you review and merge (nothing changes on the site by itself).</p>
+                      </Card>
+                    ))}
+                </>
               )}
 
               {r.ai && r.ai.recommendations.length > 0 && (
@@ -243,6 +365,73 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
                   <Empty>No recommendations yet.</Empty>
                 )}
                 <p className="muted small">Move each one along as it happens: approved → shipped → measured → kept or dropped. The analyst reviews shipped ones every week.</p>
+              </Card>
+
+              <div className="grid2">
+                <Card title="Watched pages">
+                  {g.watching.length ? (
+                    <ul className="list">
+                      {g.watching.map((w) => (
+                        <li key={w.path}>
+                          <strong>{w.path}</strong> <span className="muted small">since {w.since}</span>
+                          <div className="small">{w.reason}</div>
+                          {canWrite && (
+                            <button className="btn ghost small" onClick={() => void unwatch(w.path)}>
+                              Stop watching
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <Empty>No watched pages yet. The analyst adds pages it recommends changing; their numbers appear in the facts below.</Empty>
+                  )}
+                </Card>
+                <Card title="Analyst tools">
+                  <p className="small muted">Read-only tools (Search Console data, URL inspection, page audits, the website code) are always on. Proposals never change anything without your approval.</p>
+                  {g.tools.available.map((t) => (
+                    <label key={t} className="small">
+                      <input
+                        type="checkbox"
+                        disabled={!canWrite}
+                        checked={g.tools.enabled.includes(t)}
+                        onChange={(e) => void setTools(e.target.checked ? [...g.tools.enabled, t] : g.tools.enabled.filter((x) => x !== t))}
+                      />{' '}
+                      {t === 'submit_sitemap' ? 'Allow resubmitting the sitemap to Google (level 2, reversible)' : t}
+                    </label>
+                  ))}
+                </Card>
+              </div>
+
+              <Card title={`Tool activity${r.toolCalls !== undefined ? ` (this report: ${r.toolCalls} calls${r.commit ? `, code at ${r.commit.slice(0, 7)}` : ''})` : ''}`}>
+                {g.activity.length ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Tool</th>
+                          <th>Level</th>
+                          <th>Input</th>
+                          <th>Result</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.activity.map((a, i) => (
+                          <tr key={i}>
+                            <td className="nowrap small">{date(a.at)}</td>
+                            <td>{a.tool}</td>
+                            <td className="num">{a.level ?? ''}</td>
+                            <td className="small">{JSON.stringify(a.args).slice(0, 90)}</td>
+                            <td className="small">{a.ok ? <Badge tone="good">ok</Badge> : <Badge tone={a.refused ? 'warn' : 'bad'}>{a.refused ? 'refused' : 'error'}</Badge>} {a.error ?? ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <Empty>No tool calls yet.</Empty>
+                )}
               </Card>
 
               <div className="row-head">

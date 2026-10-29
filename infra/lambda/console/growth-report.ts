@@ -16,7 +16,19 @@ export type Recommendation = {
   stopRule: string;
   facts: string[];
 };
-export type AiReport = { summary: string; findings: Finding[]; recommendations: Recommendation[]; reviewOfPrevious: { id: string; verdict: string; facts: string[] }[] };
+export type CodeLocation = { file: string; line: number; excerpt: string };
+export type Investigation = {
+  title: string;
+  evidence: 'measured' | 'likely-cause' | 'hypothesis';
+  data: string;
+  cause: string;
+  codeLocations: CodeLocation[];
+  recommendation: string;
+  validation: string;
+  measurement: string;
+  facts: string[];
+};
+export type AiReport = { summary: string; findings: Finding[]; recommendations: Recommendation[]; reviewOfPrevious: { id: string; verdict: string; facts: string[] }[]; seoInvestigations?: Investigation[] };
 export type OpenRec = { id: string; title: string; status: string; createdAt: string; metric: string; note?: string };
 
 const pct = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${Math.round(x * 1000) / 10}%`);
@@ -62,7 +74,15 @@ Hard rules:
 - Every recommendation needs a falsifiable hypothesis, expected impact (direction and which metric, no invented figures), effort, cost in plain words, time to result, risk, the metric to watch and a stop rule.
 - Prefer few, specific, high-leverage recommendations (at most 5) over generic advice. Name the exact page, query, channel or screen.
 - For each previous recommendation that was shipped, judge from the facts whether it worked, or say the data can't tell yet.
-- Plain English for a non-specialist founder. No hype.`;
+- Plain English for a non-specialist founder. No hype.
+
+You also have growth tools (MCP server "growth"): Search Console data (search_analytics, compare_periods, inspect_url, list_sitemaps), live page audits (audit_page) and the website code at the current main commit (find_in_code, read_code). Use them to investigate the most important SEO findings down to the code, then report each in "seoInvestigations":
+- "evidence": "measured" (the data shows it), "likely-cause" (code evidence explains measured data), or "hypothesis" (plausible, not yet shown). Never present a hypothesis as a cause.
+- "codeLocations": exact file, line and the line's text, copied from find_in_code/read_code/audit_page results (they are checked against the code).
+- Numbers in investigations must come from facts or tool results.
+- Search Console needs impressions before CTR, ranking or query work means anything; with none, focus on indexing and say why.
+- Use watch_page for each page you recommend changing. Use propose_change only for a specific, evidence-backed code change (it creates a proposal for the owner; it changes nothing). Level-2 tools may be refused if not enabled; that's fine.
+- Be economical: about 25 tool calls at most.`;
 
 export const REPORT_SCHEMA = {
   type: 'object',
@@ -98,6 +118,29 @@ export const REPORT_SCHEMA = {
     reviewOfPrevious: {
       type: 'array',
       items: { type: 'object', additionalProperties: false, required: ['id', 'verdict', 'facts'], properties: { id: { type: 'string' }, verdict: { type: 'string' }, facts: { type: 'array', items: { type: 'string' } } } },
+    },
+    seoInvestigations: {
+      type: 'array',
+      maxItems: 6,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'evidence', 'data', 'cause', 'codeLocations', 'recommendation', 'validation', 'measurement', 'facts'],
+        properties: {
+          title: { type: 'string' },
+          evidence: { enum: ['measured', 'likely-cause', 'hypothesis'] },
+          data: { type: 'string' },
+          cause: { type: 'string' },
+          codeLocations: {
+            type: 'array',
+            items: { type: 'object', additionalProperties: false, required: ['file', 'line', 'excerpt'], properties: { file: { type: 'string' }, line: { type: 'number' }, excerpt: { type: 'string' } } },
+          },
+          recommendation: { type: 'string' },
+          validation: { type: 'string' },
+          measurement: { type: 'string' },
+          facts: { type: 'array', items: { type: 'string' } },
+        },
+      },
     },
   },
 } as const;
@@ -155,12 +198,54 @@ export function unsupportedNumbers(text: string, cited: string[], facts: Fact[])
 }
 
 /** Problems with an analyst report: unknown fact ids, numbers without a cited fact. Empty = valid. */
-export function validateReport(r: AiReport, facts: Fact[]): string[] {
+/** Numbers that tool results showed the analyst this run (they may be quoted in investigations). */
+export function numbersIn(values: unknown[]): Set<number> {
+  const out = new Set<number>();
+  const add = (n: number) => {
+    for (const x of [n, Math.round(n), Math.round(n * 10) / 10, Math.round(n * 100) / 100, Math.round(n * 1000) / 1000, Math.round(n * 1000) / 10, Math.round(n * 10000) / 100, Math.round(n * 100)]) out.add(x);
+  };
+  const walk = (v: unknown): void => {
+    if (typeof v === 'number') add(v);
+    else if (typeof v === 'string') for (const m of v.match(NUM) ?? []) {
+      const n = norm(m);
+      if (n !== null) add(n);
+    }
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+  };
+  values.forEach(walk);
+  return out;
+}
+
+/** Code locations that don't match the code copy (file missing, line out of range, or excerpt not on/near that line). */
+export function unverifiedLocations(locs: CodeLocation[], readFile: (file: string) => string | undefined): string[] {
+  const bad: string[] = [];
+  for (const l of locs) {
+    const body = readFile(l.file.replace(/^\/+/, ''));
+    if (body === undefined) {
+      bad.push(`${l.file}: no such file`);
+      continue;
+    }
+    const lines = body.split('\n');
+    const want = l.excerpt.trim().slice(0, 80);
+    const near = lines.slice(Math.max(0, l.line - 3), l.line + 2).join('\n');
+    if (l.line < 1 || l.line > lines.length) bad.push(`${l.file}:${l.line}: line out of range`);
+    else if (want && !near.includes(want)) bad.push(`${l.file}:${l.line}: the quoted text isn't there`);
+  }
+  return bad;
+}
+
+export function validateReport(r: AiReport, facts: Fact[], toolNumbers: Set<number> = new Set(), readFile?: (file: string) => string | undefined): string[] {
   const ids = new Set(facts.map((f) => f.id));
   const problems: string[] = [];
+  const fromTools = (m: string) => {
+    const n = norm(m);
+    return n !== null && [n, Math.round(n), Math.round(n * 10) / 10, Math.round(n * 100) / 100].some((y) => toolNumbers.has(y));
+  };
   const check = (where: string, text: string, cited: string[]) => {
     for (const id of cited) if (!ids.has(id)) problems.push(`${where}: unknown fact id "${id}"`);
-    const bad = unsupportedNumbers(text, cited, facts);
+    // Numbers the tools returned this run are real data too.
+    const bad = unsupportedNumbers(text, cited, facts).filter((m) => !fromTools(m));
     if (bad.length) problems.push(`${where}: numbers not in the cited facts: ${bad.join(', ')}`);
   };
   const allIds = facts.map((f) => f.id);
@@ -168,5 +253,15 @@ export function validateReport(r: AiReport, facts: Fact[]): string[] {
   r.findings.forEach((x, i) => check(`finding ${i + 1}`, `${x.title} ${x.detail}`, x.facts));
   r.recommendations.forEach((x, i) => check(`recommendation ${i + 1}`, [x.title, x.hypothesis, x.expectedImpact, x.cost, x.timeToResult, x.risk, x.metric, x.stopRule].join(' '), x.facts));
   r.reviewOfPrevious.forEach((x) => check(`review ${x.id}`, x.verdict, x.facts));
+  (r.seoInvestigations ?? []).forEach((x, i) => {
+    const where = `investigation ${i + 1}`;
+    for (const id of x.facts) if (!ids.has(id)) problems.push(`${where}: unknown fact id "${id}"`);
+    const bad = unsupportedNumbers([x.title, x.data, x.cause, x.recommendation, x.validation, x.measurement].join(' '), x.facts, facts).filter((m) => {
+      const n = norm(m);
+      return n === null || ![n, Math.round(n), Math.round(n * 10) / 10, Math.round(n * 100) / 100].some((y) => toolNumbers.has(y));
+    });
+    if (bad.length) problems.push(`${where}: numbers not in the cited facts or tool results: ${bad.join(', ')}`);
+    if (readFile) for (const b of unverifiedLocations(x.codeLocations, readFile)) problems.push(`${where}: ${b}`);
+  });
   return problems;
 }

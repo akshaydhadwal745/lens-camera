@@ -96,7 +96,7 @@ export async function pullSearchConsole(now = Date.now()): Promise<number | stri
 }
 
 /** Google's index status for each URL in our sitemap (URL Inspection API, 2,000 a day; we use ~70 a week). */
-export async function indexCoverage(): Promise<{ urls: number; indexed: number; states: Record<string, number>; notIndexed: string[] } | undefined> {
+export async function indexCoverage(): Promise<{ urls: number; indexed: number; states: Record<string, number>; notIndexed: string[]; stateOf: Record<string, string> } | undefined> {
   const token = await googleToken();
   if (!token) return undefined;
   const xml = async (url: string) => (await (await fetch(url, { signal: AbortSignal.timeout(15_000) })).text()).match(/<loc>(.*?)<\/loc>/g)?.map((l) => l.slice(5, -6)) ?? [];
@@ -104,6 +104,7 @@ export async function indexCoverage(): Promise<{ urls: number; indexed: number; 
   for (const map of await xml(`${SITE}sitemap-index.xml`)) urls.push(...(await xml(map)));
   const states: Record<string, number> = {};
   const notIndexed: string[] = [];
+  const stateOf: Record<string, string> = {};
   let indexed = 0;
   const inspect = async (url: string) => {
     const res = await fetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
@@ -116,10 +117,15 @@ export async function indexCoverage(): Promise<{ urls: number; indexed: number; 
     const r = ((await res.json()) as { inspectionResult?: { indexStatusResult?: { verdict?: string; coverageState?: string } } }).inspectionResult?.indexStatusResult;
     const state = r?.coverageState ?? 'unknown';
     states[state] = (states[state] ?? 0) + 1;
+    stateOf[pathOf(url)] = state;
     if (r?.verdict === 'PASS') indexed++;
     else notIndexed.push(pathOf(url));
   };
-  // 8 at a time: Google allows 600 a minute; one by one took minutes.
-  for (let i = 0; i < urls.length; i += 8) await Promise.all(urls.slice(i, i + 8).map(inspect));
-  return { urls: urls.length, indexed, states, notIndexed };
+  // 4 at a time, each retried once: one by one took minutes, and bursts of new connections can time out.
+  const once = (url: string) => inspect(url).catch(async () => {
+    await new Promise((r) => setTimeout(r, 1500));
+    return inspect(url);
+  });
+  for (let i = 0; i < urls.length; i += 4) await Promise.all(urls.slice(i, i + 4).map(once));
+  return { urls: urls.length, indexed, states, notIndexed, stateOf };
 }
