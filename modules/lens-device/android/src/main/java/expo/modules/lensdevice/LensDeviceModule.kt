@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -259,9 +260,12 @@ class LensDeviceModule : Module() {
     }
 
     // Emulator heuristics (referral rewards ignore emulators). Not proof: Play Integrity later.
+    // "Not a real person's phone": emulators, and Firebase Test Lab's real phones (which Android
+    // marks with this setting). Their accounts stay out of the Console's numbers and rewards.
     Function("isEmulator") {
+      val testLab = runCatching { Settings.System.getString(appContext.reactContext?.contentResolver, "firebase.test.lab") == "true" }.getOrDefault(false)
       val fp = Build.FINGERPRINT.lowercase()
-      fp.startsWith("generic") || fp.contains("emulator") || fp.contains("sdk_gphone") ||
+      testLab || fp.startsWith("generic") || fp.contains("emulator") || fp.contains("sdk_gphone") ||
         Build.MODEL.contains("Emulator") || Build.MODEL.contains("Android SDK built for") ||
         Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu") ||
         Build.PRODUCT.contains("sdk") || Build.MANUFACTURER.contains("Genymotion") ||

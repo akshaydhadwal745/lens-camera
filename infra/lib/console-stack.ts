@@ -21,6 +21,7 @@ import {
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
 } from 'aws-cdk-lib';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import { Construct } from 'constructs';
 
 // Lens Console (console.lens.instagrowapp.com): the admin control centre, deployed apart from
@@ -106,6 +107,41 @@ export class ConsoleStack extends Stack {
       schedule: events.Schedule.rate(Duration.hours(1)),
       targets: [new targets.LambdaFunction(fn, { event: events.RuleTargetInput.fromObject({ alerts: true }) })],
     });
+
+    // ---------- Growth analyst (docs/growth/growth-engine.md §2) ----------
+    // Weekly growth report: facts computed by code, then written up by the Claude Code CLI with the
+    // owner's subscription token. A container because the CLI is a ~230 MB native binary.
+    const growth = new lambda.DockerImageFunction(this, 'GrowthAnalyst', {
+      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '..'), {
+        file: 'growth-image/Dockerfile',
+        exclude: ['node_modules', 'cdk.out', 'scripts', 'keys', 'test', '*.log'],
+        platform: ecrAssets.Platform.LINUX_AMD64,
+      }),
+      architecture: lambda.Architecture.X86_64,
+      memorySize: 2048,
+      timeout: Duration.minutes(15),
+      logGroup: new logs.LogGroup(this, 'GrowthAnalystLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: RemovalPolicy.DESTROY }),
+      environment: {
+        TABLE: props.tableName,
+        AUDIT_BUCKET: props.auditBucketName,
+        ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
+        CONSOLE_ORIGIN: origin,
+        WEB_ORIGIN: (this.node.tryGetContext('webOrigin') as string | undefined) ?? '',
+        CODE_SENDER: `no-reply@${(this.node.tryGetContext('codeDomain') as string | undefined) ?? ''}`,
+      },
+    });
+    table.grantReadWriteData(growth);
+    growth.addToRolePolicy(
+      new iam.PolicyStatement({ actions: ['ssm:GetParameter'], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/lens/growth/*`] }),
+    );
+    growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`] }));
+    // Mondays 02:30 UTC (08:00 IST), after the daily Search Console pull.
+    new events.Rule(this, 'WeeklyGrowthReport', {
+      schedule: events.Schedule.cron({ weekDay: 'MON', hour: '2', minute: '30' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ growth: true, ai: true, by: 'schedule' }) })],
+    });
+    fn.addEnvironment('GROWTH_FUNCTION', growth.functionName);
+    growth.grantInvoke(fn);
 
     // ---------- Site ----------
     const site = new s3.Bucket(this, 'ConsoleSite', {

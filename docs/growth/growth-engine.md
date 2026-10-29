@@ -133,6 +133,13 @@ partnerships, and the weekly report.
 - **M5 built:** `search-console.ts` daily pull of the last 5 days (total, query, page, country, device) → `GSC#<day>` rows, run by daily maintenance; needs SSM `/lens/growth/service-account` (owner OK) + deploy.
 - **M6 partly:** titles over 60 characters 47 → 23 (short brand suffix when long); the rest is rewritten with the new positioning (growth-strategy A3).
 
+### Phase 2 status (2026-10-29): the growth analyst
+- **Facts engine** `infra/lambda/console/growth-facts.ts`: Search Console (28 days vs the 28 before, query movers, high-impression/low-CTR pages, page-two queries), index coverage of every sitemap URL (URL Inspection API), website, funnel, D1/D7/D30, channels, money and growth loops. Every fact has an id. Tests: `growth-report.test.ts`.
+- **Report** `growth-report.ts`: rule-based findings (work with no AI), the analyst's instructions and JSON schema, and a validator that rejects numbers not found in the cited facts (one retry, then stored with a "Check" flag).
+- **Analyst** = the Claude Code CLI (`claude -p`, all tools off, `--json-schema`, model opus) in the **GrowthAnalyst** container Lambda (`infra/growth-image/Dockerfile`, CLI pinned 2.1.312), using the owner's subscription token from `claude setup-token` (SSM `/lens/growth/claude-token`). Internal report only: never user-facing. Weekly, Mondays 02:30 UTC, and **Run report now** in the Console.
+- **Console → Insights → Growth** (`console/src/pages/growth.tsx`): summary, recommended experiments (hypothesis, impact, effort, cost, time, risk, metric, stop rule), findings with fact chips, review of earlier recommendations, the **recommendation ledger** (proposed → approved → shipped → measured → kept/dropped, audited), and the facts table. Permissions `growth` (owner, admin, finance, viewer) and `growth.write` (owner, admin). Monday email to owners.
+- **First report (local run 2026-10-29)** found that Firebase Test Lab phones were counted as users (147 "installs", D1 0%). Fixed: `test-accounts.ts` treats guests from before the closed test (2026-10-29 09:00 UTC) that never signed in as test traffic, and from the next APK the app reports Test Lab phones itself (`isEmulator` checks the `firebase.test.lab` setting).
+
 ## 4. Phase 3: first experiments (each against a baseline)
 | Experiment | Hypothesis | Expected impact | Cost | Effort | Time to result | Metric / stop rule |
 |---|---|---|---|---|---|---|

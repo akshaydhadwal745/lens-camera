@@ -6,6 +6,7 @@ import { loadSession, Login, SessionState, Verify } from './auth';
 import { Account } from './pages/account';
 import { Activity } from './pages/activity';
 import { Analytics } from './pages/analytics';
+import { Growth } from './pages/growth';
 import { Affiliates, Payouts, Referrals } from './pages/programs';
 import { Feedback, Inbox } from './pages/support';
 import { Overview } from './pages/overview';
@@ -22,6 +23,7 @@ type Section = { path: string; label: string; permission: string; group: string 
 const SECTIONS: Section[] = [
   { path: '/', label: 'Overview', permission: 'overview', group: 'Insights' },
   { path: '/analytics', label: 'Analytics', permission: 'analytics', group: 'Insights' },
+  { path: '/growth', label: 'Growth', permission: 'growth', group: 'Insights' },
   { path: '/phones', label: 'Phones', permission: 'phones', group: 'Insights' },
   { path: '/users', label: 'Users', permission: 'users', group: 'Operate' },
   { path: '/feedback', label: 'Feedback & reports', permission: 'feedback', group: 'Operate' },
@@ -53,6 +55,7 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
     page = {
       '/': <Overview />,
       '/analytics': <Analytics />,
+      '/growth': <Growth canWrite={me.permissions.includes('growth.write')} />,
       '/phones': <Phones />,
       '/users': <Users />,
       '/feedback': <Feedback canWrite={me.permissions.includes('feedback.write')} />,

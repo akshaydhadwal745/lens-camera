@@ -18,13 +18,14 @@ const ROWS_PER_DIMENSION = 1000;
 
 const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64url');
 
-async function accessToken(): Promise<string | undefined> {
+/** Access token for the growth-analyst service account (undefined until its key is in SSM). */
+export async function googleToken(scope = SCOPE): Promise<string | undefined> {
   const raw = await getParam('/lens/growth/service-account');
   if (!raw) return undefined;
   const key = JSON.parse(raw) as { client_email: string; private_key: string; token_uri?: string };
   const now = Math.floor(Date.now() / 1000);
   const aud = key.token_uri ?? 'https://oauth2.googleapis.com/token';
-  const unsigned = `${b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${b64url(JSON.stringify({ iss: key.client_email, scope: SCOPE, aud, iat: now, exp: now + 3600 }))}`;
+  const unsigned = `${b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${b64url(JSON.stringify({ iss: key.client_email, scope, aud, iat: now, exp: now + 3600 }))}`;
   const assertion = `${unsigned}.${b64url(createSign('RSA-SHA256').update(unsigned).sign(key.private_key))}`;
   const res = await fetch(aud, {
     method: 'POST',
@@ -74,7 +75,7 @@ export function rowsForDay(day: string, results: Record<'total' | 'q' | 'p' | 'c
 
 /** Daily: the last 5 days from Search Console into GSC# rows. Returns rows written, or why it skipped. */
 export async function pullSearchConsole(now = Date.now()): Promise<number | string> {
-  const token = await accessToken();
+  const token = await googleToken();
   if (!token) return 'not set up';
   const ttl = Math.floor(now / 1000) + KEEP_SECONDS;
   let written = 0;
@@ -92,4 +93,33 @@ export async function pullSearchConsole(now = Date.now()): Promise<number | stri
     written += items.length;
   }
   return written;
+}
+
+/** Google's index status for each URL in our sitemap (URL Inspection API, 2,000 a day; we use ~70 a week). */
+export async function indexCoverage(): Promise<{ urls: number; indexed: number; states: Record<string, number>; notIndexed: string[] } | undefined> {
+  const token = await googleToken();
+  if (!token) return undefined;
+  const xml = async (url: string) => (await (await fetch(url, { signal: AbortSignal.timeout(15_000) })).text()).match(/<loc>(.*?)<\/loc>/g)?.map((l) => l.slice(5, -6)) ?? [];
+  const urls: string[] = [];
+  for (const map of await xml(`${SITE}sitemap-index.xml`)) urls.push(...(await xml(map)));
+  const states: Record<string, number> = {};
+  const notIndexed: string[] = [];
+  let indexed = 0;
+  const inspect = async (url: string) => {
+    const res = await fetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ inspectionUrl: url, siteUrl: SITE }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) throw new Error(`url inspection ${res.status}`);
+    const r = ((await res.json()) as { inspectionResult?: { indexStatusResult?: { verdict?: string; coverageState?: string } } }).inspectionResult?.indexStatusResult;
+    const state = r?.coverageState ?? 'unknown';
+    states[state] = (states[state] ?? 0) + 1;
+    if (r?.verdict === 'PASS') indexed++;
+    else notIndexed.push(pathOf(url));
+  };
+  // 8 at a time: Google allows 600 a minute; one by one took minutes.
+  for (let i = 0; i < urls.length; i += 8) await Promise.all(urls.slice(i, i + 8).map(inspect));
+  return { urls: urls.length, indexed, states, notIndexed };
 }

@@ -14,6 +14,7 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
+import { growthPage, growthRec, growthRun } from './growth';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
 import { overview } from './overview';
@@ -79,6 +80,9 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'POST /sessions/end') return await endMySessions(session, req);
 
     if (route === 'GET /analytics') return await allowed('analytics', () => analytics(req));
+    if (route === 'GET /growth') return await allowed('growth', () => growthPage(req));
+    if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
+    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'recs' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthRec(seg[2], req, email));
     if (route === 'GET /overview') return await allowed('overview', () => overview(req));
 
     if (route === 'GET /users') return await allowed('users', () => userSearch(req));

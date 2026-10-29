@@ -68,7 +68,7 @@ async function website(now: number) {
   };
 }
 
-async function compute(windowDays: number) {
+export async function compute(windowDays: number) {
   const now = Date.now();
   const rows = await scanAll(true);
   const profiles = rows.filter((r) => r.sk === 'PROFILE' && String(r.pk).startsWith('D#'));
