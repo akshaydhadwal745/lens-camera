@@ -1,0 +1,50 @@
+# SEO check on pull requests that touch the website (docs/growth/seo-agent.md): builds the Astro site
+# and runs site/scripts/seo-check.mjs. Errors (broken links, wrong canonicals, noindex on public
+# pages, invalid structured data, sitemap mismatches) fail the check; warnings are listed in the
+# job summary and the JSON report artifact. Passing doesn't mean Google will rank a page.
+name: SEO check
+
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/seo-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Build the website
+        working-directory: site
+        run: |
+          npm ci --no-audit --no-fund
+          npx astro build
+
+      - name: SEO check
+        working-directory: site
+        run: |
+          set -o pipefail
+          node scripts/seo-check.mjs --json seo-report.json | tee seo.txt
+          { echo '### SEO check'; echo '```'; cat seo.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: seo-report
+          path: site/seo-report.json
+          retention-days: 30

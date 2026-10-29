@@ -52,6 +52,11 @@ jobs:
       - name: Build website
         run: ./scripts/build-web.sh
 
+      # Broken links, wrong canonicals, accidental noindex, invalid structured data or a sitemap
+      # mismatch stop the deploy; warnings are only listed (site/scripts/seo-check.mjs).
+      - name: SEO check
+        run: node site/scripts/seo-check.mjs
+
       - name: Lighthouse (performance, accessibility, SEO)
         run: |
           (cd site && npx astro preview --port 4321 >/tmp/preview.log 2>&1 &)
