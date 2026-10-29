@@ -13,6 +13,7 @@ import { reconcileDue } from './payments';
 import { resumeStalled, runMove, settleAwaiting } from './drive-move';
 import { resumeExports, runExport } from './export';
 import { lambdaContinue } from './continue';
+import { pullSearchConsole } from './search-console';
 
 type Event = {
   now?: unknown;
@@ -89,6 +90,8 @@ export async function handler(event: Event, context?: { getRemainingTimeInMillis
   // Account deletions that didn't finish (a run timed out or failed): resume them.
   if (!simulated) for (const id of await pendingDeletions()) await startBackgroundDeletion(id);
   if (!simulated) Object.assign(stats, { commissionsApproved: await approveDueCommissions(now), feedbackEmails: await retryFeedbackEmails() });
+  // Growth data (docs/growth/growth-engine.md M5): never lets a Google hiccup fail the daily run.
+  if (!simulated) Object.assign(stats, { searchConsole: await pullSearchConsole(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
   console.log('maintenance', JSON.stringify(stats));
   return stats;
 }

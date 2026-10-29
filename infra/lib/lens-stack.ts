@@ -507,6 +507,8 @@ function handler(event) {
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/razorpay/*`,
           // Google Play review sign-in: one email with a fixed code (lambda/api/auth.ts reviewLogin).
           `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/review/*`,
+          // Search Console reader for the daily growth pull (lambda/api/search-console.ts).
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/lens/growth/*`,
         ],
         }),
       );

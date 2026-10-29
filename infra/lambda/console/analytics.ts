@@ -8,6 +8,8 @@
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, json, rateLimit, Req, Res } from '../api/lib';
+import { planActive } from '../api/plans';
+import { byChannel } from './channels';
 import { scanAll, testAccounts } from './overview';
 
 const DAY = 86_400_000;
@@ -242,11 +244,26 @@ async function compute(windowDays: number) {
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([label, count]) => ({ label, count }));
   };
 
+  // ---- by install channel (PROFILE.acquisition, recorded from 2026-10-29) ----
+  const channels = byChannel(
+    cohort.map(([id, p]) => ({
+      createdAt: p.createdAt,
+      acquisition: p.acquisition,
+      usedBytes: typeof p.usedBytes === 'number' ? p.usedBytes : 0,
+      paying: planActive(p.plan, now),
+      uploadedAt: first.get(id)?.upload,
+      signedInAt: first.get(id)?.signin ?? (p.email ? p.createdAt : undefined),
+      activeDays: activeDays.get(id) ?? new Set<string>(),
+    })),
+    now,
+  );
+
   return {
     at: now,
     windowDays,
     trackingSince,
     accounts: real.size,
+    channels,
     funnel: funnel.map(({ _t, ...s }) => s),
     eligibleForReturn,
     active: { series: active, today: { dau: today.dau, wau: today.wau, mau: today.mau }, stickiness: today.mau ? today.dau / today.mau : null },

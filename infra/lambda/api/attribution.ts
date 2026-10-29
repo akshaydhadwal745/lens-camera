@@ -62,6 +62,37 @@ export function parseRef(raw: unknown): string | undefined {
   return m ? m[1].toUpperCase() : undefined;
 }
 
+/** Where an install came from (first touch, write-once on the profile; docs/growth/growth-engine.md M1). */
+export type Acquisition = { source: string; medium?: string; campaign?: string; content?: string; term?: string; ads?: true };
+
+const UTM_VALUE = (v: string | null) => (v ? v.toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 40) || undefined : undefined);
+
+/**
+ * The Play install referrer ("utm_source=google-play&utm_medium=organic", "lens_ref=ABCD234&utm_…")
+ * as channel fields. Organic Play installs come out as google-play/organic; no referrer at all
+ * (website APK, iOS) is "direct".
+ */
+export function parseAcquisition(raw: unknown): Acquisition {
+  const value = typeof raw === 'string' ? raw.slice(0, 500) : '';
+  let q: URLSearchParams;
+  try {
+    q = new URLSearchParams(value.includes('=') ? value : '');
+  } catch {
+    q = new URLSearchParams();
+  }
+  const program = q.has('lens_ref') ? 'referral' : q.has('lens_aff') ? 'affiliate' : undefined;
+  const out: Acquisition = {
+    source: UTM_VALUE(q.get('utm_source')) ?? (program ? 'lens' : 'direct'),
+    medium: UTM_VALUE(q.get('utm_medium')) ?? program,
+    campaign: UTM_VALUE(q.get('utm_campaign')),
+    content: UTM_VALUE(q.get('utm_content')),
+    term: UTM_VALUE(q.get('utm_term')),
+    ...(q.has('gclid') ? { ads: true as const } : {}),
+  };
+  for (const k of ['medium', 'campaign', 'content', 'term'] as const) if (out[k] === undefined) delete out[k];
+  return out;
+}
+
 /** Normalised email for "same person" checks (Gmail ignores dots and +tags). */
 export function canonicalEmail(email: string): string {
   const [local, domain] = email.toLowerCase().split('@');

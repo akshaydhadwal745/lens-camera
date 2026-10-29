@@ -6,6 +6,7 @@ import { Bars, Breakdown, Card, Empty, Loaded, n, Page, Stat, Tabs, useLoad, whe
 type Step = { key: string; label: string; count: number; medianHoursToReach: number | null };
 type Feature = { name: string; users7: number; uses7: number; users30: number; uses30: number; weekly: { week: string; users: number }[] };
 type Count = { label: string; count: number }[];
+type Rate = { reached: number; eligible: number; rate: number | null };
 type Analytics = {
   at: number;
   windowDays: number;
@@ -15,6 +16,18 @@ type Analytics = {
   eligibleForReturn: number;
   active: { series: { day: string; dau: number; wau: number; mau: number }[]; today: { dau: number; wau: number; mau: number }; stickiness: number | null };
   retention: { week: string; size: number; weeks: (number | null)[] }[];
+  channels: {
+    channel: string;
+    installs: number;
+    backedUp: Rate;
+    signedIn: Rate;
+    d1: Rate;
+    d7: Rate;
+    d30: Rate;
+    paying: number;
+    storageGB: number;
+    storageUsdPerMonth: number;
+  }[];
   features: Feature[];
   breakdowns: { build: Count; os: Count; tier: Count; region: Count; client: Count };
   website?: {
@@ -209,6 +222,55 @@ export function Analytics() {
                   <Empty>No installs in the last 12 weeks.</Empty>
                 )}
                 <p className="muted small">Share of each week’s new users who used Lens in each later week. Empty cells: that week hasn’t finished, or it was before daily activity was recorded.</p>
+              </Card>
+
+              <div className="row-head">
+                <h2>By install channel</h2>
+              </div>
+              <Card>
+                {a.channels?.length ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Channel</th>
+                          <th className="num">Installs</th>
+                          <th className="num">Backed up</th>
+                          <th className="num">Signed in</th>
+                          <th className="num">D1</th>
+                          <th className="num">D7</th>
+                          <th className="num">D30</th>
+                          <th className="num">Paying</th>
+                          <th className="num">Storage</th>
+                          <th className="num">Est. cost / month</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {a.channels.map((c) => (
+                          <tr key={c.channel}>
+                            <td>{c.channel}</td>
+                            <td className="num">{n(c.installs)}</td>
+                            <td className="num">{pct(c.backedUp.rate)}</td>
+                            <td className="num">{pct(c.signedIn.rate)}</td>
+                            {[c.d1, c.d7, c.d30].map((d, k) => (
+                              <td key={k} className="num" title={`${d.reached} of ${d.eligible} old enough`}>
+                                {pct(d.rate)}
+                              </td>
+                            ))}
+                            <td className="num">{n(c.paying)}</td>
+                            <td className="num">{c.storageGB} GB</td>
+                            <td className="num">${c.storageUsdPerMonth.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <Empty>No installs in this period.</Empty>
+                )}
+                <p className="muted small">
+                  Channel = where the install came from (Google Play’s install referrer: organic Play, a tagged link, an invite; “web” for website sign-ups). Recorded for installs from 29 Oct 2026. D1/D7/D30 = used Lens on exactly that day after installing, of those installed long enough ago (hover for counts). Cost = storage held × $0.012 per GB-month, an estimate.
+                </p>
               </Card>
 
               <div className="row-head">

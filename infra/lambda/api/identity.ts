@@ -27,7 +27,7 @@ import { deletionAt, planActive } from './plans';
 import { suggestFlags } from './people';
 import { randomName } from './names';
 import { realNames } from './real-names';
-import { attribute } from './attribution';
+import { attribute, parseAcquisition } from './attribution';
 import { onAttributed, rewardsHook } from './referrals';
 
 export type Identity = {
@@ -115,7 +115,7 @@ export async function createIdentity(): Promise<{ id: string; name: string }> {
             {
               Put: {
                 TableName: env.table,
-                Item: { pk: `D#${id}`, sk: 'PROFILE', name, usedBytes: 0, createdAt: now, gsi1pk: 'NAME', gsi1sk: name },
+                Item: { pk: `D#${id}`, sk: 'PROFILE', name, usedBytes: 0, createdAt: now, acquisition: { source: 'web' }, gsi1pk: 'NAME', gsi1sk: name },
                 ConditionExpression: 'attribute_not_exists(pk)',
               },
             },
@@ -181,6 +181,7 @@ export async function register(req?: Req): Promise<Res> {
 
   const id = randomId(12);
   const now = Date.now();
+  const acquisition = parseAcquisition(req?.body?.ref);
   for (let attempt = 0; attempt < 5; attempt++) {
     const name = randomName();
     try {
@@ -204,6 +205,7 @@ export async function register(req?: Req): Promise<Res> {
                   name,
                   usedBytes: 0,
                   createdAt: now,
+                  acquisition,
                   ...(fingerprint ? { fingerprint } : {}),
                   // Automated tests (infra/scripts/e2e.sh): left out of the console's numbers.
                   ...(req?.headers?.['x-lens-test'] === '1' ? { test: true } : {}),

@@ -23,7 +23,8 @@ interface Props {
 const { lang, path, title, description, noindex = false, jsonLd = [], bareTitle = false } = Astro.props;
 const site = Astro.site!.origin;
 const url = (l: Lang) => `${site}${href(l, path)}`;
-const fullTitle = bareTitle ? title : `${title} | ${BRAND}`;
+// Google shows about 60 characters: the short brand when the full one would push the title past that.
+const fullTitle = bareTitle ? title : `${title} | ${title.length + BRAND.length + 3 <= 60 ? BRAND : 'Lens'}`;
 const ogImage = `${site}/og-${lang}.png`;
 const t = ui[lang];
 
