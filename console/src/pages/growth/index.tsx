@@ -43,6 +43,7 @@ export function GrowthWorkspace({ path }: { path: string }) {
   const taskId = search.get("task");
   return (
     <Page title={title}>
+      <span className="gw-wide" hidden />
       <Loaded state={state}>
         {(ws) => (
           <>

@@ -49,7 +49,14 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
             ? 3
             : 4;
   const mine = ws.tasks
-    .filter((t) => isOpen(t) && t.status !== "blocked" && t.owner === me)
+    // Decisions are listed under "Needs a decision", not twice.
+    .filter(
+      (t) =>
+        isOpen(t) &&
+        t.status !== "blocked" &&
+        t.type !== "decision" &&
+        t.owner === me,
+    )
     .sort(
       (a, b) =>
         rank(a) - rank(b) ||
@@ -155,74 +162,76 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
             </Empty>
           )}
         </Card>
-        <Card
-          title="Goals this month"
-          actions={<Link to="/growth/goals">Roadmap →</Link>}
-        >
-          {now.map((g) => (
-            <div key={g.id} className="gw-goal-mini">
-              <div className="gw-row">
-                <strong>{g.title}</strong>
-                <GoalChip g={g} />
+        <div className="gw-today-side">
+          <Card
+            title="Goals this month"
+            actions={<Link to="/growth/goals">Roadmap →</Link>}
+          >
+            {now.map((g) => (
+              <div key={g.id} className="gw-goal-mini">
+                <div className="gw-row">
+                  <strong>{g.title}</strong>
+                  <GoalChip g={g} />
+                </div>
+                {g.krs.map((k) => (
+                  <KRBar key={k.id} kr={k} elapsed={g.elapsed} />
+                ))}
               </div>
-              {g.krs.map((k) => (
-                <KRBar key={k.id} kr={k} elapsed={g.elapsed} />
+            ))}
+            <p className="muted small">
+              The tick shows where we should be by today. Bars move only when
+              the metric moves.
+            </p>
+          </Card>
+          <Card title="Needs a decision">
+            <ul className="gw-list">
+              {toReview.map((t) => (
+                <li key={t.id}>
+                  <button className="gw-linkbtn" onClick={() => openTask(t.id)}>
+                    Review: {t.title}
+                  </button>
+                  {t.links.pr && (
+                    <span className="muted small">
+                      {" "}
+                      · PR #{t.links.pr.number}
+                    </span>
+                  )}
+                </li>
               ))}
-            </div>
-          ))}
-          <p className="muted small">
-            The tick shows where we should be by today. Bars move only when the
-            metric moves.
-          </p>
-        </Card>
+              {manage && suggested.length > 0 && (
+                <li>
+                  <Link to="/growth/insights">
+                    Triage {suggested.length} suggestion
+                    {suggested.length > 1 ? "s" : ""} from the agent
+                  </Link>
+                </li>
+              )}
+              {decisions.map((t) => (
+                <li key={t.id}>
+                  <button className="gw-linkbtn" onClick={() => openTask(t.id)}>
+                    {t.title}
+                  </button>
+                </li>
+              ))}
+              {manage && unassigned.length > 0 && (
+                <li>
+                  <Link to="/growth/tasks?owner=none">
+                    {unassigned.length} ready tasks have no owner
+                  </Link>
+                </li>
+              )}
+              {!toReview.length &&
+                !suggested.length &&
+                !decisions.length &&
+                !unassigned.length && (
+                  <li className="muted">Nothing waiting on you.</li>
+                )}
+            </ul>
+          </Card>
+        </div>
       </div>
 
-      <div className="grid3 gw-today-more">
-        <Card title="Needs a decision">
-          <ul className="gw-list">
-            {toReview.map((t) => (
-              <li key={t.id}>
-                <button className="gw-linkbtn" onClick={() => openTask(t.id)}>
-                  Review: {t.title}
-                </button>
-                {t.links.pr && (
-                  <span className="muted small">
-                    {" "}
-                    · PR #{t.links.pr.number}
-                  </span>
-                )}
-              </li>
-            ))}
-            {manage && suggested.length > 0 && (
-              <li>
-                <Link to="/growth/insights">
-                  Triage {suggested.length} suggestion
-                  {suggested.length > 1 ? "s" : ""} from the agent
-                </Link>
-              </li>
-            )}
-            {decisions.map((t) => (
-              <li key={t.id}>
-                <button className="gw-linkbtn" onClick={() => openTask(t.id)}>
-                  {t.title}
-                </button>
-              </li>
-            ))}
-            {manage && unassigned.length > 0 && (
-              <li>
-                <Link to="/growth/tasks?owner=none">
-                  {unassigned.length} ready tasks have no owner
-                </Link>
-              </li>
-            )}
-            {!toReview.length &&
-              !suggested.length &&
-              !decisions.length &&
-              !unassigned.length && (
-                <li className="muted">Nothing waiting on you.</li>
-              )}
-          </ul>
-        </Card>
+      <div className="grid2 gw-today-more">
         <Card title="What changed this week">
           <ul className="gw-list">
             {overdue.length > 0 && (

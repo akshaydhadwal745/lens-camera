@@ -992,3 +992,7 @@ tr.gw-click:hover td { background: var(--side); }
   .gw-today-stats { order: 3; grid-template-columns: 1fr 1fr; }
   .gw-today-stats .stat-value { font-size: 22px; }
 }
+/* Growth pages use wide screens; Today's right column holds goals and decisions beside your work. */
+.page:has(.gw-wide) { max-width: 1600px; }
+.gw-today-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.gw-today-work { align-items: start; }
