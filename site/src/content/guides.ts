@@ -24,9 +24,9 @@ export const guidePages: GuidePage[] = [
     name: { en: 'Lens vs Google Photos', hi: 'Lens बनाम Google Photos' },
     copy: {
       en: {
-        title: 'Lens vs Google Photos: storage, quality and sharing compared',
+        title: 'Lens vs Google Photos: storage and quality',
         description:
-          'An honest comparison as of October 2026: free storage, original quality vs Storage saver, your own storage, the camera, event albums, and where Google Photos is still better.',
+          'An honest comparison (October 2026): free storage, original quality vs Storage saver, own storage, camera, event albums, and where Google Photos wins.',
         h1: 'Lens vs Google Photos',
         lead: 'An honest look, as of October 2026. Google Photos is a great library. Lens is built for people who want every original kept, a better camera, and more free space for photos.',
         sections: [
@@ -351,7 +351,7 @@ export const guidePages: GuidePage[] = [
     name: { en: 'Collect wedding photos with a QR code', hi: 'QR कोड से शादी की फ़ोटो' },
     copy: {
       en: {
-        title: 'How to collect wedding and event photos from guests with a QR code',
+        title: 'Collect wedding photos from guests with a QR code',
         description:
           'Make a Lens event album, show its QR code, and guests add their photos from any phone, in the browser, no app needed. Step by step, with tips for the day.',
         h1: 'Collect every guest’s photos with one QR code',
