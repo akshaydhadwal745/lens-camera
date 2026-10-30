@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { calendarItems, checkMeta } from './growth-content';
+import { calendarItems, checkMeta, what } from './growth-content';
 import { jobsFrom } from './growth';
 import { unsubscribeToken } from '../api/growth-integrations';
 
@@ -55,4 +55,11 @@ test('agent jobs: the lock tells what runs (report, draft of a task, monthly), s
   assert.deepEqual(j.seoAudit, { at: now - 1000, by: 'b' });
   assert.equal(j.competitors, null);
   assert.equal(jobsFrom(undefined, { seoAudit: { startedAt: now - 16 * 60_000 } }, now).seoAudit, null);
+});
+
+test('meta task title names what changes', () => {
+  const c = (title: string, description: string) => ({ path: '/', title, description, oldTitle: '', oldDescription: '' });
+  assert.equal(what([c('', 'd')]), 'description');
+  assert.equal(what([c('t', '')]), 'title');
+  assert.equal(what([c('t', ''), c('', 'd')]), 'title and description');
 });

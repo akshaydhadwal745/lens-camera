@@ -36,6 +36,13 @@ export function checkMeta(c: Record<string, unknown>): MetaChange | string {
   return out;
 }
 
+/** "title", "description" or "title and description", from what the changes touch. */
+export const what = (cs: MetaChange[]) => {
+  const t = cs.some((c) => c.title);
+  const d = cs.some((c) => c.description);
+  return t && d ? 'title and description' : t ? 'title' : 'description';
+};
+
 /** POST /growth/seo/meta {changes:[{path,title,description,oldTitle,oldDescription}]}: one fix task the agent drafts as a PR. */
 export async function metaRequest(req: Req, by: string): Promise<Res> {
   const list = Array.isArray(req.body?.changes) ? (req.body.changes as Record<string, unknown>[]).slice(0, 30) : [];
@@ -46,7 +53,7 @@ export async function metaRequest(req: Req, by: string): Promise<Res> {
   const changes = checked as MetaChange[];
   const t = await createTask(
     {
-      title: `Update the title and description on ${changes.length === 1 ? changes[0].path : `${changes.length} pages`}`.slice(0, 160),
+      title: `Update the ${what(changes)} on ${changes.length === 1 ? changes[0].path : `${changes.length} pages`}`.slice(0, 160),
       description: changes.map((c) => `${c.path}\n  title: ${c.oldTitle || '—'} → ${c.title || '(unchanged)'}\n  description: ${c.oldDescription || '—'} → ${c.description || '(unchanged)'}`).join('\n\n'),
       workstream: 'search',
       type: 'fix',

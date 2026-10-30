@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { api, get } from "../../api";
 import { date } from "../../ui";
-import { analystButton, useGrowthReload, useJobs } from "./jobs";
+import { agentError, analystButton, useGrowthReload, useJobs } from "./jobs";
 import {
   BOARD,
   can,
@@ -77,6 +77,15 @@ export function TaskPanel({
 
   const manage = can(ws, "growth.write");
   const t = data?.task;
+  // The newest draft attempt, if it stopped (the log is newest first); a later start or PR clears it.
+  const lastDraftStop = data?.log.find((e) =>
+    /^(Draft stopped:|The growth agent started drafting|Pull request opened)/.test(
+      e.text ?? "",
+    ),
+  );
+  const draftStopped = lastDraftStop?.text?.startsWith("Draft stopped:")
+    ? lastDraftStop
+    : undefined;
   const mine = !!t && (t.owner === ws.me.email || t.reviewer === ws.me.email);
   const editable = manage || (can(ws, "growth.contribute") && mine);
 
@@ -303,6 +312,17 @@ export function TaskPanel({
                       It edits the website code, opens a PR on an agent/* branch
                       and emails you. Nothing ships until you merge.
                     </>
+                  )}
+                  {draftStopped && (
+                    <div className="notice error">
+                      The last draft stopped ({date(draftStopped.at)}):{" "}
+                      {agentError(
+                        String(draftStopped.text).replace(
+                          /^Draft stopped:\s*/,
+                          "",
+                        ),
+                      )}
+                    </div>
                   )}
                   <div className="btns">
                     <button

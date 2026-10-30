@@ -20,6 +20,8 @@ export type Jobs = {
   seoAudit: Job | null;
   competitors: Job | null;
   lastError: { message: string; at: number } | null;
+  /** When this status was fetched (so the page needn't read the clock while drawing). */
+  checkedAt?: number;
 };
 const NONE: Jobs = {
   analyst: null,
@@ -37,7 +39,10 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Jobs>(NONE);
   const prev = useRef(jobs);
   const refresh = useCallback(() => {
-    get<Jobs>("/growth/jobs").then(setJobs, () => {});
+    get<Jobs>("/growth/jobs").then(
+      (j) => setJobs({ ...j, checkedAt: Date.now() }),
+      () => {},
+    );
   }, []);
   const busy = !!(jobs.analyst || jobs.seoAudit || jobs.competitors);
   // Every 10 s while something runs, every minute otherwise (a scheduled run shows up too).
@@ -101,6 +106,15 @@ export function AgentBar({
     lines.push(
       `Checking competitors · started ${when(jobs.competitors.at)} · about 2 minutes`,
     );
+  // No job running, but the last one failed in the past hour: say so (otherwise people just wait).
+  const err = jobs.lastError;
+  if (!lines.length && err && (jobs.checkedAt ?? 0) - err.at < 3_600_000)
+    return (
+      <div className="notice error" role="status">
+        <strong>The agent’s last job stopped</strong> ({when(err.at)}):{" "}
+        {agentError(err.message)}
+      </div>
+    );
   if (!lines.length) return null;
   return (
     <div className="gw-agentbar" role="status">
@@ -118,6 +132,16 @@ export function AgentBar({
       </div>
     </div>
   );
+}
+
+/** An agent failure in plain words (the Claude usage limit gets its own explanation). */
+export function agentError(message: string) {
+  const limit = /hit your .*limit.*?resets ([^\n]+?)\s*$/i.exec(message);
+  if (limit)
+    return `the agent has used up its Claude allowance for now. It resets at ${limit[1].trim()}; press the button again after that.`;
+  return message
+    .replace(/^Draft T-\d+:\s*/, "")
+    .replace(/^claude exited \d+:\s*/, "");
 }
 
 /** Label and disabled state for a button that starts an analyst job. */
