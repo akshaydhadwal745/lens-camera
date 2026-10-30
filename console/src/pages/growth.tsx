@@ -275,10 +275,19 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
       status === "rejected"
         ? (prompt("Why not? (the analyst learns from it)") ?? undefined)
         : undefined;
-    await api("PUT", `/growth/opportunities/${encodeURIComponent(id)}`, {
-      status,
-      ...(note ? { note } : {}),
-    });
+    const res = await api<{ draft?: string }>(
+      "PUT",
+      `/growth/opportunities/${encodeURIComponent(id)}`,
+      {
+        status,
+        ...(note ? { note } : {}),
+      },
+    );
+    if (res?.draft === "busy")
+      alert(
+        "Planned. The analyst is busy right now: press Draft it in about 10 minutes.",
+      );
+
     setReload((r) => r + 1);
   };
   const setTools = async (enabled: string[]) => {

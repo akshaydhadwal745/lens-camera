@@ -22,7 +22,7 @@ import { googleToken, indexCoverage } from '../api/search-console';
 import { compute } from './analytics';
 import { demandFacts, fact, ga4Facts, indexFacts, productFacts, searchFacts, type Fact, type SearchDay, type SearchRow } from './growth-facts';
 import { bingTrend, ga4Report, SEED_KEYWORDS, trendingNow, WIKI_ARTICLES, wikiTrend, wikiViews } from './growth-sources';
-import { EDITABLE, githubConfigured, installationToken, openPullRequest, pullRequestState } from './growth-github';
+import { EDITABLE, installationToken, openPullRequest, pullRequestState } from './growth-github';
 import { ANALYST_SYSTEM, analystPrompt, DRAFT_SCHEMA, DRAFT_SYSTEM, FORBIDDEN_CLAIMS, numbersIn, opportunityScore, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type DraftResult, type OpenRec, type Opportunity } from './growth-report';
 import { log } from './log';
 import { teamMembers } from './roles';
@@ -736,9 +736,10 @@ async function syncPullRequests(now: number) {
   }
 }
 
-/** Starts a draft now if nothing else is running (Console). */
+/** Starts a draft now if nothing else is running (Console). The Console can't read the GitHub key
+ * (least privilege): the draft run checks it and reports a missing setup on the item. */
 async function startDraft(kind: DraftKind, id: string, email: string): Promise<'started' | 'busy' | 'not-set-up'> {
-  if (!process.env.GROWTH_FUNCTION || !(await githubConfigured())) return 'not-set-up';
+  if (!process.env.GROWTH_FUNCTION) return 'not-set-up';
   const lockAt = await takeLock(`draft:${email}`, true);
   if (lockAt === undefined) return 'busy';
   await new LambdaClient({})
@@ -855,7 +856,7 @@ export async function growthProposal(id: string, req: Req, email: string): Promi
     });
   await log({ entity: `growth:${id}`, action: `growth.proposal-${decision}`, actor: `console:${email}`, data: note ? { note } : undefined });
   // An approved proposal is drafted as a pull request right away (if nothing else is running).
-  const draft = decision === 'approved' ? await startDraft('prop', id, email).catch(() => 'busy' as const) : undefined;
+  const draft = decision === 'approved' ? await startDraft('prop', id, email) : undefined;
   return json(200, { ok: true, draft });
 }
 
@@ -881,7 +882,7 @@ export async function growthOpportunity(id: string, req: Req, email: string): Pr
       throw e;
     });
   await log({ entity: `growth:opp:${id}`, action: 'growth.opportunity-status', actor: `console:${email}`, data: { status, ...(note !== undefined ? { note } : {}) } });
-  const draft = status === 'planned' ? await startDraft('opp', id, email).catch(() => 'busy' as const) : undefined;
+  const draft = status === 'planned' ? await startDraft('opp', id, email) : undefined;
   return json(200, { ok: true, draft });
 }
 
