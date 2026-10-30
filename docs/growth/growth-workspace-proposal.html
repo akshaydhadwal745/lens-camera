@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lens Growth Workspace</title>
+<style>
+/* Layout: a design memo in a single readable column; mockups are framed "Console screens" in the Console's own tokens. */
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --side: #fbfbfa; --text: #16171a; --muted: #6b6f76; --line: #e6e6e2;
+  --accent: #1f5eff; --accent-soft: #e8efff;
+  --good: #137a3d; --good-soft: #e3f4ea; --warn: #8a5a00; --warn-soft: #fdf1d8; --bad: #b42318; --bad-soft: #fde7e5;
+  --ink-soft: #3a3d44;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1012; --panel: #17181b; --side: #131416; --text: #ececec; --muted: #9a9ea6; --line: #2a2c30;
+  --accent: #6b97ff; --accent-soft: #1c2640; --good: #5fd08c; --good-soft: #15301f; --warn: #f0c060; --warn-soft: #33290f;
+  --bad: #ff7b6e; --bad-soft: #3a1714; --ink-soft: #c9ccd2; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1012; --panel: #17181b; --side: #131416; --text: #ececec; --muted: #9a9ea6; --line: #2a2c30;
+  --accent: #6b97ff; --accent-soft: #1c2640; --good: #5fd08c; --good-soft: #15301f; --warn: #f0c060; --warn-soft: #33290f;
+  --bad: #ff7b6e; --bad-soft: #3a1714; --ink-soft: #c9ccd2; color-scheme: dark }
+body { background: var(--bg); color: var(--text); font: 15px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; font-weight: 600; }
+h2 { font-size: 24px; font-weight: 600; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 600 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.lead { font-size: 18px; color: var(--ink-soft); max-width: 62ch; }
+section { display: grid; gap: 18px; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+code, .mono { font-family: var(--font-mono); font-size: .9em; }
+.test { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 18px 20px; display: grid; gap: 6px; }
+.test strong { font-family: var(--font-display); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+ul.clean { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.tag { display: inline-block; font: 600 11px/1 var(--font-mono); padding: 5px 7px; border-radius: 6px; letter-spacing: .02em; white-space: nowrap; }
+.t-keep { background: var(--good-soft); color: var(--good); } .t-merge { background: var(--accent-soft); color: var(--accent); }
+.t-move { background: var(--warn-soft); color: var(--warn); } .t-miss { background: var(--bad-soft); color: var(--bad); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--side); }
+tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* mock Console screens */
+.screen { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: 0 1px 0 var(--line), 0 18px 40px -28px rgb(0 0 0 / .35); }
+.screen-bar { display: flex; gap: 8px; align-items: center; padding: 9px 14px; background: var(--side); border-bottom: 1px solid var(--line); font: 12px var(--font-mono); color: var(--muted); }
+.dots { display: flex; gap: 5px; } .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: block; }
+.screen-body { display: grid; grid-template-columns: 190px 1fr; min-height: 300px; }
+.snav { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; display: grid; gap: 2px; align-content: start; font-size: 13px; }
+.snav b { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; padding: 10px 8px 4px; }
+.snav span { padding: 5px 8px; border-radius: 7px; color: var(--ink-soft); }
+.snav span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.smain { padding: 16px 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+.card h4 { margin: 0; font: 600 13px/1.3 var(--font-display); }
+.kr { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 13px; align-items: center; }
+.bar { grid-column: 1 / -1; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; position: relative; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.bar > em { position: absolute; top: -2px; width: 2px; height: 10px; background: var(--text); opacity: .55; }
+.pill { font: 600 11px/1 var(--font-body); padding: 4px 8px; border-radius: 99px; white-space: nowrap; }
+.p-good { background: var(--good-soft); color: var(--good); } .p-warn { background: var(--warn-soft); color: var(--warn); }
+.p-bad { background: var(--bad-soft); color: var(--bad); } .p-plain { background: var(--side); color: var(--muted); border: 1px solid var(--line); }
+.p-acc { background: var(--accent-soft); color: var(--accent); }
+.task { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.task:first-of-type { border-top: 0; }
+.task .t { min-width: 0; } .task .t div:first-child { font-weight: 600; }
+.pri { font: 700 11px/1 var(--font-mono); width: 26px; text-align: center; padding: 4px 0; border-radius: 6px; }
+.p0 { background: var(--bad-soft); color: var(--bad); } .p1 { background: var(--warn-soft); color: var(--warn); } .p2 { background: var(--accent-soft); color: var(--accent); }
+.btn { font: 600 12px/1 var(--font-body); padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); white-space: nowrap; }
+.btn.pr { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.col { background: var(--side); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.col > b { font: 600 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.mini { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px; font-size: 12px; display: grid; gap: 5px; }
+.mini .who { color: var(--muted); font-size: 11px; }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: s; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 4px; font-size: 13px; }
+.step .k { font: 600 11px/1 var(--font-mono); color: var(--accent); }
+.step .who { font-size: 11px; color: var(--muted); }
+.lifecycle { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.lifecycle .arrow { color: var(--muted); }
+@media (max-width: 680px) {
+  .screen-body { grid-template-columns: 1fr; }
+  .snav { display: none; }
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@500;600&display=swap">
+</head>
+<body>
+<div class="wrap">
+
+<header style="display:grid;gap:14px">
+  <span class="eyebrow">Lens Console · design proposal · 30 Oct 2026</span>
+  <h1>Growth Workspace: from reports to execution</h1>
+  <p class="lead">Today's Growth page is a weekly report with buttons bolted on. This redesign turns it into the place where whoever owns growth sees the goal, picks up the next most valuable task, gets the AI agent to do the heavy lifting, and proves what moved the numbers.</p>
+  <div class="test"><strong>The test it has to pass</strong><span>A growth manager hired tomorrow logs in and, without a briefing, can answer: what is Lens trying to achieve, are we on track, what am I responsible for, what should I do next, and what did our last month of work actually achieve?</span></div>
+</header>
+
+<section>
+  <span class="eyebrow">1 · Audit of today's Growth page</span>
+  <h2>What works, what's duplicated, what's missing</h2>
+  <p>Everything below exists today in <span class="mono">console/src/pages/growth.tsx</span> and the Analytics, Referrals and Affiliates pages. The data and the AI are strong; the experience is organised around the weekly report instead of around the work.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Today</th><th>Verdict</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Facts engine (Search Console, GA4, Bing, Wikipedia, website, app, money)</td><td><span class="tag t-keep">Keep</span></td><td>The trustworthy base: every number computed by code. It becomes the metrics that goals and tasks are measured against.</td></tr>
+      <tr><td>AI report with number validation, SEO investigations with code locations</td><td><span class="tag t-keep">Keep</span></td><td>High quality. Moves into <b>Insights</b>, written as a short brief instead of the page's main body.</td></tr>
+      <tr><td>Recommendation ledger, Recommended experiments, Changes waiting for approval, Approved changes, Content opportunities</td><td><span class="tag t-merge">Merge</span></td><td>Five lists, three different status vocabularies, same idea: "work we might do". They become <b>one task model</b> with one lifecycle. The same recommendation shows twice today (experiments and ledger).</td></tr>
+      <tr><td>Summary, Findings, rule findings, "Did earlier recommendations work?"</td><td><span class="tag t-merge">Merge</span></td><td>Three overlapping narratives. One weekly brief: what changed, why, what to do (each item one click from a task).</td></tr>
+      <tr><td>Watched pages</td><td><span class="tag t-merge">Merge</span></td><td>A watch is really a task's success metric. It moves onto the task: baseline, target, check date, result.</td></tr>
+      <tr><td>Report date picker, Facts table, Tool activity, Analyst tools switch</td><td><span class="tag t-move">Move</span></td><td>Useful for auditing, noise for a growth manager. Move to <b>Insights → History</b> and <b>Settings</b> (admins).</td></tr>
+      <tr><td>Goals, targets, roadmap (exist only in <span class="mono">docs/growth/growth-strategy.md</span>)</td><td><span class="tag t-miss">Missing</span></td><td>No one in the Console can see what we're aiming for or whether we're on track.</td></tr>
+      <tr><td>Owners, due dates, comments, history, notifications</td><td><span class="tag t-miss">Missing</span></td><td>Nothing can be assigned or followed up; the panel only works with the owner and Claude in the loop.</td></tr>
+      <tr><td>Social, content calendar, Play Store listing (ASO), partnerships, retention work</td><td><span class="tag t-miss">Missing</span></td><td>Only SEO has a workflow. Most of the strategy (events wedge, partners, launch posts, store listing) has nowhere to live.</td></tr>
+      <tr><td>Experiments with baseline and verdict; results of completed work</td><td><span class="tag t-miss">Missing</span></td><td>"Shipped" is where tracking stops today. Impact is never written back.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">2 · Principles</span>
+  <h2>Four rules the design follows</h2>
+  <div class="grid2">
+    <div class="box"><h3>Every screen serves a growth outcome</h3><p class="small">Discovery, conversion, activation, retention, referral, revenue, partnerships. A section that can't name the outcome it moves doesn't ship. No chart galleries.</p></div>
+    <div class="box"><h3>One unit of work: the task</h3><p class="small">AI recommendations, content opportunities, code proposals, partner outreach and social posts are all tasks, with one lifecycle, one owner and one success metric.</p></div>
+    <div class="box"><h3>Progress is computed, never typed in</h3><p class="small">Goals move only when their metric moves; milestones move only when tasks are verified done. No hand-set percentages anywhere.</p></div>
+    <div class="box"><h3>The AI does the legwork, people decide</h3><p class="small">The agent finds, explains, drafts and measures. A person approves anything that ships or costs money. Permission levels stay enforced in code.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">3 · Information architecture</span>
+  <h2>Organised around the work, not the integrations</h2>
+  <p>Growth gets its own group in the Console sidebar. Integrations (Search Console, GA4, Bing…) disappear as navigation; they show up as evidence inside the work they support.</p>
+  <div class="grid3">
+    <div class="box"><span class="pill p-acc" style="justify-self:start">Start here</span><h3>Today</h3><p class="small">North-star metric, goal status, my tasks (overdue, due this week, in progress), decisions waiting on me, what changed this week, recent wins with measured impact.</p></div>
+    <div class="box"><span class="pill p-acc" style="justify-self:start">Direction</span><h3>Goals &amp; roadmap</h3><p class="small">This month, 30/60/90-day objectives with key results tied to real metrics; milestones and their tasks; on-track/at-risk/behind; blockers and open decisions.</p></div>
+    <div class="box"><span class="pill p-acc" style="justify-self:start">Execution</span><h3>Tasks</h3><p class="small">Board, list and "Mine" views over every task. Filters by workstream, owner, status, priority. Task detail with evidence, metric, comments and history.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Workstreams</span><h3>Search &amp; content</h3><p class="small">Keyword and trend opportunities, pages to optimise, technical SEO, indexing, content calendar, drafts and published content with performance.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Workstreams</span><h3>Social &amp; distribution</h3><p class="small">Post calendar (drafted by the agent, posted by a person), launch posts, community, tagged links and the visits and installs they brought.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Workstreams</span><h3>Website &amp; Play Store</h3><p class="small">Landing pages to install funnel, Play listing (ASO: title, description, screenshots, store experiments), ratings and reviews, conversion experiments.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Workstreams</span><h3>Activation &amp; retention</h3><p class="small">First backup, sign-in, D1/D7/D30, re-engagement notifications and emails, retention experiments, Plus conversion and revenue per user.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Workstreams</span><h3>Referrals &amp; events</h3><p class="small">Invites, event albums and guests who install, share links, affiliates. The loops that make growth compound.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Workstreams</span><h3>Partnerships</h3><p class="small">Pipeline of photographers, planners, colleges, influencers and companies: lead, contacted, meeting, pilot, live, won or lost, with next step and owner.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Intelligence</span><h3>Insights</h3><p class="small">The weekly brief, new opportunities to triage into tasks, anomalies, experiment results, data health. History and the raw facts for the curious.</p></div>
+    <div class="box"><span class="pill p-plain" style="justify-self:start">Admin</span><h3>Settings</h3><p class="small">Team and growth roles, agent permissions (level 2 tools), data sources, product facts, the agent's tool activity log.</p></div>
+  </div>
+  <p class="small muted">Each workstream page uses one template: its outcome metric and trend, open tasks, opportunities to triage, results of finished work, and the evidence panels that matter for it (for Search, the Search Console and demand data).</p>
+</section>
+
+<section>
+  <span class="eyebrow">4 · Today</span>
+  <h2>What a growth manager sees at 9 a.m.</h2>
+  <div class="screen" role="img" aria-label="Mockup of the Today screen">
+    <div class="screen-bar"><span class="dots"><i></i><i></i><i></i></span>console.lens.instagrowapp.com/growth</div>
+    <div class="screen-body">
+      <nav class="snav"><b>Growth</b><span class="on">Today</span><span>Goals &amp; roadmap</span><span>Tasks</span><b>Workstreams</b><span>Search &amp; content</span><span>Social &amp; distribution</span><span>Website &amp; Play Store</span><span>Activation &amp; retention</span><span>Referrals &amp; events</span><span>Partnerships</span><b>Intelligence</b><span>Insights</span></nav>
+      <div class="smain">
+        <div class="row" style="justify-content:space-between"><h3>Good morning, Priya</h3><span class="small muted">Week 1 of the closed test · goal period: Nov 2026</span></div>
+        <div class="grid2" style="gap:10px">
+          <div class="card"><h4>Weekly backup users <span class="muted" style="font-weight:400">· north star</span></h4>
+            <div class="row"><span style="font:600 26px/1 var(--font-display)">3</span><span class="pill p-plain">target 100 by day 30</span><span class="pill p-bad">behind</span></div>
+            <span class="small muted">Pace needed: +14/week. Last week: +1.</span></div>
+          <div class="card"><h4>Goals this month</h4>
+            <div class="kr"><span>Closed test: 12 testers opted in</span><span class="small">9 / 12</span><div class="bar"><i style="width:75%"></i><em style="left:60%"></em></div></div>
+            <div class="kr"><span>Google: pages indexed</span><span class="small">62 / 64</span><div class="bar"><i style="width:97%"></i></div></div>
+            <div class="kr"><span>Events created by real users</span><span class="small">1 / 10</span><div class="bar"><i style="width:10%"></i><em style="left:40%"></em></div></div>
+            <span class="small muted">Tick = where we should be today.</span></div>
+        </div>
+        <div class="card"><h4>My tasks</h4>
+          <div class="task"><span class="pri p0">P0</span><div class="t"><div>Get 3 more testers to opt in</div><div class="small muted">Play launch · due today · blocks the 14-day clock</div></div><span class="pill p-bad">overdue</span></div>
+          <div class="task"><span class="pri p1">P1</span><div class="t"><div>Run the first real QR event album (a wedding this weekend)</div><div class="small muted">Referrals &amp; events · due Sat · metric: guests who join</div></div><span class="pill p-warn">in progress</span></div>
+          <div class="task"><span class="pri p1">P1</span><div class="t"><div>Review the agent's PR: free cloud backup page</div><div class="small muted">Search &amp; content · PR #10 · SEO check passed</div></div><a class="btn pr">Review</a></div>
+          <div class="task"><span class="pri p2">P2</span><div class="t"><div>Post the WhatsApp quality guide in 3 communities</div><div class="small muted">Social · drafts ready · metric: visits with utm_source</div></div><span class="pill p-plain">ready</span></div>
+        </div>
+        <div class="grid2" style="gap:10px">
+          <div class="card"><h4>Needs a decision</h4><span class="small">· 2 new opportunities from this week's analysis <a>triage</a></span><span class="small">· Name decision: keep "Lens"? <span class="muted">(blocks the Play listing task)</span></span><span class="small">· Partner pilot terms for Studio Rangoli</span></div>
+          <div class="card"><h4>What changed this week</h4><span class="small">· "photo backup" searches on Bing (US) up 362% in 12 weeks</span><span class="small">· 4 Get Lens clicks, from 0 the week before</span><span class="small">· Free-cloud-backup page shipped: measuring until 27 Nov</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="small muted">Names, partners and some numbers in mockups are examples. Real numbers come from the facts engine.</p>
+</section>
+
+<section>
+  <span class="eyebrow">5 · Goals &amp; roadmap</span>
+  <h2>Strategy you can see, progress you can trust</h2>
+  <p>The plan in <span class="mono">growth-strategy.md</span> becomes data: objectives with key results (KRs) bound to metrics, and milestones made of tasks. Seeded on day one so a new hire sees the strategy immediately.</p>
+  <div class="screen" role="img" aria-label="Mockup of the Goals and roadmap screen">
+    <div class="screen-bar"><span class="dots"><i></i><i></i><i></i></span>console.lens.instagrowapp.com/growth/goals</div>
+    <div class="smain">
+      <div class="cols">
+        <div class="col"><b>Now · launch</b>
+          <div class="mini"><strong>O1 Launch on Google Play</strong><span>KR 12 testers opted in · 9/12</span><span>KR 14 days of closed test · day 1</span><span>KR production approved</span><span class="pill p-warn" style="justify-self:start">at risk: testers</span></div>
+          <div class="mini"><strong>Milestone A · launch prep</strong><span>7 of 10 tasks verified done</span><span class="who">blocked: name decision, Play Billing</span></div></div>
+        <div class="col"><b>Day 30 after launch</b>
+          <div class="mini"><strong>O2 First real users</strong><span>300 installs</span><span>100 weekly backup users</span><span>20 ratings ≥ 4.5★</span><span>10 events created</span><span class="pill p-plain" style="justify-self:start">starts at launch</span></div></div>
+        <div class="col"><b>Day 90</b>
+          <div class="mini"><strong>O3 Loops that compound</strong><span>3,000 installs · 1,000 weekly backup users</span><span>W4 retention ≥ 20%</span><span>30 paying Plus users</span><span>5 partners live</span></div></div>
+        <div class="col"><b>Health (always)</b>
+          <div class="mini"><strong>Guardrails</strong><span>Crash-free ≥ 99.5%</span><span>Cost per active user known and falling</span><span class="pill p-good" style="justify-self:start">on track</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="box"><h3>How progress is calculated</h3>
+      <ul class="clean small">
+        <li><b>Key result:</b> (current − baseline) ÷ (target − baseline), with current read from the facts engine. Never typed by a person.</li>
+        <li><b>On track / at risk / behind:</b> compares that progress with the share of the period elapsed (the tick on each bar). Behind = more than 25 points short, at risk = 10–25.</li>
+        <li><b>Milestone:</b> verified-done tasks ÷ all its tasks, weighted by effort. "Verified" means its PR merged, its post is live or its owner attached proof.</li>
+        <li><b>Workstream:</b> its outcome metric's trend plus counts of open, blocked and overdue tasks. No blended score.</li>
+      </ul></div>
+    <div class="box"><h3>What a key result looks like</h3>
+      <div class="table-wrap" style="border:0"><table>
+        <tbody>
+          <tr><td>Metric</td><td><span class="mono">app.weekly_backup_users</span></td></tr>
+          <tr><td>Baseline</td><td class="n">3 · 30 Oct 2026</td></tr>
+          <tr><td>Target</td><td class="n">100 · launch + 30 days</td></tr>
+          <tr><td>Owner</td><td>Growth manager</td></tr>
+          <tr><td>Linked tasks</td><td>14 open · 3 done</td></tr>
+        </tbody></table></div></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">6 · The task</span>
+  <h2>One model for every piece of growth work</h2>
+  <div class="grid2">
+    <div class="box"><h3>Fields</h3>
+      <ul class="clean small">
+        <li>Title, description, workstream, type (page, content, social post, store listing, experiment, partner, fix, research)</li>
+        <li>Why: evidence text, linked facts and charts, source (AI analysis of a date, or a person)</li>
+        <li>Priority P0–P3 from impact × confidence ÷ effort, overridable with a reason</li>
+        <li>Expected impact, effort (hours), owner, reviewer, due date</li>
+        <li>Links: page, keyword, campaign, partner, pull request, post URL</li>
+        <li>Success metric: metric, baseline, target, check date</li>
+        <li>Result: actual value, verdict (worked / no change / worse / too early), learning</li>
+        <li>Goal and milestone it serves; comments; full history</li>
+      </ul></div>
+    <div class="box"><h3>One lifecycle (replaces three)</h3>
+      <div class="lifecycle"><span class="pill p-acc">Suggested</span><span class="arrow">→</span><span class="pill p-plain">Ready</span><span class="arrow">→</span><span class="pill p-warn">In progress</span><span class="arrow">→</span><span class="pill p-warn">In review</span><span class="arrow">→</span><span class="pill p-good">Done</span><span class="arrow">→</span><span class="pill p-good">Measured</span></div>
+      <p class="small">Plus <b>Blocked</b> (with the blocker named) and <b>Won't do</b> (with a reason the agent learns from).</p>
+      <ul class="clean small">
+        <li><b>Suggested</b>: from the agent; someone triages it into Ready or Won't do.</li>
+        <li><b>In review</b>: a PR, a draft post or a partner offer waits for approval.</li>
+        <li><b>Measured</b>: the check date passed and the result was written back automatically.</li>
+      </ul>
+      <p class="small muted">Today's recommendations, proposals and opportunities migrate into this, keeping their history.</p></div>
+  </div>
+  <div class="screen" role="img" aria-label="Mockup of the Tasks board">
+    <div class="screen-bar"><span class="dots"><i></i><i></i><i></i></span>console.lens.instagrowapp.com/growth/tasks · board</div>
+    <div class="smain">
+      <div class="row"><span class="pill p-acc">All workstreams</span><span class="pill p-plain">Owner: anyone</span><span class="pill p-plain">Goal: O1 Launch</span><span class="small muted">Board · List · Mine</span></div>
+      <div class="cols">
+        <div class="col"><b>Suggested · 2</b><div class="mini"><strong>"photo backup" landing page</strong><span class="who">AI · demand +362% (Bing US)</span></div><div class="mini"><strong>Hindi Play listing</strong><span class="who">AI · ASO</span></div></div>
+        <div class="col"><b>Ready · 4</b><div class="mini"><strong>Post WhatsApp guide in 3 communities</strong><span class="who">Priya · P2 · Fri</span></div><div class="mini"><strong>Shortlist 20 wedding photographers</strong><span class="who">Unassigned · P1</span></div></div>
+        <div class="col"><b>In progress · 2</b><div class="mini"><strong>First real QR event album</strong><span class="who">Priya · P1 · Sat</span></div></div>
+        <div class="col"><b>In review · 1</b><div class="mini"><strong>Free cloud backup page</strong><span class="who">Agent · PR #10 · reviewer Akshay</span></div></div>
+        <div class="col"><b>Done → measuring · 1</b><div class="mini"><strong>Remove "unlimited" claims</strong><span class="who">checks 27 Nov · metric: Get Lens rate</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">7 · AI to execution</span>
+  <h2>The agent's ten steps, each with a home</h2>
+  <p>Your workflow, mapped onto what already exists (marked) and what this redesign adds. The same loop serves SEO, content, social, store listing and partners; only the "make it" step differs.</p>
+  <div class="flow">
+    <div class="step"><span class="k">1 · Find</span><span>Weekly analysis finds an opportunity or anomaly</span><span class="who">exists: facts + demand + tools</span></div>
+    <div class="step"><span class="k">2 · Explain</span><span>Evidence with numbers, each traced to its source</span><span class="who">exists: validated report</span></div>
+    <div class="step"><span class="k">3 · Locate</span><span>The page, file and line, or the channel</span><span class="who">exists: code locations</span></div>
+    <div class="step"><span class="k">4 · Recommend</span><span>The specific change, with a brief</span><span class="who">exists: briefs, proposals</span></div>
+    <div class="step"><span class="k">5 · Task</span><span>Lands in Suggested with priority and metric</span><span class="who">new: unified task</span></div>
+    <div class="step"><span class="k">6 · Assign</span><span>Auto-routed by workstream owner; email</span><span class="who">new: owners, notifications</span></div>
+    <div class="step"><span class="k">7 · Make</span><span>PR for pages; draft for posts, listing text and outreach emails</span><span class="who">exists for pages (Phase C); new for the rest</span></div>
+    <div class="step"><span class="k">8 · Approve &amp; ship</span><span>Reviewer approves; merged or posted; marked Done with proof</span><span class="who">exists: PR approval; new: other proofs</span></div>
+    <div class="step"><span class="k">9 · Monitor</span><span>Metric watched from baseline until the check date</span><span class="who">exists partly: watchlist</span></div>
+    <div class="step"><span class="k">10 · Result</span><span>Actual value and verdict written back; agent learns</span><span class="who">new: results loop</span></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">8 · Workstreams that don't exist yet</span>
+  <h2>Partnerships, social and the Play Store</h2>
+  <div class="grid3">
+    <div class="box"><h3>Partnerships pipeline</h3><p class="small">A light CRM: organisation, type (photographer, planner, college, influencer, company), contact, stage (lead → contacted → meeting → pilot → live → won/lost), value, next step and date, owner, notes. Each partner gets its own tagged link, so events, guests and installs per partner are measured automatically. The agent drafts outreach and researches leads; a person sends.</p></div>
+    <div class="box"><h3>Social &amp; content calendar</h3><p class="small">A calendar of posts and articles with status (idea, drafted, approved, published). The agent drafts posts from published pages and real milestones; a person posts (APIs later). Every post carries a tagged link, so the calendar shows visits and installs per post.</p></div>
+    <div class="box"><h3>Play Store (ASO)</h3><p class="small">Listing text and screenshots as versioned tasks; store listing experiments; ratings and reviews with reply status; store visitors → installs once Play's install reports are readable (one access tick pending). The agent drafts localised listings.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">9 · Team</span>
+  <h2>Roles for a growing team</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Role</th><th>Can</th><th>Typical person</th></tr></thead>
+    <tbody>
+      <tr><td><b>Owner</b></td><td>Everything; sets goals; approves spend and partner terms</td><td>Akshay</td></tr>
+      <tr><td><b>Growth lead</b> <span class="pill p-acc">new</span></td><td>Goals and milestones, triage, assign, approve agent drafts and PRs for review, agent settings</td><td>Growth manager</td></tr>
+      <tr><td><b>Growth contributor</b> <span class="pill p-acc">new</span></td><td>Work on assigned tasks, comment, ask the agent for drafts, log results; sees analytics</td><td>Content writer, social media person, BD intern</td></tr>
+      <tr><td>Admin, finance, viewer</td><td>As today; viewers see the workspace read-only</td><td>Existing team</td></tr>
+    </tbody></table></div>
+  <p class="small">Every change is in the activity history (who, when, what). Assignments, due dates, mentions and approvals send an email; each person gets a Monday digest of their week.</p>
+</section>
+
+<section>
+  <span class="eyebrow">10 · Build plan</span>
+  <h2>Four steps, each usable on its own</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Step</th><th>What ships</th><th>Effort</th></tr></thead>
+    <tbody>
+      <tr><td><b>W1 Work</b></td><td>Task model and one lifecycle (with migration of today's items); Tasks board, list and Mine; task detail with comments and history; owners, due dates, assignment emails; Today screen; growth lead and contributor roles</td><td class="n">≈ 2 days</td></tr>
+      <tr><td><b>W2 Direction</b></td><td>Goals, key results bound to metrics, milestones; computed progress and on-track status; roadmap screen seeded from the strategy; Insights screen (brief, triage, anomalies) replacing the report page</td><td class="n">≈ 2 days</td></tr>
+      <tr><td><b>W3 Workstreams</b></td><td>Workstream template; Search &amp; content (absorbs today's SEO work); Partnerships pipeline; Social calendar with agent drafts; Play Store; Activation &amp; retention; Referrals &amp; events</td><td class="n">≈ 3 days</td></tr>
+      <tr><td><b>W4 Results</b></td><td>Results loop (auto-measure at check date, verdicts, learnings to the agent); agent drafts for posts, listing text and outreach; personal Monday digest; a "Start here" page for new team members</td><td class="n">≈ 2 days</td></tr>
+    </tbody></table></div>
+</section>
+
+<section>
+  <span class="eyebrow">11 · Decisions</span>
+  <h2>What I need from you before W1</h2>
+  <div class="grid2">
+    <div class="box"><h3>1. North-star metric</h3><p class="small">Weekly backup users (people who backed up at least one photo in the last 7 days), as the strategy proposes. It's the number most tied to value and retention.</p></div>
+    <div class="box"><h3>2. Targets and their start date</h3><p class="small">Keep the strategy's day-30 and day-90 targets, counted from the Play production date, and recalibrate after 4 weeks of real data?</p></div>
+    <div class="box"><h3>3. Team today</h3><p class="small">Who besides you will use it in the next month (names and roles)? Until then, you're the growth lead and Claude is the agent.</p></div>
+    <div class="box"><h3>4. Open strategy decisions</h3><p class="small">Name, launch wedge (events recommended), cost levers, one identity, your hours per week. They'll appear as blocking decisions on the roadmap until made.</p></div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

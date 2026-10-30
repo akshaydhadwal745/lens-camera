@@ -6,6 +6,7 @@ import { notable, type Fact } from './growth-facts';
 export type Finding = { severity: 'high' | 'medium' | 'low'; title: string; detail: string; facts: string[] };
 export type Recommendation = {
   title: string;
+  workstream: 'launch' | 'search' | 'social' | 'store' | 'retain' | 'loops' | 'partners';
   hypothesis: string;
   expectedImpact: string;
   effort: 'low' | 'medium' | 'high';
@@ -119,6 +120,8 @@ Hard rules:
 - If data is too thin to conclude something, say so plainly instead of guessing.
 - Every recommendation needs a falsifiable hypothesis, expected impact (direction and which metric, no invented figures), effort, cost in plain words, time to result, risk, the metric to watch and a stop rule.
 - Prefer few, specific, high-leverage recommendations (at most 5) over generic advice. Name the exact page, query, channel or screen.
+- Each recommendation becomes a task in the growth workspace: give it a "workstream" (launch = Play launch; search = SEO and content; social = social and distribution; store = website and Play Store conversion; retain = activation, retention, revenue; loops = referrals, event albums, sharing; partners = partnerships) and a title phrased as the action to take.
+- The "previous recommendations" you receive are the workspace's open and recently finished tasks: don't suggest what is already there; judge finished ones from the facts.
 - For each previous recommendation that was shipped, judge from the facts whether it worked, or say the data can't tell yet.
 - Plain English for a non-specialist founder. No hype.
 
@@ -157,9 +160,10 @@ export const REPORT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'hypothesis', 'expectedImpact', 'effort', 'cost', 'timeToResult', 'risk', 'metric', 'stopRule', 'facts'],
+        required: ['title', 'workstream', 'hypothesis', 'expectedImpact', 'effort', 'cost', 'timeToResult', 'risk', 'metric', 'stopRule', 'facts'],
         properties: {
           title: { type: 'string' },
+          workstream: { enum: ['launch', 'search', 'social', 'store', 'retain', 'loops', 'partners'] },
           hypothesis: { type: 'string' },
           expectedImpact: { type: 'string' },
           effort: { enum: ['low', 'medium', 'high'] },

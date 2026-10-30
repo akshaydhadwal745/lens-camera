@@ -9,6 +9,8 @@ type RoleInfo = { role: string; permissions: string[] };
 const ABOUT: Record<string, string> = {
   owner: 'Everything, including the team (a second owner, so you are never locked out)',
   admin: 'Everything except the team',
+  growth_lead: 'Growth workspace: goals, tasks, assigning, triage, agent drafts; analytics, referrals, affiliates',
+  growth_contributor: 'Growth workspace: work on their own tasks, create tasks, comment; analytics',
   support: 'Users, feedback, reports, inbox, phones, health',
   finance: 'Affiliates, referrals, payouts, costs, audit',
   viewer: 'Overview, phones and health (read only)',

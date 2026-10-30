@@ -12,7 +12,7 @@ import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/li
 import { log } from './log';
 import { ddb, env, HttpError, json, Req, Res } from '../api/lib';
 
-export const ROLES = ['owner', 'admin', 'support', 'finance', 'viewer'] as const;
+export const ROLES = ['owner', 'admin', 'growth_lead', 'growth_contributor', 'support', 'finance', 'viewer'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const PERMISSIONS = [
@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   'analytics',
   'growth',
   'growth.write',
+  'growth.contribute',
   'users',
   'users.write',
   'feedback',
@@ -42,13 +43,16 @@ export type Permission = (typeof PERMISSIONS)[number];
 const GRANTS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
   admin: PERMISSIONS.filter((p) => p !== 'team'),
+  // Growth workspace (docs/growth/growth-workspace.md): leads manage it, contributors work on their tasks.
+  growth_lead: ['overview', 'analytics', 'growth', 'growth.write', 'growth.contribute', 'referrals', 'affiliates', 'feedback'],
+  growth_contributor: ['overview', 'analytics', 'growth', 'growth.contribute'],
   support: ['overview', 'analytics', 'users', 'users.write', 'feedback', 'feedback.write', 'inbox', 'inbox.write', 'phones', 'health', 'errors'],
   finance: ['overview', 'analytics', 'growth', 'referrals', 'affiliates', 'payouts', 'costs', 'audit'],
   viewer: ['overview', 'analytics', 'growth', 'phones', 'health'],
 };
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-const ADDABLE: Role[] = ['admin', 'support', 'finance', 'viewer'];
+const ADDABLE: Role[] = ['admin', 'growth_lead', 'growth_contributor', 'support', 'finance', 'viewer'];
 
 export const permissionsOf = (role: Role) => GRANTS[role];
 export const can = (role: Role, p: Permission) => GRANTS[role].includes(p);

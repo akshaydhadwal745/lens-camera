@@ -14,7 +14,11 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { growthDraft, growthOpportunity, growthPage, growthProposal, growthRec, growthRun, growthTools, growthUnwatch } from './growth';
+import { growthDraft, growthPage, growthRun, growthTools, growthUnwatch } from './growth';
+import { goalUpdate, settingsUpdate } from './growth-goals';
+import { partnerSave, postSave, recordDelete } from './growth-records';
+import { migrateLegacy, workspace } from './growth-workspace';
+import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
 import { overview } from './overview';
@@ -82,10 +86,20 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'GET /analytics') return await allowed('analytics', () => analytics(req));
     if (route === 'GET /growth') return await allowed('growth', () => growthPage(req));
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
-    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'recs' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthRec(seg[2], req, email));
-    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'proposals' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthProposal(seg[2], req, email));
-    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'opportunities' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthOpportunity(seg[2], req, email));
-    if (method === 'POST' && seg[0] === 'growth' && seg[1] === 'draft' && seg.length === 2) return await allowed('growth.write', () => growthDraft(req, email));
+    // Growth workspace tasks (growth-tasks.ts): see with growth, work with growth.contribute, manage with growth.write.
+    if (route === 'GET /growth/workspace') return await allowed('growth', () => workspace(email, role));
+    if (route === 'PUT /growth/settings') return await allowed('growth.write', () => settingsUpdate(req, email));
+    if (seg[0] === 'growth' && seg[1] === 'goals' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => goalUpdate(seg[2], req, email));
+    if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'PUT')
+      return await allowed('growth.contribute', () => (seg[1] === 'partners' ? partnerSave(seg[2], req, email) : postSave(seg[2], req, email)));
+    if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'DELETE')
+      return await allowed('growth.write', () => recordDelete(seg[1] === 'partners' ? 'PARTNER' : 'POST', seg[2], email));
+    if (route === 'GET /growth/tasks') return await allowed('growth', async () => (await migrateLegacy(), tasksPage()));
+    if (route === 'POST /growth/tasks') return await allowed('growth.contribute', () => taskCreate(req, email, role));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg.length === 3 && method === 'GET') return await allowed('growth', () => taskDetail(seg[2]));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg.length === 3 && method === 'PATCH') return await allowed('growth.contribute', () => taskUpdate(seg[2], req, email, role));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg[3] === 'comments' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => taskComment(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg[3] === 'draft' && seg.length === 4 && method === 'POST') return await allowed('growth.write', () => growthDraft(seg[2], email));
     if (route === 'PUT /growth/tools') return await allowed('growth.write', () => growthTools(req, email));
     if (route === 'DELETE /growth/watch') return await allowed('growth.write', () => growthUnwatch(req, email));
     if (route === 'GET /overview') return await allowed('overview', () => overview(req));

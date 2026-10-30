@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lens Console · Growth (prototype)</title>
+<style>
+/* Prototype of the redesigned Growth workspace in Lens Console. Same tokens as console/src/styles.css. */
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --side: #fbfbfa; --text: #16171a; --muted: #6b6f76; --line: #e6e6e2;
+  --accent: #1f5eff; --accent-soft: #e8efff;
+  --good: #137a3d; --good-soft: #e3f4ea; --warn: #8a5a00; --warn-soft: #fdf1d8; --bad: #b42318; --bad-soft: #fde7e5;
+  --radius: 12px; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0f1012; --panel: #17181b; --side: #131416; --text: #ececec; --muted: #9a9ea6; --line: #2a2c30;
+  --accent: #6b97ff; --accent-soft: #1c2640; --good: #5fd08c; --good-soft: #15301f; --warn: #f0c060; --warn-soft: #33290f;
+  --bad: #ff7b6e; --bad-soft: #3a1714; color-scheme: dark } }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-decoration: none; cursor: pointer; }
+button { font: inherit; cursor: pointer; }
+.app { display: grid; grid-template-columns: 236px 1fr; min-height: 100%; }
+/* sidebar */
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; padding: 4px 8px 14px; }
+.brand i { width: 26px; height: 26px; border-radius: 8px; background: var(--text); display: grid; place-items: center; color: var(--bg); font-style: normal; font-size: 13px; }
+.grp { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 14px 10px 4px; }
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--text); font-size: 14px; border: 0; background: none; text-align: left; width: 100%; }
+.nav:hover { background: var(--line); }
+.nav.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.nav.sub { padding-left: 22px; font-size: 13.5px; }
+.nav .ct { font-size: 11px; font-weight: 650; color: var(--muted); }
+.nav .ct.hot { color: var(--bad); }
+.dim { color: var(--muted); }
+.me { margin-top: auto; border-top: 1px solid var(--line); padding: 12px 10px 0; font-size: 13px; }
+/* main */
+.main { padding: 22px 28px 60px; display: grid; gap: 18px; align-content: start; min-width: 0; }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; }
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.head h1 { margin: 0; font-size: 24px; letter-spacing: -.01em; }
+.head p { margin: 2px 0 0; color: var(--muted); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 9px; padding: 7px 12px; font-weight: 600; font-size: 13px; }
+.btn:hover { border-color: var(--muted); }
+.btn.pr { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card > h2, .card > .ch h2 { margin: 0; font-size: 15px; }
+.ch { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 4px; }
+.stat .l { font-size: 12px; color: var(--muted); }
+.stat .v { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .s { font-size: 12px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.good { background: var(--good-soft); color: var(--good); } .warn { background: var(--warn-soft); color: var(--warn); } .bad { background: var(--bad-soft); color: var(--bad); }
+.acc { background: var(--accent-soft); color: var(--accent); } .plain { background: var(--side); color: var(--muted); border: 1px solid var(--line); }
+.kr { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; }
+.kr .t { font-size: 13.5px; } .kr .n { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.bar { grid-column: 1 / -1; height: 7px; background: var(--line); border-radius: 99px; position: relative; overflow: visible; }
+.bar > i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.bar > i.good { background: var(--good); } .bar > i.warn { background: var(--warn); } .bar > i.bad { background: var(--bad); }
+.bar > em { position: absolute; top: -3px; width: 2px; height: 13px; background: var(--text); opacity: .5; border-radius: 1px; }
+.task { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.task:first-child { border-top: 0; }
+.task:hover .tt { color: var(--accent); }
+.tt { font-weight: 600; font-size: 13.5px; }
+.tm { font-size: 12px; color: var(--muted); }
+.pri { font: 700 11px/1 ui-monospace, Menlo, monospace; text-align: center; padding: 5px 0; border-radius: 6px; }
+.p0 { background: var(--bad-soft); color: var(--bad); } .p1 { background: var(--warn-soft); color: var(--warn); } .p2 { background: var(--accent-soft); color: var(--accent); } .p3 { background: var(--side); color: var(--muted); border: 1px solid var(--line); }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; }
+.list li .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-top: 7px; flex: none; }
+.board { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.col { background: var(--side); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 190px; }
+.col h3 { margin: 0 2px 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; }
+.tc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 6px; cursor: pointer; font-size: 13px; }
+.tc:hover { border-color: var(--accent); }
+.tc .tt { font-size: 13px; }
+.tc .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ws { font-size: 11px; color: var(--muted); }
+.av { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10.5px; font-weight: 700; color: #fff; flex: none; }
+.av.ak { background: #5b6bff; } .av.pr { background: #d0632f; } .av.ag { background: #11806a; } .av.nn { background: var(--line); color: var(--muted); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tab { border: 0; background: none; padding: 8px 12px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.on { color: var(--text); border-color: var(--accent); }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 4px 10px; font-size: 12.5px; color: var(--text); }
+.chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 650; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--side); }
+.tw { overflow-x: auto; }
+.rm { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; overflow-x: auto; }
+.rmcol { display: grid; gap: 10px; align-content: start; }
+.rmcol > h3 { margin: 0; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.obj { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 10px; }
+.obj h4 { margin: 0; font-size: 14px; }
+.ms { border-top: 1px dashed var(--line); padding-top: 8px; font-size: 12.5px; display: grid; gap: 4px; }
+.stages { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap: 8px; overflow-x: auto; }
+.day { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; min-height: 120px; display: grid; gap: 6px; align-content: start; }
+.day b { font-size: 12px; color: var(--muted); }
+.post { border-radius: 8px; padding: 6px 8px; font-size: 12px; display: grid; gap: 2px; cursor: pointer; }
+.post.ig { background: #fbe7f3; color: #8a1d5e; } .post.yt { background: #fde7e5; color: #9e1c13; } .post.rd { background: #fff0e3; color: #973d00; } .post.wa { background: #e3f4ea; color: #126b36; } .post.li { background: #e8efff; color: #1a46b8; }
+@media (prefers-color-scheme: dark) { .post.ig { background: #3a1730; color: #f2a6d4; } .post.yt { background: #3a1714; color: #ff9d93; } .post.rd { background: #3a2410; color: #ffb37a; } .post.wa { background: #15301f; color: #7fdca4; } .post.li { background: #1c2640; color: #9db8ff; } }
+/* drawer */
+.scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .32); display: none; z-index: 20; }
+.scrim.open { display: block; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--panel); border-left: 1px solid var(--line); z-index: 21; transform: translateX(100%); transition: transform .2s ease; overflow-y: auto; padding: 22px 24px 40px; display: grid; gap: 16px; align-content: start; }
+.drawer.open { transform: none; }
+.drawer h2 { margin: 0; font-size: 19px; }
+dl.kv { display: grid; grid-template-columns: 130px 1fr; gap: 8px 14px; margin: 0; font-size: 13.5px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; min-width: 0; }
+.cm { display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: 13px; }
+.cm .when { color: var(--muted); font-size: 12px; }
+.hist { font-size: 12.5px; color: var(--muted); display: grid; gap: 4px; border-left: 2px solid var(--line); padding-left: 12px; }
+textarea { width: 100%; min-height: 60px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: var(--bg); color: var(--text); font: inherit; resize: vertical; }
+.spark { width: 100%; height: 40px; }
+.note { font-size: 12px; color: var(--muted); }
+.evid { background: var(--side); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: grid; gap: 4px; }
+@media (max-width: 860px) { .app { grid-template-columns: 1fr; } .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; } .grp, .me, .brand { display: none; } .main { padding: 16px; } }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Task detail"></aside>
+
+<script>
+// ---------- example data (real numbers from the 30 Oct 2026 report where available; people and partners are examples) ----------
+const PEOPLE = { ak: { name: 'Akshay', role: 'Owner', cls: 'ak', init: 'A' }, pr: { name: 'Priya', role: 'Growth lead (example)', cls: 'pr', init: 'P' }, ag: { name: 'Growth agent', role: 'AI', cls: 'ag', init: 'AI' }, nn: { name: 'Unassigned', role: '', cls: 'nn', init: '?' } };
+const WS = { search: 'Search & content', social: 'Social & distribution', store: 'Website & Play Store', retain: 'Activation & retention', loops: 'Referrals & events', partners: 'Partnerships', launch: 'Play launch' };
+const STATUSES = ['Suggested', 'Ready', 'In progress', 'In review', 'Done', 'Measured'];
+const TASKS = [
+  { id: 'T-41', title: 'Get 3 more testers to opt in', ws: 'launch', pri: 0, status: 'In progress', owner: 'ak', due: 'Today', overdue: true, goal: 'O1', effort: '2 h',
+    why: 'Google needs 12 testers opted in for 14 continuous days before production. The clock hasn’t started.', evidence: ['Testers opted in: 9 of 12 (example)'], metric: 'Testers opted in', baseline: '9', target: '12', check: 'Daily', links: ['play.google.com/apps/testing/com.instagrowapp.lens'] },
+  { id: 'T-38', title: 'Run the first real QR event album', ws: 'loops', pri: 1, status: 'In progress', owner: 'pr', due: 'Sat 1 Nov', goal: 'O2', effort: '4 h',
+    why: 'Events are our launch wedge. Nobody outside the team has created or joined an event album yet.', evidence: ['Event albums joined: 0 (loops.event_join)', 'Wedding season in India starts now (Nov–Feb)'], metric: 'Guests who join; guests who install', baseline: '0 / 0', target: '25 / 3', check: '8 Nov', links: ['/guides/collect-wedding-photos-qr-code/'] },
+  { id: 'T-35', title: 'Review the agent’s PR: free cloud backup page', ws: 'search', pri: 1, status: 'In review', owner: 'ak', reviewer: 'ak', due: 'Fri 31 Oct', goal: 'O2', effort: '20 min', source: 'AI · report 30 Oct',
+    why: '"free cloud storage" is rising fast; the page promised "unlimited" and its title was cut off in Google.', evidence: ['Bing US "free cloud storage": 4,769 searches in 12 weeks (was 1,592)', 'Bing US "backup photos": 7,707 (was 1,487)', 'Wikipedia "Cloud storage": +30% year on year'], metric: 'Impressions and Get Lens rate for /features/free-cloud-backup/', baseline: '0 · 0%', target: 'first impressions', check: '27 Nov', links: ['PR #10 · SEO check passed', '/features/free-cloud-backup/'], pr: true },
+  { id: 'T-33', title: 'Remove "unlimited" claims across the site', ws: 'search', pri: 0, status: 'In review', owner: 'ak', due: 'Fri 31 Oct', goal: 'O1', effort: '15 min', source: 'AI · report 30 Oct',
+    why: 'The site promised "unlimited and free" with your own Drive; Drive’s free plan is 15 GB. Trust and policy risk.', evidence: ['15 places in English and Hindi', 'product-facts.md: never promise unlimited'], metric: 'No "unlimited" on the site', baseline: '15', target: '0', check: 'On merge', links: ['PR #9 (merge after #10)'] },
+  { id: 'T-30', title: 'Post the WhatsApp full-quality guide in 3 communities', ws: 'social', pri: 2, status: 'Ready', owner: 'pr', due: 'Fri 31 Oct', goal: 'O2', effort: '1 h', source: 'AI · report 30 Oct',
+    why: 'Distribution, not the website, is the bottleneck: 22 of 24 visits in 30 days were direct.', evidence: ['Website visits 30 days: 24 (web.visits_30d)', 'Direct: 22 (web.source.1)'], metric: 'Visits with utm_source=reddit|whatsapp', baseline: '0', target: '30', check: '14 Nov', links: ['/guides/send-full-quality-photos-whatsapp/'] },
+  { id: 'T-29', title: 'Shortlist 20 wedding photographers in Delhi NCR', ws: 'partners', pri: 1, status: 'Ready', owner: 'nn', due: 'Tue 4 Nov', goal: 'O3', effort: '3 h',
+    why: 'Photographers bring events every week; 5 partners live is a day-90 key result.', evidence: ['Strategy §3 Phase C: partnerships pilot'], metric: 'Partners in pipeline', baseline: '0', target: '20 leads', check: '11 Nov', links: [] },
+  { id: 'T-27', title: '"photo backup" landing page', ws: 'search', pri: 2, status: 'Suggested', owner: 'nn', due: '—', goal: 'O2', effort: '1 day', source: 'AI · report 30 Oct',
+    why: 'Fastest-rising seed keyword this quarter on Bing (US).', evidence: ['Bing US "photo backup": 4,735 searches in 12 weeks (was 1,026, +362%)'], metric: 'Impressions for "photo backup"', baseline: '0', target: '100/week', check: '+6 weeks', links: [] },
+  { id: 'T-26', title: 'Hindi Play Store listing', ws: 'store', pri: 2, status: 'Suggested', owner: 'nn', due: '—', goal: 'O2', effort: '2 h', source: 'AI · strategy A4',
+    why: 'The listing is English only; Hindi users convert better on a listing in their language.', evidence: ['Listing languages: en-US only'], metric: 'Store listing conversion (hi-IN)', baseline: 'n/a', target: '+20%', check: '+4 weeks', links: [] },
+  { id: 'T-22', title: 'Decide: keep the name "Lens"?', ws: 'launch', pri: 0, status: 'In progress', owner: 'ak', due: 'Mon 3 Nov', goal: 'O1', effort: 'decision', blocked: false,
+    why: '"Lens" collides with Google Lens: word of mouth fails ("download Lens" finds Google’s app). Cheap to change before production, expensive after.', evidence: ['Strategy §2.1'], metric: 'Decision made', baseline: '—', target: 'Yes', check: '—', links: [] },
+  { id: 'T-19', title: 'New homepage positioning: "Phone full? Shoot everything."', ws: 'store', pri: 1, status: 'Done', owner: 'ag', due: '28 Oct', goal: 'O1', effort: '1 day',
+    why: 'Lead with the problem, not gigabytes.', evidence: ['Strategy §2.2'], metric: 'Visits → Get Lens', baseline: '7.1%', target: '12%', check: '20 Nov', links: ['/'] },
+  { id: 'T-12', title: 'Get the site indexed by Google', ws: 'search', pri: 0, status: 'Measured', owner: 'ag', due: '29 Oct', goal: 'O1', effort: '2 h', result: { value: '62 of 64 pages indexed (from 1)', verdict: 'Worked' },
+    why: 'Pages that aren’t indexed can’t bring visitors.', evidence: ['search.indexed_pages: 1 → 62'], metric: 'Pages indexed', baseline: '1', target: '50', check: '30 Oct', links: [] },
+];
+const GOALS = [
+  { id: 'O1', col: 'Now · launch', title: 'Launch on Google Play', status: ['warn', 'At risk'], why: 'Testers opted in is behind pace', krs: [['Testers opted in', 9, 12, 75, 60, 'warn'], ['Closed-test days', 1, 14, 7, 7, 'plain'], ['Pages indexed by Google', 62, 64, 97, 50, 'good']], ms: ['Milestone A · launch prep: 7 of 10 tasks done', 'Blocked: name decision, Play Billing'] },
+  { id: 'O2', col: 'Day 30 after launch', title: 'First real users', status: ['plain', 'Starts at launch'], why: 'Targets from the strategy, recalibrated after 4 weeks', krs: [['Installs', 3, 300, 1, 0, 'plain'], ['Weekly backup users', 3, 100, 3, 0, 'plain'], ['Play ratings ≥ 4.5★', 0, 20, 0, 0, 'plain'], ['Events created', 1, 10, 10, 0, 'plain']], ms: ['Milestone B · launch week: 0 of 8 tasks'] },
+  { id: 'O3', col: 'Day 90', title: 'Loops that compound', status: ['plain', 'Not started'], why: '', krs: [['Weekly backup users', 3, 1000, 0, 0, 'plain'], ['Week-4 retention', 0, 20, 0, 0, 'plain'], ['Paying Plus users', 0, 30, 0, 0, 'plain'], ['Partners live', 0, 5, 0, 0, 'plain']], ms: ['Milestone C · partnerships pilot: 0 of 6 tasks'] },
+  { id: 'H', col: 'Health · always', title: 'Guardrails', status: ['good', 'On track'], why: '', krs: [['Crash-free sessions', 99.7, 99.5, 100, 100, 'good'], ['Storage cost per active user', '$0.01', '↓', 100, 100, 'good']], ms: [] },
+];
+const PARTNERS = {
+  Lead: [['Studio Rangoli', 'Wedding photographer · Delhi', 'nn'], ['Shaadi Stories', 'Planner · Jaipur', 'nn'], ['IIT Delhi Rendezvous', 'College fest · 60k visitors', 'pr']],
+  Contacted: [['Clickwala Films', 'Photographer · Mumbai', 'pr'], ['Travel with Riya', 'Influencer · 48k', 'pr']],
+  Meeting: [['Frame & Fable', 'Photographer · Bengaluru', 'ak']],
+  Pilot: [['Dreamline Weddings', 'Planner · 3 weddings in Nov', 'ak']],
+  Live: [],
+  'Won / lost': [['PixelWed', 'Lost: wants white-label', 'ak']],
+};
+
+// ---------- state ----------
+let view = 'today';
+let boardFilter = 'all';
+const $ = (id) => document.getElementById(id);
+const av = (k) => `<span class="av ${PEOPLE[k].cls}" title="${PEOPLE[k].name}">${PEOPLE[k].init}</span>`;
+const pri = (p) => `<span class="pri p${p}">P${p}</span>`;
+const statusPill = (t) => t.overdue ? '<span class="pill bad">Overdue</span>' : { Suggested: '<span class="pill acc">Suggested</span>', Ready: '<span class="pill plain">Ready</span>', 'In progress': '<span class="pill warn">In progress</span>', 'In review': '<span class="pill warn">In review</span>', Done: '<span class="pill good">Done · measuring</span>', Measured: '<span class="pill good">Measured</span>' }[t.status];
+const count = (f) => TASKS.filter(f).length;
+
+const NAV = [
+  ['Insights', [['Overview', null], ['Analytics', null]]],
+  ['Growth', [['today', 'Today', () => count((t) => t.owner === 'ak' && ['Ready', 'In progress', 'In review'].includes(t.status)), true], ['goals', 'Goals & roadmap'], ['tasks', 'Tasks', () => count((t) => t.status !== 'Measured')], ['insights', 'Insights', () => count((t) => t.status === 'Suggested')]]],
+  ['Workstreams', [['search', 'Search & content'], ['social', 'Social & distribution'], ['store', 'Website & Play Store'], ['retain', 'Activation & retention'], ['loops', 'Referrals & events'], ['partners', 'Partnerships']]],
+  ['Operate', [['Users', null], ['Feedback & reports', null], ['Notifications', null]]],
+  ['Admin', [['growth-settings', 'Growth settings'], ['Team', null]]],
+];
+
+function renderSide() {
+  let h = '<div class="brand"><i>◉</i>Lens Console</div>';
+  for (const [g, items] of NAV) {
+    h += `<div class="grp">${g}</div>`;
+    for (const it of items) {
+      if (it[1] === null) { h += `<button class="nav dim" disabled>${it[0]}</button>`; continue; }
+      const [key, label, ct, hot] = it;
+      const n = ct ? ct() : '';
+      h += `<button class="nav ${g === 'Workstreams' ? 'sub' : ''} ${view === key ? 'on' : ''}" data-view="${key}"><span>${label}</span>${n !== '' ? `<span class="ct ${hot ? 'hot' : ''}">${n}</span>` : ''}</button>`;
+    }
+  }
+  h += '<div class="me">akshaydhadwal2@gmail.com<br><span class="dim">Owner</span></div>';
+  $('side').innerHTML = h;
+}
+
+const banner = '<div class="banner">Prototype of the redesigned Growth workspace. Real numbers from the 30 Oct 2026 report where available; people, partners and some numbers are examples. Click around: tasks open a detail panel.</div>';
+
+function taskRow(t) {
+  return `<div class="task" data-task="${t.id}">${pri(t.pri)}<div><div class="tt">${t.title}</div><div class="tm">${WS[t.ws]} · due ${t.due}${t.source ? ' · ' + t.source : ''}</div></div><div style="display:flex;gap:8px;align-items:center">${statusPill(t)}${av(t.owner)}</div></div>`;
+}
+const kr = ([label, cur, target, pct, pace, tone]) => `<div class="kr"><span class="t">${label}</span><span class="n">${cur} / ${target}</span><div class="bar"><i class="${tone === 'plain' ? '' : tone}" style="width:${Math.max(pct, 1)}%"></i>${pace ? `<em style="left:${pace}%"></em>` : ''}</div></div>`;
+
+// ---------- views ----------
+const VIEWS = {
+  today() {
+    const mine = TASKS.filter((t) => ['ak'].includes(t.owner) && ['Ready', 'In progress', 'In review'].includes(t.status)).sort((a, b) => a.pri - b.pri);
+    return `${banner}
+    <div class="head"><div><h1>Good afternoon, Akshay</h1><p>Thursday 30 October · Closed test, day 1 · Goal period: November 2026</p></div><div class="actions"><button class="btn">+ New task</button><button class="btn pr" data-view="insights">This week's brief</button></div></div>
+    <div class="grid4">
+      <div class="stat"><span class="l">Weekly backup users · north star</span><span class="v">3</span><span class="s"><span class="pill plain">target 100 by launch + 30 d</span></span></div>
+      <div class="stat"><span class="l">Installs, 30 days</span><span class="v">3</span><span class="s">all 3 backed up a photo</span></div>
+      <div class="stat"><span class="l">Website visits, 30 days</span><span class="v">24</span><span class="s">22 direct · 4 Get Lens clicks this week</span></div>
+      <div class="stat"><span class="l">Google: pages indexed</span><span class="v">62<span class="dim" style="font-size:15px"> / 64</span></span><span class="s">0 search impressions yet</span></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="ch"><h2>My work</h2><a data-view="tasks">All tasks →</a></div>${mine.map(taskRow).join('')}</div>
+      <div class="card"><div class="ch"><h2>Goals this month</h2><a data-view="goals">Roadmap →</a></div>
+        ${GOALS[0].krs.map(kr).join('')}${kr(['Events created by real users', 1, 10, 10, 40, 'bad'])}
+        <span class="note">The tick shows where we should be by today. Bars move only when the metric moves.</span></div>
+    </div>
+    <div class="grid3">
+      <div class="card"><h2>Needs your decision</h2><ul class="list">
+        <li><span class="dot"></span><span><a data-task="T-35">Review PR #10</a>: free cloud backup page (SEO check passed)</span></li>
+        <li><span class="dot"></span><span><a data-view="insights">Triage 2 new opportunities</a> from this week's analysis</span></li>
+        <li><span class="dot" style="background:var(--bad)"></span><span><a data-task="T-22">Name decision</a>: blocks the Hindi listing and launch posts</span></li>
+        <li><span class="dot"></span><span>Pilot terms for <a data-view="partners">Dreamline Weddings</a></span></li></ul></div>
+      <div class="card"><h2>What changed this week</h2><ul class="list">
+        <li><span class="dot"></span><span>"photo backup" searches on Bing (US) up 362% in 12 weeks</span></li>
+        <li><span class="dot"></span><span>Get Lens clicks: 4 this week, 0 the week before</span></li>
+        <li><span class="dot"></span><span>Google indexed 61 more pages (1 → 62)</span></li>
+        <li><span class="dot" style="background:var(--warn)"></span><span>The site promised "unlimited": fix in review</span></li></ul></div>
+      <div class="card"><h2>Recent wins</h2><ul class="list">
+        <li><span class="dot" style="background:var(--good)"></span><span><b>Site indexed</b>: 62 of 64 pages, from 1. <span class="pill good">Worked</span></span></li>
+        <li><span class="dot" style="background:var(--good)"></span><span><b>New homepage positioning</b> shipped 28 Oct. Measuring Get Lens rate until 20 Nov.</span></li>
+        <li><span class="dot" style="background:var(--good)"></span><span><b>GA4 + consent</b> live; first data tomorrow.</span></li></ul></div>
+    </div>`;
+  },
+  goals() {
+    const cols = [...new Set(GOALS.map((g) => g.col))];
+    return `${banner}<div class="head"><div><h1>Goals &amp; roadmap</h1><p>What we're trying to achieve, by when, and whether we're on track. Progress comes from real metrics and verified tasks only.</p></div><div class="actions"><button class="btn">Edit targets</button></div></div>
+    <div class="card"><h2>This month: get Lens into the Play Store with 12 committed testers and the first real event</h2><span class="note">Set by Akshay on 30 Oct. Review on 30 Nov.</span></div>
+    <div class="rm">${cols.map((c) => `<div class="rmcol"><h3>${c}</h3>${GOALS.filter((g) => g.col === c).map((g) => `<div class="obj"><div class="ch"><h4>${g.id === 'H' ? '' : g.id + ' · '}${g.title}</h4><span class="pill ${g.status[0]}">${g.status[1]}</span></div>${g.why ? `<span class="note">${g.why}</span>` : ''}${g.krs.map(kr).join('')}${g.ms.length ? `<div class="ms">${g.ms.map((m) => `<span>${m}</span>`).join('')}</div>` : ''}<a data-view="tasks" data-goal="${g.id}">${count((t) => t.goal === g.id)} tasks →</a></div>`).join('')}</div>`).join('')}</div>
+    <div class="grid2">
+      <div class="card"><h2>Blockers</h2><ul class="list"><li><span class="dot" style="background:var(--bad)"></span><span><b>Testers:</b> 9 of 12 opted in. The 14-day clock starts at 12.</span></li><li><span class="dot" style="background:var(--warn)"></span><span><b>Name decision</b> open since 29 Oct.</span></li><li><span class="dot" style="background:var(--warn)"></span><span><b>Play Billing</b> parked: paid plans can't launch on Play yet.</span></li></ul></div>
+      <div class="card"><h2>How this is calculated</h2><span class="note">Key result = (current − baseline) ÷ (target − baseline), read from the metrics every day. On track if progress ≥ share of the period elapsed; at risk if 10–25 points short; behind beyond that. Milestones = verified-done tasks ÷ all tasks, weighted by effort.</span></div>
+    </div>`;
+  },
+  tasks() {
+    const f = (t) => boardFilter === 'all' || t.ws === boardFilter;
+    return `${banner}<div class="head"><div><h1>Tasks</h1><p>Every piece of growth work, from AI suggestions to partner calls, in one place.</p></div><div class="actions"><button class="btn pr">+ New task</button></div></div>
+    <div class="filters"><button class="chip ${boardFilter === 'all' ? 'on' : ''}" data-filter="all">All</button>${Object.entries(WS).map(([k, v]) => `<button class="chip ${boardFilter === k ? 'on' : ''}" data-filter="${k}">${v}</button>`).join('')}<span class="note" style="margin-left:auto">Board · List · Mine</span></div>
+    <div class="board">${STATUSES.map((s) => { const ts = TASKS.filter((t) => t.status === s && f(t)); return `<div class="col"><h3>${s}<span>${ts.length}</span></h3>${ts.map((t) => `<div class="tc" data-task="${t.id}"><div class="meta">${pri(t.pri)}<span class="ws">${WS[t.ws]}</span></div><div class="tt">${t.title}</div><div class="meta" style="justify-content:space-between">${av(t.owner)}<span class="tm">${t.overdue ? '<span class="pill bad">Overdue</span>' : t.due}</span></div></div>`).join('') || '<span class="note">Nothing here</span>'}</div>`; }).join('')}</div>`;
+  },
+  insights() {
+    return `${banner}<div class="head"><div><h1>Insights</h1><p>The growth agent's analysis of 30 October 2026. Every number is checked against the data before it's shown.</p></div><div class="actions"><button class="btn">History</button><button class="btn pr">Run analysis now</button></div></div>
+    <div class="card"><h2>This week in one paragraph</h2><p style="margin:0;max-width:75ch">Still a very early week. Google has indexed 62 of 64 pages but Lens hasn't appeared in results yet. 24 website visits in 30 days, 22 direct; 4 Get Lens clicks this week against 0. Three installs, all of whom backed up a photo. The free cloud backup page promised "unlimited": a fix is in review. Wedding season is starting and the QR event album is the one loop nobody has tried yet.</p></div>
+    <div class="card"><div class="ch"><h2>New opportunities to triage</h2><span class="note">Accept to create a task · Dismiss teaches the agent</span></div>
+      <div class="tw"><table><thead><tr><th>Opportunity</th><th>Evidence</th><th class="num">Score</th><th></th></tr></thead><tbody>
+      <tr><td><b>"photo backup" landing page</b><div class="tm">Search &amp; content · new page</div></td><td class="tm">Bing US 4,735 searches in 12 weeks, was 1,026 (+362%)</td><td class="num">6.8</td><td><button class="btn sm pr">Accept</button> <button class="btn sm">Dismiss</button></td></tr>
+      <tr><td><b>Collect wedding photos with a QR code: social push</b><div class="tm">Social · posts</div></td><td class="tm">Search demand unmeasured in India; season starting; 0 event joins</td><td class="num">3.8</td><td><button class="btn sm pr">Accept</button> <button class="btn sm">Dismiss</button></td></tr>
+      <tr><td><b>Improve "Lens vs Google Photos"</b><div class="tm">Search &amp; content · existing page</div></td><td class="tm">"google photos" 19,816 Bing India searches; page not yet indexed</td><td class="num">3.6</td><td><button class="btn sm pr">Accept</button> <button class="btn sm">Dismiss</button></td></tr>
+      </tbody></table></div></div>
+    <div class="grid2">
+      <div class="card"><h2>Anomalies</h2><ul class="list"><li><span class="dot" style="background:var(--warn)"></span><span>Get Lens clicks 0 → 4 week on week (small numbers)</span></li><li><span class="dot" style="background:var(--warn)"></span><span>Wikipedia "Google Photos" views −15% year on year</span></li></ul></div>
+      <div class="card"><h2>Data sources</h2><ul class="list"><li><span class="dot" style="background:var(--good)"></span><span>Search Console · GA4 · Bing keywords · Wikipedia · Trending now · app and website</span></li><li><span class="dot" style="background:var(--warn)"></span><span>Play Console reports: waiting for access</span></li><li><span class="dot" style="background:var(--warn)"></span><span>Google Trends API: alpha applied 30 Oct</span></li></ul></div>
+    </div>`;
+  },
+  search() {
+    const ts = TASKS.filter((t) => t.ws === 'search');
+    return `${banner}<div class="head"><div><h1>Search &amp; content</h1><p>Outcome: more relevant people discover Lens through Google and Bing.</p></div><div class="actions"><button class="btn">Content calendar</button><button class="btn pr">+ New page</button></div></div>
+    <div class="grid4">
+      <div class="stat"><span class="l">Search impressions, 28 d</span><span class="v">0</span><span class="s">pages only indexed since 29 Oct</span></div>
+      <div class="stat"><span class="l">Pages indexed</span><span class="v">62 / 64</span><span class="s">2 discovered, not crawled</span></div>
+      <div class="stat"><span class="l">Pages in progress</span><span class="v">2</span><span class="s">1 PR in review</span></div>
+      <div class="stat"><span class="l">Published, measuring</span><span class="v">1</span><span class="s">results due 20 Nov</span></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="ch"><h2>Work</h2><a data-view="tasks" data-filter="search">Board →</a></div>${ts.map(taskRow).join('')}</div>
+      <div class="card"><h2>Demand: what people search for</h2><div class="tw"><table><thead><tr><th>Keyword</th><th>Source</th><th class="num">12 weeks</th><th class="num">Change</th></tr></thead><tbody>
+        <tr><td>backup photos</td><td class="tm">Bing US</td><td class="num">7,707</td><td class="num" style="color:var(--good)">+418%</td></tr>
+        <tr><td>free cloud storage</td><td class="tm">Bing US</td><td class="num">4,769</td><td class="num" style="color:var(--good)">+200%</td></tr>
+        <tr><td>photo backup</td><td class="tm">Bing US</td><td class="num">4,735</td><td class="num" style="color:var(--good)">+362%</td></tr>
+        <tr><td>google photos</td><td class="tm">Bing IN</td><td class="num">19,816</td><td class="num" style="color:var(--bad)">−9%</td></tr>
+        <tr><td>free cloud storage</td><td class="tm">Bing IN</td><td class="num">34</td><td class="num" style="color:var(--bad)">−42%</td></tr>
+      </tbody></table></div><span class="note">Bing searches are real counts on Bing only. Google Trends joins when the alpha is approved.</span></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>Pages that need attention</h2><ul class="list"><li><span class="dot" style="background:var(--warn)"></span><span>/compare/google-photos/: discovered but never crawled. <a>Request indexing</a></span></li><li><span class="dot" style="background:var(--warn)"></span><span>23 titles longer than 60 characters</span></li><li><span class="dot"></span><span>26 thin pages (under 300 words)</span></li></ul></div>
+      <div class="card"><h2>Published content and results</h2><div class="tw"><table><thead><tr><th>Page</th><th>Shipped</th><th>Result</th></tr></thead><tbody><tr><td>Homepage positioning</td><td class="tm">28 Oct</td><td><span class="pill plain">measuring · 20 Nov</span></td></tr><tr><td>Site indexing</td><td class="tm">29 Oct</td><td><span class="pill good">Worked: 1 → 62 pages</span></td></tr></tbody></table></div></div>
+    </div>`;
+  },
+  partners() {
+    return `${banner}<div class="head"><div><h1>Partnerships</h1><p>Outcome: photographers, planners, colleges and creators who bring events and users every week.</p></div><div class="actions"><button class="btn">Ask agent for leads</button><button class="btn pr">+ Add partner</button></div></div>
+    <div class="grid4">
+      <div class="stat"><span class="l">In pipeline</span><span class="v">8</span><span class="s">goal: 20 leads by 11 Nov</span></div>
+      <div class="stat"><span class="l">Pilots running</span><span class="v">1</span><span class="s">3 weddings in November</span></div>
+      <div class="stat"><span class="l">Partners live</span><span class="v">0</span><span class="s">day-90 goal: 5</span></div>
+      <div class="stat"><span class="l">Events from partners</span><span class="v">0</span><span class="s">measured via each partner's link</span></div>
+    </div>
+    <div class="stages">${Object.entries(PARTNERS).map(([s, ps]) => `<div class="col"><h3>${s}<span>${ps.length}</span></h3>${ps.map(([n, d, o]) => `<div class="tc"><div class="tt">${n}</div><div class="tm">${d}</div><div class="meta" style="justify-content:space-between">${av(o)}<span class="tm">next: ${s === 'Lead' ? 'first message' : s === 'Contacted' ? 'follow up Mon' : s === 'Meeting' ? 'demo Tue 4 Nov' : s === 'Pilot' ? 'first event 8 Nov' : 'closed'}</span></div></div>`).join('') || '<span class="note">None yet</span>'}</div>`).join('')}</div>
+    <span class="note">Example partners. Each partner gets a tagged link, so events, guests and installs they bring are counted automatically. The agent researches leads and drafts outreach; a person sends it.</span>`;
+  },
+  social() {
+    const days = [['Mon 3', [['ig', 'Reel: phone full? before/after'], ['wa', 'Testers group: day-5 update']]], ['Tue 4', [['rd', 'r/Android: full-quality WhatsApp guide']]], ['Wed 5', [['li', 'Build in public: week 1 numbers']]], ['Thu 6', [['ig', 'Carousel: wedding QR album in 3 steps']]], ['Fri 7', [['yt', 'Short: Night mode vs stock camera']]], ['Sat 8', [['wa', 'Wedding: live event album (pilot)']]], ['Sun 9', []]];
+    return `${banner}<div class="head"><div><h1>Social &amp; distribution</h1><p>Outcome: people outside our circle see Lens every week, and we know which posts bring visits and installs.</p></div><div class="actions"><button class="btn">Ask agent for drafts</button><button class="btn pr">+ New post</button></div></div>
+    <div class="grid4"><div class="stat"><span class="l">Posts this week</span><span class="v">7</span><span class="s">5 drafted by the agent, 2 approved</span></div><div class="stat"><span class="l">Visits from social, 30 d</span><span class="v">0</span><span class="s">tagged links from 3 Nov</span></div><div class="stat"><span class="l">Accounts</span><span class="v">0 / 3</span><span class="s">blocked: name decision</span></div><div class="stat"><span class="l">Best post</span><span class="v">—</span><span class="s">after the first week</span></div></div>
+    <div class="cal">${days.map(([d, ps]) => `<div class="day"><b>${d}</b>${ps.map(([c, t]) => `<div class="post ${c}"><strong>${{ ig: 'Instagram', yt: 'YouTube', rd: 'Reddit', wa: 'WhatsApp', li: 'LinkedIn' }[c]}</strong>${t}</div>`).join('')}</div>`).join('')}</div>
+    <span class="note">Example calendar. Posts are drafted from published pages and real milestones; a person posts them. Every post carries a tagged link, so its visits and installs show here.</span>`;
+  },
+  store() { return wsSimple('Website &amp; Play Store', 'Outcome: more visitors become installs, on the website and the Play listing.', [['Visits → Get Lens', '7.1%', '30 days'], ['Play listing visitors', '—', 'needs report access'], ['Store conversion', '—', 'after launch'], ['Rating', '—', '0 ratings']], 'store', ['Listing is English only (Hindi, Indonesian, Portuguese next)', 'Screenshots from 19 Oct: refresh with the new design', 'Website download button still points to the APK: switch to Play on launch day']); },
+  retain() { return wsSimple('Activation &amp; retention', 'Outcome: new users back up their first photo, sign in, and keep coming back.', [['Backed up a photo', '100%', '3 of 3 installs'], ['Signed in', '66.7%', '2 of 3'], ['D7 retention', '—', 'too few installs'], ['Paying', '0', 'Plus on website only']], 'retain', ['Too few installs to judge rates (need about 20–30)', 'Re-engagement: "you have 9 photos not backed up" notification idea', 'Plus offer timing: last 30 days of the welcome storage']); },
+  loops() { return wsSimple('Referrals &amp; events', 'Outcome: every user brings more users: invites, shared links and event albums.', [['Event albums created', '1', '30 days'], ['Guests who joined', '0', '30 days'], ['Invites accepted', '0', '30 days'], ['Share links opened', '2', '30 days']], 'loops', ['First real event album this weekend', 'QR card printable for weddings', 'Guest → install path: measure after the first event']); },
+  'growth-settings'() {
+    return `${banner}<div class="head"><div><h1>Growth settings</h1><p>Team, the agent's permissions, data sources and product facts.</p></div></div>
+    <div class="grid2"><div class="card"><h2>Team</h2><div class="tw"><table><thead><tr><th>Person</th><th>Role</th><th>Owns</th></tr></thead><tbody><tr><td>${av('ak')} Akshay</td><td>Owner</td><td>Play launch, decisions</td></tr><tr><td>${av('pr')} Priya (example)</td><td>Growth lead</td><td>Social, events, partnerships</td></tr><tr><td>${av('ag')} Growth agent</td><td>AI</td><td>Analysis, drafts, PRs (can't merge)</td></tr></tbody></table></div></div>
+    <div class="card"><h2>What the agent may do</h2><ul class="list"><li><span class="dot" style="background:var(--good)"></span><span>Read: Search Console, GA4, Bing, Wikipedia, website code</span></li><li><span class="dot" style="background:var(--good)"></span><span>Draft: pull requests, posts, listing text, outreach (a person approves)</span></li><li><span class="dot" style="background:var(--muted)"></span><span>Resubmit sitemap (off)</span></li><li><span class="dot" style="background:var(--bad)"></span><span>Never: merge, publish, spend money, contact anyone</span></li></ul></div></div>`;
+  },
+};
+function wsSimple(title, outcome, stats, ws, notes) {
+  const ts = TASKS.filter((t) => t.ws === ws);
+  return `${banner}<div class="head"><div><h1>${title}</h1><p>${outcome}</p></div><div class="actions"><button class="btn pr">+ New task</button></div></div>
+  <div class="grid4">${stats.map(([l, v, s]) => `<div class="stat"><span class="l">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join('')}</div>
+  <div class="grid2"><div class="card"><h2>Work</h2>${ts.map(taskRow).join('') || '<span class="note">No tasks yet</span>'}</div><div class="card"><h2>Opportunities and notes</h2><ul class="list">${notes.map((n) => `<li><span class="dot"></span><span>${n}</span></li>`).join('')}</ul></div></div>`;
+}
+
+// ---------- task drawer ----------
+function openTask(id) {
+  const t = TASKS.find((x) => x.id === id);
+  if (!t) return;
+  const step = STATUSES.indexOf(t.status);
+  $('drawer').innerHTML = `<div class="ch"><span class="tm">${t.id} · ${WS[t.ws]}${t.source ? ' · ' + t.source : ''}</span><button class="btn sm" id="close">Close</button></div>
+  <h2>${t.title}</h2>
+  <div class="filters">${STATUSES.map((s, i) => `<span class="pill ${i < step ? 'good' : i === step ? 'acc' : 'plain'}">${s}</span>`).join('')}</div>
+  <dl class="kv"><dt>Priority</dt><dd>${pri(t.pri)}</dd><dt>Owner</dt><dd>${av(t.owner)} ${PEOPLE[t.owner].name}${t.reviewer ? ` · reviewer ${PEOPLE[t.reviewer].name}` : ''}</dd><dt>Due</dt><dd>${t.due}${t.overdue ? ' <span class="pill bad">Overdue</span>' : ''}</dd><dt>Effort</dt><dd>${t.effort}</dd><dt>Goal</dt><dd><a data-view="goals">${t.goal} · ${(GOALS.find((g) => g.id === t.goal) || {}).title || ''}</a></dd></dl>
+  <div class="card" style="padding:12px 14px"><h2>Why</h2><span>${t.why}</span>${t.evidence.map((e) => `<div class="evid">${e}</div>`).join('')}</div>
+  <div class="card" style="padding:12px 14px"><h2>Success metric</h2><dl class="kv"><dt>Metric</dt><dd>${t.metric}</dd><dt>Baseline</dt><dd>${t.baseline}</dd><dt>Target</dt><dd>${t.target}</dd><dt>Check on</dt><dd>${t.check}</dd>${t.result ? `<dt>Result</dt><dd>${t.result.value} <span class="pill good">${t.result.verdict}</span></dd>` : ''}</dl></div>
+  ${t.links.length ? `<div class="card" style="padding:12px 14px"><h2>Linked</h2>${t.links.map((l) => `<span>${l}</span>`).join('')}</div>` : ''}
+  <div class="actions">${t.pr ? '<button class="btn pr">Open PR #10</button>' : ''}${t.status === 'Suggested' ? '<button class="btn pr">Accept</button><button class="btn">Ask agent to draft</button>' : ''}<button class="btn">Change status</button><button class="btn">Reassign</button></div>
+  <div class="card" style="padding:12px 14px"><h2>Discussion</h2>
+    <div class="cm">${av('pr')}<div><b>Priya</b> <span class="when">today 10:12</span><br>${t.ws === 'search' ? 'Checked the Hindi copy, reads well. One nit on the comparison table.' : 'Spoke to two of them, both keen. Following up tomorrow.'}</div></div>
+    <div class="cm">${av('ag')}<div><b>Growth agent</b> <span class="when">today 09:40</span><br>Baseline recorded from this week's data. I'll write the result back on ${t.check}.</div></div>
+    <textarea id="comment" placeholder="Add a note, @mention someone…"></textarea></div>
+  <div class="hist"><span>Created ${t.source ? 'by the growth agent' : 'by Akshay'} · 30 Oct</span><span>Assigned to ${PEOPLE[t.owner].name} · 30 Oct</span><span>Status → ${t.status} · 30 Oct</span></div>`;
+  $('drawer').classList.add('open');
+  $('scrim').classList.add('open');
+}
+function closeTask() { $('drawer').classList.remove('open'); $('scrim').classList.remove('open'); }
+
+function render() {
+  renderSide();
+  $('main').innerHTML = VIEWS[view]();
+  window.scrollTo(0, 0);
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-view],[data-task],[data-filter],#close,#scrim');
+  if (!el) return;
+  if (el.id === 'close' || el.id === 'scrim') return closeTask();
+  if (el.dataset.task) return openTask(el.dataset.task);
+  if (el.dataset.filter && !el.dataset.view) { boardFilter = el.dataset.filter; return render(); }
+  if (el.dataset.view) { view = el.dataset.view; boardFilter = el.dataset.filter || 'all'; closeTask(); render(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTask(); });
+render();
+</script>
+</body>
+</html>

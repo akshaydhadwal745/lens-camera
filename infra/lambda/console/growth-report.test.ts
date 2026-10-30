@@ -118,7 +118,7 @@ test('a whole report: unknown fact ids and invented numbers are reported', () =>
   const good: AiReport = {
     summary: 'Visits went from 7 to 21; Google has indexed 0 of 64 pages.',
     findings: [{ severity: 'high', title: 'Indexing', detail: '0 of 64 pages indexed.', facts: ['search.indexed_pages', 'search.sitemap_pages'] }],
-    recommendations: [{ title: 'Request indexing', hypothesis: 'Requesting indexing gets key pages indexed within 2 weeks', expectedImpact: 'More indexed pages', effort: 'low', cost: 'Free, 15 minutes', timeToResult: '2–3 weeks', risk: 'None', metric: 'Indexed pages', stopRule: 'If none indexed after 4 weeks, focus on links', facts: ['search.indexed_pages'] }],
+    recommendations: [{ title: 'Request indexing', workstream: 'search', hypothesis: 'Requesting indexing gets key pages indexed within 2 weeks', expectedImpact: 'More indexed pages', effort: 'low', cost: 'Free, 15 minutes', timeToResult: '2–3 weeks', risk: 'None', metric: 'Indexed pages', stopRule: 'If none indexed after 4 weeks, focus on links', facts: ['search.indexed_pages'] }],
     reviewOfPrevious: [],
   };
   assert.deepEqual(validateReport(good, facts), []);

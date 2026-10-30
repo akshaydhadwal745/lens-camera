@@ -23,6 +23,8 @@ import { compute } from './analytics';
 import { demandFacts, fact, ga4Facts, indexFacts, productFacts, searchFacts, type Fact, type SearchDay, type SearchRow } from './growth-facts';
 import { bingTrend, ga4Report, SEED_KEYWORDS, trendingNow, WIKI_ARTICLES, wikiTrend, wikiViews } from './growth-sources';
 import { EDITABLE, installationToken, openPullRequest, pullRequestState } from './growth-github';
+import { getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
+import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
 import { ANALYST_SYSTEM, analystPrompt, DRAFT_SCHEMA, DRAFT_SYSTEM, FORBIDDEN_CLAIMS, numbersIn, opportunityScore, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type DraftResult, type OpenRec, type Opportunity } from './growth-report';
 import { log } from './log';
 import { teamMembers } from './roles';
@@ -352,6 +354,7 @@ async function saveToolActivity(date: string, run: string, now: number) {
       const id = `P-${run}-${i + 1}`;
       const fields = { title: text(r.title, 200), evidence: text(r.evidence, 3000), files: Array.isArray(r.files) ? r.files.map((f) => text(f, 200)).slice(0, 20) : [], change: text(r.change, 3000), validation: text(r.validation, 1000), measurement: text(r.measurement, 1000) };
       await ifNew({ ...fields, status: 'proposed', report: date, createdAt: now, pk: 'GROWTH', sk: `PROP#${id}`, id });
+      if (!date.startsWith('draft:')) await upsertAiTask(`prop:${id}`, propTask(fields), date, { kind: 'prop', id, ...fields });
     }
     if (t.tool === 'watch_page') {
       const w = t.result as { watching: string; reason: string };
@@ -515,13 +518,14 @@ export async function runGrowthReport(opts: { ai: boolean; by: string; lockAt?: 
 
 async function report(opts: { ai: boolean; by: string }) {
   const now = Date.now();
-  await syncPullRequests(now).catch((e) => console.error('growth PR sync', e));
+  await syncPullRequests().catch((e) => console.error('growth PR sync', e));
   const date = new Date(now).toISOString().slice(0, 10);
   // Unique per run, so a second run on the same day never collides with the first one's ids.
   const run = `${date}-${new Date(now).toISOString().slice(11, 16).replace(':', '')}`;
   const { facts, notes } = await collectFacts(now);
   const rules = ruleFindings(facts);
-  const open: OpenRec[] = (await recs()).filter((r) => OPEN.has(r.status)).map((r) => ({ id: r.id, title: r.title, status: r.status, createdAt: r.createdAt, metric: r.metric, note: r.note }));
+  // The analyst reviews the workspace's tasks (open, and finished in the last 45 days), not the old ledger.
+  const open: OpenRec[] = await tasksForAnalyst();
   let ai: Awaited<ReturnType<typeof analyst>> = {};
   let commit: string | undefined;
   let toolCalls = 0;
@@ -556,6 +560,14 @@ async function report(opts: { ai: boolean; by: string }) {
           if (e?.name !== 'ConditionalCheckFailedException') throw e;
         });
     await saveOpportunities(ai.ai.opportunities ?? [], date, now);
+    // Everything the agent suggests becomes a Suggested task in the workspace (deduped across weeks).
+    for (const o of ai.ai.opportunities ?? []) {
+      const f = oppFields(o);
+      if (!f.relevance || !f.targetKeyword) continue;
+      const id = slug(f.targetKeyword);
+      await upsertAiTask(`opp:${id}`, oppTask(f, opportunityScore(o)), date, { kind: 'opp', id, ...f, score: opportunityScore(o) });
+    }
+    for (const rec of ai.ai.recommendations ?? []) await upsertAiTask(`rec:${taskSlug(rec.title)}`, recTask(rec), date);
     for (const [i, rec] of (ai.ai.recommendations ?? []).entries()) {
       const id = `R-${run}-${i + 1}`;
       await ifNew({ ...recFields(rec as Record<string, unknown>), status: 'proposed', report: date, createdAt: date, updatedAt: now, pk: 'GROWTH', sk: `REC#${id}`, id });
@@ -597,13 +609,11 @@ async function sendToOwners(subject: string, body: string) {
   );
 }
 
-// ---------- drafts (Phase C): an approved opportunity or proposal becomes a pull request ----------
+// ---------- drafts (Phase C): a task becomes a pull request ----------
 
-export type DraftKind = 'opp' | 'prop';
 const DRAFT_TOOLS = ['find_in_code', 'read_code', 'audit_page', 'edit_file'];
 const DRAFT_MODE: Mode = { system: DRAFT_SYSTEM, schema: DRAFT_SCHEMA, toolNames: DRAFT_TOOLS, mode: 'draft' };
 const ORIG_DIR = '/tmp/growth-code-orig';
-const READY: Record<DraftKind, string> = { opp: 'planned', prop: 'approved' };
 
 const walk = (dir: string): string[] =>
   existsSync(dir) ? readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : [join(dir, f)])) : [];
@@ -632,31 +642,34 @@ export function draftProblems(files: { path: string; content: string; before: st
   return out;
 }
 
-/** The task for Claude, from the stored row's checked fields only. */
-function draftTask(kind: DraftKind, row: Record<string, any>): string {
-  if (kind === 'prop')
-    return `APPROVED CODE PROPOSAL ${row.id}\nTitle: ${row.title}\nEvidence: ${row.evidence}\nFiles: ${(row.files ?? []).join(', ')}\nChange: ${row.change}\nValidation: ${row.validation}\nMeasurement: ${row.measurement}${row.note ? `\nOwner's note: ${row.note}` : ''}`;
-  const b = row.brief ?? {};
-  return [
-    `APPROVED CONTENT OPPORTUNITY ${row.id} (action: ${row.action}${row.existingPage ? `, existing page ${row.existingPage}` : ''})`,
-    `Topic: ${row.topic}. Target keyword: "${row.targetKeyword}" (${row.intent}). Audience: ${row.audience}`,
-    `Why: ${row.relevanceReason} Demand: ${row.demandEvidence} Competition: ${row.competition}`,
-    `Lens features to show: ${(row.lensFeatures ?? []).join(', ')}`,
-    `Brief: URL ${b.url}; title "${b.title}"; meta description "${b.metaDescription}"; H1 "${b.h1}"`,
-    `Outline: ${(b.outline ?? []).join(' | ')}`,
-    `Questions to answer: ${(b.questions ?? []).join(' | ')}`,
-    `Supporting keywords: ${(b.supportingKeywords ?? []).join(', ')}`,
-    `Internal links from: ${(b.internalLinksFrom ?? []).join(', ')}; to: ${(b.internalLinksTo ?? []).join(', ')}`,
-    row.note ? `Owner's note: ${row.note}` : '',
-  ]
+/** The instructions for Claude, from the task's stored (checked) fields and its brief or change, if any. */
+function draftTask(t: Task): string {
+  const s = (t.spec ?? {}) as Record<string, any>;
+  if (s.kind === 'prop')
+    return `APPROVED CODE CHANGE (task ${t.id})\nTitle: ${s.title}\nEvidence: ${s.evidence}\nFiles: ${(s.files ?? []).join(', ')}\nChange: ${s.change}\nValidation: ${s.validation ?? ''}\nMeasurement: ${s.measurement}`;
+  if (s.kind === 'opp') {
+    const b = s.brief ?? {};
+    return [
+      `APPROVED CONTENT OPPORTUNITY (task ${t.id}; action: ${s.action}${s.existingPage ? `, existing page ${s.existingPage}` : ''})`,
+      `Topic: ${s.topic}. Target keyword: "${s.targetKeyword}" (${s.intent}). Audience: ${s.audience}`,
+      `Why: ${s.relevanceReason} Demand: ${s.demandEvidence} Competition: ${s.competition}`,
+      `Lens features to show: ${(s.lensFeatures ?? []).join(', ')}`,
+      `Brief: URL ${b.url}; title "${b.title}"; meta description "${b.metaDescription}"; H1 "${b.h1}"`,
+      `Outline: ${(b.outline ?? []).join(' | ')}`,
+      `Questions to answer: ${(b.questions ?? []).join(' | ')}`,
+      `Supporting keywords: ${(b.supportingKeywords ?? []).join(', ')}`,
+      `Internal links from: ${(b.internalLinksFrom ?? []).join(', ')}; to: ${(b.internalLinksTo ?? []).join(', ')}`,
+    ].join('\n');
+  }
+  // A task written by a person: the title, description, evidence and page are the brief.
+  return [`APPROVED TASK ${t.id}: ${t.title}`, t.description, t.evidence.length ? `Evidence: ${t.evidence.map((e) => e.text).join(' | ')}` : '', t.links.page ? `Page: ${t.links.page}` : '', t.links.keyword ? `Keyword: ${t.links.keyword}` : '', t.metric.label ? `Success metric: ${t.metric.label}` : '']
     .filter(Boolean)
     .join('\n');
 }
 
-function prBody(kind: DraftKind, row: Record<string, any>, d: DraftResult, by: string, commit: string) {
-  const what = kind === 'opp' ? `content opportunity **${row.brief?.title || row.topic}** (“${row.targetKeyword}”, score ${row.score})` : `proposal **${row.title}**`;
+function prBody(t: Task, d: DraftResult, by: string, commit: string) {
   return [
-    `Drafted by the Lens growth agent after ${by} approved the ${what} in Lens Console (${CONSOLE}/growth).`,
+    `Drafted by the Lens growth agent for task **${t.id}: ${t.title}**, requested by ${by} in Lens Console (${CONSOLE}/growth/tasks?task=${t.id}).`,
     '',
     '## What changed',
     d.summary,
@@ -664,7 +677,8 @@ function prBody(kind: DraftKind, row: Record<string, any>, d: DraftResult, by: s
     ...d.changes.map((c) => `- \`${c.file}\`: ${c.what}`),
     '',
     '## Why',
-    kind === 'opp' ? `${row.relevanceReason}\n\n**Demand:** ${row.demandEvidence}\n\n**Measure:** ${row.measurement}` : `${row.evidence}\n\n**Measure:** ${row.measurement}`,
+    ...t.evidence.map((e) => `- ${e.text}`),
+    t.metric.label ? `\n**Measure:** ${t.metric.label}${t.metric.checkOn ? ` (check on ${t.metric.checkOn})` : ''}` : '',
     '',
     '## Check before merging',
     ...d.checks.map((c) => `- [ ] ${c}`),
@@ -675,26 +689,17 @@ function prBody(kind: DraftKind, row: Record<string, any>, d: DraftResult, by: s
   ].join('\n');
 }
 
-async function setDraftState(kind: DraftKind, id: string, set: Record<string, unknown>) {
-  const names: Record<string, string> = {};
-  const values: Record<string, unknown> = {};
-  const parts = Object.entries(set).map(([k, v], i) => {
-    names[`#k${i}`] = k;
-    values[`:v${i}`] = v;
-    return `#k${i} = :v${i}`;
-  });
-  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `${kind === 'opp' ? 'OPP' : 'PROP'}#${id}` }, UpdateExpression: `SET ${parts.join(', ')}`, ExpressionAttributeNames: names, ExpressionAttributeValues: values }));
-}
-
-/** The draft run (GrowthAnalyst Lambda): fresh code copy → Claude edits it → checks → PR. */
-export async function runDraft(opts: { kind: DraftKind; id: string; by: string; lockAt?: number }) {
+/** The draft run (GrowthAnalyst Lambda): fresh code copy → Claude edits it → checks → PR → task In review. */
+export async function runDraft(opts: { taskId: string; by: string; lockAt?: number }) {
   const lockAt = opts.lockAt ?? (await takeLock(`draft:${opts.by}`, true));
   if (lockAt === undefined) return { skipped: true };
   const started = Date.now();
+  const id = opts.taskId;
   try {
-    const row = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `${opts.kind === 'opp' ? 'OPP' : 'PROP'}#${opts.id}` } }))).Item;
-    if (!row || ![READY[opts.kind], 'drafting'].includes(row.status)) throw new Error(`${opts.id} is not ${READY[opts.kind]}`);
-    await setDraftState(opts.kind, opts.id, { status: 'drafting', draftStartedAt: started, draftError: '' });
+    const t = await getTask(id);
+    if (!t || !['ready', 'in_progress'].includes(t.status)) throw new Error(`${id} is not ready to draft`);
+    if (!['page', 'content', 'fix'].includes(t.type) && !t.spec) throw new Error('The agent drafts website changes (page, content or fix tasks)');
+    await systemUpdate(id, { status: 'in_progress' }, 'The growth agent started drafting a pull request');
     const token = await getParam('/lens/growth/claude-token');
     if (!token) throw new Error('Claude token not set up');
     rmSync(TOOL_LOG, { force: true });
@@ -702,48 +707,45 @@ export async function runDraft(opts: { kind: DraftKind; id: string; by: string; 
     rmSync(ORIG_DIR, { recursive: true, force: true });
     cpSync(CODE_DIR, ORIG_DIR, { recursive: true });
     const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), enabled: [], commit };
-    const { report: d } = await runClaude<DraftResult>(draftTask(opts.kind, row), token, tools, started + 12 * 60_000, DRAFT_MODE);
-    await saveToolActivity(`draft:${opts.id}`, `D-${opts.id}`.slice(0, 40), Date.now());
+    const { report: d } = await runClaude<DraftResult>(draftTask(t), token, tools, started + 12 * 60_000, DRAFT_MODE);
+    await saveToolActivity(`draft:${id}`, `D-${id}`, Date.now());
     const files = changedFiles();
     const problems = draftProblems(files);
     if (problems.length) throw new Error(`${problems.join('; ')}${files.length ? '' : `. Agent said: ${d.summary.slice(0, 300)}`}`);
-    const branch = `agent/${opts.kind}-${opts.id}`.slice(0, 70).replace(/-+$/, '') + `-${new Date(started).toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
-    const pr = await openPullRequest({ token: await installationToken(), base: commit, branch, files: files.map(({ path, content }) => ({ path, content })), title: d.prTitle.slice(0, 120), body: prBody(opts.kind, row, d, opts.by, commit) });
-    await setDraftState(opts.kind, opts.id, { status: 'pr-open', pr: { url: pr.url, number: pr.number, branch: pr.branch }, draftedAt: Date.now(), draftSummary: d.summary.slice(0, 1500) });
-    await sendToOwners(`Lens growth agent opened a pull request: ${d.prTitle.slice(0, 80)}`, `${d.summary}\n\nReview, approve and merge: ${pr.url}\n\nNothing changes on the website until you merge.`).catch((e) => console.error('draft email', e));
+    const branch = `agent/${id.toLowerCase()}-${taskSlug(t.title).slice(0, 40)}`.replace(/-+$/, '') + `-${new Date(started).toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+    const pr = await openPullRequest({ token: await installationToken(), base: commit, branch, files: files.map(({ path, content }) => ({ path, content })), title: d.prTitle.slice(0, 120), body: prBody(t, d, opts.by, commit) });
+    const reviewer = t.reviewer || (opts.by.includes('@') ? opts.by : '');
+    await systemUpdate(id, { status: 'in_review', reviewer, links: { ...t.links, pr: { url: pr.url, number: pr.number } }, proof: pr.url }, `Pull request opened: ${pr.url}\n\n${d.summary.slice(0, 1500)}`);
+    await sendToOwners(`Review the growth agent's pull request: ${d.prTitle.slice(0, 80)}`, `Task ${id}: ${t.title}\n\n${d.summary}\n\nReview, approve and merge: ${pr.url}\nTask: ${CONSOLE}/growth/tasks?task=${id}\n\nNothing changes on the website until you merge.`).catch((e) => console.error('draft email', e));
     await releaseLock(lockAt);
     return { pr: pr.url };
   } catch (e) {
     const message = (e as Error).message ?? String(e);
     console.error('growth draft failed', e);
-    await setDraftState(opts.kind, opts.id, { status: READY[opts.kind], draftError: message.slice(0, 600), draftFailedAt: Date.now() }).catch(() => {});
-    await releaseLock(lockAt, `Draft ${opts.id}: ${message}`);
-    await sendToOwners('Lens growth agent could not draft a change', `Draft of ${opts.id} stopped:\n\n${message.slice(0, 600)}\n\nTry again from ${CONSOLE}/growth.`).catch(() => {});
+    await systemUpdate(id, { status: 'ready' }, `Draft stopped: ${message.slice(0, 600)}`).catch(() => {});
+    await releaseLock(lockAt, `Draft ${id}: ${message}`);
+    await sendToOwners('Lens growth agent could not draft a change', `Task ${id} stopped:\n\n${message.slice(0, 600)}\n\nTry again from ${CONSOLE}/growth/tasks?task=${id}`).catch(() => {});
     return { error: message };
   }
 }
 
-/** Open agent PRs: merged → published (opportunity) / merged (proposal); closed → back to the owner. */
-async function syncPullRequests(now: number) {
-  for (const prefix of ['OPP#', 'PROP#'] as const) {
-    const items = (await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': prefix } }))).Items ?? [];
-    for (const it of items.filter((i) => i.status === 'pr-open' && typeof i.pr?.number === 'number')) {
-      const state = await pullRequestState(it.pr.number).catch(() => 'open' as const);
-      if (state === 'open') continue;
-      const status = state === 'merged' ? (prefix === 'OPP#' ? 'published' : 'merged') : prefix === 'OPP#' ? 'planned' : 'approved';
-      await setDraftState(prefix === 'OPP#' ? 'opp' : 'prop', it.id, { status, prState: state, prStateAt: now, ...(state === 'merged' ? { publishedAt: now } : {}) });
-    }
+/** Agent PRs on tasks In review: merged → Done (measuring starts); closed unmerged → back to Ready. */
+async function syncPullRequests() {
+  for (const t of (await listTasks()).filter((x) => x.status === 'in_review' && typeof x.links?.pr?.number === 'number')) {
+    const state = await pullRequestState(t.links.pr!.number).catch(() => 'open' as const);
+    if (state === 'merged') await systemUpdate(t.id, { status: 'done', doneAt: Date.now(), proof: `Merged: ${t.links.pr!.url}` }, `Pull request #${t.links.pr!.number} merged: published. Measuring until ${t.metric.checkOn || 'the check date'}.`);
+    if (state === 'closed') await systemUpdate(t.id, { status: 'ready' }, `Pull request #${t.links.pr!.number} was closed without merging`);
   }
 }
 
 /** Starts a draft now if nothing else is running (Console). The Console can't read the GitHub key
- * (least privilege): the draft run checks it and reports a missing setup on the item. */
-async function startDraft(kind: DraftKind, id: string, email: string): Promise<'started' | 'busy' | 'not-set-up'> {
+ * (least privilege): the draft run checks it and reports a missing setup on the task. */
+async function startDraft(taskId: string, email: string): Promise<'started' | 'busy' | 'not-set-up'> {
   if (!process.env.GROWTH_FUNCTION) return 'not-set-up';
   const lockAt = await takeLock(`draft:${email}`, true);
   if (lockAt === undefined) return 'busy';
   await new LambdaClient({})
-    .send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ draft: { kind, id }, by: email, lockAt })) }))
+    .send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ draft: { taskId }, by: email, lockAt })) }))
     .catch(async (e) => {
       await releaseLock(lockAt, `Could not start the draft: ${(e as Error).message}`);
       throw e;
@@ -751,17 +753,16 @@ async function startDraft(kind: DraftKind, id: string, email: string): Promise<'
   return 'started';
 }
 
-/** POST /growth/draft {kind: opp|prop, id}: draft (again) an approved item as a pull request. */
-export async function growthDraft(req: Req, email: string): Promise<Res> {
-  const kind = req.body?.kind;
-  const id = typeof req.body?.id === 'string' ? req.body.id : '';
-  if ((kind !== 'opp' && kind !== 'prop') || !/^[A-Za-z0-9-]{1,80}$/.test(id)) throw new HttpError(400, 'kind (opp|prop) and id required');
-  const row = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `${kind === 'opp' ? 'OPP' : 'PROP'}#${id}` } }))).Item;
-  if (!row || row.status !== READY[kind as DraftKind]) throw new HttpError(409, `Only ${READY[kind as DraftKind]} items can be drafted`);
-  const result = await startDraft(kind, id, email);
+/** POST /growth/tasks/<id>/draft: the agent drafts this task as a pull request. */
+export async function growthDraft(taskId: string, email: string): Promise<Res> {
+  const t = await getTask(taskId);
+  if (!t) throw new HttpError(404, 'No such task');
+  if (!['ready', 'in_progress'].includes(t.status)) throw new HttpError(409, 'Accept the task first (only Ready or In progress tasks can be drafted)');
+  if (!['page', 'content', 'fix'].includes(t.type) && !t.spec) throw new HttpError(400, 'The agent drafts website changes: page, content or fix tasks');
+  const result = await startDraft(taskId, email);
   if (result === 'busy') throw new HttpError(409, 'The analyst is busy (a report or another draft). Try again in about 10 minutes.');
-  if (result === 'not-set-up') throw new HttpError(503, 'The GitHub App is not set up');
-  await log({ entity: `growth:${kind}:${id}`, action: 'growth.draft-start', actor: `console:${email}` });
+  if (result === 'not-set-up') throw new HttpError(503, 'The growth analyst is not deployed');
+  await log({ entity: `growth:task:${taskId}`, action: 'growth.draft-start', actor: `console:${email}` });
   return json(202, { started: true });
 }
 
@@ -810,81 +811,8 @@ export async function growthRun(req: Req, email: string): Promise<Res> {
   return json(202, { started: true });
 }
 
-/** PUT /growth/recs/<id> {status, note?}: move a recommendation along the ledger. */
-export async function growthRec(id: string, req: Req, email: string): Promise<Res> {
-  const status = req.body?.status;
-  if (!STATUSES.includes(status)) throw new HttpError(400, 'Unknown status');
-  const note = typeof req.body?.note === 'string' ? req.body.note.slice(0, 500) : undefined;
-  await ddb
-    .send(
-      new UpdateCommand({
-        TableName: env.table,
-        Key: { pk: 'GROWTH', sk: `REC#${id}` },
-        UpdateExpression: `SET #s = :s, updatedAt = :t, updatedBy = :b${note !== undefined ? ', note = :n' : ''}`,
-        ConditionExpression: 'attribute_exists(pk)',
-        ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':s': status, ':t': Date.now(), ':b': email, ...(note !== undefined ? { ':n': note } : {}) },
-      }),
-    )
-    .catch((e) => {
-      if (e?.name === 'ConditionalCheckFailedException') throw new HttpError(404, 'No such recommendation');
-      throw e;
-    });
-  await log({ entity: `growth:${id}`, action: 'growth.recommendation-status', actor: `console:${email}`, data: { status, ...(note !== undefined ? { note } : {}) } });
-  return json(200, { ok: true });
-}
 
-/** PUT /growth/proposals/<id> {decision: approved|rejected, note?}: the owner's answer to a level-3 proposal. */
-export async function growthProposal(id: string, req: Req, email: string): Promise<Res> {
-  const decision = req.body?.decision;
-  if (decision !== 'approved' && decision !== 'rejected') throw new HttpError(400, 'decision must be approved or rejected');
-  const note = typeof req.body?.note === 'string' ? req.body.note.slice(0, 500) : undefined;
-  await ddb
-    .send(
-      new UpdateCommand({
-        TableName: env.table,
-        Key: { pk: 'GROWTH', sk: `PROP#${id}` },
-        UpdateExpression: `SET #s = :s, decidedAt = :t, decidedBy = :b${note !== undefined ? ', note = :n' : ''}`,
-        ConditionExpression: 'attribute_exists(pk) AND #s = :proposed',
-        ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':s': decision, ':t': Date.now(), ':b': email, ':proposed': 'proposed', ...(note !== undefined ? { ':n': note } : {}) },
-      }),
-    )
-    .catch((e) => {
-      if (e?.name === 'ConditionalCheckFailedException') throw new HttpError(409, 'No such open proposal');
-      throw e;
-    });
-  await log({ entity: `growth:${id}`, action: `growth.proposal-${decision}`, actor: `console:${email}`, data: note ? { note } : undefined });
-  // An approved proposal is drafted as a pull request right away (if nothing else is running).
-  const draft = decision === 'approved' ? await startDraft('prop', id, email) : undefined;
-  return json(200, { ok: true, draft });
-}
 
-/** PUT /growth/opportunities/<id> {status, note?}: the owner plans, rejects or marks published/measured. */
-export async function growthOpportunity(id: string, req: Req, email: string): Promise<Res> {
-  const status = req.body?.status;
-  if (!OWNER_OPP_STATUSES.includes(status)) throw new HttpError(400, `status must be one of ${OWNER_OPP_STATUSES.join(', ')}`);
-  if (!/^[a-z0-9-]{1,60}$/.test(id)) throw new HttpError(400, 'Bad id');
-  const note = typeof req.body?.note === 'string' ? req.body.note.slice(0, 500) : undefined;
-  await ddb
-    .send(
-      new UpdateCommand({
-        TableName: env.table,
-        Key: { pk: 'GROWTH', sk: `OPP#${id}` },
-        UpdateExpression: `SET #s = :s, decidedAt = :t, decidedBy = :b${note !== undefined ? ', note = :n' : ''}`,
-        ConditionExpression: 'attribute_exists(pk)',
-        ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':s': status, ':t': Date.now(), ':b': email, ...(note !== undefined ? { ':n': note } : {}) },
-      }),
-    )
-    .catch((e) => {
-      if (e?.name === 'ConditionalCheckFailedException') throw new HttpError(404, 'No such opportunity');
-      throw e;
-    });
-  await log({ entity: `growth:opp:${id}`, action: 'growth.opportunity-status', actor: `console:${email}`, data: { status, ...(note !== undefined ? { note } : {}) } });
-  const draft = status === 'planned' ? await startDraft('opp', id, email) : undefined;
-  return json(200, { ok: true, draft });
-}
 
 /** PUT /growth/tools {enabled: [...]}: which level-2 tools the analyst may use. */
 export async function growthTools(req: Req, email: string): Promise<Res> {
