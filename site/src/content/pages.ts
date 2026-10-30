@@ -34,7 +34,7 @@ export const pages: ContentPage[] = [
       en: {
         title: 'Free photo & video backup at original quality: 40 GB to start',
         description:
-          'Back up every photo and video at full original quality. 40 GB free for your first 3 months, then 10 GB free forever, or unlimited in your own Google Drive or Dropbox.',
+          'Back up every photo and video at full original quality. 40 GB free for your first 3 months, then 10 GB free forever, or back up to your own Google Drive or Dropbox.',
         h1: 'Free backup, at the quality you shot it',
         lead: 'Every photo and video goes to the cloud the moment you take it, byte for byte. No compression, no "storage saver" quality, no surprises.',
         sections: [
@@ -69,21 +69,21 @@ export const pages: ContentPage[] = [
               'Sign in with email or Google: 40 GB free for your first 3 months',
               'After that: 10 GB free, forever',
               '+10 GB for every friend who joins and backs up (up to 10 friends)',
-              'Unlimited and free when you back up to your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV',
+              'No Lens limit when you back up to your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV (your provider’s space applies)',
             ],
           },
         ],
         faq: [
           { q: 'Does Lens compress my photos?', a: 'No. The original file is stored exactly as your camera saved it. Lens only makes small previews for fast browsing, in addition to the original.' },
           { q: 'What happens when the 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays in your library, viewable and downloadable. Only new backups to Lens storage pause while you are above the free limit, until you invite friends, free some space, or switch to your own storage. Lens reminds you 14, 3 and 1 days before. If you stay above the limit for 5 months, what is above it is deleted (most recent first), with reminders 90, 30, 7 and 1 days before.' },
-          { q: 'Can I get unlimited backup?', a: 'Yes, free: connect your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV storage and your originals go there. Lens keeps only small previews, so they don’t count against a Lens limit.' },
+          { q: 'Can I back up more than my free Lens space?', a: 'Yes: connect your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV storage and your originals go there. Lens keeps only small previews, so they don’t count against a Lens limit. The space for your originals is whatever your storage provider gives you.' },
           { q: 'Does backup use my mobile data?', a: 'You choose: everything, small files only, or Wi-Fi only. Upload while recording is Wi-Fi only by default.' },
         ],
       },
       hi: {
         title: 'ओरिजिनल क्वालिटी में मुफ़्त फ़ोटो और वीडियो बैकअप: शुरुआत में 40 GB',
         description:
-          'हर फ़ोटो और वीडियो का पूरी ओरिजिनल क्वालिटी में बैकअप। पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त, या अपने Google Drive या Dropbox में अनलिमिटेड।',
+          'हर फ़ोटो और वीडियो का पूरी ओरिजिनल क्वालिटी में बैकअप। पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त, या अपने Google Drive या Dropbox में बैकअप करें।',
         h1: 'मुफ़्त बैकअप, उसी क्वालिटी में जिसमें आपने लिया',
         lead: 'हर फ़ोटो और वीडियो लेते ही क्लाउड में चला जाता है, हूबहू वैसा ही। न कंप्रेशन, न "स्टोरेज सेवर" क्वालिटी, न कोई सरप्राइज़।',
         sections: [
@@ -118,14 +118,14 @@ export const pages: ContentPage[] = [
               'ईमेल या Google से साइन इन: पहले 3 महीने 40 GB मुफ़्त',
               'उसके बाद: 10 GB मुफ़्त, हमेशा',
               'जुड़कर बैकअप करने वाले हर दोस्त पर +10 GB (10 दोस्तों तक)',
-              'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV में बैकअप करने पर अनलिमिटेड और मुफ़्त',
+              'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV में बैकअप करने पर Lens की कोई सीमा नहीं (जगह आपके प्रोवाइडर की)',
             ],
           },
         ],
         faq: [
           { q: 'क्या Lens मेरी फ़ोटो कंप्रेस करता है?', a: 'नहीं। ओरिजिनल फ़ाइल ठीक वैसी ही रखी जाती है जैसी कैमरे ने सेव की। Lens सिर्फ़ तेज़ ब्राउज़िंग के लिए छोटे प्रीव्यू अलग से बनाता है।' },
           { q: '40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ आपकी लाइब्रेरी में रहता है, देख और डाउनलोड कर सकते हैं। मुफ़्त सीमा से ऊपर होने पर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, कुछ जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। Lens 14, 3 और 1 दिन पहले याद दिलाता है। अगर आप 5 महीने तक सीमा से ऊपर रहते हैं, तो सीमा से ऊपर का कंटेंट डिलीट होता है (सबसे हाल का पहले), 90, 30, 7 और 1 दिन पहले याद दिलाकर।' },
-          { q: 'क्या अनलिमिटेड बैकअप मिल सकता है?', a: 'हाँ, मुफ़्त: अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV स्टोरेज जोड़ें और आपके ओरिजिनल वहाँ जाएँगे। Lens सिर्फ़ छोटे प्रीव्यू रखता है, इसलिए वे Lens की सीमा में नहीं गिने जाते।' },
+          { q: 'क्या मुफ़्त Lens स्टोरेज से ज़्यादा बैकअप कर सकते हैं?', a: 'हाँ: अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV स्टोरेज जोड़ें और आपके ओरिजिनल वहाँ जाएँगे। Lens सिर्फ़ छोटे प्रीव्यू रखता है, इसलिए वे Lens की सीमा में नहीं गिने जाते। आपके ओरिजिनल के लिए जगह उतनी है जितनी आपका स्टोरेज प्रोवाइडर देता है।' },
           { q: 'क्या बैकअप मेरा मोबाइल डेटा इस्तेमाल करता है?', a: 'आप चुनें: सब कुछ, सिर्फ़ छोटी फ़ाइलें, या सिर्फ़ Wi-Fi। रिकॉर्डिंग के दौरान अपलोड डिफ़ॉल्ट रूप से सिर्फ़ Wi-Fi पर होता है।' },
         ],
       },
@@ -456,7 +456,7 @@ export const pages: ContentPage[] = [
             bullets: ['Every shot is backed up as you take it, at original quality', 'Once verified in the cloud, the full-size file can leave your phone', 'A sharp preview stays, so your gallery works offline', 'Lens keeps the space you choose free, oldest files first'],
             body: [],
           },
-          { h2: 'Free to start', body: ['40 GB free for your first 3 months when you sign in, then 10 GB free forever. Already have Google Drive, OneDrive or Dropbox space? Connect it and back up without a limit, free.'] },
+          { h2: 'Free to start', body: ['40 GB free for your first 3 months when you sign in, then 10 GB free forever. Already have Google Drive, OneDrive or Dropbox space? Connect it and back up there with no Lens limit.'] },
         ],
         faq: [
           { q: 'Will I lose quality if Lens removes photos from my phone?', a: 'No. The original is kept in full quality in the cloud and comes back when you open it, share it or save it.' },
@@ -476,7 +476,7 @@ export const pages: ContentPage[] = [
             bullets: ['हर शॉट लेते ही ओरिजिनल क्वालिटी में बैकअप होता है', 'क्लाउड में जाँच के बाद बड़ी फ़ाइल फ़ोन से हट सकती है', 'साफ़ प्रीव्यू रहता है, गैलरी ऑफ़लाइन चलती है', 'Lens आपकी चुनी हुई जगह ख़ाली रखता है, सबसे पुरानी फ़ाइलें पहले'],
             body: [],
           },
-          { h2: 'शुरुआत मुफ़्त', body: ['साइन इन करने पर पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त। Google Drive, OneDrive या Dropbox में पहले से जगह है? उसे जोड़ें और बिना सीमा के, मुफ़्त बैकअप करें।'] },
+          { h2: 'शुरुआत मुफ़्त', body: ['साइन इन करने पर पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त। Google Drive, OneDrive या Dropbox में पहले से जगह है? उसे जोड़ें और वहाँ बैकअप करें, Lens की कोई सीमा नहीं।'] },
         ],
         faq: [
           { q: 'Lens फ़ोन से फ़ोटो हटाए तो क्या क्वालिटी कम होगी?', a: 'नहीं। ओरिजिनल पूरी क्वालिटी में क्लाउड में रहता है और खोलने, शेयर या सेव करने पर वापस आता है।' },
