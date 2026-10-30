@@ -23,10 +23,12 @@ const CODE = process.env.GROWTH_CODE_DIR ?? '/tmp/growth-code';
 const LOG = process.env.GROWTH_TOOL_LOG ?? '/tmp/growth-tools.jsonl';
 const BING_KEY = process.env.GROWTH_BING_KEY ?? '';
 const DRAFT = process.env.GROWTH_MODE === 'draft';
+/** Competitor sites the agent may read (from the Console's competitor list); nothing else on the web. */
+const COMPETITOR_HOSTS = (process.env.GROWTH_COMPETITOR_HOSTS ?? '').split(',').filter(Boolean);
 /** What a draft may change: the website's source, nothing else (no CI, infra, app or scripts). */
 export const EDITABLE = /^site\/src\/(content|components|pages|layouts|i18n)\/[\w\-/.[\]]+\.(ts|astro)$/;
 const GA4_TOKEN = process.env.GROWTH_GA4_TOKEN ?? '';
-const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1, edit_file: 40, keyword_volume: 40, related_keywords: 15, topic_interest: 15, trending_now: 4, ga4_report: 25 };
+const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1, edit_file: 40, competitor_page: 25, keyword_volume: 40, related_keywords: 15, topic_interest: 15, trending_now: 4, ga4_report: 25 };
 // Per report, not per process: the retry run starts a new server, so earlier calls count too.
 const used: Record<string, number> = {};
 if (existsSync(LOG))
@@ -305,6 +307,38 @@ const TOOLS: Record<string, Tool> = {
           metrics: metrics.map((name) => ({ name })),
           limit: Math.min(100, Math.max(1, Number(a.limit) || 50)),
         })),
+      };
+    },
+  },
+  competitor_page: {
+    level: 1,
+    description:
+      'Read a public page on a competitor\'s website (only sites on the Console\'s competitor list): title, description, headings, prices mentioned and the page text. For positioning, pricing and feature comparison; quote what the page says, never guess.',
+    inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'https:// address on a listed competitor site' } }, required: ['url'] },
+    run: async (a) => {
+      const raw = str(a, 'url', 400);
+      let u: URL;
+      try {
+        u = new URL(raw);
+      } catch {
+        throw new Refused('url must be a full https:// address');
+      }
+      const host = u.hostname.toLowerCase();
+      if (u.protocol !== 'https:' || !COMPETITOR_HOSTS.some((h) => host === h || host.endsWith(`.${h.replace(/^www\./, '')}`) || host === h.replace(/^www\./, '')))
+        throw new Refused(`only listed competitor sites can be read (${COMPETITOR_HOSTS.join(', ') || 'none listed'})`);
+      const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; LensGrowthAudit/1.0; +https://lens.instagrowapp.com)' }, redirect: 'follow', signal: AbortSignal.timeout(20_000) });
+      const html = res.ok ? await res.text() : '';
+      const head = html.split(/<\/head>/i)[0] ?? '';
+      const body = html.slice(head.length).replace(/<(script|style|svg|noscript)[\s\S]*?<\/\1>/gi, ' ');
+      const text = decode(body.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+      return {
+        url: u.toString(),
+        status: res.status,
+        title: decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1] ?? ''),
+        headings: [...body.matchAll(/<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi)].map((m) => decode(m[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 30),
+        prices: [...new Set(text.match(/(₹|\$|€|£|\bRs\.?\s?|\bINR\s?|\bUSD\s?)\s?\d[\d,]*(\.\d{1,2})?(\s?\/\s?(mo|month|yr|year))?/g) ?? [])].slice(0, 20),
+        text: text.slice(0, 12_000),
+        note: text.split(' ').length < 80 ? 'Almost no text: the page may be drawn by JavaScript' : undefined,
       };
     },
   },

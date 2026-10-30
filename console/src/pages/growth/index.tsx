@@ -7,6 +7,7 @@ import { Loaded, Page, useLoad } from "../../ui";
 import { Goals, Tasks, Today } from "./main-views";
 import { GrowthSettings, Insights, StartHere } from "./other-views";
 import { WS, type Workspace, type Workstream } from "./shared";
+import { Competitors } from "./competitors";
 import { SeoTools } from "./seo";
 import { NewTask, TaskPanel } from "./task-panel";
 import { WorkstreamPage } from "./workstreams";
@@ -19,6 +20,7 @@ const TITLES: Record<string, string> = {
   settings: "Growth settings",
   start: "Start here",
   seo: "SEO tools",
+  competitors: "Competitors",
 };
 
 export function GrowthWorkspace({ path }: { path: string }) {
@@ -60,6 +62,7 @@ export function GrowthWorkspace({ path }: { path: string }) {
             )}
             {sub === "start" && <StartHere ws={ws} />}
             {sub === "seo" && <SeoTools ws={ws} search={search} />}
+            {sub === "competitors" && <Competitors ws={ws} />}
             {wsKey && WS[wsKey] && (
               <WorkstreamPage
                 ws={ws}

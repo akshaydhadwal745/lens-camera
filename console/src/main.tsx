@@ -73,6 +73,12 @@ const SECTIONS: Section[] = [
     group: "Workstreams",
   },
   {
+    path: "/growth/competitors",
+    label: "Competitors",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
     path: "/growth/ws/social",
     label: "Social & distribution",
     permission: "growth",

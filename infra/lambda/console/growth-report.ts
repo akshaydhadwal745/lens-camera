@@ -429,7 +429,8 @@ Rules:
 3. Social posts: write for the channel (Instagram caption with a hook in the first line; Reddit helpful and non-promotional, answering the community's question first, following typical subreddit rules; LinkedIn build-in-public with a real lesson; WhatsApp short and personal; YouTube Shorts a 30-second script). Each post points to ONE website page that answers it.
 4. Play listing: title ≤ 30 characters, short description ≤ 80, full description ≤ 4000 with a clear first line; no claims Play forbids (no "best", "#1", prices in the title, or calls to review).
 5. Partner outreach: short, specific to the partner type, the value for them (their clients get photos from guests in full quality, free for them during the pilot), one clear ask; no pressure.
-6. Give 2–4 options for each piece so the owner can choose. If the task can't be done well, say why in "notes" and give no drafts.`;
+6. Give 2–4 options for each piece so the owner can choose. If the task can't be done well, say why in "notes" and give no drafts.
+7. Competitor research (task says COMPETITOR RESEARCH): read their pages with competitor_page (homepage, pricing, features; at most 12 pages). Write ONE draft, kind "other", channel "other", title "Competitor brief: <name>", body in short sections: Positioning (their own words, quoted) · Plans and prices (exactly as listed, with the page) · Key features · Who it's for · Strengths · Weaknesses · What Lens should learn · Where Lens wins (only true product facts) · Watch for. Quote; never guess numbers. If a page can't be read, say so.`;
 
 export const TEXT_SCHEMA = {
   type: 'object',

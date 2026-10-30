@@ -173,3 +173,12 @@ test('edit_file: refused in a report run; in a draft run only under site/src and
   assert.deepEqual(ok, { edited: 'site/src/content/pages.ts', line: 3, removedChars: 11, addedChars: 8 });
   assert.match(readFileSync(join(code, 'site/src/content/pages.ts'), 'utf8'), /c: 'New line'/);
 });
+
+test('competitor_page reads only listed competitor sites', async () => {
+  const s = server();
+  const off = await s.callTool('competitor_page', { url: 'https://www.degoo.com/' });
+  const bad = await s.callTool('competitor_page', { url: 'http://169.254.169.254/latest/meta-data/' });
+  s.stop();
+  assert.match(off.content[0].text, /REFUSED: only listed competitor sites can be read \(none listed\)/);
+  assert.match(bad.content[0].text, /REFUSED/);
+});

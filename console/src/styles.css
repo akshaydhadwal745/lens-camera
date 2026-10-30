@@ -996,3 +996,4 @@ tr.gw-click:hover td { background: var(--side); }
 .page:has(.gw-wide) { max-width: 1600px; }
 .gw-today-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .gw-today-work { align-items: start; }
+.gw-brief { white-space: pre-wrap; background: var(--side); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; max-height: 520px; overflow-y: auto; }

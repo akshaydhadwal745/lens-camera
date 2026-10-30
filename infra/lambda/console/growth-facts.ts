@@ -5,7 +5,7 @@
 export type Unit = 'count' | 'pct' | 'position' | 'usd' | 'gb';
 export type Fact = {
   id: string;
-  area: 'search' | 'website' | 'app' | 'channels' | 'money' | 'loops' | 'demand' | 'ga4';
+  area: 'search' | 'website' | 'app' | 'channels' | 'money' | 'loops' | 'demand' | 'ga4' | 'competitors';
   label: string;
   value: number | null;
   unit: Unit;

@@ -97,3 +97,10 @@ Console → Workstreams → **SEO tools** (`console/src/pages/growth/seo.tsx`, `
 - **Speed:** PageSpeed Insights (Lighthouse) for 5 key pages, mobile and desktop, plus real-user Core Web Vitals when Google has them. Key: SSM `/lens/growth/pagespeed-key` (API key restricted to PageSpeed, project lens-5df67). First run: 99–100 everywhere, LCP 0.3–1.4 s.
 - **Backlinks & link building:** links Bing found (GetLinkCounts/GetUrlLinks); a pipeline of places to get a link (`PROSPECT#`, seeded with 12 real ones) whose pages are fetched weekly and moved to "live" when they link to the site.
 - Runs weekly in the analysis (facts `seo.audit_score`, `seo.audit_errors`, `seo.audit_warnings`, `seo.broken_links`, `seo.backlinks` for the agent) and on demand ("Run audit again" → GrowthAnalyst `{seoAudit:true}`).
+
+## Group 2: Competitors (2026-10-30)
+Console → Workstreams → **Competitors** (`console/src/pages/growth/competitors.tsx`, `infra/lambda/console/growth-competitors.ts`, tests `growth-competitors.test.ts`):
+- List `GROWTH / COMPETITOR#` seeded with 8 from the strategy (Google Photos, TeraBox, JioAICloud, Amazon Photos, Degoo, Kululu, Guestpix, WedShoots); add/edit/stop watching.
+- Weekly (with the analysis) and on demand ("Check now"): homepage title, description, headlines, prices on the page, sitemap size; diff against last week → changes and new pages (`COMPSNAP#<id>#<day>`; page addresses kept as 10-character fingerprints so a row never nears DynamoDB's 400 KB). Facts `comp.<name>.changes` / `.new_pages` for the agent.
+- Agent tool `competitor_page` (level 1): reads public pages on listed competitor hosts only (enforced in the tool server; anything else refused). "Research" creates a research task the agent drafts as a **competitor brief** (positioning, prices quoted, features, strengths, weaknesses, what to learn, where Lens wins), stored on the competitor and the task.
+- Plain fetch reads 7 of 8 sites fully (237–4,784 words). A page with almost no text is flagged "needs a browser crawler" (then add Crawl4AI or similar to the analyst image). TeraBox didn't answer from the office network: check from AWS.

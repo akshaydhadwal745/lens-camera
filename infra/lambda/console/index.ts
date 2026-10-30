@@ -14,7 +14,8 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { growthDraft, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { competitorCheck, competitorResearch, growthDraft, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { competitorSave, competitorsPage } from './growth-competitors';
 import { keywordSave, prospectSave, seoPage } from './growth-seo';
 import { goalUpdate, settingsUpdate } from './growth-goals';
 import { partnerSave, postSave, recordDelete } from './growth-records';
@@ -94,6 +95,12 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
     // Growth workspace tasks (growth-tasks.ts): see with growth, work with growth.contribute, manage with growth.write.
     if (route === 'GET /growth/workspace') return await allowed('growth', () => workspace(email, role));
+    // Competitors (growth-competitors.ts)
+    if (route === 'GET /growth/competitors') return await allowed('growth', () => competitorsPage(email));
+    if (route === 'POST /growth/competitors/check') return await allowed('growth.write', () => competitorCheck(email));
+    if (seg[0] === 'growth' && seg[1] === 'competitors' && seg[2] && seg[3] === 'research' && seg.length === 4 && method === 'POST') return await allowed('growth.write', () => competitorResearch(seg[2], email));
+    if (seg[0] === 'growth' && seg[1] === 'competitors' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => competitorSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'competitors' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => competitorSave(seg[2], req, email, true));
     // SEO tools (growth-seo.ts)
     if (route === 'GET /growth/seo') return await allowed('growth', () => seoPage(email));
     if (route === 'POST /growth/seo/audit') return await allowed('growth.write', () => seoAuditRun(email));

@@ -24,8 +24,9 @@ import { compute } from './analytics';
 import { demandFacts, fact, ga4Facts, indexFacts, productFacts, searchFacts, type Fact, type SearchDay, type SearchRow } from './growth-facts';
 import { bingTrend, ga4Report, SEED_KEYWORDS, trendingNow, WIKI_ARTICLES, wikiTrend, wikiViews } from './growth-sources';
 import { EDITABLE, installationToken, openPullRequest, pullRequestState } from './growth-github';
+import { competitorHosts, watchCompetitors } from './growth-competitors';
 import { runSeoAudit } from './growth-seo';
-import { getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
+import { createTask, getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
 import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
 import { TEXT_SCHEMA, TEXT_SYSTEM, type TextDraft } from './growth-report';
 import { ANALYST_SYSTEM, analystPrompt, DRAFT_SCHEMA, DRAFT_SYSTEM, FORBIDDEN_CLAIMS, numbersIn, opportunityScore, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type DraftResult, type OpenRec, type Opportunity } from './growth-report';
@@ -39,7 +40,7 @@ const STATUSES = ['proposed', 'approved', 'shipped', 'measured', 'kept', 'droppe
 const OPEN = new Set(['proposed', 'approved', 'shipped', 'measured']);
 /** Level-2 tools the owner may switch on (growth-mcp.ts enforces it). */
 export const LEVEL2_TOOLS = ['submit_sitemap'] as const;
-const TOOL_NAMES = ['search_analytics', 'compare_periods', 'inspect_url', 'list_sitemaps', 'audit_page', 'find_in_code', 'read_code', 'keyword_volume', 'related_keywords', 'topic_interest', 'trending_now', 'ga4_report', 'watch_page', 'submit_sitemap', 'propose_change'];
+const TOOL_NAMES = ['search_analytics', 'compare_periods', 'inspect_url', 'list_sitemaps', 'audit_page', 'find_in_code', 'read_code', 'keyword_volume', 'related_keywords', 'topic_interest', 'trending_now', 'ga4_report', 'competitor_page', 'watch_page', 'submit_sitemap', 'propose_change'];
 const REPO = 'akshaydhadwal745/lens-camera';
 const CODE_DIR = '/tmp/growth-code';
 const TOOL_LOG = '/tmp/growth-tools.jsonl';
@@ -235,7 +236,7 @@ const toolLog = (): ToolEntry[] =>
 
 // ---------- the analyst (Claude Code CLI, headless; its only tools are the growth MCP server) ----------
 
-type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; ga4Token?: string; enabled: string[]; commit?: string };
+type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; ga4Token?: string; competitorHosts?: string[]; enabled: string[]; commit?: string };
 
 /** What a run asks of Claude: its instructions, output schema and tool list (the weekly report by default). */
 type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft' };
@@ -258,6 +259,7 @@ function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup
             GROWTH_GOOGLE_WRITE_TOKEN: tools.writeToken ?? '',
             GROWTH_BING_KEY: tools.bingKey ?? '',
             GROWTH_GA4_TOKEN: tools.ga4Token ?? '',
+            GROWTH_COMPETITOR_HOSTS: (tools.competitorHosts ?? []).join(','),
             GROWTH_ENABLED_TOOLS: tools.enabled.join(','),
             GROWTH_CODE_DIR: CODE_DIR,
             GROWTH_CODE_COMMIT: tools.commit ?? '',
@@ -539,6 +541,16 @@ async function report(opts: { ai: boolean; by: string }) {
   } catch (e) {
     notes.push(`SEO audit failed: ${(e as Error).message.slice(0, 120)}`);
   }
+  // Competitors: what changed on their sites this week (the agent can read their pages with competitor_page).
+  try {
+    for (const c of await watchCompetitors(now)) {
+      const key = taskSlug(c.name);
+      if (c.changes.length) facts.push(fact({ id: `comp.${key}.changes`, area: 'competitors', label: `${c.name}: changes on its homepage this week (${c.changes.join(' | ').slice(0, 300)})`, value: c.changes.length, unit: 'count', window: 'since last week' }));
+      if (c.newPages.length) facts.push(fact({ id: `comp.${key}.new_pages`, area: 'competitors', label: `${c.name}: new pages in its sitemap (${c.newPages.slice(0, 5).join(', ')})`, value: c.newPages.length, unit: 'count', window: 'since last week' }));
+    }
+  } catch (e) {
+    notes.push(`Competitor watch failed: ${(e as Error).message.slice(0, 120)}`);
+  }
   const rules = ruleFindings(facts);
   // The analyst reviews the workspace's tasks (open, and finished in the last 45 days), not the old ledger.
   const open: OpenRec[] = await tasksForAnalyst();
@@ -557,6 +569,7 @@ async function report(opts: { ai: boolean; by: string }) {
       writeToken: enabled.includes('submit_sitemap') ? await retry(() => googleToken('https://www.googleapis.com/auth/webmasters')).catch(() => undefined) : undefined,
       bingKey: await getParam('/lens/growth/bing-key').catch(() => undefined),
       ga4Token: await retry(() => googleToken(GA4_SCOPE)).catch(() => undefined),
+      competitorHosts: await competitorHosts().catch(() => []),
       enabled,
       commit,
     };
@@ -677,6 +690,8 @@ function draftTask(t: Task): string {
       `Internal links from: ${(b.internalLinksFrom ?? []).join(', ')}; to: ${(b.internalLinksTo ?? []).join(', ')}`,
     ].join('\n');
   }
+  if (s.kind === 'competitor')
+    return `COMPETITOR RESEARCH (task ${t.id}): ${s.name} (${s.site}).\nRead their homepage, pricing and feature pages with competitor_page (start from ${s.site}; follow links you see in the text), and our own pages (audit_page) and docs/growth/product-facts.md. ${t.description}`;
   // A task written by a person: the title, description, evidence and page are the brief.
   return [`APPROVED TASK ${t.id}: ${t.title}`, t.description, t.evidence.length ? `Evidence: ${t.evidence.map((e) => e.text).join(' | ')}` : '', t.links.page ? `Page: ${t.links.page}` : '', t.links.keyword ? `Keyword: ${t.links.keyword}` : '', t.metric.label ? `Success metric: ${t.metric.label}` : '']
     .filter(Boolean)
@@ -706,8 +721,8 @@ function prBody(t: Task, d: DraftResult, by: string, commit: string) {
 }
 
 /** Tasks the agent drafts as text for a person to post or send (no code change, no PR). */
-export const TEXT_TYPES = ['social', 'listing', 'partner'];
-const TEXT_MODE: Mode = { system: TEXT_SYSTEM, schema: TEXT_SCHEMA, toolNames: ['find_in_code', 'read_code', 'audit_page'], mode: 'report' };
+export const TEXT_TYPES = ['social', 'listing', 'partner', 'research'];
+const TEXT_MODE: Mode = { system: TEXT_SYSTEM, schema: TEXT_SCHEMA, toolNames: ['find_in_code', 'read_code', 'audit_page', 'competitor_page'], mode: 'report' };
 const CHANNEL_OK = new Set(['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin', 'x', 'facebook', 'blog', 'other']);
 
 /** Text drafts: posts land in the calendar as "drafted"; listing and outreach text goes on the task. */
@@ -716,7 +731,7 @@ async function runTextDraft(t: Task, by: string, started: number) {
   if (!token) throw new Error('Claude token not set up');
   rmSync(TOOL_LOG, { force: true });
   const commit = await fetchCode();
-  const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), enabled: [], commit };
+  const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), competitorHosts: await competitorHosts().catch(() => []), enabled: [], commit };
   const { report: d } = await runClaude<TextDraft>(draftTask(t), token, tools, started + 12 * 60_000, TEXT_MODE);
   await saveToolActivity(`draft:${t.id}`, `D-${t.id}`, Date.now());
   const drafts = (d.drafts ?? []).filter((x) => typeof x.body === 'string' && x.body.trim()).slice(0, 8);
@@ -734,6 +749,12 @@ async function runTextDraft(t: Task, by: string, started: number) {
   }
   const rest = drafts.filter((y) => y.kind !== 'social-post' || !CHANNEL_OK.has(y.channel));
   const note = [posts ? `${posts} post draft${posts > 1 ? 's' : ''} added to the social calendar as "drafted".` : '', ...rest.map((x, i) => `Option ${i + 1} · ${x.channel} · ${x.title}\n${x.body}`), d.notes ? `Notes: ${d.notes}` : ''].filter(Boolean).join('\n\n');
+  // A competitor brief is kept on the competitor too, so the Competitors page shows the latest one.
+  const spec = (t.spec ?? {}) as Record<string, unknown>;
+  if (spec.kind === 'competitor' && typeof spec.id === 'string' && /^[a-f0-9]{10}$/.test(spec.id)) {
+    const brief = drafts.map((x) => `${x.title}\n\n${x.body}`).join('\n\n');
+    await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `COMPETITOR#${spec.id}` }, UpdateExpression: 'SET brief = :b, briefAt = :t, briefTask = :k', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':b': brief.slice(0, 20_000), ':t': Date.now(), ':k': t.id } })).catch((e) => console.error('competitor brief', e));
+  }
   const reviewer = t.reviewer || (by.includes('@') ? by : '');
   await systemUpdate(t.id, { status: 'in_review', reviewer, spec: { ...(t.spec ?? {}), drafts } }, `Drafts ready for review:\n\n${note.slice(0, 6000)}`);
   await sendToOwners(`Drafts ready for review: ${t.title.slice(0, 80)}`, `${note.slice(0, 3000)}\n\nReview: ${CONSOLE}/growth/tasks?task=${t.id}\n\nNothing is posted or sent: a person does that.`).catch(() => {});
@@ -808,6 +829,40 @@ async function startDraft(taskId: string, email: string): Promise<'started' | 'b
       throw e;
     });
   return 'started';
+}
+
+/** POST /growth/competitors/<id>/research: a research task for the agent, drafted right away. */
+export async function competitorResearch(id: string, email: string): Promise<Res> {
+  const c = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `COMPETITOR#${id}` } }))).Item;
+  if (!c) throw new HttpError(404, 'No such competitor');
+  const t = await createTask(
+    {
+      title: `Competitor brief: ${c.name}`,
+      description: 'Positioning, pricing and plans, key features, who it is for, strengths, weaknesses, what Lens should learn from it, and where Lens wins (with quotes from their pages).',
+      workstream: 'search',
+      type: 'research',
+      impact: 2,
+      confidence: 3,
+      effortHours: 1,
+      owner: 'agent',
+      reviewer: email,
+      status: 'ready',
+    },
+    email,
+    { kind: 'person', by: email },
+    { kind: 'competitor', id, name: c.name, site: c.site },
+  );
+  const started = await startDraft(t.id, email).catch(() => 'busy' as const);
+  await log({ entity: `growth:competitor:${id}`, action: 'growth.competitor-research', actor: `console:${email}`, data: { task: t.id, started } });
+  return json(202, { taskId: t.id, started });
+}
+
+/** POST /growth/competitors/check: snapshot every competitor now (GrowthAnalyst). */
+export async function competitorCheck(email: string): Promise<Res> {
+  if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
+  await rateLimit('console-competitor-check', 6, 'A check was started recently. Try again in an hour.');
+  await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ competitors: true, by: email })) }));
+  return json(202, { started: true });
 }
 
 /** POST /growth/seo/audit: run the SEO audit now (GrowthAnalyst; a minute or two). */
