@@ -59,13 +59,13 @@ production date (unset → "starts at launch"); team = owner + growth agent; bui
 - [x] W4.3 Monday digest per person (their open, overdue, due this week, waiting for their review)
 - [x] W4.4 Start here page: mission, north star, strategy, how the workspace works, your role
 - [x] W4.5 Growth settings: workstream owners (auto-assign), launch date, north star, month focus, agent permissions, data sources, product facts
-- [ ] W4.6 Docs (growth-engine.md, README status), tests, e2e, deploy, owner walkthrough
+- [x] W4.6 Docs (growth-engine.md, README status), tests, e2e, deploy, owner walkthrough
 
 ## Status (2026-10-30)
 Built and verified locally: infra unit tests 89/89 (growth-workspace.test.ts: priority, lifecycle rules,
 mentions, KR/goal/milestone progress, AI → tasks, partners/posts, results verdict, digest), typecheck,
 Console build, every screen rendered in headless Chrome against a mock API with this week's real metrics
-(no runtime errors). **Live: waiting for the deploy** (W4.6).
+(no runtime errors). **Live since 2026-10-30** (LensConsole deploys 06:55, 07:08 and the Console files after; e2e 433/433). Tested by the owner and on the Galaxy S8 with real data.
 
 ### Where things are
 - Backend: `infra/lambda/console/growth-tasks.ts` (tasks, lifecycle, comments/history, emails),
@@ -82,3 +82,10 @@ Console build, every screen rendered in headless Chrome against a mock API with 
 - Hourly Console job (`index.ts` alerts): `growthHousekeeping` = daily results loop + Monday 03:00 UTC digest.
 - First load seeds goals O1/O2/O3/Health, milestones A/B/C and 23 strategy tasks (incl. the 5 owner
   decisions), and migrates the old recommendations, proposals and opportunities into tasks (once).
+
+### After the owner's first review (2026-10-30)
+- One-time cleanup (`cleanupV2`, marker `MIGRATED#TASKS2`, 21 changes): migrated suggestions that were done → Done with proof; duplicates and "hold" advice → Won't do with the reason; real actions → Ready with owner and due date; strategy tasks got real priorities and dates.
+- `similar()` guard: the agent can't add the same idea twice in other words (it notes "suggested again" on the existing task).
+- Priority: P0 only for high-impact, confident work that isn't huge (`priorityOf`).
+- Today: My work = in progress → overdue → due soon → priority (decisions only under "Needs a decision"); desktop has goals and decisions beside your work; phones show work first with two-up numbers; growth pages use up to 1600 px.
+- Task panel leads with what and why; goals show "Just started" in the first tenth of their period; sign-in returns to the page you were opening.
