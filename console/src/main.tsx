@@ -1,80 +1,251 @@
-import { StrictMode, useCallback, useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
+import { StrictMode, useCallback, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
 
-import { get, Me, post, whenSignedOut } from './api';
-import { loadSession, Login, SessionState, Verify } from './auth';
-import { Account } from './pages/account';
-import { Activity } from './pages/activity';
-import { Analytics } from './pages/analytics';
-import { Growth } from './pages/growth';
-import { Affiliates, Payouts, Referrals } from './pages/programs';
-import { Feedback, Inbox } from './pages/support';
-import { Overview } from './pages/overview';
-import { Notifications } from './pages/notifications';
-import { Phones } from './pages/phones';
-import { Costs, Errors, Health } from './pages/system';
-import { Team } from './pages/team';
-import { UserDetail, Users } from './pages/users';
-import { Link, navigate, usePath } from './ui';
-import './styles.css';
+import { get, Me, post, whenSignedOut } from "./api";
+import { loadSession, Login, SessionState, Verify } from "./auth";
+import { Account } from "./pages/account";
+import { Activity } from "./pages/activity";
+import { Analytics } from "./pages/analytics";
+import { GrowthWorkspace } from "./pages/growth/index";
+import { Affiliates, Payouts, Referrals } from "./pages/programs";
+import { Feedback, Inbox } from "./pages/support";
+import { Overview } from "./pages/overview";
+import { Notifications } from "./pages/notifications";
+import { Phones } from "./pages/phones";
+import { Costs, Errors, Health } from "./pages/system";
+import { Team } from "./pages/team";
+import { UserDetail, Users } from "./pages/users";
+import { Link, navigate, usePath } from "./ui";
+import "./styles.css";
 
-type Section = { path: string; label: string; permission: string; group: string };
+type Section = {
+  path: string;
+  label: string;
+  permission: string;
+  group: string;
+};
 
 const SECTIONS: Section[] = [
-  { path: '/', label: 'Overview', permission: 'overview', group: 'Insights' },
-  { path: '/analytics', label: 'Analytics', permission: 'analytics', group: 'Insights' },
-  { path: '/growth', label: 'Growth', permission: 'growth', group: 'Insights' },
-  { path: '/phones', label: 'Phones', permission: 'phones', group: 'Insights' },
-  { path: '/users', label: 'Users', permission: 'users', group: 'Operate' },
-  { path: '/feedback', label: 'Feedback & reports', permission: 'feedback', group: 'Operate' },
-  { path: '/inbox', label: 'Inbox', permission: 'inbox', group: 'Operate' },
-  { path: '/notifications', label: 'Notifications', permission: 'notifications', group: 'Operate' },
-  { path: '/affiliates', label: 'Affiliates', permission: 'affiliates', group: 'Programs' },
-  { path: '/referrals', label: 'Referrals', permission: 'referrals', group: 'Programs' },
-  { path: '/payouts', label: 'Payouts', permission: 'payouts', group: 'Programs' },
-  { path: '/health', label: 'Health', permission: 'health', group: 'System' },
-  { path: '/errors', label: 'App errors', permission: 'errors', group: 'System' },
-  { path: '/costs', label: 'AWS costs', permission: 'costs', group: 'System' },
-  { path: '/activity', label: 'Activity log', permission: 'audit', group: 'Admin' },
-  { path: '/team', label: 'Team', permission: 'team', group: 'Admin' },
+  { path: "/", label: "Overview", permission: "overview", group: "Insights" },
+  {
+    path: "/analytics",
+    label: "Analytics",
+    permission: "analytics",
+    group: "Insights",
+  },
+  { path: "/phones", label: "Phones", permission: "phones", group: "Insights" },
+  // Growth workspace (docs/growth/growth-workspace.md)
+  { path: "/growth", label: "Today", permission: "growth", group: "Growth" },
+  {
+    path: "/growth/goals",
+    label: "Goals & roadmap",
+    permission: "growth",
+    group: "Growth",
+  },
+  {
+    path: "/growth/tasks",
+    label: "Tasks",
+    permission: "growth",
+    group: "Growth",
+  },
+  {
+    path: "/growth/insights",
+    label: "Insights",
+    permission: "growth",
+    group: "Growth",
+  },
+  {
+    path: "/growth/ws/launch",
+    label: "Play launch",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/ws/search",
+    label: "Search & content",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/seo",
+    label: "SEO tools",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/competitors",
+    label: "Competitors",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/money",
+    label: "Campaigns & budget",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/calendar",
+    label: "Content calendar",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/analytics",
+    label: "Website analytics (GA4)",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/integrations",
+    label: "Integrations",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/ws/social",
+    label: "Social & distribution",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/ws/store",
+    label: "Website & Play Store",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/ws/retain",
+    label: "Activation & retention",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/ws/loops",
+    label: "Referrals & events",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/partners",
+    label: "Partnerships",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/start",
+    label: "Start here",
+    permission: "growth",
+    group: "Growth",
+  },
+  {
+    path: "/growth/settings",
+    label: "Growth settings",
+    permission: "growth",
+    group: "Growth",
+  },
+  { path: "/users", label: "Users", permission: "users", group: "Operate" },
+  {
+    path: "/feedback",
+    label: "Feedback & reports",
+    permission: "feedback",
+    group: "Operate",
+  },
+  { path: "/inbox", label: "Inbox", permission: "inbox", group: "Operate" },
+  {
+    path: "/notifications",
+    label: "Notifications",
+    permission: "notifications",
+    group: "Operate",
+  },
+  {
+    path: "/affiliates",
+    label: "Affiliates",
+    permission: "affiliates",
+    group: "Programs",
+  },
+  {
+    path: "/referrals",
+    label: "Referrals",
+    permission: "referrals",
+    group: "Programs",
+  },
+  {
+    path: "/payouts",
+    label: "Payouts",
+    permission: "payouts",
+    group: "Programs",
+  },
+  { path: "/health", label: "Health", permission: "health", group: "System" },
+  {
+    path: "/errors",
+    label: "App errors",
+    permission: "errors",
+    group: "System",
+  },
+  { path: "/costs", label: "AWS costs", permission: "costs", group: "System" },
+  {
+    path: "/activity",
+    label: "Activity log",
+    permission: "audit",
+    group: "Admin",
+  },
+  { path: "/team", label: "Team", permission: "team", group: "Admin" },
 ];
 
 function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
   const path = usePath();
   const [menu, setMenu] = useState(false);
   const allowed = SECTIONS.filter((s) => me.permissions.includes(s.permission));
-  const pathname = path.split('?')[0];
-  const active = allowed.find((s) => (s.path === '/' ? pathname === '/' : pathname.startsWith(s.path)));
+  const pathname = path.split("?")[0];
+  // The longest matching path wins (/growth/tasks over /growth).
+  const active = allowed
+    .filter((s) =>
+      s.path === "/"
+        ? pathname === "/"
+        : pathname === s.path || pathname.startsWith(`${s.path}/`),
+    )
+    .sort((a, b) => b.path.length - a.path.length)[0];
   useEffect(() => setMenu(false), [path]);
 
   let page: React.ReactNode;
-  if (pathname === '/account') page = <Account />;
-  else if (pathname.startsWith('/users/') && me.permissions.includes('users')) page = <UserDetail id={decodeURIComponent(pathname.slice(7))} canWrite={me.permissions.includes('users.write')} />;
-  else if (!active) page = allowed[0] ? <NotFound to={allowed[0].path} /> : <NoAccess />;
+  if (pathname === "/account") page = <Account />;
+  else if (pathname.startsWith("/users/") && me.permissions.includes("users"))
+    page = (
+      <UserDetail
+        id={decodeURIComponent(pathname.slice(7))}
+        canWrite={me.permissions.includes("users.write")}
+      />
+    );
+  else if (pathname.startsWith("/growth") && me.permissions.includes("growth"))
+    page = <GrowthWorkspace path={path} />;
+  else if (!active)
+    page = allowed[0] ? <NotFound to={allowed[0].path} /> : <NoAccess />;
   else {
     page = {
-      '/': <Overview />,
-      '/analytics': <Analytics />,
-      '/growth': <Growth canWrite={me.permissions.includes('growth.write')} />,
-      '/phones': <Phones />,
-      '/users': <Users />,
-      '/feedback': <Feedback canWrite={me.permissions.includes('feedback.write')} />,
-      '/inbox': <Inbox canWrite={me.permissions.includes('inbox.write')} />,
-      '/notifications': <Notifications />,
-      '/affiliates': <Affiliates />,
-      '/referrals': <Referrals />,
-      '/payouts': <Payouts />,
-      '/health': <Health />,
-      '/errors': <Errors />,
-      '/costs': <Costs />,
-      '/activity': <Activity />,
-      '/team': <Team me={me.email} />,
+      "/": <Overview />,
+      "/analytics": <Analytics />,
+      "/phones": <Phones />,
+      "/users": <Users />,
+      "/feedback": (
+        <Feedback canWrite={me.permissions.includes("feedback.write")} />
+      ),
+      "/inbox": <Inbox canWrite={me.permissions.includes("inbox.write")} />,
+      "/notifications": <Notifications />,
+      "/affiliates": <Affiliates />,
+      "/referrals": <Referrals />,
+      "/payouts": <Payouts />,
+      "/health": <Health />,
+      "/errors": <Errors />,
+      "/costs": <Costs />,
+      "/activity": <Activity />,
+      "/team": <Team me={me.email} />,
     }[active.path];
   }
 
   const groups = [...new Set(allowed.map((s) => s.group))];
   return (
-    <div className={menu ? 'shell menu-open' : 'shell'}>
+    <div className={menu ? "shell menu-open" : "shell"}>
       <aside className="side">
         <div className="side-brand">
           <img src="/icon.svg" alt="" width={28} height={28} />
@@ -87,7 +258,13 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
               {allowed
                 .filter((s) => s.group === g)
                 .map((s) => (
-                  <Link key={s.path} to={s.path} className={active?.path === s.path ? 'nav-item on' : 'nav-item'}>
+                  <Link
+                    key={s.path}
+                    to={s.path}
+                    className={
+                      active?.path === s.path ? "nav-item on" : "nav-item"
+                    }
+                  >
                     {s.label}
                   </Link>
                 ))}
@@ -95,13 +272,21 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
           ))}
         </nav>
         <div className="side-foot">
-          <Link to="/account" className={pathname === '/account' ? 'nav-item on' : 'nav-item'}>
+          <Link
+            to="/account"
+            className={pathname === "/account" ? "nav-item on" : "nav-item"}
+          >
             <span className="who">
               <span className="who-email">{me.email}</span>
               <span className="who-role">{me.role}</span>
             </span>
           </Link>
-          <button className="btn ghost wide" onClick={() => post('/auth/logout').finally(() => location.assign('/login'))}>
+          <button
+            className="btn ghost wide"
+            onClick={() =>
+              post("/auth/logout").finally(() => location.assign("/login"))
+            }
+          >
             Sign out
           </button>
           <SessionClock expiresAt={expiresAt} />
@@ -109,7 +294,11 @@ function Shell({ me, expiresAt }: { me: Me; expiresAt: number }) {
       </aside>
       <div className="main">
         <div className="topbar">
-          <button className="btn ghost" aria-label="Menu" onClick={() => setMenu((m) => !m)}>
+          <button
+            className="btn ghost"
+            aria-label="Menu"
+            onClick={() => setMenu((m) => !m)}
+          >
             ☰
           </button>
           <span>Lens Console</span>
@@ -127,7 +316,11 @@ function SessionClock({ expiresAt }: { expiresAt: number }) {
     return () => clearInterval(t);
   }, []);
   const left = Math.max(0, Math.round((expiresAt - Date.now()) / 60_000));
-  return <div className="muted small">Session: ends after 30 min idle{left < 31 ? ` (${left} min)` : ''}</div>;
+  return (
+    <div className="muted small">
+      Session: ends after 30 min idle{left < 31 ? ` (${left} min)` : ""}
+    </div>
+  );
 }
 
 function NotFound({ to }: { to: string }) {
@@ -136,20 +329,22 @@ function NotFound({ to }: { to: string }) {
 }
 
 function NoAccess() {
-  return <div className="notice">Your role has no sections yet. Ask an owner.</div>;
+  return (
+    <div className="notice">Your role has no sections yet. Ask an owner.</div>
+  );
 }
 
 function App() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [me, setMe] = useState<Me | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const path = usePath();
 
   const refresh = useCallback(async () => {
     try {
       const s = await loadSession();
       setSession(s);
-      setMe(s.stage === 'full' ? await get<Me>('/me') : null);
+      setMe(s.stage === "full" ? await get<Me>("/me") : null);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -157,7 +352,7 @@ function App() {
 
   useEffect(() => {
     whenSignedOut(() => {
-      setSession({ stage: 'signed-out' });
+      setSession({ stage: "signed-out" });
       setMe(null);
     });
     void refresh();
@@ -165,36 +360,56 @@ function App() {
 
   // Keep the session clock honest (the server ends idle sessions; this notices it).
   useEffect(() => {
-    if (session?.stage !== 'full') return;
+    if (session?.stage !== "full") return;
     const t = setInterval(() => void refresh(), 5 * 60_000);
     return () => clearInterval(t);
   }, [session?.stage, refresh]);
 
   if (error) return <div className="notice error pad">{error}</div>;
   if (!session) return <div className="muted pad">Loading…</div>;
-  if (session.stage === 'signed-out') {
-    if (!path.startsWith('/login')) history.replaceState(null, '', '/login');
+  if (session.stage === "signed-out") {
+    // Remember the page they were opening, to return there after sign-in.
+    if (!path.startsWith("/login") && !path.startsWith("/verify")) {
+      try {
+        sessionStorage.setItem("console-return", path);
+      } catch {
+        // storage blocked: they land on the default page
+      }
+      history.replaceState(null, "", "/login");
+    }
     return <Login />;
   }
-  if (session.stage === 'mfa') {
-    if (!path.startsWith('/verify')) history.replaceState(null, '', '/verify');
+  if (session.stage === "mfa") {
+    if (!path.startsWith("/verify")) history.replaceState(null, "", "/verify");
     return (
       <Verify
         email={session.email}
         enrolled={session.enrolled}
         onDone={() => {
-          history.replaceState(null, '', '/');
+          let back = "/";
+          try {
+            back = sessionStorage.getItem("console-return") || "/";
+            sessionStorage.removeItem("console-return");
+          } catch {
+            // default page
+          }
+          history.replaceState(
+            null,
+            "",
+            back.startsWith("/") && !back.startsWith("//") ? back : "/",
+          );
           void refresh();
         }}
       />
     );
   }
-  if (path.startsWith('/login') || path.startsWith('/verify')) history.replaceState(null, '', '/');
+  if (path.startsWith("/login") || path.startsWith("/verify"))
+    history.replaceState(null, "", "/");
   if (!me) return <div className="muted pad">Loading…</div>;
   return <Shell me={me} expiresAt={session.expiresAt} />;
 }
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
   </StrictMode>,

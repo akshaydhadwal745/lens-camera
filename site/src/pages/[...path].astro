@@ -1,10 +1,12 @@
 ---
 // Every content page in English (/…) and Hindi (/hi/…), from src/content/.
+import BlogHub from '../components/BlogHub.astro';
 import FeaturePage from '../components/FeaturePage.astro';
 import Help from '../components/Help.astro';
 import Hub from '../components/Hub.astro';
 import InfoView from '../components/InfoView.astro';
 import LegalView from '../components/LegalView.astro';
+import { blogPosts } from '../content/blog';
 import { guidePages } from '../content/guides';
 import { infoPages } from '../content/info';
 import { affiliateTerms, deletion, privacy, terms } from '../content/legal';
@@ -14,6 +16,8 @@ import { type Lang, LANGS } from '../i18n/ui';
 type Route =
   | { kind: 'hub'; group: 'features' | 'use-cases' | 'guides' }
   | { kind: 'guide'; path: string }
+  | { kind: 'blog' }
+  | { kind: 'post'; slug: string }
   | { kind: 'page'; slug: string }
   | { kind: 'info'; slug: string }
   | { kind: 'help' }
@@ -25,6 +29,9 @@ export function getStaticPaths() {
     ['use-cases', { kind: 'hub', group: 'use-cases' }],
     ['guides', { kind: 'hub', group: 'guides' }],
     ...guidePages.map((g): [string, Route] => [g.path, { kind: 'guide', path: g.path }]),
+    // The blog exists only once it has a post (an empty /blog/ would be a thin page).
+    ...(blogPosts.length ? ([['blog', { kind: 'blog' }]] as [string, Route][]) : []),
+    ...blogPosts.map((p): [string, Route] => [`blog/${p.slug}`, { kind: 'post', slug: p.slug }]),
     ...pages.map((p): [string, Route] => [`${p.group}/${p.slug}`, { kind: 'page', slug: p.slug }]),
     ...infoPages.map((p): [string, Route] => [p.slug, { kind: 'info', slug: p.slug }]),
     ['help', { kind: 'help' }],
@@ -62,6 +69,15 @@ const securityLinks: [string, string][] = lang === 'en' ? [['Why you can trust L
       const hub: [string, string] = [lang === 'en' ? 'Guides' : 'गाइड', 'guides'];
       const trail: [string, string][] = g.kind === 'trust' ? [[g.name[lang], g.path]] : [hub, [g.name[lang], g.path]];
       return <InfoView lang={lang} path={path} name={g.name[lang]} copy={g.copy[lang]} faq={g.copy[lang].faq} links={g.links[lang]} trail={trail} />;
+    })()
+}
+{route.kind === 'blog' && <BlogHub lang={lang} />}
+{
+  route.kind === 'post' &&
+    (() => {
+      const p = blogPosts.find((x) => x.slug === route.slug)!;
+      const trail: [string, string][] = [[lang === 'en' ? 'Blog' : 'ब्लॉग', 'blog'], [p.name[lang], `blog/${p.slug}`]];
+      return <InfoView lang={lang} path={path} name={p.name[lang]} copy={p.copy[lang]} faq={p.copy[lang].faq} links={p.links[lang]} trail={trail} />;
     })()
 }
 {route.kind === 'help' && <Help lang={lang} />}

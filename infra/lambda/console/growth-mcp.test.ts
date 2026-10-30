@@ -18,9 +18,9 @@ writeFileSync(join(code, 'site/src/layouts/Layout.astro'), "---\nconst a = 1;\n-
 writeFileSync(join(dir, 'secret.txt'), 'do not read');
 const logFile = join(dir, 'tools.jsonl');
 
-function server(enabled = '') {
+function server(enabled = '', mode = 'report') {
   const child = spawn(process.execPath, ['--import', 'tsx', join(__dirname, 'growth-mcp.ts')], {
-    env: { ...process.env, GROWTH_ENABLED_TOOLS: enabled, GROWTH_CODE_DIR: code, GROWTH_CODE_COMMIT: 'abc123', GROWTH_TOOL_LOG: logFile, GROWTH_GOOGLE_TOKEN: '' },
+    env: { ...process.env, GROWTH_ENABLED_TOOLS: enabled, GROWTH_CODE_DIR: code, GROWTH_CODE_COMMIT: 'abc123', GROWTH_TOOL_LOG: logFile, GROWTH_GOOGLE_TOKEN: '', GROWTH_MODE: mode },
     stdio: ['pipe', 'pipe', 'inherit'],
   });
   let buf = '';
@@ -151,4 +151,34 @@ test('demand tools refuse cleanly when their source is not connected', async () 
   s.stop();
   assert.match(kw.content[0].text, /REFUSED: Bing keyword data is not connected/);
   assert.match(ga.content[0].text, /REFUSED: GA4 is not connected/);
+});
+
+test('edit_file: refused in a report run; in a draft run only under site/src and only an exact single match', async () => {
+  mkdirSync(join(code, 'site/src/content'), { recursive: true });
+  writeFileSync(join(code, 'site/src/content/pages.ts'), "a: 'Back up to Drive',\nb: 'Back up to Drive',\nc: 'Unique line',\n");
+  writeFileSync(join(code, 'site/src/scripts.ts'), 'x');
+  const r = server('', 'report');
+  const inReport = await r.callTool('edit_file', { file: 'site/src/content/pages.ts', find: 'Unique line', replace: 'New line' });
+  r.stop();
+  assert.match(inReport.content[0].text, /REFUSED: edit_file only works in an approved draft run/);
+  const d = server('', 'draft');
+  const twice = await d.callTool('edit_file', { file: 'site/src/content/pages.ts', find: 'Back up to Drive', replace: 'x' });
+  const outside = await d.callTool('edit_file', { file: 'site/src/scripts.ts', find: 'x', replace: 'y' });
+  const layout = await d.callTool('edit_file', { file: 'site/src/layouts/Layout.astro', find: 'Night mode camera', replace: 'Night camera' });
+  const ok = JSON.parse((await d.callTool('edit_file', { file: 'site/src/content/pages.ts', find: 'Unique line', replace: 'New line' })).content[0].text);
+  d.stop();
+  assert.match(twice.content[0].text, /appears 2 times/);
+  assert.match(outside.content[0].text, /outside what drafts may change/);
+  assert.equal(layout.isError, undefined);
+  assert.deepEqual(ok, { edited: 'site/src/content/pages.ts', line: 3, removedChars: 11, addedChars: 8 });
+  assert.match(readFileSync(join(code, 'site/src/content/pages.ts'), 'utf8'), /c: 'New line'/);
+});
+
+test('competitor_page reads only listed competitor sites', async () => {
+  const s = server();
+  const off = await s.callTool('competitor_page', { url: 'https://www.degoo.com/' });
+  const bad = await s.callTool('competitor_page', { url: 'http://169.254.169.254/latest/meta-data/' });
+  s.stop();
+  assert.match(off.content[0].text, /REFUSED: only listed competitor sites can be read \(none listed\)/);
+  assert.match(bad.content[0].text, /REFUSED/);
 });

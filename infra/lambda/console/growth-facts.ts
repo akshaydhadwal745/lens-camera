@@ -5,7 +5,7 @@
 export type Unit = 'count' | 'pct' | 'position' | 'usd' | 'gb';
 export type Fact = {
   id: string;
-  area: 'search' | 'website' | 'app' | 'channels' | 'money' | 'loops' | 'demand' | 'ga4';
+  area: 'search' | 'website' | 'app' | 'channels' | 'money' | 'loops' | 'demand' | 'ga4' | 'competitors';
   label: string;
   value: number | null;
   unit: Unit;
@@ -115,6 +115,7 @@ export type AnalyticsInput = {
   active: { series: { day: string; dau: number; wau: number; mau: number }[]; today: { dau: number; wau: number; mau: number } };
   channels?: { channel: string; installs: number; backedUp: Rate; signedIn: Rate; d1: Rate; d7: Rate; d30: Rate; paying: number; storageGB: number; storageUsdPerMonth: number }[];
   features: { name: string; users30: number; uses30: number }[];
+  weeklyBackupSeries?: { weeksAgo: number; users: number }[];
   website?: {
     daily: { day: string; visits: number; getLens: number }[];
     visits: number;
@@ -163,6 +164,10 @@ export function productFacts(a: AnalyticsInput): Fact[] {
   const step = (k: string) => a.funnel.find((s) => s.key === k)?.count ?? 0;
   const installs = step('install');
   facts.push(fact({ id: 'app.installs', area: 'app', label: 'New installs', value: installs, unit: 'count', window: '30 days' }));
+  if (a.weeklyBackupSeries?.length) {
+    const s = a.weeklyBackupSeries;
+    facts.push(fact({ id: 'app.weekly_backup_users', area: 'app', label: 'Weekly backup users (north star: people who backed up at least one photo or video in 7 days)', value: s[s.length - 1].users, previous: s.length > 1 ? s[s.length - 2].users : null, unit: 'count', window: 'last 7 days vs the 7 before' }));
+  }
   for (const [k, label] of [
     ['upload', 'Installs that backed up a photo or video'],
     ['signin', 'Installs that signed in'],

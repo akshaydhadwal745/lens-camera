@@ -244,8 +244,8 @@ export const guidePages: GuidePage[] = [
       },
     },
     links: {
-      en: [['Lens vs Google Photos', 'compare/google-photos'], ['Pricing', 'pricing'], ['Web app', 'features/web-app']],
-      hi: [['Lens बनाम Google Photos', 'compare/google-photos'], ['कीमत', 'pricing'], ['वेब ऐप', 'features/web-app']],
+      en: [['Lens vs Google Photos', 'compare/google-photos'], ['Free cloud backup', 'features/free-cloud-backup'], ['Pricing', 'pricing'], ['Web app', 'features/web-app']],
+      hi: [['Lens बनाम Google Photos', 'compare/google-photos'], ['मुफ़्त क्लाउड बैकअप', 'features/free-cloud-backup'], ['कीमत', 'pricing'], ['वेब ऐप', 'features/web-app']],
     },
   },
 

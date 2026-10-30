@@ -151,6 +151,11 @@ export class ConsoleStack extends Stack {
       schedule: events.Schedule.cron({ weekDay: 'MON', hour: '2', minute: '30' }),
       targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ growth: true, ai: true, by: 'schedule' }), retryAttempts: 0 })],
     });
+    // The month-in-review: the 1st of each month, 03:30 UTC (09:00 IST).
+    new events.Rule(this, 'MonthlyGrowthReview', {
+      schedule: events.Schedule.cron({ day: '1', hour: '3', minute: '30' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ monthly: true, by: 'schedule' }), retryAttempts: 0 })],
+    });
     fn.addEnvironment('GROWTH_FUNCTION', growth.functionName);
     growth.grantInvoke(fn);
 

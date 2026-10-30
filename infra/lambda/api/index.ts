@@ -64,6 +64,7 @@ import {
 import { cancelPlus, checkout as plusCheckout, getPlus, refreshPlus, webhook as razorpayWebhook } from './payments';
 import { cancelMove, getMove, refreshMove, startMove } from './drive-move';
 import { getExport, startExport } from './export';
+import { setMarketingEmail, unsubscribe } from './growth-integrations';
 import { getExtra, setExtra } from './extra-storage';
 import { createLink as createShareLink, linkInfo, linkPage, listLinks, openLink, revokeLink } from './links';
 
@@ -82,6 +83,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /updates') return await updateManifest(req);
     if (route === 'POST /contact') return await submitContact(req);
     if (route === 'POST /web-events') return await webEvent(req);
+    if (route === 'GET /email/unsubscribe' || route === 'POST /email/unsubscribe') return await unsubscribe(req);
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
     // Razorpay → Lens (signed with the dashboard webhook secret; payments.ts).
     if (route === 'POST /razorpay/webhook') return await razorpayWebhook(req);
@@ -116,6 +118,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
 
     if (route === 'GET /me') return me(identity);
     if (route === 'PUT /me') return await setRealName(identity, req);
+    if (route === 'PUT /me/marketing-email') return await setMarketingEmail(identity, req);
     if (route === 'DELETE /account') return await requestAccountDeletion(identity, req);
     if (route === 'POST /auth/email/start') return await startEmail(identity, req);
     if (route === 'POST /auth/email/verify') return await verifyEmail(identity, req);

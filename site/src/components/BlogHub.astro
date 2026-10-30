@@ -1,0 +1,52 @@
+---
+// /blog/: every post, newest first.
+import Layout from '../layouts/Layout.astro';
+import { sortedPosts } from '../content/blog';
+import { href, type Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const posts = sortedPosts();
+const t =
+  lang === 'en'
+    ? { title: 'Blog: photos, storage and sharing, explained', description: 'Practical posts about keeping every photo and video in full quality, freeing space on your phone, and sharing with family and guests.', h1: 'Blog' }
+    : { title: 'ब्लॉग: फ़ोटो, स्टोरेज और शेयरिंग, आसान भाषा में', description: 'हर फ़ोटो और वीडियो को फ़ुल क्वालिटी में रखने, फ़ोन में जगह ख़ाली करने और परिवार व मेहमानों के साथ शेयर करने पर काम की पोस्ट।', h1: 'ब्लॉग' };
+const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'hi-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+---
+
+<Layout lang={lang} path="blog" title={t.title} description={t.description}>
+  <section class="container section">
+    <h1>{t.h1}</h1>
+    <ul class="blog-list">
+      {
+        posts.map((p) => (
+          <li>
+            <a href={href(lang, `blog/${p.slug}`)}>
+              <h2>{p.copy[lang].h1}</h2>
+            </a>
+            <p class="muted">{fmt(p.date)}</p>
+            <p>{p.copy[lang].description}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Layout>
+
+<style>
+  .blog-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 28px;
+    max-width: 760px;
+  }
+  .blog-list h2 {
+    margin: 0 0 4px;
+  }
+  .blog-list p {
+    margin: 4px 0;
+  }
+</style>

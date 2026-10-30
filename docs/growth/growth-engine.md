@@ -193,3 +193,9 @@ fund consumer growth instead of competing with it.
 - **Health notes** in the report and email: Search Console days the daily pull missed (each pulled day now has a `GSC#<day> / pulled` marker, from 2026-10-31), and the Claude token's expiry (a year after `/lens/growth/claude-token` was set) from 30 days before.
 - **Retention:** D1/D7/D30 use installs from the last 90 days (in a 30-day window nothing is old enough for D30) and are labelled "exactly day N"; "came back 7+ days later" is cumulative, so it reads higher. That was the contradiction the first cloud report pointed out.
 - Tool call limits count across the retry run (from the call log; refused calls don't count).
+
+### Growth workspace (2026-10-30)
+The Console's Growth page became a workspace (goals, tasks, workstreams, partnerships, social calendar,
+insights): see `growth-workspace.md`. The analyst's recommendations, opportunities and proposals now
+land as **Suggested tasks** (one lifecycle, owners, due dates, success metric, measured result); the old
+ledger/proposal/opportunity rows are migrated once and no longer shown.

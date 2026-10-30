@@ -1,34 +1,51 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState } from "react";
 
-import { api, get, post } from '../api';
-import { Badge, Card, Confirm, date, Loaded, Page, useLoad } from '../ui';
+import { api, get, post } from "../api";
+import { Badge, Card, Confirm, date, Loaded, Page, useLoad } from "../ui";
 
-type Member = { email: string; role: string; fixed: boolean; addedBy?: string; at?: number; authenticator: boolean; sessions: number };
+type Member = {
+  email: string;
+  role: string;
+  fixed: boolean;
+  addedBy?: string;
+  at?: number;
+  authenticator: boolean;
+  sessions: number;
+};
 type RoleInfo = { role: string; permissions: string[] };
 
 const ABOUT: Record<string, string> = {
-  owner: 'Everything, including the team (a second owner, so you are never locked out)',
-  admin: 'Everything except the team',
-  support: 'Users, feedback, reports, inbox, phones, health',
-  finance: 'Affiliates, referrals, payouts, costs, audit',
-  viewer: 'Overview, phones and health (read only)',
+  owner:
+    "Everything, including the team (a second owner, so you are never locked out)",
+  admin: "Everything except the team",
+  growth_lead:
+    "Growth workspace: goals, tasks, assigning, triage, agent drafts; analytics, referrals, affiliates",
+  growth_contributor:
+    "Growth workspace: work on their own tasks, create tasks, comment; analytics",
+  support: "Users, feedback, reports, inbox, phones, health",
+  finance: "Affiliates, referrals, payouts, costs, audit",
+  viewer: "Overview, phones and health (read only)",
 };
 
 export function Team({ me }: { me: string }) {
-  const state = useLoad(() => get<{ team: Member[]; roles: RoleInfo[] }>('/team'), []);
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('support');
-  const [error, setError] = useState('');
+  const state = useLoad(
+    () => get<{ team: Member[]; roles: RoleInfo[] }>("/team"),
+    [],
+  );
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("support");
+  const [error, setError] = useState("");
   // Only the main owner (from the server configuration) can add or change owners.
-  const mainOwner = state.data?.team.some((m) => m.fixed && m.email === me) ?? false;
-  const roles = Object.keys(ABOUT).filter((r) => r !== 'owner' || mainOwner);
+  const mainOwner =
+    state.data?.team.some((m) => m.fixed && m.email === me) ?? false;
+  const roles = Object.keys(ABOUT).filter((r) => r !== "owner" || mainOwner);
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    setError('');
+    setError("");
     try {
-      await api('PUT', '/team', { email, role });
-      setEmail('');
+      await api("PUT", "/team", { email, role });
+      setEmail("");
       state.reload();
     } catch (err) {
       setError((err as Error).message);
@@ -36,19 +53,34 @@ export function Team({ me }: { me: string }) {
   }
 
   async function change(m: Member, to: string) {
-    await api('PUT', '/team', { email: m.email, role: to }).catch((e: Error) => alert(e.message));
+    await api("PUT", "/team", { email: m.email, role: to }).catch((e: Error) =>
+      alert(e.message),
+    );
     state.reload();
   }
 
   return (
     <Page title="Team">
       <p className="muted small">
-        People who can open the console. Each signs in with their own Google account plus an authenticator code. The main owner is set in the server configuration; they can add a second owner here.
+        People who can open the console. Each signs in with their own Google
+        account plus an authenticator code. The main owner is set in the server
+        configuration; they can add a second owner here.
       </p>
       <Card title="Add someone">
         <form className="toolbar" onSubmit={add}>
-          <input className="search" type="email" required placeholder="Their Google email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">
+          <input
+            className="search"
+            type="email"
+            required
+            placeholder="Their Google email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            aria-label="Role"
+          >
             {roles.map((r) => (
               <option key={r} value={r}>
                 {r} — {ABOUT[r]}
@@ -84,32 +116,71 @@ export function Team({ me }: { me: string }) {
                         {m.fixed ? (
                           <Badge tone="good">owner</Badge>
                         ) : (
-                          <select value={m.role} onChange={(e) => change(m, e.target.value)} aria-label={`Role of ${m.email}`}>
-                            {(roles.includes(m.role) ? roles : [...roles, m.role]).map((r) => (
+                          <select
+                            value={m.role}
+                            onChange={(e) => change(m, e.target.value)}
+                            aria-label={`Role of ${m.email}`}
+                          >
+                            {(roles.includes(m.role)
+                              ? roles
+                              : [...roles, m.role]
+                            ).map((r) => (
                               <option key={r}>{r}</option>
                             ))}
                           </select>
                         )}
                       </td>
-                      <td>{m.authenticator ? <Badge tone="good">set up</Badge> : <Badge tone="warn">at first sign-in</Badge>}</td>
-                      <td>{m.sessions || '—'}</td>
-                      <td className="muted small">{m.at ? `${date(m.at)} by ${m.addedBy}` : 'configuration'}</td>
+                      <td>
+                        {m.authenticator ? (
+                          <Badge tone="good">set up</Badge>
+                        ) : (
+                          <Badge tone="warn">at first sign-in</Badge>
+                        )}
+                      </td>
+                      <td>{m.sessions || "—"}</td>
+                      <td className="muted small">
+                        {m.at
+                          ? `${date(m.at)} by ${m.addedBy}`
+                          : "configuration"}
+                      </td>
                       <td className="btns">
                         {m.email !== me && m.sessions > 0 && (
-                          <Confirm text={`Sign ${m.email} out everywhere?`} onYes={() => post(`/team/${encodeURIComponent(m.email)}/sign-out`, { resetAuthenticator: false }).then(state.reload)}>
+                          <Confirm
+                            text={`Sign ${m.email} out everywhere?`}
+                            onYes={() =>
+                              post(
+                                `/team/${encodeURIComponent(m.email)}/sign-out`,
+                                { resetAuthenticator: false },
+                              ).then(state.reload)
+                            }
+                          >
                             Sign out
                           </Confirm>
                         )}
                         {m.email !== me && m.authenticator && (
                           <Confirm
                             text={`Reset ${m.email}'s authenticator? They will be signed out and must set up a new one at the next sign-in. Use this when they lost their phone.`}
-                            onYes={() => post(`/team/${encodeURIComponent(m.email)}/sign-out`, { resetAuthenticator: true }).then(state.reload)}
+                            onYes={() =>
+                              post(
+                                `/team/${encodeURIComponent(m.email)}/sign-out`,
+                                { resetAuthenticator: true },
+                              ).then(state.reload)
+                            }
                           >
                             Reset authenticator
                           </Confirm>
                         )}
-                        {!m.fixed && (m.role !== 'owner' || mainOwner) && (
-                          <Confirm danger text={`Remove ${m.email}? Their access ends immediately.`} onYes={() => api('DELETE', `/team/${encodeURIComponent(m.email)}`).then(state.reload)}>
+                        {!m.fixed && (m.role !== "owner" || mainOwner) && (
+                          <Confirm
+                            danger
+                            text={`Remove ${m.email}? Their access ends immediately.`}
+                            onYes={() =>
+                              api(
+                                "DELETE",
+                                `/team/${encodeURIComponent(m.email)}`,
+                              ).then(state.reload)
+                            }
+                          >
                             Remove
                           </Confirm>
                         )}

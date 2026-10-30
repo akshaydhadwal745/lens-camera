@@ -118,7 +118,7 @@ test('a whole report: unknown fact ids and invented numbers are reported', () =>
   const good: AiReport = {
     summary: 'Visits went from 7 to 21; Google has indexed 0 of 64 pages.',
     findings: [{ severity: 'high', title: 'Indexing', detail: '0 of 64 pages indexed.', facts: ['search.indexed_pages', 'search.sitemap_pages'] }],
-    recommendations: [{ title: 'Request indexing', hypothesis: 'Requesting indexing gets key pages indexed within 2 weeks', expectedImpact: 'More indexed pages', effort: 'low', cost: 'Free, 15 minutes', timeToResult: '2–3 weeks', risk: 'None', metric: 'Indexed pages', stopRule: 'If none indexed after 4 weeks, focus on links', facts: ['search.indexed_pages'] }],
+    recommendations: [{ title: 'Request indexing', workstream: 'search', hypothesis: 'Requesting indexing gets key pages indexed within 2 weeks', expectedImpact: 'More indexed pages', effort: 'low', cost: 'Free, 15 minutes', timeToResult: '2–3 weeks', risk: 'None', metric: 'Indexed pages', stopRule: 'If none indexed after 4 weeks, focus on links', facts: ['search.indexed_pages'] }],
     reviewOfPrevious: [],
   };
   assert.deepEqual(validateReport(good, facts), []);
@@ -162,4 +162,18 @@ test('opportunities: invented features, numbers, long titles and bad URLs are ca
   assert.match(bad.join('\n'), /"Unlimited storage" is not a feature/);
   assert.match(bad.join('\n'), /61 characters/);
   assert.match(bad.join('\n'), /lowercase path/);
+});
+
+test('drafts: nothing changed, too many files, wrong paths and forbidden claims are stopped by code', () => {
+  const { draftProblems } = require('./growth') as typeof import('./growth');
+  const f = (path: string, content: string, before = '') => ({ path, content, before });
+  assert.deepEqual(draftProblems([]), ['the draft changed nothing']);
+  assert.deepEqual(draftProblems([f('site/src/content/pages.ts', 'Back up with no Lens limit', 'Back up')]), []);
+  assert.match(draftProblems([f('site/src/content/pages.ts', 'Unlimited backup', 'Backup')]).join(), /forbids/);
+  // An existing claim that stays (not added) is not the draft's fault.
+  assert.deepEqual(draftProblems([f('site/src/content/pages.ts', '10 GB free forever. New text.', '10 GB free forever.')]), []);
+  assert.deepEqual(draftProblems([f('site/src/content/pages.ts', 'Then 10 GB free forever.', 'Then 10 GB free.')]), []); // allowed since 2026-10-30
+  assert.equal(draftProblems([f('site/src/content/pages.ts', 'Unlimited storage.', 'Storage.')]).length, 1);
+  assert.match(draftProblems([f('.github/workflows/web.yml', 'x')]).join(), /outside/);
+  assert.match(draftProblems(Array.from({ length: 11 }, (_, i) => f(`site/src/content/p${i}.ts`, 'x'))).join(), /max 10/);
 });

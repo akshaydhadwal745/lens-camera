@@ -21,6 +21,12 @@ export const SEED_KEYWORDS = [
   'event photo sharing qr code',
   'shared photo album',
   'travel photo backup',
+  // What people actually type (Bing related searches, 30 Oct 2026): real volume, unlike several above.
+  'backup photos',
+  'photo storage',
+  'cloud storage for photos',
+  'wedding photos',
+  'google photos storage full',
 ] as const;
 
 /** Wikipedia articles that move with interest in our space (English Wikipedia). */

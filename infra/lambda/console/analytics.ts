@@ -121,6 +121,9 @@ export async function compute(windowDays: number) {
   const activeDays = new Map<string, Set<string>>();
   const lastUsed = new Map<string, number>();
   const actRows: Row[] = [];
+  // North star (docs/growth/growth-workspace.md): weekly backup users = real accounts with a finished
+  // upload in that 7-day window; weeks counted back from now (0 = the last 7 days).
+  const backupWeeks: Set<string>[] = Array.from({ length: 8 }, () => new Set<string>());
   for (const r of rows) {
     const pk = String(r.pk);
     const sk = String(r.sk);
@@ -133,7 +136,12 @@ export async function compute(windowDays: number) {
       continue;
     }
     const id = owner(r);
-    if (sk.startsWith('M#') && r.status === 'ready' && !r.deletedAt) mark(id, 'upload', tsOf(r));
+    if (sk.startsWith('M#') && r.status === 'ready' && !r.deletedAt) {
+      mark(id, 'upload', tsOf(r));
+      const t = tsOf(r);
+      const w = t === undefined ? -1 : Math.floor((now - t) / (7 * DAY));
+      if (id && real.has(id) && w >= 0 && w < 8) backupWeeks[w].add(id);
+    }
     else if (sk.startsWith('OUT#') || sk.startsWith('LKO#') || sk.startsWith('AM#')) mark(id, 'share', tsOf(r));
     else if (sk.startsWith('T#') && id && typeof r.lastUsedAt === 'number') lastUsed.set(id, Math.max(lastUsed.get(id) ?? 0, r.lastUsedAt));
     else if (sk === 'ACCOUNT' && pk.startsWith('ID#') && r.accountId) mark(String(r.accountId), 'signin', tsOf(r));
@@ -294,8 +302,37 @@ export async function compute(windowDays: number) {
     [...real.entries()].filter(([, p]) => p.createdAt >= now - Math.max(windowDays, RETENTION_DAYS) * DAY).map(channelAccount),
   );
 
+  // Campaigns and months (growth-money.ts: CAC, ROI): installs by utm_campaign, and by calendar month.
+  const yearAgo = now - 365 * DAY;
+  const outcome = (id: string, p: Row) => ({ backedUp: first.get(id)?.upload !== undefined, signedIn: first.get(id)?.signin !== undefined || !!p.email, paying: planActive(p.plan, now) });
+  const campaignInstalls: Record<string, { installs: number; backedUp: number; signedIn: number; paying: number }> = {};
+  const months: Record<string, { installs: number; backedUp: number; paying: number }> = {};
+  for (const [id, p] of real) {
+    if (typeof p.createdAt !== 'number' || p.createdAt < yearAgo) continue;
+    const o = outcome(id, p);
+    const camp = typeof p.acquisition?.campaign === 'string' ? p.acquisition.campaign : '';
+    if (camp) {
+      const c = (campaignInstalls[camp] ??= { installs: 0, backedUp: 0, signedIn: 0, paying: 0 });
+      c.installs++;
+      c.backedUp += Number(o.backedUp);
+      c.signedIn += Number(o.signedIn);
+      c.paying += Number(o.paying);
+    }
+    const m = (months[new Date(p.createdAt).toISOString().slice(0, 7)] ??= { installs: 0, backedUp: 0, paying: 0 });
+    m.installs++;
+    m.backedUp += Number(o.backedUp);
+    m.paying += Number(o.paying);
+  }
+
   return {
     at: now,
+    campaignInstalls,
+    installsByMonth: Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([month, v]) => ({ month, ...v })),
+    weeklyBackupUsers: backupWeeks[0].size,
+    weeklyBackupSeries: backupWeeks.map((s, w) => ({ weeksAgo: w, users: s.size })).reverse(),
     windowDays,
     trackingSince,
     accounts: real.size,

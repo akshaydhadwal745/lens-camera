@@ -9,7 +9,7 @@ Last checked: 2026-10-30.
 
 ## Features
 - **Full-quality backup**: every photo and video goes to the cloud the moment it's taken, byte for byte; no compression, no "storage saver".
-- **Free storage**: signed-in accounts get 40 GB free for the first 3 months, then 10 GB free; guests (no sign-in) get 5 GB.
+- **Free storage**: signed-in accounts get 40 GB free for the first 3 months, then 10 GB free forever (owner decision 2026-10-30: the free tier never expires; "10 GB free forever" may be said); guests (no sign-in) get 5 GB.
 - **Lens Plus**: 50 GB for ₹59 a month or ₹499 a year (website and website APK; Google Play billing is coming).
 - **Extra storage**: above Plus, add storage at ₹3 per GB a month (website).
 - **Phone storage saver**: originals are safe in the cloud, so the phone can free space while the gallery keeps working.

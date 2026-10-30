@@ -14,7 +14,15 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { growthOpportunity, growthPage, growthProposal, growthRec, growthRun, growthTools, growthUnwatch } from './growth';
+import { competitorCheck, competitorResearch, growthDraft, jobsPage, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { calendarPage, ga4Page, integrationsPage, metaRequest } from './growth-content';
+import { competitorSave, competitorsPage } from './growth-competitors';
+import { campaignSave, moneyPage, spendSave } from './growth-money';
+import { keywordSave, prospectSave, seoPage } from './growth-seo';
+import { goalUpdate, settingsUpdate } from './growth-goals';
+import { partnerSave, postSave, recordDelete } from './growth-records';
+import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
+import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
 import { overview } from './overview';
@@ -40,7 +48,12 @@ import { runAlerts } from './alerts';
 
 export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }): Promise<Res> {
   // Hourly owner alerts (EventBridge, not HTTP; console-stack.ts).
-  if ('alerts' in event && event.alerts === true) return (await runAlerts()) as unknown as Res;
+  if ('alerts' in event && event.alerts === true) {
+    const alerts = await runAlerts();
+    // Growth workspace: daily results loop and the Monday digest (growth-workspace.ts).
+    const growth = await growthHousekeeping().catch((e) => (console.error('growth housekeeping', e), { error: String(e) }));
+    return { ...(alerts as object), growth } as unknown as Res;
+  }
   event = event as APIGatewayProxyEventV2;
   try {
     // Only the console's CloudFront knows the edge secret: direct calls to the function URL stop here.
@@ -82,9 +95,47 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'GET /analytics') return await allowed('analytics', () => analytics(req));
     if (route === 'GET /growth') return await allowed('growth', () => growthPage(req));
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
-    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'recs' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthRec(seg[2], req, email));
-    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'proposals' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthProposal(seg[2], req, email));
-    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'opportunities' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthOpportunity(seg[2], req, email));
+    // Growth workspace tasks (growth-tasks.ts): see with growth, work with growth.contribute, manage with growth.write.
+    if (route === 'GET /growth/jobs') return await allowed('growth', () => jobsPage());
+    if (route === 'GET /growth/workspace') return await allowed('growth', () => workspace(email, role));
+    if (route === 'GET /growth/monthly') return await allowed('growth', () => monthlyPage(req));
+    if (route === 'POST /growth/monthly/run') return await allowed('growth.write', () => monthlyRun(req, email));
+    // Campaigns, spend and unit economics (growth-money.ts)
+    if (route === 'GET /growth/money') return await allowed('growth', async () => moneyPage(await liveAnalytics()));
+    if (seg[0] === 'growth' && seg[1] === 'campaigns' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.contribute', () => campaignSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'campaigns' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => campaignSave(seg[2], req, email, true));
+    if (seg[0] === 'growth' && seg[1] === 'spend' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => spendSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'spend' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => spendSave(seg[2], req, email, true));
+    // Competitors (growth-competitors.ts)
+    if (route === 'GET /growth/competitors') return await allowed('growth', () => competitorsPage(email));
+    if (route === 'POST /growth/competitors/check') return await allowed('growth.write', () => competitorCheck(email));
+    if (seg[0] === 'growth' && seg[1] === 'competitors' && seg[2] && seg[3] === 'research' && seg.length === 4 && method === 'POST') return await allowed('growth.write', () => competitorResearch(seg[2], email));
+    if (seg[0] === 'growth' && seg[1] === 'competitors' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => competitorSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'competitors' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => competitorSave(seg[2], req, email, true));
+    // SEO tools (growth-seo.ts)
+    if (route === 'GET /growth/seo') return await allowed('growth', () => seoPage(email));
+    if (route === 'POST /growth/seo/audit') return await allowed('growth.write', () => seoAuditRun(email));
+    if (route === 'POST /growth/seo/meta') return await allowed('growth.contribute', () => metaRequest(req, email));
+    // Website tools (growth-content.ts)
+    if (route === 'GET /growth/ga4') return await allowed('growth', () => ga4Page());
+    if (route === 'GET /growth/integrations') return await allowed('growth', () => integrationsPage());
+    if (route === 'GET /growth/calendar') return await allowed('growth', () => calendarPage(req));
+    if (route === 'PUT /growth/keywords') return await allowed('growth.contribute', () => keywordSave(req, email));
+    if (route === 'DELETE /growth/keywords') return await allowed('growth.contribute', () => keywordSave(req, email, true));
+    if (seg[0] === 'growth' && seg[1] === 'prospects' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.contribute', () => prospectSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'prospects' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => prospectSave(seg[2], req, email, true));
+    if (route === 'PUT /growth/settings') return await allowed('growth.write', () => settingsUpdate(req, email));
+    if (seg[0] === 'growth' && seg[1] === 'goals' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => goalUpdate(seg[2], req, email));
+    if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'PUT')
+      return await allowed('growth.contribute', () => (seg[1] === 'partners' ? partnerSave(seg[2], req, email) : postSave(seg[2], req, email)));
+    if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'DELETE')
+      return await allowed('growth.write', () => recordDelete(seg[1] === 'partners' ? 'PARTNER' : 'POST', seg[2], email));
+    if (route === 'GET /growth/tasks') return await allowed('growth', async () => (await migrateLegacy(), tasksPage()));
+    if (route === 'POST /growth/tasks') return await allowed('growth.contribute', () => taskCreate(req, email, role));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg.length === 3 && method === 'GET') return await allowed('growth', () => taskDetail(seg[2]));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg.length === 3 && method === 'PATCH') return await allowed('growth.contribute', () => taskUpdate(seg[2], req, email, role));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg[3] === 'comments' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => taskComment(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'tasks' && seg[2] && seg[3] === 'draft' && seg.length === 4 && method === 'POST') return await allowed('growth.write', () => growthDraft(seg[2], email));
     if (route === 'PUT /growth/tools') return await allowed('growth.write', () => growthTools(req, email));
     if (route === 'DELETE /growth/watch') return await allowed('growth.write', () => growthUnwatch(req, email));
     if (route === 'GET /overview') return await allowed('overview', () => overview(req));

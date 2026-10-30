@@ -6,7 +6,7 @@
 // No Google SDK: a signed JWT for the access token and plain fetch, like the FCM sender.
 import { createSign } from 'node:crypto';
 
-import { BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam } from './lib';
 
@@ -129,4 +129,35 @@ export async function indexCoverage(): Promise<{ urls: number; indexed: number; 
   });
   for (let i = 0; i < urls.length; i += 4) await Promise.all(urls.slice(i, i + 4).map(once));
   return { urls: urls.length, indexed, states, notIndexed, stateOf };
+}
+
+// ---------- GA4 snapshot for the Console (growth workspace, group 4) ----------
+// The Console can't read the Google key (least privilege), so the daily run stores what its GA4
+// charts show: GROWTH / GA4SNAP. Empty rows until visitors who allow analytics arrive.
+const GA4_PROPERTY = '558351960';
+
+async function ga4(token: string, body: Record<string, unknown>) {
+  const res = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${GA4_PROPERTY}:runReport`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`GA4 ${res.status} ${(await res.text()).slice(0, 160)}`);
+  const r = (await res.json()) as { dimensionHeaders?: { name: string }[]; metricHeaders?: { name: string }[]; rows?: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }[] };
+  const dims = (r.dimensionHeaders ?? []).map((h) => h.name);
+  const mets = (r.metricHeaders ?? []).map((h) => h.name);
+  return (r.rows ?? []).map((row) => Object.fromEntries([...dims.map((d, i) => [d, row.dimensionValues[i]?.value]), ...mets.map((m, i) => [m, Number(row.metricValues[i]?.value)])]));
+}
+
+export async function pullGa4Snapshot(now = Date.now()): Promise<string> {
+  const token = await googleToken('https://www.googleapis.com/auth/analytics.readonly');
+  if (!token) return 'not set up';
+  const range = [{ startDate: '28daysAgo', endDate: 'yesterday' }];
+  const m = (names: string[]) => names.map((name) => ({ name }));
+  const [daily, channels, landing, countries, devices, events] = await Promise.all([
+    ga4(token, { dateRanges: range, dimensions: m(['date']), metrics: m(['sessions', 'engagedSessions', 'keyEvents', 'totalUsers']), orderBys: [{ dimension: { dimensionName: 'date' } }] }),
+    ga4(token, { dateRanges: range, dimensions: m(['sessionDefaultChannelGroup']), metrics: m(['sessions', 'engagementRate', 'keyEvents']), orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 12 }),
+    ga4(token, { dateRanges: range, dimensions: m(['landingPage']), metrics: m(['sessions', 'engagementRate', 'averageSessionDuration', 'keyEvents']), orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 25 }),
+    ga4(token, { dateRanges: range, dimensions: m(['country']), metrics: m(['sessions']), orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 12 }),
+    ga4(token, { dateRanges: range, dimensions: m(['deviceCategory']), metrics: m(['sessions']), orderBys: [{ metric: { metricName: 'sessions' }, desc: true }] }),
+    ga4(token, { dateRanges: range, dimensions: m(['eventName']), metrics: m(['eventCount']), orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }], limit: 20 }),
+  ]);
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: 'GA4SNAP', at: now, daily, channels, landing, countries, devices, events } }));
+  return `${daily.length} days`;
 }

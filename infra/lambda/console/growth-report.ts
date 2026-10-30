@@ -6,6 +6,7 @@ import { notable, type Fact } from './growth-facts';
 export type Finding = { severity: 'high' | 'medium' | 'low'; title: string; detail: string; facts: string[] };
 export type Recommendation = {
   title: string;
+  workstream: 'launch' | 'search' | 'social' | 'store' | 'retain' | 'loops' | 'partners';
   hypothesis: string;
   expectedImpact: string;
   effort: 'low' | 'medium' | 'high';
@@ -119,6 +120,8 @@ Hard rules:
 - If data is too thin to conclude something, say so plainly instead of guessing.
 - Every recommendation needs a falsifiable hypothesis, expected impact (direction and which metric, no invented figures), effort, cost in plain words, time to result, risk, the metric to watch and a stop rule.
 - Prefer few, specific, high-leverage recommendations (at most 5) over generic advice. Name the exact page, query, channel or screen.
+- Each recommendation becomes a task in the growth workspace: give it a "workstream" (launch = Play launch; search = SEO and content; social = social and distribution; store = website and Play Store conversion; retain = activation, retention, revenue; loops = referrals, event albums, sharing; partners = partnerships) and a title phrased as the action to take.
+- The "previous recommendations" you receive are the workspace's open and recently finished tasks: don't suggest what is already there; judge finished ones from the facts.
 - For each previous recommendation that was shipped, judge from the facts whether it worked, or say the data can't tell yet.
 - Plain English for a non-specialist founder. No hype.
 
@@ -157,9 +160,10 @@ export const REPORT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'hypothesis', 'expectedImpact', 'effort', 'cost', 'timeToResult', 'risk', 'metric', 'stopRule', 'facts'],
+        required: ['title', 'workstream', 'hypothesis', 'expectedImpact', 'effort', 'cost', 'timeToResult', 'risk', 'metric', 'stopRule', 'facts'],
         properties: {
           title: { type: 'string' },
+          workstream: { enum: ['launch', 'search', 'social', 'store', 'retain', 'loops', 'partners'] },
           hypothesis: { type: 'string' },
           expectedImpact: { type: 'string' },
           effort: { enum: ['low', 'medium', 'high'] },
@@ -378,3 +382,106 @@ export function validateReport(r: AiReport, facts: Fact[], toolNumbers: Set<numb
   });
   return problems;
 }
+
+// ---------- drafts (Phase C): an approved opportunity or proposal becomes a pull request ----------
+
+export const DRAFT_SYSTEM = `You are the growth agent for Lens (lens.instagrowapp.com), now making ONE change the owner approved: a content opportunity (with its brief) or a code proposal. You edit a copy of the website code; the system turns your edits into a pull request the owner reviews. You cannot merge or publish anything.
+
+Tools: find_in_code and read_code (the website code at the current main commit), audit_page (the live page), edit_file (replace one exact piece of text in a file under site/src/content, components, pages, layouts or i18n).
+
+How to work:
+1. Read docs/growth/product-facts.md first. Only claim what is listed under Features; never promise anything under "Not available".
+2. Find how the site is built before editing: pages are data in site/src/content (pages.ts, guides.ts, help.ts, info.ts) rendered by components; follow the existing structure, field names, tone and length of neighbouring entries exactly. New guides are new entries in the same data files, not new frameworks. A blog post is a new entry in site/src/content/blog.ts (slug, date = today, name, copy and links in English and Hindi, like a guide); the blog index appears by itself once there is a post.
+3. The site is English and Hindi. When you change English copy that has a Hindi counterpart, change the Hindi too, in natural Hindi as the existing copy is written (not word-for-word). For a brand-new page, add the Hindi entry only if the data file requires both languages; then write it properly.
+4. Make the smallest change that fully does the approved task. Don't touch unrelated text, formatting or files. Keep titles ≤ 60 characters and meta descriptions ≤ 155. Add internal links the brief lists when an existing page clearly has a natural place for them.
+5. Writing: for the reader's problem first; specific, accurate, honest about alternatives; no keyword stuffing, no filler, no invented numbers, quotes or testimonials.
+6. If the task can't be done well (the brief conflicts with product facts, or the structure doesn't fit), make no edits and explain in "summary".
+
+Answer with the pull request title (short, plain), a summary of what you changed and why, each changed file with what changed, the checks the owner should do before merging, and risks.`;
+
+export const DRAFT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['prTitle', 'summary', 'changes', 'checks', 'risks'],
+  properties: {
+    prTitle: { type: 'string' },
+    summary: { type: 'string' },
+    changes: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['file', 'what'], properties: { file: { type: 'string' }, what: { type: 'string' } } } },
+    checks: { type: 'array', items: { type: 'string' } },
+    risks: { type: 'string' },
+  },
+} as const;
+
+export type DraftResult = { prTitle: string; summary: string; changes: { file: string; what: string }[]; checks: string[]; risks: string };
+
+/** Words that must never be added to the site (product-facts "Not available"), whatever the brief says. */
+export const FORBIDDEN_CLAIMS = /\bunlimited\b|अनलिमिटेड|असीमित/i; // "10 GB free forever" is true (owner decision 2026-10-30)
+
+// ---------- text drafts (W4.2): social posts, Play listing text, partner outreach ----------
+
+export const TEXT_SYSTEM = `You are the growth agent for Lens (lens.instagrowapp.com), drafting text a person will review and then post or send themselves. You never post or send anything.
+
+Tools: find_in_code and read_code (the website code and docs/growth), audit_page (a live page).
+
+Rules:
+1. Read docs/growth/product-facts.md first. Claim only what is under Features; never anything under "Not available". No invented numbers, users, reviews or testimonials.
+2. Positioning: lead with the problem ("Phone full? Shoot everything.", full quality, events), not gigabytes. Honest about alternatives. English unless the task asks for Hindi; Hindi in natural Hindi.
+3. Social posts: write for the channel (Instagram caption with a hook in the first line; Reddit helpful and non-promotional, answering the community's question first, following typical subreddit rules; LinkedIn build-in-public with a real lesson; WhatsApp short and personal; YouTube Shorts a 30-second script). Each post points to ONE website page that answers it.
+4. Play listing: title ≤ 30 characters, short description ≤ 80, full description ≤ 4000 with a clear first line; no claims Play forbids (no "best", "#1", prices in the title, or calls to review).
+5. Partner outreach: short, specific to the partner type, the value for them (their clients get photos from guests in full quality, free for them during the pilot), one clear ask; no pressure.
+6. Give 2–4 options for each piece so the owner can choose. If the task can't be done well, say why in "notes" and give no drafts.
+7. Competitor research (task says COMPETITOR RESEARCH): read their pages with competitor_page (homepage, pricing, features; at most 12 pages). Write ONE draft, kind "other", channel "other", title "Competitor brief: <name>", body in short sections: Positioning (their own words, quoted) · Plans and prices (exactly as listed, with the page) · Key features · Who it's for · Strengths · Weaknesses · What Lens should learn · Where Lens wins (only true product facts) · Watch for. Quote; never guess numbers. If a page can't be read, say so.`;
+
+export const TEXT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['drafts', 'notes'],
+  properties: {
+    drafts: {
+      type: 'array',
+      maxItems: 8,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'channel', 'title', 'body', 'page', 'dayOffset'],
+        properties: {
+          kind: { enum: ['social-post', 'listing', 'outreach', 'other'] },
+          channel: { enum: ['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin', 'x', 'facebook', 'blog', 'play', 'email', 'other'] },
+          title: { type: 'string' },
+          body: { type: 'string' },
+          page: { type: 'string', description: 'website path the post links to, e.g. /guides/collect-wedding-photos-qr-code/' },
+          dayOffset: { type: 'number', description: 'for posts: suggested days from today to publish (0–14)' },
+        },
+      },
+    },
+    notes: { type: 'string' },
+  },
+} as const;
+
+export type TextDraft = { drafts: { kind: string; channel: string; title: string; body: string; page: string; dayOffset: number }[]; notes: string };
+
+// ---------- the monthly review (group 3) ----------
+
+export const MONTHLY_SYSTEM = `You are the growth analyst for Lens, writing the month-in-review for the founder and the growth team. You receive MONTH FACTS (numbers computed by code, each with an id), the work finished and measured this month, goals, spend, SEO and competitor changes, and the weekly summaries.
+
+Rules:
+- Use ONLY numbers from the facts and lists given. Never compute new ratios or estimate. If something wasn't measured, say so.
+- Facts with unit "pct" are fractions: write them as percentages. Money is in Indian rupees (₹).
+- Be honest and specific: what moved the north star and goals, what didn't work, what's blocked. Name tasks by their title.
+- "nextMonth": at most 5 priorities, each tied to a goal or a measured result, in plain words.
+- Plain English for a non-specialist founder. No hype.`;
+
+export const MONTHLY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['headline', 'summary', 'wins', 'misses', 'nextMonth'],
+  properties: {
+    headline: { type: 'string' },
+    summary: { type: 'string' },
+    wins: { type: 'array', maxItems: 6, items: { type: 'string' } },
+    misses: { type: 'array', maxItems: 6, items: { type: 'string' } },
+    nextMonth: { type: 'array', maxItems: 5, items: { type: 'string' } },
+  },
+} as const;
+
+export type MonthlyAi = { headline: string; summary: string; wins: string[]; misses: string[]; nextMonth: string[] };
