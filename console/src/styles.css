@@ -984,3 +984,11 @@ tr.gw-click:hover td { background: var(--side); }
 .gw-details summary { cursor: pointer; font-weight: 600; }
 .gw-steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 @media (max-width: 720px) { .gw-kv, .gw-inline { grid-template-columns: 1fr; } .gw-task { grid-template-columns: auto 1fr; } .gw-task-side { grid-column: 2; } }
+/* Today on a phone: today's work first, then decisions, then the numbers (two per row). */
+.gw-today { display: flex; flex-direction: column; gap: 16px; }
+@media (max-width: 720px) {
+  .gw-today-work { order: 1; }
+  .gw-today-more { order: 2; }
+  .gw-today-stats { order: 3; grid-template-columns: 1fr 1fr; }
+  .gw-today-stats .stat-value { font-size: 22px; }
+}

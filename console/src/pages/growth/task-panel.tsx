@@ -315,6 +315,35 @@ export function TaskPanel({
               <div className="notice">Won't do: {t.wontDoReason}</div>
             )}
 
+            <section className="gw-sec">
+              <h3>What and why</h3>
+              <TextEdit
+                value={t.description}
+                editable={editable}
+                onSave={(v) => save({ description: v })}
+                placeholder="What needs to happen"
+              />
+              {t.evidence.map((e, i) => (
+                <div key={i} className="gw-evid">
+                  {e.text}
+                  {e.facts.length > 0 && (
+                    <span className="muted small"> · {e.facts.join(", ")}</span>
+                  )}
+                  {e.link && (
+                    <>
+                      {" "}
+                      <a href={e.link} target="_blank" rel="noreferrer">
+                        link
+                      </a>
+                    </>
+                  )}
+                </div>
+              ))}
+              {t.expectedImpact && (
+                <p className="small">Expected impact: {t.expectedImpact}</p>
+              )}
+            </section>
+
             <dl className="gw-kv">
               <dt>Priority</dt>
               <dd>
@@ -456,35 +485,6 @@ export function TaskPanel({
                 )}
               </dd>
             </dl>
-
-            <section className="gw-sec">
-              <h3>What and why</h3>
-              <TextEdit
-                value={t.description}
-                editable={editable}
-                onSave={(v) => save({ description: v })}
-                placeholder="What needs to happen"
-              />
-              {t.evidence.map((e, i) => (
-                <div key={i} className="gw-evid">
-                  {e.text}
-                  {e.facts.length > 0 && (
-                    <span className="muted small"> · {e.facts.join(", ")}</span>
-                  )}
-                  {e.link && (
-                    <>
-                      {" "}
-                      <a href={e.link} target="_blank" rel="noreferrer">
-                        link
-                      </a>
-                    </>
-                  )}
-                </div>
-              ))}
-              {t.expectedImpact && (
-                <p className="small">Expected impact: {t.expectedImpact}</p>
-              )}
-            </section>
 
             <section className="gw-sec">
               <h3>Success metric</h3>

@@ -85,7 +85,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
     .slice(0, 4);
   const wf = (id: string) => ws.facts.find((f) => f.id === id);
   return (
-    <>
+    <div className="gw-today">
       <div className="gw-hello">
         <div>
           <h2>
@@ -109,7 +109,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
         </div>
       </div>
 
-      <div className="stats">
+      <div className="stats gw-today-stats">
         <Stat
           label="Weekly backup users · north star"
           value={fmt(ws.northStar.value, "count")}
@@ -139,7 +139,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
         />
       </div>
 
-      <div className="grid2">
+      <div className="grid2 gw-today-work">
         <Card
           title="My work"
           actions={<Link to="/growth/tasks?view=mine">All my tasks →</Link>}
@@ -177,7 +177,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
         </Card>
       </div>
 
-      <div className="grid3">
+      <div className="grid3 gw-today-more">
         <Card title="Needs a decision">
           <ul className="gw-list">
             {toReview.map((t) => (
@@ -281,7 +281,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
           </ul>
         </Card>
       </div>
-    </>
+    </div>
   );
 }
 

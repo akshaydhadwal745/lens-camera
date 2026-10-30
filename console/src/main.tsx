@@ -332,7 +332,15 @@ function App() {
   if (error) return <div className="notice error pad">{error}</div>;
   if (!session) return <div className="muted pad">Loading…</div>;
   if (session.stage === "signed-out") {
-    if (!path.startsWith("/login")) history.replaceState(null, "", "/login");
+    // Remember the page they were opening, to return there after sign-in.
+    if (!path.startsWith("/login") && !path.startsWith("/verify")) {
+      try {
+        sessionStorage.setItem("console-return", path);
+      } catch {
+        // storage blocked: they land on the default page
+      }
+      history.replaceState(null, "", "/login");
+    }
     return <Login />;
   }
   if (session.stage === "mfa") {
@@ -342,7 +350,14 @@ function App() {
         email={session.email}
         enrolled={session.enrolled}
         onDone={() => {
-          history.replaceState(null, "", "/");
+          let back = "/";
+          try {
+            back = sessionStorage.getItem("console-return") || "/";
+            sessionStorage.removeItem("console-return");
+          } catch {
+            // default page
+          }
+          history.replaceState(null, "", back.startsWith("/") && !back.startsWith("//") ? back : "/");
           void refresh();
         }}
       />
