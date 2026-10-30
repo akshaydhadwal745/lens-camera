@@ -15,7 +15,8 @@ export default defineConfig({
     sitemap({
       // Sign-in and the app are private; the 404 isn't a page.
       filter: (page) => !/\/(signin|l|e|u|s|app|qr-card|paid)\//.test(page) && !page.endsWith('/404/'),
-      i18n: { defaultLocale: 'en', locales: { en: 'en-IN', hi: 'hi-IN' } },
+      // Language only: the English pages are for everyone, not English-for-India.
+      i18n: { defaultLocale: 'en', locales: { en: 'en', hi: 'hi' } },
     }),
   ],
 });

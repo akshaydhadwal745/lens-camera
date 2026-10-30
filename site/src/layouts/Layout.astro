@@ -43,7 +43,7 @@ const graph = [
     '@id': `${site}/#website`,
     name: BRAND,
     url: site,
-    inLanguage: ['en-IN', 'hi-IN'],
+    inLanguage: ['en', 'hi'],
     publisher: { '@id': `${site}/#org` },
   },
   ...jsonLd,
@@ -61,8 +61,9 @@ const graph = [
     {
       !noindex && (
         <>
-          <link rel="alternate" hreflang="en-IN" href={url('en')} />
-          <link rel="alternate" hreflang="hi-IN" href={url('hi')} />
+          {/* Worldwide English, not English-for-India: no region code (docs/growth/seo-agent.md). */}
+          <link rel="alternate" hreflang="en" href={url('en')} />
+          <link rel="alternate" hreflang="hi" href={url('hi')} />
           <link rel="alternate" hreflang="x-default" href={url('en')} />
         </>
       )
