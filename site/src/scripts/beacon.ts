@@ -46,7 +46,10 @@ document.addEventListener(
               : /\/app\/?/.test(href)
                 ? 'web_app'
                 : null);
-    if (event) send({ p: path, e: event });
+    if (!event) return;
+    send({ p: path, e: event });
+    // The same click as a GA4 event (no-op where Google Analytics isn't loaded or was declined).
+    (window as { gtag?: (...a: unknown[]) => void }).gtag?.('event', event, { page_path: path });
   },
   { capture: true },
 );
