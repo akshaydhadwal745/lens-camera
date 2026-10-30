@@ -15,7 +15,7 @@ export const LEGAL = {
   /** No public mailbox: the contact form (topic presets via ?topic=). */
   contact: 'lens.instagrowapp.com/contact/',
   grievance: 'lens.instagrowapp.com/contact/?topic=grievance',
-  updated: { en: '26 October 2026', hi: '26 अक्टूबर 2026' },
+  updated: { en: '30 October 2026', hi: '30 अक्टूबर 2026' },
 };
 
 export type LegalBlock = { h2: string; p?: string[]; ul?: string[]; table?: { head: string[]; rows: string[][] } };
@@ -106,7 +106,8 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '6. Cookies on the website',
-        p: ['The website uses only strictly necessary cookies. "__Host-lens" keeps you signed in. It is secure, HttpOnly (scripts cannot read it) and sent only to lens.instagrowapp.com. It lasts up to 30 days or until you log out. If you arrive through an invite or affiliate link, a second cookie, "__Host-lensref", remembers that link’s code for up to 30 days so the right person is credited if you sign up on the website. We use no advertising or tracking cookies. To see which pages help people, each page view and a few clicks (such as Get Lens) are counted by our own script, without cookies or any ID: we keep only daily totals per page and per source website (for example "google.com"), never anything about you. Your browser’s tab remembers only that the visit was already counted (session storage, cleared when you close the tab).'],
+        p: ['Necessary cookies: "__Host-lens" keeps you signed in. It is secure, HttpOnly (scripts cannot read it) and sent only to lens.instagrowapp.com. It lasts up to 30 days or until you log out. If you arrive through an invite or affiliate link, a second cookie, "__Host-lensref", remembers that link’s code for up to 30 days so the right person is credited if you sign up on the website. To see which pages help people, each page view and a few clicks (such as Get Lens) are counted by our own script, without cookies or any ID: we keep only daily totals per page and per source website (for example "google.com"), never anything about you. Your browser’s tab remembers only that the visit was already counted (session storage, cleared when you close the tab).',
+          'Analytics cookies (Google Analytics 4): we also use Google Analytics to understand how visitors use the website: which pages they land on, how they found us, how long they stay, their country and device type, and clicks such as Get Lens. Google sets the "_ga" cookies for up to 2 years and processes this data for us (Google’s privacy policy: policies.google.com/privacy); IP addresses are not stored. We never use it for advertising: ad storage, ad personalisation and Google signals are switched off. In the EU/EEA, the UK and Switzerland these cookies are off until you accept them in the banner. Everywhere, you can turn them off or on with "Cookie settings" at the bottom of every page. The sign-in, invite and web-app pages don’t load Google Analytics, and the app never does.'],
       },
       {
         h2: '7. Your rights',
@@ -215,7 +216,8 @@ export const privacy: Record<Lang, LegalDoc> = {
       },
       {
         h2: '6. वेबसाइट पर कुकी',
-        p: ['वेबसाइट सिर्फ़ ज़रूरी कुकी इस्तेमाल करती है। "__Host-lens" आपको साइन इन रखती है। यह सुरक्षित, HttpOnly (स्क्रिप्ट नहीं पढ़ सकतीं) है और सिर्फ़ lens.instagrowapp.com को भेजी जाती है। यह 30 दिन तक या लॉग आउट करने तक रहती है। अगर आप किसी इनवाइट या एफ़िलिएट लिंक से आते हैं, तो दूसरी कुकी "__Host-lensref" उस लिंक का कोड 30 दिन तक याद रखती है ताकि वेबसाइट पर साइन अप करने पर सही व्यक्ति को श्रेय मिले। हम कोई विज्ञापन या ट्रैकिंग कुकी इस्तेमाल नहीं करते। यह देखने के लिए कि कौन-से पेज लोगों की मदद करते हैं, हर पेज व्यू और कुछ क्लिक (जैसे Get Lens) हमारी अपनी स्क्रिप्ट गिनती है, बिना कुकी या किसी ID के: हम सिर्फ़ हर पेज और हर स्रोत वेबसाइट (जैसे "google.com") के रोज़ाना कुल आँकड़े रखते हैं, आपके बारे में कुछ नहीं। ब्राउज़र का टैब सिर्फ़ यह याद रखता है कि विज़िट गिन ली गई (सेशन स्टोरेज, टैब बंद करने पर मिट जाता है)।'],
+        p: ['ज़रूरी कुकी: "__Host-lens" आपको साइन इन रखती है। यह सुरक्षित, HttpOnly (स्क्रिप्ट नहीं पढ़ सकतीं) है और सिर्फ़ lens.instagrowapp.com को भेजी जाती है। यह 30 दिन तक या लॉग आउट करने तक रहती है। अगर आप किसी इनवाइट या एफ़िलिएट लिंक से आते हैं, तो दूसरी कुकी "__Host-lensref" उस लिंक का कोड 30 दिन तक याद रखती है ताकि वेबसाइट पर साइन अप करने पर सही व्यक्ति को श्रेय मिले। यह देखने के लिए कि कौन-से पेज लोगों की मदद करते हैं, हर पेज व्यू और कुछ क्लिक (जैसे Get Lens) हमारी अपनी स्क्रिप्ट गिनती है, बिना कुकी या किसी ID के: हम सिर्फ़ हर पेज और हर स्रोत वेबसाइट (जैसे "google.com") के रोज़ाना कुल आँकड़े रखते हैं, आपके बारे में कुछ नहीं। ब्राउज़र का टैब सिर्फ़ यह याद रखता है कि विज़िट गिन ली गई (सेशन स्टोरेज, टैब बंद करने पर मिट जाता है)।',
+          'एनालिटिक्स कुकी (Google Analytics 4): हम यह समझने के लिए भी Google Analytics इस्तेमाल करते हैं कि लोग वेबसाइट कैसे इस्तेमाल करते हैं: वे किस पेज पर आते हैं, हमें कैसे ढूँढते हैं, कितनी देर रुकते हैं, उनका देश और डिवाइस का प्रकार, और Get Lens जैसे क्लिक। Google "_ga" कुकी 2 साल तक के लिए सेट करता है और यह डेटा हमारे लिए प्रोसेस करता है (Google की प्राइवेसी पॉलिसी: policies.google.com/privacy); IP एड्रेस सेव नहीं होते। हम इसे विज्ञापन के लिए कभी इस्तेमाल नहीं करते: ऐड स्टोरेज, ऐड पर्सनलाइज़ेशन और Google signals बंद हैं। EU/EEA, UK और स्विट्ज़रलैंड में ये कुकी तब तक बंद रहती हैं जब तक आप बैनर में स्वीकार न करें। हर जगह, हर पेज के नीचे "कुकी सेटिंग" से आप इन्हें बंद या चालू कर सकते हैं। साइन-इन, इनवाइट और वेब-ऐप पेज Google Analytics लोड नहीं करते, और ऐप कभी नहीं।'],
       },
       {
         h2: '7. आपके अधिकार',

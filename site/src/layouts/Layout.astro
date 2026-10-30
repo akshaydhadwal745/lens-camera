@@ -2,6 +2,7 @@
 // Every page: SEO head (title, description, canonical, hreflang, social
 // cards, JSON-LD), header and footer. No client JavaScript unless a page adds it.
 import '../styles/global.css';
+import Analytics from '../components/Analytics.astro';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
 import { BRAND, href, type Lang, ui } from '../i18n/ui';
@@ -97,6 +98,8 @@ const graph = [
       <slot />
     </main>
     <Footer lang={lang} />
+    {/* Private pages (sign-in, QR landing) don't load Google Analytics. */}
+    {!noindex && <Analytics lang={lang} />}
     <script>
       import '../scripts/beacon.ts';
     </script>

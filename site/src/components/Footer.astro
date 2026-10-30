@@ -63,6 +63,7 @@ const legal =
       <h2>{t.footer.company}</h2>
       <ul>
         {legal.map(([p, label]) => <li><a href={href(lang, p)}>{label}</a></li>)}
+        <li><a href={href(lang, 'privacy')} data-cookie-settings>{lang === 'en' ? 'Cookie settings' : 'कुकी सेटिंग'}</a></li>
       </ul>
     </nav>
   </div>

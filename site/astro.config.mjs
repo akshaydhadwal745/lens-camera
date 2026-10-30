@@ -9,7 +9,8 @@ export default defineConfig({
   build: { format: 'directory', inlineStylesheets: 'always' },
   compressHTML: true,
   // Hashes for every inline script/style: a strict Content-Security-Policy.
-  security: { csp: true },
+  // Google Analytics' tag is the only outside script (src/components/Analytics.astro).
+  security: { csp: { scriptDirective: { resources: ["'self'", 'https://www.googletagmanager.com'] } } },
   devToolbar: { enabled: false },
   integrations: [
     sitemap({

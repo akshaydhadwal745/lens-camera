@@ -1,0 +1,151 @@
+---
+// Google Analytics 4 (docs/growth/growth-intelligence.md §8), next to our own cookie-free analytics.
+// Consent Mode v2: analytics cookies are off by default in the EU/EEA, UK and Switzerland until the
+// visitor accepts the banner; elsewhere they are on, with "Cookie settings" in the footer to turn
+// them off. Never advertising: ad storage, ad personalisation and Google signals stay off everywhere.
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const text =
+  lang === 'en'
+    ? {
+        body: 'We use Google Analytics cookies to see which pages help people, nothing for ads.',
+        accept: 'Accept',
+        decline: 'Decline',
+        policy: 'Privacy policy',
+      }
+    : {
+        body: 'हम Google Analytics कुकीज़ से देखते हैं कि कौन-से पेज लोगों के काम आते हैं। विज्ञापन के लिए कुछ नहीं।',
+        accept: 'स्वीकार करें',
+        decline: 'मना करें',
+        policy: 'प्राइवेसी पॉलिसी',
+      };
+---
+
+<script>
+  const GA_ID = 'G-MR339VK2QB';
+  // Processed (not inline) so the site's Content-Security-Policy hashes it; googletagmanager.com is
+  // allowed in astro.config.mjs.
+  type Gtag = (...args: unknown[]) => void;
+  const w = window as unknown as { dataLayer: unknown[]; gtag: Gtag };
+  w.dataLayer = w.dataLayer || [];
+  // gtag.js expects the `arguments` object itself, not an array.
+  w.gtag = function () {
+    // eslint-disable-next-line prefer-rest-params
+    w.dataLayer.push(arguments);
+  };
+  const gtag = w.gtag;
+  const off = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' };
+  // EU/EEA, UK, Switzerland: no analytics cookies until the visitor says yes.
+  gtag('consent', 'default', {
+    ...off,
+    analytics_storage: 'denied',
+    region: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH'],
+  });
+  gtag('consent', 'default', { ...off, analytics_storage: 'granted' });
+  let choice: string | null = null;
+  try {
+    choice = localStorage.getItem('lens-analytics');
+  } catch {
+    // storage blocked: defaults apply
+  }
+  if (choice === 'granted' || choice === 'denied') gtag('consent', 'update', { analytics_storage: choice });
+  gtag('js', new Date());
+  gtag('config', GA_ID, { allow_google_signals: false, allow_ad_personalization_signals: false });
+  const tag = document.createElement('script');
+  tag.async = true;
+  tag.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
+  document.head.appendChild(tag);
+
+  // The banner is only needed where cookies are off until consent (time zone is a good-enough guess;
+  // Google applies the regional default by the visitor's real location either way).
+  const box = document.getElementById('consent');
+  if (box) {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const europe = tz.startsWith('Europe/') || ['Atlantic/Reykjavik', 'Atlantic/Canary', 'Atlantic/Madeira', 'Atlantic/Azores', 'Atlantic/Faroe'].includes(tz);
+    let asked = true;
+    try {
+      asked = !!localStorage.getItem('lens-analytics');
+    } catch {
+      asked = true; // can't store an answer: don't nag on every page
+    }
+    if (europe && !asked) box.hidden = false;
+    box.addEventListener('click', (e) => {
+      const v = e.target instanceof Element ? e.target.getAttribute('data-consent') : null;
+      if (v !== 'granted' && v !== 'denied') return;
+      try {
+        localStorage.setItem('lens-analytics', v);
+      } catch {
+        // can't remember: asked again next time
+      }
+      gtag('consent', 'update', { analytics_storage: v });
+      box.hidden = true;
+    });
+    document.addEventListener('click', (e) => {
+      if (e.target instanceof Element && e.target.closest('[data-cookie-settings]')) {
+        e.preventDefault();
+        box.hidden = false;
+      }
+    });
+  }
+</script>
+
+<div class="consent" id="consent" role="dialog" aria-live="polite" aria-label="Cookies" hidden>
+  <p>{text.body} <a href={lang === 'en' ? '/privacy/' : '/hi/privacy/'}>{text.policy}</a></p>
+  <div class="consent-actions">
+    <button type="button" class="consent-btn" data-consent="denied">{text.decline}</button>
+    <button type="button" class="consent-btn consent-yes" data-consent="granted">{text.accept}</button>
+  </div>
+</div>
+
+
+<style>
+  .consent {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 50;
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 16px;
+    border-radius: 16px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 8px 32px rgb(0 0 0 / 0.5);
+    font-size: 0.95rem;
+  }
+  .consent[hidden] {
+    display: none;
+  }
+  .consent p {
+    margin: 0 0 12px;
+  }
+  .consent a {
+    color: var(--accent);
+  }
+  .consent-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .consent-btn {
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid var(--surface-2);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  .consent-yes {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
+</style>
