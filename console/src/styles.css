@@ -1016,7 +1016,9 @@ tr.gw-click:hover td { background: var(--side); }
   .gw-cards td { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr); column-gap: 12px; align-items: baseline; border: 0; padding: 3px 0; text-align: left; }
   .gw-cards td.num { text-align: right; }
   .gw-cards td::before { content: attr(data-label); grid-row: 1 / span 20; color: var(--muted); font-size: 0.85em; }
-  .gw-cards td > * { grid-column: 2; }
+  .gw-cards td > * { grid-column: 2; justify-self: start; }
+  .gw-cards td.num::before { text-align: left; }
+  .gw-cards td.num > * { justify-self: end; }
   .gw-cards td:first-child, .gw-cards td[data-label=""] { display: block; }
   .gw-cards td:first-child { font-weight: 600; }
   .gw-cards td:first-child::before, .gw-cards td[data-label=""]::before { content: none; }
