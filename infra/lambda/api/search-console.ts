@@ -82,7 +82,8 @@ export async function pullSearchConsole(now = Date.now()): Promise<number | stri
   for (let back = 5; back >= 1; back--) {
     const day = new Date(now - back * DAY).toISOString().slice(0, 10);
     const [total, q, p, c, d] = await Promise.all([query(token, day), query(token, day, 'query'), query(token, day, 'page'), query(token, day, 'country'), query(token, day, 'device')]);
-    const items = rowsForDay(day, { total, q, p, c, d }, ttl);
+    // `pulled` marks the day as fetched, so a day with no search data (no rows) differs from a failed pull.
+    const items = [...rowsForDay(day, { total, q, p, c, d }, ttl), { pk: `GSC#${day}`, sk: 'pulled', at: now, ttl }];
     for (let i = 0; i < items.length; i += 25) {
       let batch: Record<string, unknown>[] = items.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } }));
       for (let attempt = 0; batch.length && attempt < 5; attempt++) {
@@ -90,7 +91,7 @@ export async function pullSearchConsole(now = Date.now()): Promise<number | stri
         batch = (r.UnprocessedItems?.[env.table] as Record<string, unknown>[] | undefined) ?? [];
       }
     }
-    written += items.length;
+    written += items.length - 1;
   }
   return written;
 }

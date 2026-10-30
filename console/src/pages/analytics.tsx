@@ -269,7 +269,7 @@ export function Analytics() {
                   <Empty>No installs in this period.</Empty>
                 )}
                 <p className="muted small">
-                  Channel = where the install came from (Google Play’s install referrer: organic Play, a tagged link, an invite; “web” for website sign-ups). Recorded for installs from 29 Oct 2026. D1/D7/D30 = used Lens on exactly that day after installing, of those installed long enough ago (hover for counts). Cost = storage held × $0.012 per GB-month, an estimate.
+                  Channel = where the install came from (Google Play’s install referrer: organic Play, a tagged link, an invite; “web” for website sign-ups). Recorded for installs from 29 Oct 2026. D1/D7/D30 = used Lens on exactly that day after installing (classic day-N), of installs from the last 90 days old enough to count (hover for counts); “Came back 7+ days later” in the funnel counts any later visit, so it reads higher. Cost = storage held × $0.012 per GB-month, an estimate.
                 </p>
               </Card>
 

@@ -110,3 +110,36 @@ test('a report may quote tool results anywhere, but not invented numbers', () =>
   assert.deepEqual(validateReport(report, facts, numbersIn([{ submitted: '64' }, { words: 399 }])), []);
   assert.match(validateReport(report, facts, numbersIn([{ submitted: '64' }]))[0], /399/);
 });
+
+test('unknown arguments are refused, so nothing extra can reach a stored row', async () => {
+  const s = server();
+  const r = await s.callTool('propose_change', { title: 't', evidence: 'e', files: ['a:1'], change: 'c', validation: 'v', measurement: 'm', pk: 'CSESS#x', sk: 'S' });
+  const tools = (await s.rpc('tools/list')).result.tools as { inputSchema: { additionalProperties?: boolean } }[];
+  s.stop();
+  assert.equal(r.isError, true);
+  assert.match(r.content[0].text, /REFUSED: unknown arguments: pk, sk/);
+  assert.ok(tools.every((t) => t.inputSchema.additionalProperties === false));
+});
+
+test('a proposal comes back as cleaned fields only', async () => {
+  const s = server();
+  const r = JSON.parse((await s.callTool('propose_change', { title: 'x'.repeat(500), evidence: 'e', files: ['a:1', 7, 'b:2'], change: 'c', validation: 'v', measurement: 'm' })).content[0].text);
+  s.stop();
+  assert.deepEqual(Object.keys(r).sort(), ['change', 'evidence', 'files', 'measurement', 'proposal', 'title', 'validation']);
+  assert.equal(r.title.length, 200);
+  assert.deepEqual(r.files, ['a:1', 'b:2']);
+});
+
+test('call limits hold across a second server in the same report (the retry run)', async () => {
+  const log = join(dir, 'limits.jsonl');
+  writeFileSync(log, `${JSON.stringify({ tool: 'propose_change' })}\n`.repeat(5) + '{"tool":"cut sh');
+  const child = spawn(process.execPath, ['--import', 'tsx', join(__dirname, 'growth-mcp.ts')], {
+    env: { ...process.env, GROWTH_ENABLED_TOOLS: '', GROWTH_CODE_DIR: code, GROWTH_TOOL_LOG: log, GROWTH_GOOGLE_TOKEN: '' },
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
+  const reply = new Promise<any>((resolve) => child.stdout.once('data', (d) => resolve(JSON.parse(String(d).split('\n')[0]))));
+  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'propose_change', arguments: { title: 't', evidence: 'e', files: ['a:1'], change: 'c', validation: 'v', measurement: 'm' } } })}\n`);
+  const r = (await reply).result;
+  child.kill();
+  assert.match(r.content[0].text, /REFUSED: propose_change: limit of 5 calls per report reached/);
+});

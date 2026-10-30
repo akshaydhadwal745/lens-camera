@@ -185,3 +185,11 @@ fund consumer growth instead of competing with it.
 2. **Next week:** analyst facts engine + Growth tab; model comparison and choice.
 3. **From production launch:** E2–E6 weekly, with the analyst's report every Monday.
 4. **Month 2–3:** E7 if retention qualifies; partner pipeline (B2B event albums pilot).
+
+### Hardening (2026-10-30, after an independent code review of Phases 2 and B)
+- **Stored rows are built from fixed fields only.** A proposal row takes the six fields the tool server checked and returned (capped lengths), never the model's raw arguments; recommendations take only the schema's fields; the row keys are written last. The tool server refuses unknown arguments and every tool schema says `additionalProperties: false`. Defence in depth: the GrowthAnalyst role reads the table but may write only `GROWTH` rows (IAM `dynamodb:LeadingKeys`), so a model misled by text in Search Console data can't touch accounts or sessions.
+- **One run at a time:** `GROWTH / RUNNING` is a conditional lock (Console button and Monday schedule); a failed run clears it, records `lastError` (shown on the Growth page) and emails the owners. No automatic Lambda retries (they would run Claude and email twice).
+- **Ledger:** ids are unique per run (`R-<date>-<HHMM>-<n>`, `P-…`); a re-run the same day marks that day's untouched recommendations "dropped (replaced)"; recommendations from a report that failed its number checks are held back. A failed retry keeps the first answer.
+- **Health notes** in the report and email: Search Console days the daily pull missed (each pulled day now has a `GSC#<day> / pulled` marker, from 2026-10-31), and the Claude token's expiry (a year after `/lens/growth/claude-token` was set) from 30 days before.
+- **Retention:** D1/D7/D30 use installs from the last 90 days (in a 30-day window nothing is old enough for D30) and are labelled "exactly day N"; "came back 7+ days later" is cumulative, so it reads higher. That was the contradiction the first cloud report pointed out.
+- Tool call limits count across the retry run (from the call log; refused calls don't count).

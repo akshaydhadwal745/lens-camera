@@ -56,3 +56,11 @@ test('an empty channel list gives no rows; a new account has no D1 yet', () => {
   assert.deepEqual(byChannel([], NOW), []);
   assert.deepEqual(byChannel([acct(0, [0])], NOW)[0].d1, { reached: 0, eligible: 0, rate: null });
 });
+
+test('retention can use a longer cohort than the window, so D30 has accounts old enough', () => {
+  const recent = [acct(10, [0])];
+  const older = [acct(10, [0]), acct(45, [0, 30])];
+  const [r] = byChannel(recent, NOW, older);
+  assert.equal(r.installs, 1);
+  assert.deepEqual(r.d30, { reached: 1, eligible: 1, rate: 1 });
+});

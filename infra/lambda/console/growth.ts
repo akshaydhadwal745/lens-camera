@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam, HttpError, json, rateLimit, Req, Res } from '../api/lib';
@@ -49,12 +50,16 @@ async function retry<T>(f: () => Promise<T>, tries = 3): Promise<T> {
 
 // ---------- facts ----------
 
-async function searchDays(now: number): Promise<SearchDay[]> {
+/** The daily pull marks each fetched day from this date on (search-console.ts). */
+const PULL_MARKERS_SINCE = '2026-10-31';
+
+async function searchDays(now: number): Promise<(SearchDay & { pulled: boolean })[]> {
   const days = Array.from({ length: 56 }, (_, i) => new Date(now - (56 - i) * DAY).toISOString().slice(0, 10));
   return Promise.all(
     days.map(async (day) => {
       const r = await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': `GSC#${day}` } }));
-      return { day, rows: (r.Items ?? []) as SearchRow[] };
+      const items = (r.Items ?? []) as SearchRow[];
+      return { day, rows: items.filter((x) => x.sk !== 'pulled'), pulled: items.some((x) => x.sk === 'pulled') };
     }),
   );
 }
@@ -90,6 +95,31 @@ async function watchFacts(now: number, state: Map<string, string>): Promise<Fact
     out.push(fact({ id: `watch.${i + 1}.indexed`, area: 'search', label: `${label}: indexed by Google (1 yes, 0 no); state "${state.get(w.path) ?? 'not checked'}"`, value: state.has(w.path) ? (state.get(w.path) === 'Submitted and indexed' ? 1 : 0) : null, unit: 'count', window: 'now' }));
   }
   return out;
+}
+
+/** Problems the owner should hear about even when the report itself looks fine. */
+async function healthNotes(now: number): Promise<string[]> {
+  const notes: string[] = [];
+  // Search Console: days the daily pull should have fetched (Google lags ~3 days) but didn't.
+  const from = Math.max(Date.parse(PULL_MARKERS_SINCE), now - 28 * DAY);
+  const missing: string[] = [];
+  for (const d of await searchDays(now)) {
+    const t = Date.parse(`${d.day}T00:00:00Z`);
+    if (t >= from && t <= now - 4 * DAY && !d.pulled) missing.push(d.day);
+  }
+  if (missing.length) notes.push(`Search Console data is missing for ${missing.length} day(s) (${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}): the daily pull may be failing, and search numbers for those days read as zero.`);
+  // The Claude token from `claude setup-token` lasts a year.
+  try {
+    const p = await new SSMClient({}).send(new GetParameterCommand({ Name: '/lens/growth/claude-token' }));
+    const set = p.Parameter?.LastModifiedDate?.getTime();
+    if (set) {
+      const expires = set + 365 * DAY;
+      if (expires - now < 30 * DAY) notes.push(`The Claude token for the analyst expires around ${new Date(expires).toISOString().slice(0, 10)}: run \`claude setup-token\` and replace /lens/growth/claude-token.`);
+    }
+  } catch (e) {
+    console.error('growth token age', e);
+  }
+  return notes;
 }
 
 // ---------- the code the tools may read: the website at the current main commit ----------
@@ -139,7 +169,13 @@ const toolLog = (): ToolEntry[] =>
     ? readFileSync(TOOL_LOG, 'utf8')
         .split('\n')
         .filter(Boolean)
-        .map((l) => JSON.parse(l) as ToolEntry)
+        .flatMap((l) => {
+          try {
+            return [JSON.parse(l) as ToolEntry];
+          } catch {
+            return []; // a line cut short when the time limit killed the run
+          }
+        })
     : [];
 
 // ---------- the analyst (Claude Code CLI, headless; its only tools are the growth MCP server) ----------
@@ -222,21 +258,27 @@ async function analyst(facts: Fact[], prompt: string, tools: ToolSetup, started:
   // The Lambda has 15 minutes: facts take ~1, storing ~1; the analyst gets the rest.
   const deadline = started + 12 * 60_000;
   const check = (r: AiReport) => validateReport(r, facts, numbersIn(toolLog().filter((t) => t.ok).map((t) => t.result)), readCode);
+  let first: { report: AiReport; model?: string };
   try {
-    let { report, model } = await runClaude(prompt, token, tools, deadline);
-    let problems = check(report);
-    if (problems.length && deadline - Date.now() > 5 * 60_000) {
-      ({ report, model } = await runClaude(`${prompt}\n\nYour previous answer broke the rules:\n${problems.map((p) => `- ${p}`).join('\n')}\nFix these: only numbers from cited facts or tool results, only existing fact ids, and code locations copied exactly from tool results.`, token, tools, deadline));
-      problems = check(report);
-    }
-    return { ai: report, model, ...(problems.length ? { aiProblems: problems } : {}) };
+    first = await runClaude(prompt, token, tools, deadline);
   } catch (e) {
     return { aiError: (e as Error).message.slice(0, 400) };
   }
+  let { report, model } = first;
+  let problems = check(report);
+  if (problems.length && deadline - Date.now() > 5 * 60_000) {
+    // A failed retry keeps the first answer (flagged), rather than losing the week's report.
+    const second = await runClaude(`${prompt}\n\nYour previous answer broke the rules:\n${problems.map((p) => `- ${p}`).join('\n')}\nFix these: only numbers from cited facts or tool results, only existing fact ids, and code locations copied exactly from tool results.`, token, tools, deadline).catch(() => undefined);
+    if (second) {
+      const again = check(second.report);
+      if (again.length <= problems.length) ({ report, model, problems } = { ...second, problems: again });
+    }
+  }
+  return { ai: report, model, ...(problems.length ? { aiProblems: problems } : {}) };
 }
 
 /** Tool calls → activity rows; proposals and watched pages → their own rows. */
-async function saveToolActivity(date: string, now: number) {
+async function saveToolActivity(date: string, run: string, now: number) {
   const entries = toolLog();
   for (const [i, t] of entries.entries()) {
     const resultSize = t.result === undefined ? 0 : JSON.stringify(t.result).length;
@@ -248,15 +290,78 @@ async function saveToolActivity(date: string, now: number) {
     );
     if (!t.ok) continue;
     if (t.tool === 'propose_change') {
-      const id = `P-${date}-${i + 1}`;
-      await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `PROP#${id}`, id, ...t.args, status: 'proposed', report: date, createdAt: now }, ConditionExpression: 'attribute_not_exists(pk)' })).catch(() => {});
+      // Only the fields the tool server checked and returned (never the model's raw arguments); keys last.
+      const r = t.result as Record<string, unknown>;
+      const id = `P-${run}-${i + 1}`;
+      const fields = { title: text(r.title, 200), evidence: text(r.evidence, 3000), files: Array.isArray(r.files) ? r.files.map((f) => text(f, 200)).slice(0, 20) : [], change: text(r.change, 3000), validation: text(r.validation, 1000), measurement: text(r.measurement, 1000) };
+      await ifNew({ ...fields, status: 'proposed', report: date, createdAt: now, pk: 'GROWTH', sk: `PROP#${id}`, id });
     }
     if (t.tool === 'watch_page') {
       const w = t.result as { watching: string; reason: string };
-      await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `WATCH#${w.watching}`, path: w.watching, reason: w.reason, since: date, report: date }, ConditionExpression: 'attribute_not_exists(pk)' })).catch(() => {});
+      if (typeof w?.watching === 'string' && /^\/[\w\-/.]*$/.test(w.watching)) await ifNew({ path: w.watching, reason: text(w.reason, 300), since: date, report: date, pk: 'GROWTH', sk: `WATCH#${w.watching}` });
     }
   }
   return entries.length;
+}
+
+const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+
+/** A row written only if it doesn't exist yet; "already there" is expected, anything else is a real error. */
+async function ifNew(item: Record<string, unknown>) {
+  await ddb.send(new PutCommand({ TableName: env.table, Item: item, ConditionExpression: 'attribute_not_exists(pk)' })).catch((e) => {
+    if (e?.name !== 'ConditionalCheckFailedException') throw e;
+  });
+}
+
+/** Recommendation fields from the report schema, type-checked and capped; nothing else reaches the ledger row. */
+function recFields(r: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (!REC_KEYS.has(k)) continue;
+    if (typeof v === 'string') out[k] = v.slice(0, 2000);
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+    else if (Array.isArray(v)) out[k] = v.filter((x) => typeof x === 'string').slice(0, 30).map((x) => (x as string).slice(0, 200));
+  }
+  return out;
+}
+const REC_KEYS = new Set(Object.keys((REPORT_SCHEMA as any).properties.recommendations.items.properties as Record<string, unknown>));
+
+// ---------- the run lock (one report at a time: Console button and Monday schedule) ----------
+
+const STALE = 20 * 60_000;
+
+/** Takes the lock unless a run started in the last 20 minutes. Returns its start time, or undefined if busy. */
+export async function takeLock(by: string, ai: boolean, now = Date.now()): Promise<number | undefined> {
+  try {
+    await ddb.send(
+      new PutCommand({
+        TableName: env.table,
+        Item: { pk: 'GROWTH', sk: 'RUNNING', at: now, by, ai },
+        ConditionExpression: 'attribute_not_exists(pk) OR #a < :stale',
+        ExpressionAttributeNames: { '#a': 'at' },
+        ExpressionAttributeValues: { ':stale': now - STALE },
+      }),
+    );
+    return now;
+  } catch (e) {
+    if ((e as { name?: string })?.name === 'ConditionalCheckFailedException') return undefined;
+    throw e;
+  }
+}
+
+async function releaseLock(at: number, error?: string) {
+  await ddb
+    .send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: { pk: 'GROWTH', sk: 'RUNNING' },
+        UpdateExpression: error ? 'SET #a = :z, lastError = :e, lastErrorAt = :t' : 'SET #a = :z REMOVE lastError, lastErrorAt',
+        ConditionExpression: '#a = :mine',
+        ExpressionAttributeNames: { '#a': 'at' },
+        ExpressionAttributeValues: { ':z': 0, ':mine': at, ...(error ? { ':e': error.slice(0, 400), ':t': Date.now() } : {}) },
+      }),
+    )
+    .catch((e) => console.error('growth lock release', e));
 }
 
 // ---------- recommendations ledger ----------
@@ -270,9 +375,31 @@ async function recs(): Promise<Record<string, any>[]> {
 
 // ---------- the weekly run (GrowthAnalyst Lambda) ----------
 
-export async function runGrowthReport(opts: { ai: boolean; by: string }) {
+export async function runGrowthReport(opts: { ai: boolean; by: string; lockAt?: number }) {
+  // The Console takes the lock before invoking; the schedule takes it here.
+  const lockAt = opts.lockAt ?? (await takeLock(opts.by, opts.ai));
+  if (lockAt === undefined) {
+    console.log('growth report skipped: another run is in progress');
+    return { skipped: true };
+  }
+  try {
+    const result = await report(opts);
+    await releaseLock(lockAt);
+    return result;
+  } catch (e) {
+    const message = (e as Error).message ?? String(e);
+    console.error('growth report failed', e);
+    await releaseLock(lockAt, message);
+    await emailFailure(message).catch((err) => console.error('growth failure email', err));
+    throw e;
+  }
+}
+
+async function report(opts: { ai: boolean; by: string }) {
   const now = Date.now();
   const date = new Date(now).toISOString().slice(0, 10);
+  // Unique per run, so a second run on the same day never collides with the first one's ids.
+  const run = `${date}-${new Date(now).toISOString().slice(11, 16).replace(':', '')}`;
   const { facts, notes } = await collectFacts(now);
   const rules = ruleFindings(facts);
   const open: OpenRec[] = (await recs()).filter((r) => OPEN.has(r.status)).map((r) => ({ id: r.id, title: r.title, status: r.status, createdAt: r.createdAt, metric: r.metric, note: r.note }));
@@ -293,36 +420,57 @@ export async function runGrowthReport(opts: { ai: boolean; by: string }) {
       commit,
     };
     ai = await analyst(facts, analystPrompt(facts, rules, open), tools, now);
-    toolCalls = await saveToolActivity(date, now);
+    toolCalls = await saveToolActivity(date, run, now);
   }
-  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `REPORT#${date}`, date, at: now, by: opts.by, facts, rules, notes, commit, toolCalls, ...ai } }));
-  // New recommendations join the ledger as "proposed"; the owner moves them along in the Console.
-  for (const [i, rec] of (ai.ai?.recommendations ?? []).entries()) {
-    const id = `R-${date}-${i + 1}`;
-    await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `REC#${id}`, id, ...rec, status: 'proposed', report: date, createdAt: date, updatedAt: now }, ConditionExpression: 'attribute_not_exists(pk)' })).catch(() => {});
+  const held = !!ai.aiProblems?.length;
+  if (held) notes.push('Recommendations were held back from the ledger because the report failed its number checks.');
+  notes.push(...(await healthNotes(now)));
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { ...ai, date, at: now, by: opts.by, facts, rules, notes, commit, toolCalls, pk: 'GROWTH', sk: `REPORT#${date}` } }));
+  // New recommendations join the ledger as "proposed", but only from a report that passed the checks;
+  // a re-run the same day replaces that day's still-untouched ones.
+  if (ai.ai && !held) {
+    for (const old of await recs())
+      if (old.report === date && old.status === 'proposed')
+        await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: old.sk }, UpdateExpression: 'SET #s = :d, note = :n, updatedAt = :t', ConditionExpression: '#s = :p', ExpressionAttributeNames: { '#s': 'status' }, ExpressionAttributeValues: { ':d': 'dropped', ':n': 'Replaced by a later report the same day.', ':t': now, ':p': 'proposed' } })).catch((e) => {
+          if (e?.name !== 'ConditionalCheckFailedException') throw e;
+        });
+    for (const [i, rec] of (ai.ai.recommendations ?? []).entries()) {
+      const id = `R-${run}-${i + 1}`;
+      await ifNew({ ...recFields(rec as Record<string, unknown>), status: 'proposed', report: date, createdAt: date, updatedAt: now, pk: 'GROWTH', sk: `REC#${id}`, id });
+    }
   }
-  await emailOwners(date, rules.length, ai).catch((e) => console.error('growth email', e));
-  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'RUNNING' }, UpdateExpression: 'SET #a = :z', ExpressionAttributeNames: { '#a': 'at' }, ExpressionAttributeValues: { ':z': 0 } }));
+  await emailOwners(date, rules.length, ai, notes).catch((e) => console.error('growth email', e));
   console.log('growth report', JSON.stringify({ date, facts: facts.length, rules: rules.length, ai: !!ai.ai, aiProblems: ai.aiProblems?.length ?? 0, aiError: ai.aiError }));
   return { date, facts: facts.length, rules: rules.length, ai: !!ai.ai, aiError: ai.aiError };
 }
 
-async function emailOwners(date: string, rules: number, ai: { ai?: AiReport; aiError?: string }) {
-  const sender = process.env.CODE_SENDER ?? '';
-  const to = (await teamMembers()).filter((m) => m.role === 'owner').map((m) => m.email);
-  if (!sender.startsWith('no-reply@') || !to.length) return;
+async function emailOwners(date: string, rules: number, ai: { ai?: AiReport; aiError?: string }, notes: string[]) {
   const body = [
-    ai.ai ? ai.ai.summary : `This week's report has ${rules} rule-based findings.${ai.aiError ? ' (The AI analysis did not run.)' : ''}`,
+    ai.ai ? ai.ai.summary : `This week's report has ${rules} rule-based findings.${ai.aiError ? ` The AI analysis did not run: ${ai.aiError}` : ''}`,
     '',
     ...(ai.ai?.recommendations ?? []).map((r, i) => `${i + 1}. ${r.title}`),
+    ...(notes.length ? ['', 'Needs attention:', ...notes.map((n) => `- ${n}`)] : []),
     '',
     `Full report: ${CONSOLE}/growth`,
   ].join('\n');
+  await sendToOwners(`Lens growth report · ${date}`, body);
+}
+
+async function emailFailure(message: string) {
+  await sendToOwners('Lens growth report failed', `This week's growth report stopped with an error:\n\n${message.slice(0, 600)}\n\nYou can try again from ${CONSOLE}/growth (Run report now).`);
+}
+
+/** Owners only. Throws when it can't send, so a missing sender or owner list shows up in the logs. */
+async function sendToOwners(subject: string, body: string) {
+  const sender = process.env.CODE_SENDER ?? '';
+  const to = (await teamMembers()).filter((m) => m.role === 'owner').map((m) => m.email);
+  if (!sender.startsWith('no-reply@')) throw new Error(`growth email: no sender configured (${sender || 'empty'})`);
+  if (!to.length) throw new Error('growth email: no owners in the team');
   await new SESv2Client({}).send(
     new SendEmailCommand({
       FromEmailAddress: `Lens Console <${sender}>`,
       Destination: { ToAddresses: to },
-      Content: { Simple: { Subject: { Data: `Lens growth report · ${date}` }, Body: { Text: { Data: body } } } },
+      Content: { Simple: { Subject: { Data: subject }, Body: { Text: { Data: body } } } },
     }),
   );
 }
@@ -349,7 +497,8 @@ export async function growthPage(req: Req): Promise<Res> {
     watching,
     activity,
     tools: { available: LEVEL2_TOOLS, enabled: await enabledTools() },
-    running: running && Date.now() - running.at < 20 * 60_000 ? running : null,
+    running: running && Date.now() - running.at < STALE ? running : null,
+    lastError: running?.lastError ? { message: running.lastError, at: running.lastErrorAt } : null,
   });
 }
 
@@ -358,8 +507,14 @@ export async function growthRun(req: Req, email: string): Promise<Res> {
   if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
   await rateLimit('console-growth-run', 4, 'A report was started recently. Try again in an hour.');
   const ai = req.body?.ai !== false;
-  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: 'RUNNING', at: Date.now(), by: email, ai } }));
-  await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ growth: true, ai, by: email })) }));
+  const lockAt = await takeLock(email, ai);
+  if (lockAt === undefined) throw new HttpError(409, 'A report is already running. It takes about 10 minutes.');
+  await new LambdaClient({})
+    .send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ growth: true, ai, by: email, lockAt })) }))
+    .catch(async (e) => {
+      await releaseLock(lockAt, `Could not start the report: ${(e as Error).message}`);
+      throw e;
+    });
   await log({ entity: 'growth:report', action: 'growth.report-run', actor: `console:${email}`, data: { ai } });
   return json(202, { started: true });
 }
