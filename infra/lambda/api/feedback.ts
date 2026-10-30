@@ -218,6 +218,9 @@ export async function retryFeedbackEmails(): Promise<{ retried: number; sent: nu
 }
 
 /** GET /v1/admin/feedback?status=new|done&kind=: newest first. */
+/** Feedback from the automated tests (throwaway @e2e.lens.invalid accounts): hidden unless asked for. */
+export const isTestFeedback = (f: Record<string, any>) => /@e2e\.lens\.invalid$/i.test(String(f.accountEmail ?? f.email ?? '')) || String(f.message ?? '').startsWith('[e2e]');
+
 export async function listFeedback(req: Req): Promise<Res> {
   const status = req.query.status === 'done' ? 'done' : 'new';
   const kind = FEEDBACK_KINDS.includes(req.query.kind as Kind) ? req.query.kind : undefined;
@@ -233,7 +236,7 @@ export async function listFeedback(req: Req): Promise<Res> {
     }),
   );
   return json(200, {
-    feedback: (rows.Items ?? []).map((f) => ({
+    feedback: (rows.Items ?? []).filter((f) => req.query.tests === '1' || !isTestFeedback(f)).map((f) => ({
       id: f.sk,
       reference: f.reference,
       kind: f.kind,

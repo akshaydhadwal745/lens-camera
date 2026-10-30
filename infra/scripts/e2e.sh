@@ -633,7 +633,7 @@ FREF=$(echo "$R" | j .reference)
 R=$(call POST /feedback "$TA" -d '{"kind":"issue","message":"[e2e] The camera froze once","email":"reply@e2e.lens.invalid","includeDevice":false,"device":{"model":"should not be kept"}}')
 FREF2=$(echo "$R" | j .reference)
 [[ $(call POST /feedback "$TA" -d '{"kind":"other","message":"[e2e] bot text here","website":"http://spam"}' | j .received) == true ]] && ok "feedback honeypot: bots get a fake success"
-FB=$(capi GET "/feedback")
+FB=$(capi GET "/feedback?tests=1")
 [[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.rating") == 5 && $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.device.model") == "E2E phone" ]] && ok "admin sees the rating and the shared device"
 [[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.device.secret") == "" ]] && ok "only known device fields are kept"
 [[ $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF2')?.device") == "" && $(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF2')?.email") == reply@e2e.lens.invalid ]] && ok "no device details without consent; reply email kept"
@@ -642,8 +642,9 @@ FID=$(echo "$FB" | j ".feedback.find(f=>f.reference==='$FREF')?.id")
 [[ $(capi POST "/feedback/$(node -p "encodeURIComponent('$FID')")/done" | j .status) == done ]] && ok "feedback marked done"
 [[ $(call GET "/admin/feedback" "$TA" -o /dev/null -w '%{http_code}') == 404 ]] && ok "feedback list hidden from normal accounts"
 R=$(call POST /feedback "$TA" -d '{"kind":"review","rating":2,"source":"prompt","message":"[e2e] from the rating card"}'); FREF3=$(echo "$R" | j .reference)
-[[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF3')?.source") == prompt ]] && ok "rating-card answers are tagged with their source"
-[[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF2')?.source") == settings ]] && ok "Settings feedback is tagged settings"
+[[ $(capi GET "/feedback?tests=1" | j ".feedback.find(f=>f.reference==='$FREF3')?.source") == prompt ]] && ok "rating-card answers are tagged with their source"
+[[ $(capi GET "/feedback?tests=1" | j ".feedback.find(f=>f.reference==='$FREF2')?.source") == settings ]] && ok "Settings feedback is tagged settings"
+[[ $(capi GET "/feedback" | j ".feedback.some(f=>f.reference==='$FREF2')") == false ]] && ok "test-account feedback is hidden unless asked for"
 # Our own analytics: feature counts (counted once per batch) and daily activity.
 UDAY=$(date -u +%F); UB="e2e$(date +%s%N)"
 [[ $(call POST /usage "$TA" -d "{\"batch\":\"$UB\",\"build\":\"dev-0\",\"days\":[{\"day\":\"$UDAY\",\"counts\":{\"capture_photo\":2,\"BAD NAME\":5}}]}" | j .saved) == 1 ]] && ok "usage counts saved"
@@ -700,8 +701,8 @@ SKEY=$(echo "$SLOT" | j .key); SURL=$(echo "$SLOT" | j .url)
 [[ $(call POST /feedback/attachments "$TA" -d '{"contentType":"image/jpeg","size":9999999}' -o /dev/null -w '%{http_code}') == 400 ]] && ok "screenshots over 4 MB refused"
 [[ $(call POST /feedback "$TB" -d "{\"kind\":\"issue\",\"message\":\"[e2e] someone else's screenshot\",\"attachments\":[\"$SKEY\"]}" -o /dev/null -w '%{http_code}') == 400 ]] && ok "can't attach another account's screenshot"
 R=$(call POST /feedback "$TA" -d "{\"kind\":\"issue\",\"message\":\"[e2e] with a screenshot\",\"attachments\":[\"$SKEY\"]}"); FREF4=$(echo "$R" | j .reference)
-FID4=$(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF4')?.id")
-[[ $(capi GET "/feedback" | j ".feedback.find(f=>f.reference==='$FREF4')?.attachments") == 1 ]] && ok "console lists the screenshot count"
+FID4=$(capi GET "/feedback?tests=1" | j ".feedback.find(f=>f.reference==='$FREF4')?.id")
+[[ $(capi GET "/feedback?tests=1" | j ".feedback.find(f=>f.reference==='$FREF4')?.attachments") == 1 ]] && ok "console lists the screenshot count"
 [[ $(capi GET "/feedback/$(node -p "encodeURIComponent('$FID4')")/files/0" -o "$TMP/got.jpg" -w '%{content_type}') == image/jpeg ]] && cmp -s "$TMP/shot.jpg" "$TMP/got.jpg" && ok "console opens the screenshot (same bytes)"
 [[ $(capi GET "/feedback/$(node -p "encodeURIComponent('$FID4')")/files/1" -o /dev/null -w '%{http_code}') == 404 ]] && ok "no screenshot beyond what was attached"
 [[ $(capi GET "/activity" | j ".events.some(e=>e.action==='feedback.screenshot.viewed'&&e.entity==='feedback:$FID4')") == true ]] && ok "opening a screenshot is in the activity log"
@@ -745,7 +746,7 @@ done
 [[ "$GONE" == None ]] && ok "account removed in the background" || fail "account still there"
 [[ $(vcount "m/$ID_D/") == 0 && $(vcount "d/$ID_D/") == 0 && $(vcount "r/$ID_D/") == 0 ]] && ok "every stored file and version deleted"
 [[ $(vcount "lab/sets/$LSET/") == 0 ]] && ok "its Quality Lab set deleted too"
-[[ $(capi GET "/feedback" | j ".feedback.some(f=>f.message==='[e2e] feedback before deletion')") == false ]] && ok "its feedback deleted too"
+[[ $(capi GET "/feedback?tests=1" | j ".feedback.some(f=>f.message==='[e2e] feedback before deletion')") == false ]] && ok "its feedback deleted too"
 [[ $(call GET /shared "$TB" | j ".items.some(i=>i.id==='$IDD')") == false ]] && ok "friends lose access to what it shared"
 N=$(curl -sS -X POST "$API/devices"); TN=$(echo "$N" | j .token)
 call POST /auth/email/start "$TN" -d "{\"email\":\"$MAILD\"}" >/dev/null

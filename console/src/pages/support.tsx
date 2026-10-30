@@ -32,7 +32,8 @@ export function Feedback({ canWrite }: { canWrite: boolean }) {
   const params = new URLSearchParams(location.search);
   const [status, setStatus] = useState<'new' | 'done'>('new');
   const [kind, setKind] = useState(params.get('kind') ?? '');
-  const state = useLoad(() => get<{ feedback: FeedbackRow[] }>(`/feedback?status=${status}${kind ? `&kind=${kind}` : ''}`), [status, kind]);
+  const [tests, setTests] = useState(false);
+  const state = useLoad(() => get<{ feedback: FeedbackRow[] }>(`/feedback?status=${status}${kind ? `&kind=${kind}` : ''}${tests ? '&tests=1' : ''}`), [status, kind, tests]);
 
   async function done(id: string) {
     await post(`/feedback/${encodeURIComponent(id)}/done`).catch((e: Error) => alert(e.message));
@@ -57,6 +58,9 @@ export function Feedback({ canWrite }: { canWrite: boolean }) {
             </option>
           ))}
         </select>
+        <label className="check">
+          <input type="checkbox" checked={tests} onChange={(e) => setTests(e.target.checked)} /> Show test entries
+        </label>
       </div>
       <Loaded state={state}>
         {(d) =>

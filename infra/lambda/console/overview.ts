@@ -9,6 +9,7 @@
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
+import { isTestFeedback } from '../api/feedback';
 import { ddb, env, json, rateLimit, Req, Res } from '../api/lib';
 import { testAccounts } from '../api/test-accounts';
 
@@ -23,7 +24,7 @@ const cw = new CloudWatchClient({});
 type Row = Record<string, any>;
 
 // Every name aliased (#f0…): several are DynamoDB reserved words (size, status, location, state…).
-const FIELDS = ['pk', 'sk', 'createdAt', 'email', 'test', 'fingerprint', 'attribution', 'usedBytes', 'bonusBytes', 'kind', 'size', 'status', 'location', 'lastUsedAt', 'at', 'archived', 'deletedAt', 'referral', 'state', 'expiresAt', 'gsi1pk', 'code', 'emulator', 'guestId'];
+const FIELDS = ['pk', 'sk', 'createdAt', 'email', 'test', 'fingerprint', 'attribution', 'usedBytes', 'bonusBytes', 'kind', 'size', 'status', 'location', 'lastUsedAt', 'at', 'archived', 'deletedAt', 'referral', 'state', 'expiresAt', 'gsi1pk', 'code', 'emulator', 'guestId', 'accountEmail', 'message'];
 
 /** The whole table in one parallel pass; `all` = every attribute (analytics needs the f_* counts). */
 export async function scanAll(all = false): Promise<Row[]> {
@@ -180,7 +181,7 @@ export async function compute() {
 
   // ---- to do ----
   const open = (pk: string) => rows.filter((r) => r.pk === pk && r.status === 'new');
-  const feedback = open('FEEDBACK');
+  const feedback = open('FEEDBACK').filter((f) => !isTestFeedback(f));
   const todo = {
     feedback: feedback.filter((f) => f.kind !== 'report').length,
     reports: feedback.filter((f) => f.kind === 'report').length,

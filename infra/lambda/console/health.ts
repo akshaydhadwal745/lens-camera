@@ -118,6 +118,11 @@ export async function compute() {
   ]);
 
   const day = (xs?: { t: number; v: number }[]) => (xs ?? []).filter((x) => x.t >= Date.now() - 24 * HOUR);
+  const weighted = (vals: { t: number; v: number }[], weights: { t: number; v: number }[]) => {
+    const w = new Map(weights.map((x) => [x.t, x.v]));
+    const total = vals.reduce((s, x) => s + (w.get(x.t) ?? 0), 0);
+    return total ? vals.reduce((s, x) => s + x.v * (w.get(x.t) ?? 0), 0) / total : maxOf(vals);
+  };
   const functions = fns.map((f, i) => {
     const inv7 = total(m[`inv${i}`]);
     const err7 = total(m[`err${i}`]);
@@ -131,7 +136,8 @@ export async function compute() {
       invocations7d: inv7,
       errors7d: err7,
       throttles7d: total(m[`thr${i}`]),
-      p95Ms24h: Math.round(maxOf(day(m[`p95${i}`]))),
+      // Each hour's p95 weighted by its calls: a quiet hour with one slow call can't set the day's figure.
+      p95Ms24h: Math.round(weighted(day(m[`p95${i}`]), day(m[`inv${i}`]))),
       hourly: hourly(m[`inv${i}`]).map((x, k) => ({ t: x.t, calls: x.v, errors: hourly(m[`err${i}`])[k].v })),
     };
   });
