@@ -163,3 +163,15 @@ test('opportunities: invented features, numbers, long titles and bad URLs are ca
   assert.match(bad.join('\n'), /61 characters/);
   assert.match(bad.join('\n'), /lowercase path/);
 });
+
+test('drafts: nothing changed, too many files, wrong paths and forbidden claims are stopped by code', () => {
+  const { draftProblems } = require('./growth') as typeof import('./growth');
+  const f = (path: string, content: string, before = '') => ({ path, content, before });
+  assert.deepEqual(draftProblems([]), ['the draft changed nothing']);
+  assert.deepEqual(draftProblems([f('site/src/content/pages.ts', 'Back up with no Lens limit', 'Back up')]), []);
+  assert.match(draftProblems([f('site/src/content/pages.ts', 'Unlimited backup', 'Backup')]).join(), /forbids/);
+  // An existing claim that stays (not added) is not the draft's fault.
+  assert.deepEqual(draftProblems([f('site/src/content/pages.ts', '10 GB free forever. New text.', '10 GB free forever.')]), []);
+  assert.match(draftProblems([f('.github/workflows/web.yml', 'x')]).join(), /outside/);
+  assert.match(draftProblems(Array.from({ length: 11 }, (_, i) => f(`site/src/content/p${i}.ts`, 'x'))).join(), /max 10/);
+});

@@ -4,9 +4,11 @@
 // file (env). Permissions are enforced here, not in the prompt:
 //   level 1  read and analyse         always on
 //   level 2  low-risk, reversible     only if the owner enabled the tool (Console → Growth → Tools)
-//   level 3  needs approval           never executes: records a proposal the owner approves or rejects
+//   level 3  needs approval           propose_change only records a proposal; edit_file works only in a draft
+//                                     run, which starts after the owner approved (GROWTH_MODE=draft), and only
+//                                     edits the local code copy: the Lambda, not the model, opens the PR
 // Every call (allowed or refused) is appended to the log; the Lambda stores it as GROWTH / ACT#.
-import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, normalize, relative } from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -20,8 +22,11 @@ const ENABLED = new Set((process.env.GROWTH_ENABLED_TOOLS ?? '').split(',').filt
 const CODE = process.env.GROWTH_CODE_DIR ?? '/tmp/growth-code';
 const LOG = process.env.GROWTH_TOOL_LOG ?? '/tmp/growth-tools.jsonl';
 const BING_KEY = process.env.GROWTH_BING_KEY ?? '';
+const DRAFT = process.env.GROWTH_MODE === 'draft';
+/** What a draft may change: the website's source, nothing else (no CI, infra, app or scripts). */
+export const EDITABLE = /^site\/src\/(content|components|pages|layouts|i18n)\/[\w\-/.[\]]+\.(ts|astro)$/;
 const GA4_TOKEN = process.env.GROWTH_GA4_TOKEN ?? '';
-const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1, keyword_volume: 40, related_keywords: 15, topic_interest: 15, trending_now: 4, ga4_report: 25 };
+const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1, edit_file: 40, keyword_volume: 40, related_keywords: 15, topic_interest: 15, trending_now: 4, ga4_report: 25 };
 // Per report, not per process: the retry run starts a new server, so earlier calls count too.
 const used: Record<string, number> = {};
 if (existsSync(LOG))
@@ -316,6 +321,26 @@ const TOOLS: Record<string, Tool> = {
     run: async () => {
       await google(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(PROPERTY)}/sitemaps/${encodeURIComponent(`${SITE}/sitemap-index.xml`)}`, null, SUBMIT_TOKEN);
       return { submitted: `${SITE}/sitemap-index.xml` };
+    },
+  },
+  edit_file: {
+    level: 3,
+    description:
+      'Change the website code copy for the approved draft: replace one exact piece of text in a file under site/src/ (content, components, pages, layouts, i18n). "find" must appear exactly once (include enough surrounding text); "replace" is the new text. Only available in a draft run after the owner approved; the result becomes a pull request the owner reviews.',
+    inputSchema: { type: 'object', properties: { file: { type: 'string' }, find: { type: 'string' }, replace: { type: 'string' } }, required: ['file', 'find', 'replace'] },
+    run: async (a) => {
+      if (!DRAFT) throw new Refused('edit_file only works in an approved draft run');
+      const f = safeFile(str(a, 'file'));
+      if (!EDITABLE.test(f)) throw new Refused(`${f} is outside what drafts may change (site/src content, components, pages, layouts, i18n)`);
+      const find = typeof a.find === 'string' ? a.find : '';
+      const replace = typeof a.replace === 'string' ? a.replace : '';
+      if (!find || find.length > 20_000 || replace.length > 30_000) throw new Refused('"find" (1–20,000 characters) and "replace" (≤30,000) are required');
+      const text = readFileSync(join(CODE, f), 'utf8');
+      const count = text.split(find).length - 1;
+      if (count !== 1) throw new Refused(`"find" appears ${count} times in ${f}; it must appear exactly once (add surrounding text)`);
+      writeFileSync(join(CODE, f), text.replace(find, () => replace));
+      const line = text.slice(0, text.indexOf(find)).split('\n').length;
+      return { edited: f, line, removedChars: find.length, addedChars: replace.length };
     },
   },
   propose_change: {

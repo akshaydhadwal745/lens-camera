@@ -88,6 +88,8 @@ type Proposal = {
   report: string;
   decidedBy?: string;
   note?: string;
+  pr?: { url: string; number: number };
+  draftError?: string;
 };
 type Opp = {
   id: string;
@@ -125,6 +127,7 @@ type Opp = {
   lastSeen: string;
   note?: string;
   pr?: { url: string };
+  draftError?: string;
 };
 const ACTION: Record<string, string> = {
   "improve-page": "Improve existing page",
@@ -257,6 +260,14 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
       decision,
       ...(note ? { note } : {}),
     });
+    setReload((r) => r + 1);
+  };
+  const draft = async (kind: "opp" | "prop", id: string) => {
+    try {
+      await api("POST", "/growth/draft", { kind, id });
+    } catch (e) {
+      alert((e as Error).message);
+    }
     setReload((r) => r + 1);
   };
   const setOpp = async (id: string, status: string) => {
@@ -430,6 +441,53 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
                 </>
               )}
 
+              {g.proposals.some((p) =>
+                ["approved", "drafting", "pr-open"].includes(p.status),
+              ) && (
+                <>
+                  <div className="row-head">
+                    <h2>Approved changes</h2>
+                  </div>
+                  {g.proposals
+                    .filter((p) =>
+                      ["approved", "drafting", "pr-open"].includes(p.status),
+                    )
+                    .map((p) => (
+                      <Card key={p.id} title={p.title}>
+                        <p className="small">
+                          <span className="chip">{p.status}</span>{" "}
+                          {p.pr?.url && (
+                            <a href={p.pr.url} target="_blank" rel="noreferrer">
+                              Review pull request #{p.pr.number}
+                            </a>
+                          )}
+                        </p>
+                        {p.status === "drafting" && (
+                          <p className="muted small">
+                            The agent is writing this change (about 5–10
+                            minutes). You'll get an email with the pull request.
+                          </p>
+                        )}
+                        {p.draftError && p.status === "approved" && (
+                          <p className="muted small">
+                            Last draft stopped: {p.draftError}
+                          </p>
+                        )}
+                        {canWrite && p.status === "approved" && (
+                          <div className="actions">
+                            <button
+                              className="btn"
+                              onClick={() => void draft("prop", p.id)}
+                            >
+                              {p.draftError ? "Draft again" : "Draft it"}
+                            </button>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                </>
+              )}
+
               {g.proposals.some((p) => p.status === "proposed") && (
                 <>
                   <div className="row-head">
@@ -468,9 +526,9 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
                           </div>
                         )}
                         <p className="muted small">
-                          Approving records your decision; the change is made as
-                          a pull request you review and merge (nothing changes
-                          on the site by itself).
+                          Approving starts the agent: it writes the change as a
+                          pull request you review, approve and merge. Nothing
+                          changes on the site until you merge.
                         </p>
                       </Card>
                     ))}
@@ -570,8 +628,27 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
                             <dd>{o.measurement}</dd>
                           </dl>
                         </details>
+                        {o.status === "drafting" && (
+                          <p className="muted small">
+                            The agent is writing this as a pull request (about
+                            5–10 minutes). You'll get an email.
+                          </p>
+                        )}
+                        {o.draftError && o.status === "planned" && (
+                          <p className="muted small">
+                            Last draft stopped: {o.draftError}
+                          </p>
+                        )}
                         {canWrite && (
                           <div className="actions">
+                            {o.status === "planned" && (
+                              <button
+                                className="btn"
+                                onClick={() => void draft("opp", o.id)}
+                              >
+                                {o.draftError ? "Draft again" : "Draft it"}
+                              </button>
+                            )}{" "}
                             {o.status === "idea" && (
                               <button
                                 className="btn"
