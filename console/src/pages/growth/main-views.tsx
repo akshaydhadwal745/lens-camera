@@ -13,6 +13,7 @@ import {
   isOpen,
   isOverdue,
   KRBar,
+  CardTable,
   openTask,
   Person,
   Pri,
@@ -637,7 +638,7 @@ export function Tasks({
         </div>
       ) : (
         <Card>
-          <div className="table-wrap">
+          <CardTable>
             <table>
               <thead>
                 <tr>
@@ -684,7 +685,7 @@ export function Tasks({
                   ))}
               </tbody>
             </table>
-          </div>
+          </CardTable>
           {!filtered.length && <Empty>No tasks match.</Empty>}
         </Card>
       )}

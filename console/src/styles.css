@@ -1012,10 +1012,13 @@ tr.gw-click:hover td { background: var(--side); }
   .gw-cards table, .gw-cards tbody, .gw-cards tr, .gw-cards td { display: block; width: auto !important; }
   .gw-cards thead { display: none; }
   .gw-cards tr { border-top: 1px solid var(--line); padding: 10px 0; }
-  .gw-cards td { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; border: 0; padding: 3px 0; text-align: right; }
-  .gw-cards td::before { content: attr(data-label); flex: none; max-width: 45%; color: var(--muted); font-size: 0.85em; text-align: left; }
-  .gw-cards td:first-child { display: block; text-align: left; font-weight: 600; }
+  /* Label on the left; everything in the cell stacks on the right. */
+  .gw-cards td { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr); column-gap: 12px; align-items: baseline; border: 0; padding: 3px 0; text-align: left; }
+  .gw-cards td.num { text-align: right; }
+  .gw-cards td::before { content: attr(data-label); grid-row: 1 / span 20; color: var(--muted); font-size: 0.85em; }
+  .gw-cards td > * { grid-column: 2; }
+  .gw-cards td:first-child, .gw-cards td[data-label=""] { display: block; }
+  .gw-cards td:first-child { font-weight: 600; }
   .gw-cards td:first-child::before, .gw-cards td[data-label=""]::before { content: none; }
-  .gw-cards td[data-label=""] { justify-content: flex-start; }
   .gw-cards .gw-meta-in { min-width: 0; }
 }
