@@ -120,6 +120,8 @@ export class ConsoleStack extends Stack {
       architecture: lambda.Architecture.X86_64,
       memorySize: 2048,
       timeout: Duration.minutes(15),
+      // A failed run emails the owners and clears its lock; an automatic retry would run Claude and email twice.
+      retryAttempts: 0,
       logGroup: new logs.LogGroup(this, 'GrowthAnalystLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: RemovalPolicy.DESTROY }),
       environment: {
         TABLE: props.tableName,
@@ -130,7 +132,16 @@ export class ConsoleStack extends Stack {
         CODE_SENDER: `no-reply@${(this.node.tryGetContext('codeDomain') as string | undefined) ?? ''}`,
       },
     });
-    table.grantReadWriteData(growth);
+    // Reads the whole table (facts); writes only its own GROWTH rows, so even a misled analyst can't
+    // touch accounts, sessions or anything else.
+    table.grantReadData(growth);
+    growth.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem'],
+        resources: [table.tableArn],
+        conditions: { 'ForAllValues:StringEquals': { 'dynamodb:LeadingKeys': ['GROWTH'] } },
+      }),
+    );
     growth.addToRolePolicy(
       new iam.PolicyStatement({ actions: ['ssm:GetParameter'], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/lens/growth/*`] }),
     );
@@ -138,7 +149,7 @@ export class ConsoleStack extends Stack {
     // Mondays 02:30 UTC (08:00 IST), after the daily Search Console pull.
     new events.Rule(this, 'WeeklyGrowthReport', {
       schedule: events.Schedule.cron({ weekDay: 'MON', hour: '2', minute: '30' }),
-      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ growth: true, ai: true, by: 'schedule' }) })],
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ growth: true, ai: true, by: 'schedule' }), retryAttempts: 0 })],
     });
     fn.addEnvironment('GROWTH_FUNCTION', growth.functionName);
     growth.grantInvoke(fn);

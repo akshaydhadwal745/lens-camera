@@ -18,7 +18,17 @@ const ENABLED = new Set((process.env.GROWTH_ENABLED_TOOLS ?? '').split(',').filt
 const CODE = process.env.GROWTH_CODE_DIR ?? '/tmp/growth-code';
 const LOG = process.env.GROWTH_TOOL_LOG ?? '/tmp/growth-tools.jsonl';
 const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1 };
+// Per report, not per process: the retry run starts a new server, so earlier calls count too.
 const used: Record<string, number> = {};
+if (existsSync(LOG))
+  for (const l of readFileSync(LOG, 'utf8').split('\n')) {
+    try {
+      const e = JSON.parse(l) as { tool?: unknown; refused?: boolean };
+      if (typeof e.tool === 'string' && !e.refused) used[e.tool] = (used[e.tool] ?? 0) + 1; // refused calls never ran
+    } catch {
+      // a line cut short by a time-limit kill
+    }
+  }
 
 type Args = Record<string, unknown>;
 type Tool = { level: 1 | 2 | 3; description: string; inputSchema: Record<string, unknown>; run: (a: Args) => Promise<unknown> };
@@ -243,7 +253,19 @@ const TOOLS: Record<string, Tool> = {
       },
       required: ['title', 'evidence', 'files', 'change', 'validation', 'measurement'],
     },
-    run: async (a) => ({ proposal: 'recorded for owner approval; nothing was changed', title: str(a, 'title') }),
+    run: async (a) => {
+      const files = Array.isArray(a.files) ? a.files.filter((f): f is string => typeof f === 'string').slice(0, 20).map((f) => f.slice(0, 200)) : [];
+      if (!files.length) throw new Refused('"files" must list file:line locations');
+      return {
+        proposal: 'recorded for owner approval; nothing was changed',
+        title: str(a, 'title', 200),
+        evidence: str(a, 'evidence', 3000),
+        files,
+        change: str(a, 'change', 3000),
+        validation: str(a, 'validation', 1000),
+        measurement: str(a, 'measurement', 1000),
+      };
+    },
   },
 };
 
@@ -255,6 +277,9 @@ async function call(name: string, args: Args) {
   const tool = TOOLS[name];
   if (!tool) throw new Refused(`unknown tool ${name}`);
   if (tool.level === 2 && !ENABLED.has(name)) throw new Refused(`${name} is a level-2 tool and is not enabled by the owner`);
+  const known = Object.keys((tool.inputSchema.properties ?? {}) as Record<string, unknown>);
+  const extra = Object.keys(args).filter((k) => !known.includes(k));
+  if (extra.length) throw new Refused(`unknown arguments: ${extra.join(', ').slice(0, 100)}`);
   used[name] = (used[name] ?? 0) + 1;
   if (used[name] > (LIMITS[name] ?? 20)) throw new Refused(`${name}: limit of ${LIMITS[name]} calls per report reached`);
   return tool.run(args);
@@ -272,11 +297,12 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
     return send({
       jsonrpc: '2.0',
       id: m.id,
-      result: { tools: Object.entries(TOOLS).map(([name, t]) => ({ name, description: `[level ${t.level}] ${t.description}`, inputSchema: t.inputSchema })) },
+      result: { tools: Object.entries(TOOLS).map(([name, t]) => ({ name, description: `[level ${t.level}] ${t.description}`, inputSchema: { ...t.inputSchema, additionalProperties: false } })) },
     });
   if (m.method === 'tools/call') {
     const name = String(m.params?.name ?? '');
-    const args = (m.params?.arguments ?? {}) as Args;
+    const raw = m.params?.arguments;
+    const args = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as Args;
     const started = Date.now();
     try {
       const result = await call(name, args);

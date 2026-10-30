@@ -45,9 +45,15 @@ function dayN(accounts: ChannelAccount[], n: number, now: number): Rate {
   return rate(reached.length, eligible.length);
 }
 
-export function byChannel(accounts: ChannelAccount[], now: number): ChannelRow[] {
+/**
+ * `accounts` = installs in the window (installs, activation, paying, storage). `retention` = installs over a
+ * longer span for D1/D7/D30, since in a 30-day window no install is old enough for D30. Defaults to `accounts`.
+ */
+export function byChannel(accounts: ChannelAccount[], now: number, retention: ChannelAccount[] = accounts): ChannelRow[] {
   const groups = new Map<string, ChannelAccount[]>();
   for (const a of accounts) groups.set(channelOf(a.acquisition), [...(groups.get(channelOf(a.acquisition)) ?? []), a]);
+  const older = new Map<string, ChannelAccount[]>();
+  for (const a of retention) older.set(channelOf(a.acquisition), [...(older.get(channelOf(a.acquisition)) ?? []), a]);
   const rows = [...groups.entries()].map(([channel, list]) => {
     const bytes = list.reduce((s, a) => s + (a.usedBytes ?? 0), 0);
     return {
@@ -55,9 +61,9 @@ export function byChannel(accounts: ChannelAccount[], now: number): ChannelRow[]
       installs: list.length,
       backedUp: rate(list.filter((a) => a.uploadedAt !== undefined).length, list.length),
       signedIn: rate(list.filter((a) => a.signedInAt !== undefined).length, list.length),
-      d1: dayN(list, 1, now),
-      d7: dayN(list, 7, now),
-      d30: dayN(list, 30, now),
+      d1: dayN(older.get(channel) ?? [], 1, now),
+      d7: dayN(older.get(channel) ?? [], 7, now),
+      d30: dayN(older.get(channel) ?? [], 30, now),
       paying: list.filter((a) => a.paying).length,
       storageGB: Math.round((bytes / GB) * 10) / 10,
       storageUsdPerMonth: Math.round((bytes / GB) * STORAGE_USD_PER_GB_MONTH * 100) / 100,

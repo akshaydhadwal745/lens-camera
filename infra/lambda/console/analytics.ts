@@ -68,6 +68,9 @@ async function website(now: number) {
   };
 }
 
+/** D1/D7/D30 by channel look this far back (a 30-day window has no install old enough for D30). */
+const RETENTION_DAYS = 90;
+
 export async function compute(windowDays: number) {
   const now = Date.now();
   const rows = await scanAll(true);
@@ -245,17 +248,20 @@ export async function compute(windowDays: number) {
   };
 
   // ---- by install channel (PROFILE.acquisition, recorded from 2026-10-29) ----
+  // Retention looks back 90 days so that D30 has installs old enough to count.
+  const channelAccount = ([id, p]: [string, Row]) => ({
+    createdAt: p.createdAt,
+    acquisition: p.acquisition,
+    usedBytes: typeof p.usedBytes === 'number' ? p.usedBytes : 0,
+    paying: planActive(p.plan, now),
+    uploadedAt: first.get(id)?.upload,
+    signedInAt: first.get(id)?.signin ?? (p.email ? p.createdAt : undefined),
+    activeDays: activeDays.get(id) ?? new Set<string>(),
+  });
   const channels = byChannel(
-    cohort.map(([id, p]) => ({
-      createdAt: p.createdAt,
-      acquisition: p.acquisition,
-      usedBytes: typeof p.usedBytes === 'number' ? p.usedBytes : 0,
-      paying: planActive(p.plan, now),
-      uploadedAt: first.get(id)?.upload,
-      signedInAt: first.get(id)?.signin ?? (p.email ? p.createdAt : undefined),
-      activeDays: activeDays.get(id) ?? new Set<string>(),
-    })),
+    cohort.map(channelAccount),
     now,
+    [...real.entries()].filter(([, p]) => p.createdAt >= now - Math.max(windowDays, RETENTION_DAYS) * DAY).map(channelAccount),
   );
 
   return {

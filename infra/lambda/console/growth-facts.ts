@@ -138,7 +138,7 @@ export function productFacts(a: AnalyticsInput): Fact[] {
     ['share', 'Installs that shared something'],
   ] as const)
     facts.push(fact({ id: `app.${k}_rate`, area: 'app', label, value: installs ? step(k) / installs : null, unit: 'pct', window: w30 }));
-  facts.push(fact({ id: 'app.came_back_7d_rate', area: 'app', label: 'Came back 7+ days after installing', value: a.eligibleForReturn ? step('return') / a.eligibleForReturn : null, unit: 'pct', window: 'installed 7–30 days ago' }));
+  facts.push(fact({ id: 'app.came_back_7d_rate', area: 'app', label: 'Came back at any time 7+ days after installing (cumulative; not the same as D7)', value: a.eligibleForReturn ? step('return') / a.eligibleForReturn : null, unit: 'pct', window: 'installed 7–30 days ago' }));
   facts.push(weekOverWeek('app.daily_active', 'app', 'Daily active users (sum of days)', a.active.series.map((d) => d.dau)));
   facts.push(fact({ id: 'app.wau', area: 'app', label: 'Weekly active users', value: a.active.today.wau, unit: 'count', window: 'last 7 days' }));
   facts.push(fact({ id: 'app.mau', area: 'app', label: 'Monthly active users', value: a.active.today.mau, unit: 'count', window: 'last 30 days' }));
@@ -148,11 +148,13 @@ export function productFacts(a: AnalyticsInput): Fact[] {
     const r = ch.reduce((s, c) => ({ reached: s.reached + c[k].reached, eligible: s.eligible + c[k].eligible }), { reached: 0, eligible: 0 });
     return r.eligible ? r.reached / r.eligible : null;
   };
-  for (const k of ['d1', 'd7', 'd30'] as const) facts.push(fact({ id: `app.retention_${k}`, area: 'app', label: `${k.toUpperCase()} retention (used Lens on day ${k.slice(1)})`, value: total(k), unit: 'pct', window: w30 }));
+  const w90 = 'installed in the last 90 days, old enough to count';
+  for (const k of ['d1', 'd7', 'd30'] as const)
+    facts.push(fact({ id: `app.retention_${k}`, area: 'app', label: `${k.toUpperCase()} retention: used Lens on exactly day ${k.slice(1)} after installing (classic day-N; lower than "came back at any time")`, value: total(k), unit: 'pct', window: w90 }));
   ch.slice(0, 5).forEach((c, i) => {
     facts.push(fact({ id: `channel.${i + 1}.installs`, area: 'channels', label: `Installs from ${c.channel}`, value: c.installs, unit: 'count', window: w30 }));
     facts.push(fact({ id: `channel.${i + 1}.backed_up`, area: 'channels', label: `${c.channel}: installs that backed up`, value: c.backedUp.rate, unit: 'pct', window: w30 }));
-    facts.push(fact({ id: `channel.${i + 1}.d7`, area: 'channels', label: `${c.channel}: D7 retention`, value: c.d7.rate, unit: 'pct', window: w30 }));
+    facts.push(fact({ id: `channel.${i + 1}.d7`, area: 'channels', label: `${c.channel}: D7 retention (used Lens on exactly day 7)`, value: c.d7.rate, unit: 'pct', window: w90 }));
   });
   facts.push(fact({ id: 'money.paying', area: 'money', label: 'Paying accounts (installed in the window)', value: ch.reduce((s, c) => s + c.paying, 0), unit: 'count', window: w30 }));
   facts.push(fact({ id: 'money.storage_gb', area: 'money', label: 'Storage held by these accounts', value: ch.reduce((s, c) => s + c.storageGB, 0), unit: 'gb', window: w30 }));
