@@ -907,7 +907,7 @@ button.gw-chip.on { opacity: 1; outline: 2px solid currentColor; outline-offset:
 .gw-person { display: inline-flex; align-items: center; gap: 6px; }
 .gw-av { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10.5px; font-weight: 700; color: #fff; background: var(--accent); flex: none; }
 .gw-av.agent { background: var(--good); }
-.gw-av.none { background: var(--line); color: var(--muted); }
+.gw-av.none { background: transparent; border: 1.5px dashed var(--muted); color: var(--muted); }
 .gw-kr { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; align-items: baseline; margin: 6px 0; }
 .gw-bar { grid-column: 1 / -1; height: 7px; background: var(--line); border-radius: 99px; position: relative; }
 .gw-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--bar-dim); }
@@ -1024,3 +1024,12 @@ tr.gw-click:hover td { background: var(--side); }
   .gw-cards td:first-child::before, .gw-cards td[data-label=""]::before { content: none; }
   .gw-cards .gw-meta-in { min-width: 0; }
 }
+@media (max-width: 720px) {
+  /* Tabs wrap instead of hiding the last ones off-screen. */
+  .tabs { flex-wrap: wrap; }
+  /* Editable cells (titles & descriptions): label above a full-width field. */
+  .gw-cards td:has(.gw-meta-in) { display: block; }
+  .gw-cards td:has(.gw-meta-in)::before { display: block; margin-bottom: 4px; }
+}
+.gw-copyrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; } .gw-copyrow input { flex: 1; min-width: 0; }
+@media (max-width: 720px) { .gw-roadmap { grid-template-columns: 1fr; overflow-x: visible; } }

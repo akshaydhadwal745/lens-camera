@@ -4,7 +4,15 @@ import { useState } from "react";
 import { api, get } from "../../api";
 import { Card, date, Empty, Loaded, useLoad } from "../../ui";
 import { analystButton, useGrowthReload, useJobs } from "./jobs";
-import { can, Chip, fmt, openTask, type Fact, type Workspace } from "./shared";
+import {
+  can,
+  Chip,
+  fmt,
+  openTask,
+  Prose,
+  type Fact,
+  type Workspace,
+} from "./shared";
 
 type Review = {
   month: string;
@@ -24,6 +32,15 @@ type Review = {
     done: { id: string; title: string }[];
     measured: { id: string; title: string; verdict: string; value: string }[];
   };
+};
+
+/** The next 1st of the month, e.g. "1 November". */
+const nextFirst = () => {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() + 1, 1).toLocaleDateString(
+    "en-GB",
+    { day: "numeric", month: "long" },
+  );
 };
 
 export function MonthlyReviews({
@@ -81,8 +98,8 @@ export function MonthlyReviews({
         >
           {!r ? (
             <Empty>
-              The first review is written on 1 December (each 1st of the month,
-              09:00 IST), or now with the button.
+              The first review is written on {nextFirst()} (the 1st of every
+              month, 09:00 IST, about last month), or now with the button.
             </Empty>
           ) : (
             <details open={!!search.get("monthly")}>
@@ -91,7 +108,7 @@ export function MonthlyReviews({
                 <span className="muted small">· {date(r.at)}</span>
               </summary>
               {r.ai ? (
-                <p>{r.ai.summary}</p>
+                <Prose text={r.ai.summary} />
               ) : (
                 <p className="muted">
                   The AI write-up didn't run{r.aiError ? `: ${r.aiError}` : ""}.

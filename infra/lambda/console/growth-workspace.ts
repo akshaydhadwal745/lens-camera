@@ -62,11 +62,14 @@ export function oppTask(o: OppFields, score: number): Partial<Task> {
   };
 }
 
+/** Text without its closing full stop (so joined sentences don't end in ".."). */
+const bare = (t: string) => String(t ?? '').trim().replace(/[.\s]+$/, '');
+
 /** A weekly recommendation as a task (an experiment with its metric and stop rule). */
 export function recTask(r: Recommendation): Partial<Task> {
   return {
     title: r.title,
-    description: `${r.hypothesis}\n\nCost: ${r.cost}. Time to result: ${r.timeToResult}. Risk: ${r.risk}. Stop if: ${r.stopRule}`,
+    description: `${r.hypothesis}\n\nCost: ${bare(r.cost)}. Time to result: ${bare(r.timeToResult)}. Risk: ${bare(r.risk)}. Stop if: ${r.stopRule}`,
     workstream: r.workstream ?? 'search',
     type: 'experiment',
     impact: 2,

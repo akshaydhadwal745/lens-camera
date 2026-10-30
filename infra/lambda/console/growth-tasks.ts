@@ -77,6 +77,9 @@ export function similar(a: string, b: string): boolean {
   const A = words(a);
   const B = words(b);
   if (!A.size || !B.size) return false;
+  // Same action too: "List Lens on AlternativeTo…" and "Improve /compare/…" share topic words but aren't the same work.
+  const verb = (x: string) => x.toLowerCase().match(/[a-z]+/)?.[0] ?? '';
+  if (verb(a) !== verb(b)) return false;
   const shared = [...A].filter((w) => B.has(w)).length;
   return shared / Math.min(A.size, B.size) >= 0.6;
 }

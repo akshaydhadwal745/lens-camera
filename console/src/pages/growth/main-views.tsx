@@ -270,6 +270,8 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
                   <Chip tone={VERDICT[t.result.verdict].tone}>
                     {VERDICT[t.result.verdict].label}
                   </Chip>
+                ) : !t.metric.label ? (
+                  <Chip tone="good">done</Chip>
                 ) : (
                   <Chip>
                     measuring

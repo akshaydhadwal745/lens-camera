@@ -6,6 +6,7 @@ import { Card, Empty, Stat } from "../../ui";
 import {
   can,
   Chip,
+  CopyButton,
   fmt,
   isOpen,
   isOverdue,
@@ -561,6 +562,16 @@ function PartnerForm({
       setError((e as Error).message);
     }
   };
+  const remove = async (kind: string, id: string, what: string) => {
+    if (!confirm(`Delete this ${what}? Its link stops being counted.`)) return;
+    try {
+      await api("DELETE", `/growth/${kind}/${id}`);
+      onDone();
+      dispatchEvent(new Event("growth-reload"));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) =>
     setV({ ...v, [k]: e.target.value });
   return (
@@ -578,12 +589,15 @@ function PartnerForm({
           <div className="gw-callout">
             <strong>Their tagged link</strong> (visits are counted: {p.visits}{" "}
             so far)
-            <input
-              readOnly
-              value={p.link}
-              onFocus={(e) => e.target.select()}
-              aria-label="Partner link"
-            />
+            <div className="gw-copyrow">
+              <input
+                readOnly
+                value={p.link}
+                onFocus={(e) => e.target.select()}
+                aria-label="Partner link"
+              />
+              <CopyButton text={p.link} />
+            </div>
           </div>
         )}
         <div className="gw-form">
@@ -673,6 +687,16 @@ function PartnerForm({
             >
               Save
             </button>
+            {p && can(ws, "growth.write") && (
+              <button
+                className="btn danger"
+                onClick={() =>
+                  void remove("partners", p.id, `partner "${p.name}"`)
+                }
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
       </aside>
@@ -802,6 +826,16 @@ function PostForm({
       setError((e as Error).message);
     }
   };
+  const remove = async (kind: string, id: string, what: string) => {
+    if (!confirm(`Delete this ${what}? Its link stops being counted.`)) return;
+    try {
+      await api("DELETE", `/growth/${kind}/${id}`);
+      onDone();
+      dispatchEvent(new Event("growth-reload"));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) =>
     setV({ ...v, [k]: e.target.value });
   return (
@@ -818,12 +852,15 @@ function PostForm({
         {p && (
           <div className="gw-callout">
             <strong>Link to use in the post</strong> ({p.visits} visits so far)
-            <input
-              readOnly
-              value={p.link}
-              onFocus={(e) => e.target.select()}
-              aria-label="Post link"
-            />
+            <div className="gw-copyrow">
+              <input
+                readOnly
+                value={p.link}
+                onFocus={(e) => e.target.select()}
+                aria-label="Post link"
+              />
+              <CopyButton text={p.link} />
+            </div>
           </div>
         )}
         <div className="gw-form">
@@ -875,6 +912,14 @@ function PostForm({
             >
               Save
             </button>
+            {p && can(ws, "growth.write") && (
+              <button
+                className="btn danger"
+                onClick={() => void remove("posts", p.id, "post")}
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
       </aside>

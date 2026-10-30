@@ -3,7 +3,15 @@ import { useState } from "react";
 
 import { api, get } from "../../api";
 import { Card, Empty, Loaded, Stat, useLoad } from "../../ui";
-import { can, Chip, Person, shortDate, type Workspace } from "./shared";
+import {
+  can,
+  CardTable,
+  Chip,
+  CopyButton,
+  Person,
+  shortDate,
+  type Workspace,
+} from "./shared";
 
 type Econ = {
   spend: number;
@@ -145,7 +153,7 @@ export function MoneyPage({ ws }: { ws: Workspace }) {
               }
             >
               {m.campaigns.length ? (
-                <div className="table-wrap">
+                <CardTable>
                   <table>
                     <thead>
                       <tr>
@@ -173,7 +181,7 @@ export function MoneyPage({ ws }: { ws: Workspace }) {
                               {c.name}
                             </button>
                             <div className="muted small">
-                              {c.channel} ·{" "}
+                              {c.channel}{" "}
                               <Chip
                                 tone={
                                   c.status === "live"
@@ -215,7 +223,7 @@ export function MoneyPage({ ws }: { ws: Workspace }) {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </CardTable>
               ) : (
                 <Empty>
                   No campaigns yet. A campaign gives you a tagged link: share it
@@ -281,7 +289,7 @@ export function MoneyPage({ ws }: { ws: Workspace }) {
                         <strong>{inr(s.amount)}</strong> · {shortDate(s.date)} ·{" "}
                         {s.category}
                         {s.campaignId
-                          ? ` · ${m.campaigns.find((c) => c.id === s.campaignId)?.name ?? "campaign"}`
+                          ? ` · ${m.campaigns.find((c) => c.id === s.campaignId)?.name ?? "a deleted campaign"}`
                           : ""}
                         {s.note ? (
                           <span className="muted small"> · {s.note}</span>
@@ -290,6 +298,9 @@ export function MoneyPage({ ws }: { ws: Workspace }) {
                           <button
                             className="gw-linkbtn bad small"
                             onClick={() =>
+                              confirm(
+                                `Remove ${inr(s.amount)} spent on ${shortDate(s.date)}?`,
+                              ) &&
                               void api("DELETE", `/growth/spend/${s.id}`).then(
                                 reload,
                               )
@@ -376,12 +387,15 @@ function CampaignForm({
           <div className="gw-callout">
             <strong>The campaign's link</strong> (use it everywhere this
             campaign runs)
-            <input
-              readOnly
-              value={c.link}
-              onFocus={(e) => e.target.select()}
-              aria-label="Campaign link"
-            />
+            <div className="gw-copyrow">
+              <input
+                readOnly
+                value={c.link}
+                onFocus={(e) => e.target.select()}
+                aria-label="Campaign link"
+              />
+              <CopyButton text={c.link} />
+            </div>
           </div>
         )}
         <div className="gw-form">
@@ -485,6 +499,9 @@ function CampaignForm({
               <button
                 className="btn danger"
                 onClick={() =>
+                  confirm(
+                    `Delete the campaign "${c.name}"? Its spend entries stay in the spend log.`,
+                  ) &&
                   void api("DELETE", `/growth/campaigns/${c.id}`).then(onDone)
                 }
               >

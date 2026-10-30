@@ -14,6 +14,7 @@ import {
   WS,
   type Workspace,
   type Workstream,
+  Prose,
 } from "./shared";
 import { analystButton, useGrowthReload, useJobs } from "./jobs";
 
@@ -104,7 +105,7 @@ export function Insights({
     if (!accept) return openTask(id); // dismissing needs a reason: the panel asks for it
     await api("PATCH", `/growth/tasks/${id}`, {
       status: "ready",
-      owner: t.owner || ws.settings.wsOwners[t.workstream] || "",
+      owner: t.owner || ws.settings.wsOwners[t.workstream] || ws.me.email,
     }).catch((e: Error) => alert(e.message));
     onChanged();
   };
@@ -117,7 +118,7 @@ export function Insights({
             <div className="gw-row">
               <p className="muted small" style={{ margin: 0 }}>
                 {r
-                  ? `Analysis of ${r.date} · ${date(r.at)} by ${r.by}${r.model ? ` · ${r.model}` : ""}`
+                  ? `Analysis of ${r.date} · ${date(r.at)} by ${r.by}${r.model ? ` · ${r.model}` : ""}.`
                   : "No analysis yet."}{" "}
                 Every number in it is checked against the data before it's
                 shown. Weekly, Mondays 08:00 IST.
@@ -155,7 +156,7 @@ export function Insights({
             )}
             <Card title="This week in one paragraph">
               {r?.ai ? (
-                <p>{r.ai.summary}</p>
+                <Prose text={r.ai.summary} />
               ) : (
                 <p className="muted">
                   The AI analysis didn't run{r?.aiError ? `: ${r.aiError}` : ""}

@@ -410,6 +410,7 @@ function CompForm({ c, onDone }: { c?: Comp; onDone: () => void }) {
               <button
                 className="btn danger"
                 onClick={() =>
+                  confirm(`Stop watching ${c.name}? Its history is kept.`) &&
                   void api("DELETE", `/growth/competitors/${c.id}`)
                     .then(onDone)
                     .catch((e: Error) => setError(e.message))

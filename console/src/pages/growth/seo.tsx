@@ -654,7 +654,7 @@ function MetaEditor({ ws, s }: { ws: Workspace; s: Seo }) {
         the agent edits the site’s content files and opens a pull request that
         someone reviews and merges. Nothing changes on the website until then.
       </p>
-      <div className="table-wrap">
+      <CardTable>
         <table>
           <thead>
             <tr>
@@ -700,7 +700,7 @@ function MetaEditor({ ws, s }: { ws: Workspace; s: Seo }) {
             })}
           </tbody>
         </table>
-      </div>
+      </CardTable>
     </Card>
   );
 }

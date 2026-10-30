@@ -631,7 +631,8 @@ async function report(opts: { ai: boolean; by: string }) {
       const id = slug(f.targetKeyword);
       await upsertAiTask(`opp:${id}`, oppTask(f, opportunityScore(o)), date, { kind: 'opp', id, ...f, score: opportunityScore(o) });
     }
-    for (const rec of ai.ai.recommendations ?? []) await upsertAiTask(`rec:${taskSlug(rec.title)}`, recTask(rec), date);
+    // A proposal is already a task: "approve the proposal…" recommendations would only duplicate it.
+    for (const rec of (ai.ai.recommendations ?? []).filter((r) => !/^(approve|review|merge)\b.*\bproposal\b/i.test(r.title))) await upsertAiTask(`rec:${taskSlug(rec.title)}`, recTask(rec), date);
     for (const [i, rec] of (ai.ai.recommendations ?? []).entries()) {
       const id = `R-${run}-${i + 1}`;
       await ifNew({ ...recFields(rec as Record<string, unknown>), status: 'proposed', report: date, createdAt: date, updatedAt: now, pk: 'GROWTH', sk: `REC#${id}`, id });

@@ -18,6 +18,7 @@ import {
   type Status,
   type Task,
   type Workspace,
+  TYPE_LABEL,
 } from "./shared";
 
 type LogEntry = {
@@ -153,7 +154,7 @@ export function TaskPanel({
           <span className="muted small">
             {id}
             {t
-              ? ` · ${WS[t.workstream]?.label ?? t.workstream} · ${t.type}`
+              ? ` · ${WS[t.workstream]?.label ?? t.workstream} · ${TYPE_LABEL[t.type] ?? t.type}`
               : ""}
             {t?.source.kind === "ai"
               ? ` · suggested by the agent${t.source.report ? ` (${t.source.report})` : ""}`
@@ -183,7 +184,7 @@ export function TaskPanel({
                 </button>
               ))}
               <button
-                className="gw-chip plain"
+                className={`gw-chip ${t.status === "wontdo" ? "bad on" : "plain"}`}
                 disabled={!editable || busy || t.status === "wontdo"}
                 onClick={() => changeStatus("wontdo")}
               >
@@ -260,7 +261,9 @@ export function TaskPanel({
                       void save({
                         status: "ready",
                         owner:
-                          t.owner || ws.settings.wsOwners[t.workstream] || "",
+                          t.owner ||
+                          ws.settings.wsOwners[t.workstream] ||
+                          ws.me.email,
                       })
                     }
                   >
@@ -642,10 +645,12 @@ export function TaskPanel({
                           .join(";")}
                     </div>
                   ))}
-                <div>
-                  <span className="muted">{date(t.createdAt)}</span> · created
-                  by {t.createdBy === "seed" ? "the strategy" : t.createdBy}
-                </div>
+                {!data!.log.some((e) => e.text === "Created") && (
+                  <div>
+                    <span className="muted">{date(t.createdAt)}</span> · created
+                    by {t.createdBy === "seed" ? "the strategy" : t.createdBy}
+                  </div>
+                )}
               </div>
             </section>
           </>
@@ -997,19 +1002,10 @@ export function NewTask({
             <label className="gw-field">
               <span>Type</span>
               <select value={f.type} onChange={set("type")}>
-                {[
-                  "page",
-                  "content",
-                  "social",
-                  "listing",
-                  "experiment",
-                  "partner",
-                  "fix",
-                  "research",
-                  "decision",
-                  "ops",
-                ].map((x) => (
-                  <option key={x}>{x}</option>
+                {Object.entries(TYPE_LABEL).map(([x, l]) => (
+                  <option key={x} value={x}>
+                    {l}
+                  </option>
                 ))}
               </select>
             </label>

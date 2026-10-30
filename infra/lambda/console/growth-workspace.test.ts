@@ -24,6 +24,7 @@ test('duplicates: same work in other words is recognised; different work is not'
   assert.equal(similar('Run one real QR event album at a wedding or party during the coming season', 'Run one real QR event album at an event this month'), true);
   assert.equal(similar('Request indexing for /compare/google-photos/ by hand in Search Console', 'Ask Google to index /compare/google-photos/'), false);
   assert.equal(similar('Post the WhatsApp guide in 3 communities', 'Decide: keep the name "Lens"'), false);
+  assert.equal(similar('List Lens on AlternativeTo as a Google Photos alternative, linking to /compare/google-photos/', 'Improve /compare/google-photos/ for “google photos alternative”'), false);
 });
 
 test('task fields: only known fields, capped, typed; unknown keys and bad values dropped', () => {

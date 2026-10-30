@@ -1,5 +1,5 @@
 // Growth workspace: shared types and small pieces (docs/growth/growth-workspace.md).
-import { ReactNode, useLayoutEffect, useRef } from "react";
+import { ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 import { navigate } from "../../ui";
 
@@ -241,7 +241,7 @@ export const STATUS: Record<
   ready: { label: "Ready", tone: "plain" },
   in_progress: { label: "In progress", tone: "warn" },
   in_review: { label: "In review", tone: "warn" },
-  done: { label: "Done · measuring", tone: "good" },
+  done: { label: "Done", tone: "good" },
   measured: { label: "Measured", tone: "good" },
   blocked: { label: "Blocked", tone: "bad" },
   wontdo: { label: "Won't do", tone: "plain" },
@@ -327,7 +327,7 @@ export function Person({ email, small }: { email: string; small?: boolean }) {
     : email === "agent"
       ? "Growth agent"
       : email.split("@")[0];
-  const init = !email ? "?" : email === "agent" ? "AI" : email[0].toUpperCase();
+  const init = !email ? "" : email === "agent" ? "AI" : email[0].toUpperCase();
   return (
     <span className="gw-person" title={email || "Unassigned"}>
       <span
@@ -465,3 +465,71 @@ export function CardTable({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+/** The agent's text with its light formatting: **bold**, and "- " items as a list. */
+export function Prose({ text }: { text: string }) {
+  const bold = (s: string) =>
+    s
+      .split(/\*\*(.+?)\*\*/g)
+      .map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
+  // Items written inline ("…this week: - **Get…** … - **Ask…**") start on their own line.
+  const lines = text
+    .replace(/\s+-\s+(?=\*\*)/g, "\n- ")
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const out: ReactNode[] = [];
+  let items: string[] = [];
+  const flush = () => {
+    if (items.length)
+      out.push(
+        <ul key={out.length} className="gw-list">
+          {items.map((x, i) => (
+            <li key={i}>{bold(x)}</li>
+          ))}
+        </ul>,
+      );
+    items = [];
+  };
+  for (const l of lines) {
+    if (/^[-•*]\s+/.test(l)) items.push(l.replace(/^[-•*]\s+/, ""));
+    else {
+      flush();
+      out.push(<p key={out.length}>{bold(l)}</p>);
+    }
+  }
+  flush();
+  return <>{out}</>;
+}
+
+/** Copies a link; says "Copied" for a moment. */
+export function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      className="btn small"
+      onClick={() =>
+        void navigator.clipboard.writeText(text).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        })
+      }
+    >
+      {done ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+/** Task types in plain words. */
+export const TYPE_LABEL: Record<string, string> = {
+  page: "New website page",
+  content: "Website content",
+  fix: "Website fix",
+  social: "Social post",
+  listing: "Play Store listing",
+  partner: "Partner outreach",
+  experiment: "Experiment",
+  research: "Research",
+  decision: "Decision",
+  ops: "Other",
+};
