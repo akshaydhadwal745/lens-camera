@@ -14,7 +14,8 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { growthDraft, growthPage, growthRun, growthTools, growthUnwatch } from './growth';
+import { growthDraft, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { keywordSave, prospectSave, seoPage } from './growth-seo';
 import { goalUpdate, settingsUpdate } from './growth-goals';
 import { partnerSave, postSave, recordDelete } from './growth-records';
 import { growthHousekeeping, migrateLegacy, workspace } from './growth-workspace';
@@ -93,6 +94,13 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
     // Growth workspace tasks (growth-tasks.ts): see with growth, work with growth.contribute, manage with growth.write.
     if (route === 'GET /growth/workspace') return await allowed('growth', () => workspace(email, role));
+    // SEO tools (growth-seo.ts)
+    if (route === 'GET /growth/seo') return await allowed('growth', () => seoPage(email));
+    if (route === 'POST /growth/seo/audit') return await allowed('growth.write', () => seoAuditRun(email));
+    if (route === 'PUT /growth/keywords') return await allowed('growth.contribute', () => keywordSave(req, email));
+    if (route === 'DELETE /growth/keywords') return await allowed('growth.contribute', () => keywordSave(req, email, true));
+    if (seg[0] === 'growth' && seg[1] === 'prospects' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.contribute', () => prospectSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'prospects' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => prospectSave(seg[2], req, email, true));
     if (route === 'PUT /growth/settings') return await allowed('growth.write', () => settingsUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'goals' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => goalUpdate(seg[2], req, email));
     if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'PUT')

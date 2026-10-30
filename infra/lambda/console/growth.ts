@@ -24,6 +24,7 @@ import { compute } from './analytics';
 import { demandFacts, fact, ga4Facts, indexFacts, productFacts, searchFacts, type Fact, type SearchDay, type SearchRow } from './growth-facts';
 import { bingTrend, ga4Report, SEED_KEYWORDS, trendingNow, WIKI_ARTICLES, wikiTrend, wikiViews } from './growth-sources';
 import { EDITABLE, installationToken, openPullRequest, pullRequestState } from './growth-github';
+import { runSeoAudit } from './growth-seo';
 import { getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
 import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
 import { TEXT_SCHEMA, TEXT_SYSTEM, type TextDraft } from './growth-report';
@@ -72,7 +73,7 @@ async function searchDays(now: number): Promise<(SearchDay & { pulled: boolean }
   );
 }
 
-export async function collectFacts(now = Date.now()): Promise<{ facts: Fact[]; notes: string[] }> {
+export async function collectFacts(now = Date.now()): Promise<{ facts: Fact[]; notes: string[]; indexState: Record<string, string> }> {
   const notes: string[] = [];
   const facts: Fact[] = [];
   facts.push(...searchFacts(await searchDays(now)));
@@ -89,7 +90,7 @@ export async function collectFacts(now = Date.now()): Promise<{ facts: Fact[]; n
   facts.push(...(await watchFacts(now, coverageState)));
   facts.push(...(await demand(now, notes)));
   facts.push(...(await ga4(notes)));
-  return { facts, notes };
+  return { facts, notes, indexState: Object.fromEntries(coverageState) };
 }
 
 /** `items` through `f`, 4 at a time (bursts of connections time out); failures become undefined. */
@@ -524,7 +525,20 @@ async function report(opts: { ai: boolean; by: string }) {
   const date = new Date(now).toISOString().slice(0, 10);
   // Unique per run, so a second run on the same day never collides with the first one's ids.
   const run = `${date}-${new Date(now).toISOString().slice(11, 16).replace(':', '')}`;
-  const { facts, notes } = await collectFacts(now);
+  const { facts, notes, indexState } = await collectFacts(now);
+  // SEO audit (every sitemap page, speed, backlinks) with Google's index state; its headline numbers become facts.
+  try {
+    const seo = await runSeoAudit(now, indexState);
+    facts.push(
+      fact({ id: 'seo.audit_score', area: 'search', label: 'Technical SEO health score (100 = no issues; −10 per error, −3 per warning per page)', value: seo.score, unit: 'count', window: 'this week' }),
+      fact({ id: 'seo.audit_errors', area: 'search', label: 'Technical SEO errors across sitemap pages', value: seo.errors, unit: 'count', window: 'this week' }),
+      fact({ id: 'seo.audit_warnings', area: 'search', label: 'Technical SEO warnings across sitemap pages', value: seo.warnings, unit: 'count', window: 'this week' }),
+      fact({ id: 'seo.broken_links', area: 'search', label: 'Broken internal links', value: seo.brokenLinks, unit: 'count', window: 'this week' }),
+      fact({ id: 'seo.backlinks', area: 'search', label: 'Links to the site found by Bing', value: seo.backlinks, unit: 'count', window: 'this week' }),
+    );
+  } catch (e) {
+    notes.push(`SEO audit failed: ${(e as Error).message.slice(0, 120)}`);
+  }
   const rules = ruleFindings(facts);
   // The analyst reviews the workspace's tasks (open, and finished in the last 45 days), not the old ledger.
   const open: OpenRec[] = await tasksForAnalyst();
@@ -794,6 +808,15 @@ async function startDraft(taskId: string, email: string): Promise<'started' | 'b
       throw e;
     });
   return 'started';
+}
+
+/** POST /growth/seo/audit: run the SEO audit now (GrowthAnalyst; a minute or two). */
+export async function seoAuditRun(email: string): Promise<Res> {
+  if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
+  await rateLimit('console-seo-audit', 6, 'An audit was started recently. Try again in an hour.');
+  await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ seoAudit: true, by: email })) }));
+  await log({ entity: 'growth:seo', action: 'growth.seo-audit', actor: `console:${email}` });
+  return json(202, { started: true });
 }
 
 /** POST /growth/tasks/<id>/draft: the agent drafts this task as a pull request. */

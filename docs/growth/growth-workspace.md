@@ -89,3 +89,11 @@ Console build, every screen rendered in headless Chrome against a mock API with 
 - Priority: P0 only for high-impact, confident work that isn't huge (`priorityOf`).
 - Today: My work = in progress → overdue → due soon → priority (decisions only under "Needs a decision"); desktop has goals and decisions beside your work; phones show work first with two-up numbers; growth pages use up to 1600 px.
 - Task panel leads with what and why; goals show "Just started" in the first tenth of their period; sign-in returns to the page you were opening.
+
+## Group 1: SEO tools (2026-10-30)
+Console → Workstreams → **SEO tools** (`console/src/pages/growth/seo.tsx`, `infra/lambda/console/growth-seo.ts`, tests `growth-seo.test.ts`):
+- **Keywords:** tracked keywords (`GROWTH / KEYWORD#`, seeded from SEED_KEYWORDS and task keywords) with Google position, impressions and clicks over 28 days and a 12-week position trend from the daily Search Console rows; Bing position (GetQueryStats) and Bing demand; every query Google showed us for.
+- **Technical audit:** every sitemap page (status, title/description length, H1, canonical, noindex, hreflang en/hi/x-default, lang, JSON-LD, og:image, thin < 300 words, images without alt, broken internal links, Google index state) → `GROWTH / SEOAUDIT` + `SEOHIST#<day>`; health score; "Make it a task" per issue type. First real run: 64 pages, 0 errors, 67 warnings, score 97.
+- **Speed:** PageSpeed Insights (Lighthouse) for 5 key pages, mobile and desktop, plus real-user Core Web Vitals when Google has them. Key: SSM `/lens/growth/pagespeed-key` (API key restricted to PageSpeed, project lens-5df67). First run: 99–100 everywhere, LCP 0.3–1.4 s.
+- **Backlinks & link building:** links Bing found (GetLinkCounts/GetUrlLinks); a pipeline of places to get a link (`PROSPECT#`, seeded with 12 real ones) whose pages are fetched weekly and moved to "live" when they link to the site.
+- Runs weekly in the analysis (facts `seo.audit_score`, `seo.audit_errors`, `seo.audit_warnings`, `seo.broken_links`, `seo.backlinks` for the agent) and on demand ("Run audit again" → GrowthAnalyst `{seoAudit:true}`).

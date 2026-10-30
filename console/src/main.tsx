@@ -67,6 +67,12 @@ const SECTIONS: Section[] = [
     group: "Workstreams",
   },
   {
+    path: "/growth/seo",
+    label: "SEO tools",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
     path: "/growth/ws/social",
     label: "Social & distribution",
     permission: "growth",
@@ -357,7 +363,11 @@ function App() {
           } catch {
             // default page
           }
-          history.replaceState(null, "", back.startsWith("/") && !back.startsWith("//") ? back : "/");
+          history.replaceState(
+            null,
+            "",
+            back.startsWith("/") && !back.startsWith("//") ? back : "/",
+          );
           void refresh();
         }}
       />
