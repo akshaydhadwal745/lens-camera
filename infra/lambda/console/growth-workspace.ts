@@ -166,7 +166,9 @@ async function latestReport() {
 export async function workspace(email: string, role: Role): Promise<Res> {
   await migrateLegacy();
   const team = (await teamMembers()).filter((m) => can(m.role, 'growth'));
-  await seedFromStrategy(team.find((m) => m.role === 'owner')?.email ?? email);
+  const ownerEmail = team.find((m) => m.role === 'owner')?.email ?? email;
+  await seedFromStrategy(ownerEmail);
+  await cleanupV2(ownerEmail);
   const [settings, goalRows, msRows, tasks, partnerRows, postRows, report, analytics] = await Promise.all([loadSettings(), loadGoals(), loadMilestones(), listTasks(), loadPartners(), loadPosts(), latestReport(), liveAnalytics()]);
   // Current metrics: this week's report (search, demand, GA4) overlaid with live product/website facts.
   const facts = new Map<string, Fact>();
@@ -316,4 +318,61 @@ export async function growthHousekeeping(now = Date.now()) {
     out.digests = sent;
   }
   return out;
+}
+
+// ---------- one-time cleanup of the first migration (2026-10-30, owner review) ----------
+
+type Fix = Partial<Task> & { note: string };
+const plus = (n: number) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10);
+
+/** Explicit decisions for what the first migration brought in: done work, duplicates, held advice, real actions. */
+export function cleanupPlan(owner: string): { ref?: RegExp; title?: RegExp; fix: Fix }[] {
+  const ready = (ws: Workstream, priority: 0 | 1 | 2 | 3, due: number, extra: Partial<Task> = {}): Fix => ({ status: 'ready', workstream: ws, priority, owner, due: plus(due), note: 'Cleaned up: kept as a real action with an owner and a due date', ...extra });
+  return [
+    { ref: /^rec:get-the-website-s-pages-into-google/, fix: { status: 'done', workstream: 'search', proof: 'Google indexed 62 of 64 pages by 30 Oct 2026 (from 1)', note: 'Cleaned up: already done' } },
+    { ref: /^rec:check-how-d1-and-d7-retention-are-counted/, fix: { status: 'done', workstream: 'retain', proof: 'Fixed 30 Oct 2026 (commit 9b56d49): D1/D7/D30 over a 90-day cohort, clearer labels', note: 'Cleaned up: already done' } },
+    { ref: /^rec:make-the-first-backup-happen/, fix: { status: 'wontdo', workstream: 'retain', wontDoReason: 'On hold: too few installs to measure onboarding changes (the agent’s own advice, 30 Oct). Revisit after launch.', note: 'Cleaned up: held' } },
+    { ref: /^rec:ask-people-to-sign-in-right-after/, fix: { status: 'wontdo', workstream: 'retain', wontDoReason: 'On hold: too few installs to measure onboarding changes. Revisit after launch.', note: 'Cleaned up: held' } },
+    { ref: /^rec:keep-holding-onboarding-changes/, fix: { status: 'wontdo', workstream: 'retain', wontDoReason: 'Advice, not work: hold onboarding changes and paid ads until there are enough installs to measure.', note: 'Cleaned up: advice recorded' } },
+    { ref: /^rec:approve-the-copy-fix-that-removes-unlimited/, fix: { status: 'wontdo', wontDoReason: 'Duplicate: the "unlimited" fix is in review (PR #9 and PR #10).', note: 'Cleaned up: duplicate' } },
+    { ref: /^prop:P-2026-10-30-0541-17/, fix: { status: 'wontdo', wontDoReason: 'Duplicate of the other "unlimited" proposal; the fix is in review (PR #9).', note: 'Cleaned up: duplicate' } },
+    { ref: /^prop:P-2026-10-30-0541-35/, fix: { status: 'in_review', reviewer: owner, links: { page: '/features/free-cloud-backup/', keyword: '', campaign: '', partner: '', post: '', pr: { url: 'https://github.com/akshaydhadwal745/lens-camera/pull/9', number: 9 } }, proof: 'https://github.com/akshaydhadwal745/lens-camera/pull/9', note: 'Cleaned up: linked to PR #9 (merge PR #10 first, then #9)' } },
+    { ref: /^rec:try-qr-event-albums-yourself/, fix: { status: 'wontdo', wontDoReason: 'Duplicate of "Run one real QR event album at a wedding or party".', note: 'Cleaned up: duplicate' } },
+    { ref: /^rec:run-one-real-qr-event-album/, fix: ready('loops', 1, 9, { type: 'experiment', metric: { label: 'Guests who joined the album; guests who installed', fact: 'loops.event_join', baseline: '0', baselineAt: plus(0), target: '25', checkOn: plus(16) } }) },
+    { ref: /^rec:request-indexing-for-compare-google-photos/, fix: ready('search', 1, 2, { effortHours: 1, description: 'Search Console → URL Inspection → paste https://lens.instagrowapp.com/compare/google-photos/ → Request indexing. Google can’t do this through its API: it has to be a click.' }) },
+    { ref: /^rec:add-tracking-tags-to-every-link/, fix: ready('social', 2, 7) },
+    { ref: /^rec:ask-google-to-index-compare-google-photos/, fix: { status: 'wontdo', wontDoReason: 'Duplicate of "Request indexing for /compare/google-photos/".', note: 'Cleaned up: duplicate' } },
+    // Strategy tasks: real priorities and dates (the first seed made small tasks P0).
+    { title: /^Get 12\+ testers opted in/, fix: { priority: 0, due: plus(3), note: 'Cleaned up: priority and due date' } },
+    { title: /^Decide: keep the name/, fix: { priority: 0, due: plus(4), note: 'Cleaned up: priority and due date' } },
+    { title: /^Decide: launch wedge/, fix: { priority: 1, due: plus(7), note: 'Cleaned up: priority and due date' } },
+    { title: /^Decide: one company identity/, fix: { priority: 1, due: plus(7), note: 'Cleaned up: priority and due date' } },
+    { title: /^Decide: owner hours/, fix: { priority: 1, due: plus(7), note: 'Cleaned up: priority and due date' } },
+    { title: /^Decide: cost levers/, fix: { priority: 2, due: plus(14), note: 'Cleaned up: priority and due date' } },
+    { title: /^Testers → first community/, fix: { priority: 1, due: plus(5), note: 'Cleaned up: priority and due date' } },
+    { title: /^Monthly review/, fix: { priority: 3, due: plus(30), note: 'Cleaned up: priority and due date' } },
+    { title: /^Website download button and every/, fix: { priority: 1, note: 'Cleaned up: priority (launch day)' } },
+  ];
+}
+
+export async function cleanupV2(owner: string): Promise<number> {
+  const marker = { pk: 'GROWTH', sk: 'MIGRATED#TASKS2' };
+  if ((await ddb.send(new GetCommand({ TableName: env.table, Key: marker }))).Item) return 0;
+  const tasks = await listTasks();
+  let n = 0;
+  for (const { ref, title, fix } of cleanupPlan(owner)) {
+    const { note, ...set } = fix;
+    // Items already closed as Won't do stay closed (they were older duplicates).
+    for (const t of tasks.filter((x) => x.status !== 'wontdo' && ((ref && ref.test(x.source?.ref ?? '')) || (title && title.test(x.title))))) {
+      await systemUpdate(t.id, { ...set, ...(set.status === 'done' ? { doneAt: Date.now() } : {}) }, note);
+      n++;
+    }
+  }
+  // Anything else the first migration brought in as a suggestion: classify by words, not "search" for all.
+  for (const t of tasks.filter((x) => x.source?.ref?.startsWith('rec:') && x.workstream === 'search' && x.status === 'suggested')) {
+    const ws: Workstream = /sign.?in|backup|onboard|retention|first screen/i.test(t.title) ? 'retain' : /event|qr|invite|referr/i.test(t.title) ? 'loops' : /post|reddit|social|tag/i.test(t.title) ? 'social' : 'search';
+    if (ws !== 'search') await systemUpdate(t.id, { workstream: ws }, 'Cleaned up: workstream');
+  }
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { ...marker, at: Date.now(), count: n } }));
+  return n;
 }

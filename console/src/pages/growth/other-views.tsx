@@ -7,7 +7,7 @@ import {
   can,
   Chip,
   fmt,
-  GOAL_STATUS,
+  GoalChip,
   openTask,
   Person,
   TaskRow,
@@ -213,24 +213,29 @@ export function Insights({
               </Card>
               <Card title="Did earlier work pay off?">
                 <ul className="gw-list">
-                  {(r?.ai?.reviewOfPrevious ?? []).map((x) => (
-                    <li key={x.id}>
-                      {x.id.startsWith("T-") ? (
-                        <button
-                          className="gw-linkbtn"
-                          onClick={() => openTask(x.id)}
-                        >
-                          {x.id}
-                        </button>
-                      ) : (
-                        x.id
-                      )}
-                      : {x.verdict}
-                    </li>
-                  ))}
-                  {!(r?.ai?.reviewOfPrevious ?? []).length && (
+                  {(r?.ai?.reviewOfPrevious ?? [])
+                    .filter((x) => x.id.startsWith("T-"))
+                    .map((x) => (
+                      <li key={x.id}>
+                        {x.id.startsWith("T-") ? (
+                          <button
+                            className="gw-linkbtn"
+                            onClick={() => openTask(x.id)}
+                          >
+                            {x.id}
+                          </button>
+                        ) : (
+                          x.id
+                        )}
+                        : {x.verdict}
+                      </li>
+                    ))}
+                  {!(r?.ai?.reviewOfPrevious ?? []).some((x) =>
+                    x.id.startsWith("T-"),
+                  ) && (
                     <li className="muted">
-                      Nothing finished long enough ago to judge.
+                      From the next analysis, the agent judges finished tasks
+                      here (with links).
                     </li>
                   )}
                 </ul>
@@ -593,10 +598,7 @@ export function StartHere({ ws }: { ws: Workspace }) {
           <ul className="gw-list">
             {ws.goals.map((g) => (
               <li key={g.id}>
-                <strong>{g.title}</strong>{" "}
-                <Chip tone={GOAL_STATUS[g.status].tone}>
-                  {GOAL_STATUS[g.status].label}
-                </Chip>
+                <strong>{g.title}</strong> <GoalChip g={g} />
                 <div className="muted small">
                   {g.krs
                     .map(

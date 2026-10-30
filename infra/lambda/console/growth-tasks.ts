@@ -61,11 +61,24 @@ const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test
 const int = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d);
 const email = (v: unknown) => (typeof v === 'string' && (v === 'agent' || /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(v)) ? v.toLowerCase() : '');
 
-/** Priority from impact × confidence ÷ effort (ICE); P0 = do now … P3 = someday. */
+/** Priority: P0 only for high-impact, high-confidence work that is quick to do; effort nudges, it doesn't decide. */
 export function priorityOf(impact: number, confidence: number, effortHours: number): 0 | 1 | 2 | 3 {
-  const effort = effortHours <= 2 ? 1 : effortHours <= 8 ? 2 : 3;
-  const score = (impact * confidence * 2) / effort;
-  return score >= 9 ? 0 : score >= 4 ? 1 : score >= 2 ? 2 : 3;
+  const value = impact * confidence; // 1..9
+  if (impact === 3 && confidence >= 2 && effortHours <= 8) return 0;
+  if (value >= 6) return 1;
+  if (value >= 3) return 2;
+  return 3;
+}
+
+/** Same work in other words? Word overlap of the titles (ignoring filler words). */
+export function similar(a: string, b: string): boolean {
+  const stop = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'for', 'of', 'in', 'on', 'at', 'with', 'by', 'from', 'your', 'our', 'one', 'real', 'first', 'this', 'that', 'it', 'is', 'be', 'yourself', 'repeat']);
+  const words = (x: string) => new Set(x.toLowerCase().replace(/[^a-z0-9/ ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !stop.has(w)));
+  const A = words(a);
+  const B = words(b);
+  if (!A.size || !B.size) return false;
+  const shared = [...A].filter((w) => B.has(w)).length;
+  return shared / Math.min(A.size, B.size) >= 0.6;
 }
 
 /** The fields a person or the agent may set (anything else in the body is ignored). */
@@ -167,6 +180,13 @@ export async function upsertAiTask(dedupe: string, fields: Partial<Task>, report
     const t = await getTask(known);
     if (t?.status === 'suggested') await saveTask({ ...t, ...fields, ...(spec ? { spec } : {}), status: 'suggested', updatedAt: Date.now() });
     return known;
+  }
+  // Already on the list in other words (open or finished)? Note it there instead of adding a duplicate.
+  const twin = (await listTasks()).find((t) => t.status !== 'wontdo' && similar(t.title, fields.title ?? ''));
+  if (twin) {
+    await addLog(twin.id, { kind: 'change', by: 'agent', text: `The growth agent suggested this again (report ${report}): "${fields.title}"` });
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...k, taskId: twin.id } }));
+    return twin.id;
   }
   const task = await createTask({ ...fields, status: 'suggested' }, 'agent', { kind: 'ai', by: 'agent', report, ref: dedupe }, spec);
   await ddb.send(new PutCommand({ TableName: env.table, Item: { ...k, taskId: task.id } }));

@@ -434,3 +434,12 @@ export function Sparkline({ values }: { values: number[] }) {
     </svg>
   );
 }
+
+/** A goal's status; in the first tenth of its period "on track" means little, so it says "Just started". */
+export function GoalChip({ g }: { g: Goal }) {
+  if (g.status === "on_track" && g.elapsed !== null && g.elapsed < 0.1)
+    return <Chip tone="plain">Just started</Chip>;
+  return (
+    <Chip tone={GOAL_STATUS[g.status].tone}>{GOAL_STATUS[g.status].label}</Chip>
+  );
+}

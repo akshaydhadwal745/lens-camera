@@ -9,7 +9,7 @@ import {
   Chip,
   dueSoon,
   fmt,
-  GOAL_STATUS,
+  GoalChip,
   isOpen,
   isOverdue,
   KRBar,
@@ -37,11 +37,22 @@ const greeting = () => {
 export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
   const me = ws.me.email;
   const manage = can(ws, "growth.write");
+  // In progress first, then overdue, then due soonest, then priority: what to do today is at the top.
+  const rank = (t: Task) =>
+    t.status === "in_progress"
+      ? 0
+      : isOverdue(t)
+        ? 1
+        : t.status === "in_review" && t.reviewer === me
+          ? 2
+          : dueSoon(t, 3)
+            ? 3
+            : 4;
   const mine = ws.tasks
-    .filter((t) => isOpen(t) && t.owner === me)
+    .filter((t) => isOpen(t) && t.status !== "blocked" && t.owner === me)
     .sort(
       (a, b) =>
-        Number(isOverdue(b)) - Number(isOverdue(a)) ||
+        rank(a) - rank(b) ||
         a.priority - b.priority ||
         (a.due || "9").localeCompare(b.due || "9"),
     );
@@ -134,7 +145,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
           actions={<Link to="/growth/tasks?view=mine">All my tasks →</Link>}
         >
           {mine.length ? (
-            mine.slice(0, 8).map((t) => <TaskRow key={t.id} t={t} />)
+            mine.slice(0, 6).map((t) => <TaskRow key={t.id} t={t} />)
           ) : (
             <Empty>
               Nothing assigned to you.{" "}
@@ -152,9 +163,7 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
             <div key={g.id} className="gw-goal-mini">
               <div className="gw-row">
                 <strong>{g.title}</strong>
-                <Chip tone={GOAL_STATUS[g.status].tone}>
-                  {GOAL_STATUS[g.status].label}
-                </Chip>
+                <GoalChip g={g} />
               </div>
               {g.krs.map((k) => (
                 <KRBar key={k.id} kr={k} elapsed={g.elapsed} />
@@ -330,9 +339,7 @@ export function Goals({
                       {g.horizon === "health" ? "" : `${g.id} · `}
                       {g.title}
                     </strong>
-                    <Chip tone={GOAL_STATUS[g.status].tone}>
-                      {GOAL_STATUS[g.status].label}
-                    </Chip>
+                    <GoalChip g={g} />
                   </div>
                   {g.why && <p className="muted small">{g.why}</p>}
                   {g.period && (

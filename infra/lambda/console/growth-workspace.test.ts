@@ -6,16 +6,24 @@ import { test } from 'node:test';
 
 import { goalStatus, krProgress, milestoneProgress, period } from './growth-goals';
 import { codeOf, partnerFields, partnerLink, postFields } from './growth-records';
-import { cleanFields, mentionedEmails, priorityOf, transitionProblem, type Task } from './growth-tasks';
+import { cleanFields, mentionedEmails, priorityOf, similar, transitionProblem, type Task } from './growth-tasks';
 import { digestFor, oppTask, propTask, recTask, verdictFor } from './growth-workspace';
 
 const base = { id: 'T-1', title: 't', status: 'ready', links: { page: '', keyword: '', campaign: '', partner: '', post: '' }, wontDoReason: '', blockedBy: '', reviewer: '', proof: '' } as unknown as Task;
 
-test('priority from impact × confidence ÷ effort', () => {
-  assert.equal(priorityOf(3, 3, 2), 0); // high, sure, quick → do now
-  assert.equal(priorityOf(3, 2, 8), 1);
+test('priority: P0 only for high impact, confident and not huge; effort nudges, it doesn\u2019t decide', () => {
+  assert.equal(priorityOf(3, 3, 2), 0);
+  assert.equal(priorityOf(3, 2, 8), 0);
+  assert.equal(priorityOf(3, 3, 24), 1); // big work isn't "do now"
+  assert.equal(priorityOf(2, 3, 1), 1); // small isn't urgent by itself
   assert.equal(priorityOf(2, 2, 24), 2);
-  assert.equal(priorityOf(1, 1, 40), 3);
+  assert.equal(priorityOf(1, 1, 1), 3);
+});
+
+test('duplicates: same work in other words is recognised; different work is not', () => {
+  assert.equal(similar('Run one real QR event album at a wedding or party during the coming season', 'Run one real QR event album at an event this month'), true);
+  assert.equal(similar('Request indexing for /compare/google-photos/ by hand in Search Console', 'Ask Google to index /compare/google-photos/'), false);
+  assert.equal(similar('Post the WhatsApp guide in 3 communities', 'Decide: keep the name "Lens"'), false);
 });
 
 test('task fields: only known fields, capped, typed; unknown keys and bad values dropped', () => {
