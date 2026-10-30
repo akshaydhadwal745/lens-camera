@@ -8,6 +8,8 @@ import { Goals, Tasks, Today } from "./main-views";
 import { GrowthSettings, Insights, StartHere } from "./other-views";
 import { WS, type Workspace, type Workstream } from "./shared";
 import { Competitors } from "./competitors";
+import { MoneyPage } from "./money";
+import { MonthlyReviews } from "./monthly";
 import { SeoTools } from "./seo";
 import { NewTask, TaskPanel } from "./task-panel";
 import { WorkstreamPage } from "./workstreams";
@@ -21,6 +23,7 @@ const TITLES: Record<string, string> = {
   start: "Start here",
   seo: "SEO tools",
   competitors: "Competitors",
+  money: "Campaigns & budget",
 };
 
 export function GrowthWorkspace({ path }: { path: string }) {
@@ -56,13 +59,19 @@ export function GrowthWorkspace({ path }: { path: string }) {
             {sub === "tasks" && (
               <Tasks ws={ws} search={search} onNew={() => setCreating(true)} />
             )}
-            {sub === "insights" && <Insights ws={ws} onChanged={reload} />}
+            {sub === "insights" && (
+              <div className="gw-stack">
+                <MonthlyReviews ws={ws} search={search} />
+                <Insights ws={ws} onChanged={reload} />
+              </div>
+            )}
             {sub === "settings" && (
               <GrowthSettings ws={ws} onChanged={reload} />
             )}
             {sub === "start" && <StartHere ws={ws} />}
             {sub === "seo" && <SeoTools ws={ws} search={search} />}
             {sub === "competitors" && <Competitors ws={ws} />}
+            {sub === "money" && <MoneyPage ws={ws} />}
             {wsKey && WS[wsKey] && (
               <WorkstreamPage
                 ws={ws}

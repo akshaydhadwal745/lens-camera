@@ -302,8 +302,35 @@ export async function compute(windowDays: number) {
     [...real.entries()].filter(([, p]) => p.createdAt >= now - Math.max(windowDays, RETENTION_DAYS) * DAY).map(channelAccount),
   );
 
+  // Campaigns and months (growth-money.ts: CAC, ROI): installs by utm_campaign, and by calendar month.
+  const yearAgo = now - 365 * DAY;
+  const outcome = (id: string, p: Row) => ({ backedUp: first.get(id)?.upload !== undefined, signedIn: first.get(id)?.signin !== undefined || !!p.email, paying: planActive(p.plan, now) });
+  const campaignInstalls: Record<string, { installs: number; backedUp: number; signedIn: number; paying: number }> = {};
+  const months: Record<string, { installs: number; backedUp: number; paying: number }> = {};
+  for (const [id, p] of real) {
+    if (typeof p.createdAt !== 'number' || p.createdAt < yearAgo) continue;
+    const o = outcome(id, p);
+    const camp = typeof p.acquisition?.campaign === 'string' ? p.acquisition.campaign : '';
+    if (camp) {
+      const c = (campaignInstalls[camp] ??= { installs: 0, backedUp: 0, signedIn: 0, paying: 0 });
+      c.installs++;
+      c.backedUp += Number(o.backedUp);
+      c.signedIn += Number(o.signedIn);
+      c.paying += Number(o.paying);
+    }
+    const m = (months[new Date(p.createdAt).toISOString().slice(0, 7)] ??= { installs: 0, backedUp: 0, paying: 0 });
+    m.installs++;
+    m.backedUp += Number(o.backedUp);
+    m.paying += Number(o.paying);
+  }
+
   return {
     at: now,
+    campaignInstalls,
+    installsByMonth: Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([month, v]) => ({ month, ...v })),
     weeklyBackupUsers: backupWeeks[0].size,
     weeklyBackupSeries: backupWeeks.map((s, w) => ({ weeksAgo: w, users: s.size })).reverse(),
     windowDays,

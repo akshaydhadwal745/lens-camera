@@ -79,6 +79,12 @@ const SECTIONS: Section[] = [
     group: "Workstreams",
   },
   {
+    path: "/growth/money",
+    label: "Campaigns & budget",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
     path: "/growth/ws/social",
     label: "Social & distribution",
     permission: "growth",

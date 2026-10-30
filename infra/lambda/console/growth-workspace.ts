@@ -149,7 +149,7 @@ export async function migrateLegacy(): Promise<number> {
 const LIVE_MS = 6 * 3_600_000;
 
 /** Product and website analytics, at most 6 hours old (shared with the Analytics page's cache). */
-async function liveAnalytics() {
+export async function liveAnalytics() {
   const k = { pk: 'STATS', sk: 'ANALYTICS#30' };
   const cached = (await ddb.send(new GetCommand({ TableName: env.table, Key: k }))).Item;
   if (cached && Date.now() - cached.data.at < LIVE_MS) return cached.data;

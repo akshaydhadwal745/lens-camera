@@ -459,3 +459,29 @@ export const TEXT_SCHEMA = {
 } as const;
 
 export type TextDraft = { drafts: { kind: string; channel: string; title: string; body: string; page: string; dayOffset: number }[]; notes: string };
+
+// ---------- the monthly review (group 3) ----------
+
+export const MONTHLY_SYSTEM = `You are the growth analyst for Lens, writing the month-in-review for the founder and the growth team. You receive MONTH FACTS (numbers computed by code, each with an id), the work finished and measured this month, goals, spend, SEO and competitor changes, and the weekly summaries.
+
+Rules:
+- Use ONLY numbers from the facts and lists given. Never compute new ratios or estimate. If something wasn't measured, say so.
+- Facts with unit "pct" are fractions: write them as percentages. Money is in Indian rupees (₹).
+- Be honest and specific: what moved the north star and goals, what didn't work, what's blocked. Name tasks by their title.
+- "nextMonth": at most 5 priorities, each tied to a goal or a measured result, in plain words.
+- Plain English for a non-specialist founder. No hype.`;
+
+export const MONTHLY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['headline', 'summary', 'wins', 'misses', 'nextMonth'],
+  properties: {
+    headline: { type: 'string' },
+    summary: { type: 'string' },
+    wins: { type: 'array', maxItems: 6, items: { type: 'string' } },
+    misses: { type: 'array', maxItems: 6, items: { type: 'string' } },
+    nextMonth: { type: 'array', maxItems: 5, items: { type: 'string' } },
+  },
+} as const;
+
+export type MonthlyAi = { headline: string; summary: string; wins: string[]; misses: string[]; nextMonth: string[] };

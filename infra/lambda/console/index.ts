@@ -14,12 +14,13 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { competitorCheck, competitorResearch, growthDraft, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { competitorCheck, competitorResearch, growthDraft, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
 import { competitorSave, competitorsPage } from './growth-competitors';
+import { campaignSave, moneyPage, spendSave } from './growth-money';
 import { keywordSave, prospectSave, seoPage } from './growth-seo';
 import { goalUpdate, settingsUpdate } from './growth-goals';
 import { partnerSave, postSave, recordDelete } from './growth-records';
-import { growthHousekeeping, migrateLegacy, workspace } from './growth-workspace';
+import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
 import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
@@ -95,6 +96,14 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
     // Growth workspace tasks (growth-tasks.ts): see with growth, work with growth.contribute, manage with growth.write.
     if (route === 'GET /growth/workspace') return await allowed('growth', () => workspace(email, role));
+    if (route === 'GET /growth/monthly') return await allowed('growth', () => monthlyPage(req));
+    if (route === 'POST /growth/monthly/run') return await allowed('growth.write', () => monthlyRun(req, email));
+    // Campaigns, spend and unit economics (growth-money.ts)
+    if (route === 'GET /growth/money') return await allowed('growth', async () => moneyPage(await liveAnalytics()));
+    if (seg[0] === 'growth' && seg[1] === 'campaigns' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.contribute', () => campaignSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'campaigns' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => campaignSave(seg[2], req, email, true));
+    if (seg[0] === 'growth' && seg[1] === 'spend' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => spendSave(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'spend' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => spendSave(seg[2], req, email, true));
     // Competitors (growth-competitors.ts)
     if (route === 'GET /growth/competitors') return await allowed('growth', () => competitorsPage(email));
     if (route === 'POST /growth/competitors/check') return await allowed('growth.write', () => competitorCheck(email));

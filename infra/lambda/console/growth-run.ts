@@ -1,11 +1,12 @@
 // GrowthAnalyst Lambda entry (container image with the Claude Code CLI, infra/growth-image):
 // weekly from EventBridge, or on demand from the Console (POST /growth/run).
-import { runDraft, runGrowthReport } from './growth';
+import { runDraft, runGrowthReport, runMonthly } from './growth';
 import { watchCompetitors } from './growth-competitors';
 import { runSeoAudit } from './growth-seo';
 import { indexCoverage } from '../api/search-console';
 
-export async function handler(event: { growth?: boolean; ai?: boolean; by?: string; lockAt?: number; draft?: { taskId: string }; seoAudit?: boolean; competitors?: boolean }) {
+export async function handler(event: { growth?: boolean; ai?: boolean; by?: string; lockAt?: number; draft?: { taskId: string }; seoAudit?: boolean; competitors?: boolean; monthly?: boolean; month?: string }) {
+  if (event.monthly) return runMonthly({ month: event.month, by: event.by ?? 'schedule', lockAt: typeof event.lockAt === 'number' ? event.lockAt : undefined });
   if (event.competitors) return watchCompetitors();
   if (event.seoAudit) {
     const cov = await indexCoverage().catch(() => undefined);

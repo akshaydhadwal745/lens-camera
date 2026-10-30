@@ -28,7 +28,10 @@ import { competitorHosts, watchCompetitors } from './growth-competitors';
 import { runSeoAudit } from './growth-seo';
 import { createTask, getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
 import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
-import { TEXT_SCHEMA, TEXT_SYSTEM, type TextDraft } from './growth-report';
+import { MONTHLY_SCHEMA, MONTHLY_SYSTEM, TEXT_SCHEMA, TEXT_SYSTEM, unsupportedNumbers, type MonthlyAi, type TextDraft } from './growth-report';
+import { goals as loadGoals } from './growth-goals';
+import { spendRows } from './growth-money';
+import { liveAnalytics } from './growth-workspace';
 import { ANALYST_SYSTEM, analystPrompt, DRAFT_SCHEMA, DRAFT_SYSTEM, FORBIDDEN_CLAIMS, numbersIn, opportunityScore, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type DraftResult, type OpenRec, type Opportunity } from './growth-report';
 import { log } from './log';
 import { teamMembers } from './roles';
@@ -951,4 +954,119 @@ export async function growthUnwatch(req: Req, email: string): Promise<Res> {
   await ddb.send(new DeleteCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `WATCH#${path}` } }));
   await log({ entity: `growth:watch:${path}`, action: 'growth.unwatch', actor: `console:${email}` });
   return json(200, { ok: true });
+}
+
+
+// ---------- the monthly review (1st of each month, and on demand) ----------
+
+const MONTHLY_MODE: Mode = { system: MONTHLY_SYSTEM, schema: MONTHLY_SCHEMA, toolNames: ['read_code'], mode: 'report' };
+const prevMonth = (now: number) => {
+  const d = new Date(now);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+};
+
+/** The month's numbers and lists, computed by code (the AI only writes them up). */
+export async function monthlyData(month: string) {
+  const [y, m] = month.split('-').map(Number);
+  const start = Date.UTC(y, m - 1, 1);
+  const end = Date.UTC(y, m, 1);
+  const inMonth = (t?: number) => typeof t === 'number' && t >= start && t < end;
+  const tasks = await listTasks();
+  const done = tasks.filter((t) => inMonth(t.doneAt));
+  const measured = tasks.filter((t) => inMonth(t.measuredAt) && t.result);
+  const created = tasks.filter((t) => inMonth(t.createdAt));
+  const reports = ((await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': `REPORT#${month}` } }))).Items ?? []).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const lastFacts = ((reports[reports.length - 1]?.facts ?? []) as Fact[]).filter((f) => f.value !== null);
+  const spend = (await spendRows()).filter((s) => String(s.date).startsWith(month));
+  const spendTotal = spend.reduce((a, s) => a + Number(s.amount ?? 0), 0);
+  const analytics = await liveAnalytics().catch(() => undefined);
+  const mon = (analytics?.installsByMonth as { month: string; installs: number; backedUp: number; paying: number }[] | undefined)?.find((x) => x.month === month);
+  const seo = ((await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': `SEOHIST#${month}` } }))).Items ?? []).sort((a, b) => String(a.sk).localeCompare(String(b.sk)));
+  const comp = ((await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': 'COMPSNAP#' } }))).Items ?? []).filter((s) => String(s.sk).includes(`#${month}-`)).filter((s) => (s.changes?.length ?? 0) + (s.newPages?.length ?? 0) > 0);
+  const goals = await loadGoals();
+  const factOf = (id: string, label: string, value: number | null, unit: Fact['unit'] = 'count') => fact({ id, area: 'app', label, value, unit, window: month });
+  const facts: Fact[] = [
+    ...lastFacts,
+    factOf('month.installs', 'Installs this month', mon?.installs ?? null),
+    factOf('month.backed_up', 'Installs this month that backed up', mon?.backedUp ?? null),
+    factOf('month.paying', 'Installs this month now paying', mon?.paying ?? null),
+    factOf('month.spend', 'Spend this month (₹)', spendTotal),
+    factOf('month.cac', 'Cost per install this month (₹)', mon?.installs ? Math.round((spendTotal / mon.installs) * 100) / 100 : null),
+    factOf('month.tasks_done', 'Tasks finished this month', done.length),
+    factOf('month.results', 'Results measured this month', measured.length),
+    factOf('month.worked', 'Measured results that worked', measured.filter((t) => t.result?.verdict === 'worked').length),
+    factOf('month.tasks_created', 'Tasks created this month', created.length),
+    factOf('month.open', 'Open tasks now', tasks.filter((t) => ['ready', 'in_progress', 'in_review', 'blocked'].includes(t.status)).length),
+    factOf('month.blocked', 'Blocked tasks now', tasks.filter((t) => t.status === 'blocked').length),
+    factOf('month.seo_score_start', 'SEO health at the start of the month', seo[0]?.score ?? null),
+    factOf('month.seo_score_end', 'SEO health at the end of the month', seo[seo.length - 1]?.score ?? null),
+    factOf('month.competitor_changes', 'Competitor website changes noticed', comp.length),
+  ];
+  return {
+    month,
+    facts,
+    done: done.map((t) => ({ id: t.id, title: t.title, workstream: t.workstream })),
+    measured: measured.map((t) => ({ id: t.id, title: t.title, verdict: t.result!.verdict, value: t.result!.value })),
+    goals: goals.map((g) => ({ id: g.id, title: g.title, krs: g.krs.map((k) => ({ label: k.label, target: k.target, value: k.source === 'manual' ? (k.value ?? null) : (lastFacts.find((f) => f.id === k.fact)?.value ?? null) })) })),
+    spendByCategory: spend.reduce<Record<string, number>>((a, s) => ((a[String(s.category)] = (a[String(s.category)] ?? 0) + Number(s.amount ?? 0)), a), {}),
+    weekly: reports.map((r) => ({ date: r.date, summary: String(r.ai?.summary ?? '').slice(0, 1200) })),
+    competitors: comp.map((c) => ({ snap: String(c.sk), changes: c.changes, newPages: (c.newPages ?? []).length })),
+  };
+}
+
+/** Builds, writes up (checked) and stores the month-in-review; emails the owners. */
+export async function runMonthly(opts: { month?: string; by: string; lockAt?: number }) {
+  const lockAt = opts.lockAt ?? (await takeLock(`monthly:${opts.by}`, true));
+  if (lockAt === undefined) return { skipped: true };
+  const now = Date.now();
+  const month = opts.month && /^\d{4}-\d{2}$/.test(opts.month) ? opts.month : prevMonth(now);
+  try {
+    const data = await monthlyData(month);
+    let ai: MonthlyAi | undefined;
+    let aiError: string | undefined;
+    let aiProblems: string[] = [];
+    const token = await getParam('/lens/growth/claude-token');
+    if (token) {
+      try {
+        const prompt = `MONTH: ${month}\n\nMONTH FACTS:\n${data.facts.map((f) => `${f.id} | ${f.label} | ${f.value}${f.unit === 'pct' ? ' (fraction)' : ''} | ${f.window}`).join('\n')}\n\nFINISHED:\n${data.done.map((t) => `${t.id} ${t.title} (${t.workstream})`).join('\n') || 'none'}\n\nMEASURED RESULTS:\n${data.measured.map((t) => `${t.id} ${t.title}: ${t.verdict} (${t.value})`).join('\n') || 'none'}\n\nGOALS:\n${JSON.stringify(data.goals)}\n\nSPEND BY CATEGORY (₹): ${JSON.stringify(data.spendByCategory)}\n\nCOMPETITOR CHANGES:\n${JSON.stringify(data.competitors).slice(0, 3000)}\n\nWEEKLY SUMMARIES:\n${data.weekly.map((w) => `${w.date}: ${w.summary}`).join('\n\n')}`;
+        ai = (await runClaude<MonthlyAi>(prompt, token, { enabled: [] }, now + 10 * 60_000, MONTHLY_MODE)).report;
+        const ids = data.facts.map((f) => f.id);
+        const all = [ai.headline, ai.summary, ...ai.wins, ...ai.misses, ...ai.nextMonth].join(' ');
+        const bad = unsupportedNumbers(all, ids, data.facts).filter((n) => !data.measured.some((t) => t.value.includes(n)) && !month.includes(n));
+        if (bad.length) aiProblems = [`numbers not in the month's facts: ${bad.join(', ')}`];
+      } catch (e) {
+        aiError = (e as Error).message.slice(0, 300);
+      }
+    } else aiError = 'Claude token not set up';
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `MONTHLY#${month}`, month, at: now, by: opts.by, data, ...(ai ? { ai } : {}), ...(aiError ? { aiError } : {}), ...(aiProblems.length ? { aiProblems } : {}) } }));
+    const f = (id: string) => data.facts.find((x) => x.id === id)?.value ?? '—';
+    await sendToOwners(
+      `Lens growth: ${month} in review`,
+      [ai ? `${ai.headline}\n\n${ai.summary}` : `The month in numbers (the AI write-up didn't run${aiError ? `: ${aiError}` : ''}).`, '', `Installs ${f('month.installs')} · backed up ${f('month.backed_up')} · paying ${f('month.paying')} · spend ₹${f('month.spend')} · cost per install ₹${f('month.cac')}`, `Tasks finished ${f('month.tasks_done')} · results measured ${f('month.results')} (${f('month.worked')} worked)`, ...(ai?.nextMonth.length ? ['', 'Next month:', ...ai.nextMonth.map((x) => `- ${x}`)] : []), '', `Full review: ${CONSOLE}/growth/insights?monthly=${month}`].join('\n'),
+    ).catch((e) => console.error('monthly email', e));
+    await releaseLock(lockAt);
+    return { month, ai: !!ai };
+  } catch (e) {
+    await releaseLock(lockAt, `Monthly ${month}: ${(e as Error).message}`);
+    throw e;
+  }
+}
+
+/** GET /growth/monthly[?month=YYYY-MM]: the list of months and one review. */
+export async function monthlyPage(req: Req): Promise<Res> {
+  const list = ((await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': 'MONTHLY#' }, ScanIndexForward: false, ProjectionExpression: '#m, #a', ExpressionAttributeNames: { '#m': 'month', '#a': 'at' } }))).Items ?? []).map((i) => String(i.month));
+  const month = /^\d{4}-\d{2}$/.test(req.query.month ?? '') ? req.query.month! : list[0];
+  const review = month ? (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `MONTHLY#${month}` } }))).Item : undefined;
+  return json(200, { months: list, review: review ?? null });
+}
+
+/** POST /growth/monthly/run {month?}: write a month-in-review now (GrowthAnalyst). */
+export async function monthlyRun(req: Req, email: string): Promise<Res> {
+  if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
+  await rateLimit('console-monthly-run', 4, 'A review was started recently. Try again in an hour.');
+  const month = typeof req.body?.month === 'string' && /^\d{4}-\d{2}$/.test(req.body.month) ? req.body.month : undefined;
+  const lockAt = await takeLock(`monthly:${email}`, true);
+  if (lockAt === undefined) throw new HttpError(409, 'The analyst is busy. Try again in about 10 minutes.');
+  await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ monthly: true, month, by: email, lockAt })) }));
+  return json(202, { started: true });
 }
