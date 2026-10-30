@@ -1,7 +1,7 @@
 {
   "name": "Lens by InstaGrow",
   "short_name": "Lens",
-  "description": "Pro camera and 100 GB free photo backup at original quality.",
+  "description": "Pro camera and full-quality photo backup, 40 GB free to start.",
   "start_url": "/app/",
   "scope": "/",
   "display": "standalone",
