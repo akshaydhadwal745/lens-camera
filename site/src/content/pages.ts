@@ -498,7 +498,7 @@ export const pages: ContentPage[] = [
             bullets: ['Every shot is backed up as you take it, at original quality', 'Once verified in the cloud, the full-size file can leave your phone', 'A sharp preview stays, so your gallery works offline', 'Lens keeps the space you choose free, oldest files first'],
             body: [],
           },
-          { h2: 'Free to start', body: ['40 GB free for your first 3 months when you sign in, then 10 GB free forever. Already have Google Drive, OneDrive or Dropbox space? Connect it and back up without a limit, free.'] },
+          { h2: 'Free to start', body: ['40 GB free for your first 3 months when you sign in, then 10 GB free forever. Already have Google Drive, OneDrive or Dropbox space? Connect it and back up there with no Lens limit.'] },
         ],
         faq: [
           { q: 'Will I lose quality if Lens removes photos from my phone?', a: 'No. The original is kept in full quality in the cloud and comes back when you open it, share it or save it.' },
@@ -518,7 +518,7 @@ export const pages: ContentPage[] = [
             bullets: ['हर शॉट लेते ही ओरिजिनल क्वालिटी में बैकअप होता है', 'क्लाउड में जाँच के बाद बड़ी फ़ाइल फ़ोन से हट सकती है', 'साफ़ प्रीव्यू रहता है, गैलरी ऑफ़लाइन चलती है', 'Lens आपकी चुनी हुई जगह ख़ाली रखता है, सबसे पुरानी फ़ाइलें पहले'],
             body: [],
           },
-          { h2: 'शुरुआत मुफ़्त', body: ['साइन इन करने पर पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त। Google Drive, OneDrive या Dropbox में पहले से जगह है? उसे जोड़ें और बिना सीमा के, मुफ़्त बैकअप करें।'] },
+          { h2: 'शुरुआत मुफ़्त', body: ['साइन इन करने पर पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त। Google Drive, OneDrive या Dropbox में पहले से जगह है? उसे जोड़ें और वहाँ बैकअप करें, Lens की कोई सीमा नहीं।'] },
         ],
         faq: [
           { q: 'Lens फ़ोन से फ़ोटो हटाए तो क्या क्वालिटी कम होगी?', a: 'नहीं। ओरिजिनल पूरी क्वालिटी में क्लाउड में रहता है और खोलने, शेयर या सेव करने पर वापस आता है।' },

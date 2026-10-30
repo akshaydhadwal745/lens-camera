@@ -483,7 +483,7 @@ export const guidePages: GuidePage[] = [
           {
             h2: '5. Back up photos and videos first',
             body: ['Before you delete any photo, make sure a full-quality copy is safe somewhere else. Lens backs up every photo and video at original quality and checks each upload against the file on your phone.'],
-            bullets: ['40 GB free for your first 3 months, then 10 GB free forever', 'Unlimited and free with your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV'],
+            bullets: ['40 GB free for your first 3 months, then 10 GB free forever', 'No Lens limit with your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV (your provider’s space applies)'],
           },
           {
             h2: '6. Let Lens free the space',
@@ -523,7 +523,7 @@ export const guidePages: GuidePage[] = [
           {
             h2: '5. पहले फ़ोटो और वीडियो का बैकअप लें',
             body: ['कोई भी फ़ोटो डिलीट करने से पहले पक्का करें कि उसकी फ़ुल क्वालिटी कॉपी कहीं और सुरक्षित है। Lens हर फ़ोटो और वीडियो का ओरिजिनल क्वालिटी में बैकअप लेता है और हर अपलोड को फ़ोन की फ़ाइल से मिलाकर जाँचता है।'],
-            bullets: ['पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त', 'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV के साथ अनलिमिटेड और मुफ़्त'],
+            bullets: ['पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त', 'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV के साथ Lens की कोई सीमा नहीं (जगह आपके प्रोवाइडर की)'],
           },
           {
             h2: '6. Lens को जगह ख़ाली करने दें',
