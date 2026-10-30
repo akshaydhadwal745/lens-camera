@@ -14,7 +14,7 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { growthPage, growthProposal, growthRec, growthRun, growthTools, growthUnwatch } from './growth';
+import { growthOpportunity, growthPage, growthProposal, growthRec, growthRun, growthTools, growthUnwatch } from './growth';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
 import { overview } from './overview';
@@ -84,6 +84,7 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
     if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'recs' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthRec(seg[2], req, email));
     if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'proposals' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthProposal(seg[2], req, email));
+    if (method === 'PUT' && seg[0] === 'growth' && seg[1] === 'opportunities' && seg[2] && seg.length === 3) return await allowed('growth.write', () => growthOpportunity(seg[2], req, email));
     if (route === 'PUT /growth/tools') return await allowed('growth.write', () => growthTools(req, email));
     if (route === 'DELETE /growth/watch') return await allowed('growth.write', () => growthUnwatch(req, email));
     if (route === 'GET /overview') return await allowed('overview', () => overview(req));

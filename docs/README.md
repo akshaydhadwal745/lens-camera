@@ -23,6 +23,7 @@ native camera module on each platform), and a web viewer.
 | Identity, sharing & web viewer | [features/sharing-and-web.md](features/sharing-and-web.md) |
 | Website + web app (lens.instagrowapp.com): SEO site EN/HI, QR/email/Google sign-in, upload, sync, delete account | [features/website.md](features/website.md) |
 | Invite friends (+10 GB) and the affiliate program (50% commission), admin, audit log | [features/referrals-and-affiliates.md](features/referrals-and-affiliates.md) |
+| Growth engine: facts, AI growth analyst (Claude) with Search Console / GA4 / Bing / Wikipedia / Trending-now tools, content opportunities, Console → Growth | [growth/growth-engine.md](growth/growth-engine.md), [growth/seo-agent.md](growth/seo-agent.md), [growth/growth-intelligence.md](growth/growth-intelligence.md), [growth/product-facts.md](growth/product-facts.md) |
 
 ## Engineering
 

@@ -28,7 +28,53 @@ export type Investigation = {
   measurement: string;
   facts: string[];
 };
-export type AiReport = { summary: string; findings: Finding[]; recommendations: Recommendation[]; reviewOfPrevious: { id: string; verdict: string; facts: string[] }[]; seoInvestigations?: Investigation[] };
+export type Brief = {
+  url: string;
+  title: string;
+  metaDescription: string;
+  h1: string;
+  outline: string[];
+  questions: string[];
+  supportingKeywords: string[];
+  internalLinksFrom: string[];
+  internalLinksTo: string[];
+  searchResultsToday: string;
+};
+export type Opportunity = {
+  topic: string;
+  targetKeyword: string;
+  intent: 'problem' | 'informational' | 'comparison' | 'commercial';
+  audience: string;
+  lensFeatures: string[];
+  relevance: 0 | 1 | 2 | 3;
+  relevanceReason: string;
+  demand: 'high' | 'medium' | 'low' | 'unmeasured';
+  demandEvidence: string;
+  trend: 'rising' | 'seasonal' | 'steady' | 'falling' | 'unknown';
+  winnability: 'high' | 'medium' | 'low';
+  competition: string;
+  action: 'improve-page' | 'new-guide' | 'landing-page' | 'faq-and-links' | 'conversion-fix' | 'social-post' | 'experiment';
+  existingPage: string;
+  brief: Brief;
+  businessValue: string;
+  measurement: string;
+  facts: string[];
+};
+export type AiReport = { summary: string; findings: Finding[]; recommendations: Recommendation[]; reviewOfPrevious: { id: string; verdict: string; facts: string[] }[]; seoInvestigations?: Investigation[]; opportunities?: Opportunity[] };
+
+/** Priority from the analyst's graded inputs (shown with its parts in the Console; relevance 0 is never kept). */
+export function opportunityScore(o: Pick<Opportunity, 'relevance' | 'demand' | 'trend' | 'winnability'>): number {
+  const demand = { high: 3, medium: 2, low: 1, unmeasured: 0.5 }[o.demand];
+  const trend = { rising: 1.5, seasonal: 1.25, steady: 1, unknown: 0.9, falling: 0.6 }[o.trend];
+  const win = { high: 1.5, medium: 1, low: 0.5 }[o.winnability];
+  return Math.round(o.relevance * demand * trend * win * 10) / 10;
+}
+
+/** Feature names from docs/growth/product-facts.md ("- **Name**: …" under "## Features"). */
+export function productFeatures(md: string): string[] {
+  const part = md.split(/^## /m).find((x) => x.startsWith('Features')) ?? '';
+  return [...part.matchAll(/^- \*\*(.+?)\*\*/gm)].map((m) => m[1]);
+}
 export type OpenRec = { id: string; title: string; status: string; createdAt: string; metric: string; note?: string };
 
 const pct = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${Math.round(x * 1000) / 10}%`);
@@ -82,7 +128,18 @@ You also have growth tools (MCP server "growth"): Search Console data (search_an
 - Numbers in investigations must come from facts or tool results.
 - Search Console needs impressions before CTR, ranking or query work means anything; with none, focus on indexing and say why.
 - Use watch_page for each page you recommend changing. Use propose_change only for a specific, evidence-backed code change (it creates a proposal for the owner; it changes nothing). Level-2 tools may be refused if not enabled; that's fine.
-- Be economical: about 25 tool calls at most.`;
+- Be economical: about 25 tool calls at most for SEO.
+
+CONTENT OPPORTUNITIES ("opportunities", at most 6): what people are interested in that Lens can genuinely help with, and the page that would serve them.
+- Sources, each a different scale; never mix them up or call one "search volume" of another: Bing searches (keyword_volume, related_keywords: real counts, Bing only, small in India), Wikipedia views (topic_interest: long-term interest), Google "Trending now" (trending_now: today's spikes, mostly irrelevant), our own Search Console impressions and website/GA4 behaviour (ga4_report). Google Trends itself isn't connected yet.
+- Read docs/growth/product-facts.md first (read_code). "lensFeatures" must use feature names exactly as listed under Features; never promise anything under "Not available".
+- Relevance 0–3: 3 = Lens directly solves the searcher's problem; 0 = no real link (leave it out). Don't chase trends Lens can't help with.
+- "demand": high/medium/low from the numbers you found, or "unmeasured"; "demandEvidence" quotes those numbers with their source (only numbers from facts or tool results). "trend": from 12-week Bing change, Wikipedia year-on-year, or known seasonality (Indian weddings peak Nov–Feb).
+- "winnability": can a new site rank? Consider whether we already get impressions, whether the results are dominated by big brands, and how specific the problem is.
+- Prefer improving an existing page (find it with find_in_code/audit_page; set "existingPage") over a new one when it covers the intent. One page per intent; no near-duplicates of existing pages.
+- The brief must be specific: URL path, title ≤ 60 characters, meta description ≤ 155, H1, outline (H2s), real questions people ask (from related_keywords), supporting keywords, internal links from and to existing pages, and a one-line view of what ranks today if you know it (else "not checked").
+- Content principles: written for the reader's problem first, original and accurate, honest about alternatives; no keyword stuffing; no mass-produced pages.
+- About 20 more tool calls for this part.`;
 
 export const REPORT_SCHEMA = {
   type: 'object',
@@ -118,6 +175,51 @@ export const REPORT_SCHEMA = {
     reviewOfPrevious: {
       type: 'array',
       items: { type: 'object', additionalProperties: false, required: ['id', 'verdict', 'facts'], properties: { id: { type: 'string' }, verdict: { type: 'string' }, facts: { type: 'array', items: { type: 'string' } } } },
+    },
+    opportunities: {
+      type: 'array',
+      maxItems: 6,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['topic', 'targetKeyword', 'intent', 'audience', 'lensFeatures', 'relevance', 'relevanceReason', 'demand', 'demandEvidence', 'trend', 'winnability', 'competition', 'action', 'existingPage', 'brief', 'businessValue', 'measurement', 'facts'],
+        properties: {
+          topic: { type: 'string' },
+          targetKeyword: { type: 'string' },
+          intent: { enum: ['problem', 'informational', 'comparison', 'commercial'] },
+          audience: { type: 'string' },
+          lensFeatures: { type: 'array', items: { type: 'string' } },
+          relevance: { enum: [0, 1, 2, 3] },
+          relevanceReason: { type: 'string' },
+          demand: { enum: ['high', 'medium', 'low', 'unmeasured'] },
+          demandEvidence: { type: 'string' },
+          trend: { enum: ['rising', 'seasonal', 'steady', 'falling', 'unknown'] },
+          winnability: { enum: ['high', 'medium', 'low'] },
+          competition: { type: 'string' },
+          action: { enum: ['improve-page', 'new-guide', 'landing-page', 'faq-and-links', 'conversion-fix', 'social-post', 'experiment'] },
+          existingPage: { type: 'string' },
+          brief: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['url', 'title', 'metaDescription', 'h1', 'outline', 'questions', 'supportingKeywords', 'internalLinksFrom', 'internalLinksTo', 'searchResultsToday'],
+            properties: {
+              url: { type: 'string' },
+              title: { type: 'string' },
+              metaDescription: { type: 'string' },
+              h1: { type: 'string' },
+              outline: { type: 'array', items: { type: 'string' } },
+              questions: { type: 'array', items: { type: 'string' } },
+              supportingKeywords: { type: 'array', items: { type: 'string' } },
+              internalLinksFrom: { type: 'array', items: { type: 'string' } },
+              internalLinksTo: { type: 'array', items: { type: 'string' } },
+              searchResultsToday: { type: 'string' },
+            },
+          },
+          businessValue: { type: 'string' },
+          measurement: { type: 'string' },
+          facts: { type: 'array', items: { type: 'string' } },
+        },
+      },
     },
     seoInvestigations: {
       type: 'array',
@@ -262,6 +364,17 @@ export function validateReport(r: AiReport, facts: Fact[], toolNumbers: Set<numb
     });
     if (bad.length) problems.push(`${where}: numbers not in the cited facts or tool results: ${bad.join(', ')}`);
     if (readFile) for (const b of unverifiedLocations(x.codeLocations, readFile)) problems.push(`${where}: ${b}`);
+  });
+  const features = readFile ? new Set(productFeatures(readFile('docs/growth/product-facts.md') ?? '')) : undefined;
+  (r.opportunities ?? []).forEach((o, i) => {
+    const where = `opportunity ${i + 1} (${o.targetKeyword})`;
+    for (const id of o.facts) if (!ids.has(id)) problems.push(`${where}: unknown fact id "${id}"`);
+    const bad = unsupportedNumbers([o.demandEvidence, o.relevanceReason, o.competition, o.businessValue, o.measurement].join(' '), o.facts, facts).filter((m) => !fromTools(m));
+    if (bad.length) problems.push(`${where}: numbers not in the cited facts or tool results: ${bad.join(', ')}`);
+    if (features?.size) for (const f of o.lensFeatures) if (!features.has(f)) problems.push(`${where}: "${f}" is not a feature in product-facts.md`);
+    if (o.brief.title.length > 60) problems.push(`${where}: title is ${o.brief.title.length} characters (max 60)`);
+    if (o.brief.metaDescription.length > 160) problems.push(`${where}: meta description is ${o.brief.metaDescription.length} characters (max 160)`);
+    if (!/^\/[a-z0-9\-/]*$/.test(o.brief.url)) problems.push(`${where}: url must be a lowercase path like /guides/topic/`);
   });
   return problems;
 }

@@ -5,7 +5,7 @@
 export type Unit = 'count' | 'pct' | 'position' | 'usd' | 'gb';
 export type Fact = {
   id: string;
-  area: 'search' | 'website' | 'app' | 'channels' | 'money' | 'loops';
+  area: 'search' | 'website' | 'app' | 'channels' | 'money' | 'loops' | 'demand' | 'ga4';
   label: string;
   value: number | null;
   unit: Unit;
@@ -115,7 +115,20 @@ export type AnalyticsInput = {
   active: { series: { day: string; dau: number; wau: number; mau: number }[]; today: { dau: number; wau: number; mau: number } };
   channels?: { channel: string; installs: number; backedUp: Rate; signedIn: Rate; d1: Rate; d7: Rate; d30: Rate; paying: number; storageGB: number; storageUsdPerMonth: number }[];
   features: { name: string; users30: number; uses30: number }[];
-  website?: { daily: { day: string; visits: number; getLens: number }[]; visits: number; getLens: number; getLensRate: number | null; sources: { label: string; count: number }[] };
+  website?: {
+    daily: { day: string; visits: number; getLens: number }[];
+    visits: number;
+    getLens: number;
+    getLensRate: number | null;
+    sources: { label: string; count: number }[];
+    engagedVisits?: number;
+    engagedRate?: number | null;
+    landing?: { path: string; visits: number; engaged: number; getLens: number }[];
+    pageQuality?: { path: string; views: number; avgSeconds: number | null; engagedRate: number | null; scrollRate: number | null }[];
+    campaigns?: { label: string; count: number }[];
+    countries?: { label: string; count: number }[];
+    devices?: { label: string; count: number }[];
+  };
 };
 
 /** Website, app funnel, retention, channels, money and growth loops from the Console's analytics (30-day window). */
@@ -128,6 +141,24 @@ export function productFacts(a: AnalyticsInput): Fact[] {
     facts.push(fact({ id: 'web.visits_30d', area: 'website', label: 'Website visits', value: a.website.visits, unit: 'count', window: '30 days' }));
     facts.push(fact({ id: 'web.get_lens_rate', area: 'website', label: 'Visits that clicked Get Lens', value: a.website.getLensRate, unit: 'pct', window: '30 days' }));
     a.website.sources.slice(0, 5).forEach((s, i) => facts.push(fact({ id: `web.source.${i + 1}`, area: 'website', label: `Visits from ${s.label}`, value: s.count, unit: 'count', window: '30 days' })));
+    // Beacon v2 (from 2026-10-30): engagement, landing pages and who visits. Counted only since then.
+    const v2 = '30 days (counted from 30 Oct 2026)';
+    if (a.website.engagedRate !== undefined) facts.push(fact({ id: 'web.engaged_rate', area: 'website', label: 'Visits that engaged (2+ pages or 10+ seconds)', value: a.website.engagedRate, unit: 'pct', window: v2 }));
+    (a.website.landing ?? []).slice(0, 5).forEach((l, i) => {
+      facts.push(fact({ id: `web.landing.${i + 1}.visits`, area: 'website', label: `Visits that landed on ${l.path}`, value: l.visits, unit: 'count', window: v2 }));
+      facts.push(fact({ id: `web.landing.${i + 1}.engaged`, area: 'website', label: `Visits landing on ${l.path} that engaged`, value: l.visits ? l.engaged / l.visits : null, unit: 'pct', window: v2 }));
+      facts.push(fact({ id: `web.landing.${i + 1}.get_lens`, area: 'website', label: `Visits landing on ${l.path} that clicked Get Lens`, value: l.visits ? l.getLens / l.visits : null, unit: 'pct', window: v2 }));
+    });
+    (a.website.pageQuality ?? [])
+      .filter((p) => p.avgSeconds !== null)
+      .slice(0, 5)
+      .forEach((p, i) => {
+        facts.push(fact({ id: `web.page.${i + 1}.seconds`, area: 'website', label: `Average seconds visible on ${p.path}`, value: p.avgSeconds, unit: 'count', window: v2 }));
+        facts.push(fact({ id: `web.page.${i + 1}.scrolled`, area: 'website', label: `Views of ${p.path} scrolled to 75%`, value: p.scrollRate, unit: 'pct', window: v2 }));
+      });
+    (a.website.countries ?? []).slice(0, 3).forEach((c, i) => facts.push(fact({ id: `web.country.${i + 1}`, area: 'website', label: `Visits from country ${c.label}`, value: c.count, unit: 'count', window: v2 })));
+    (a.website.devices ?? []).forEach((d) => facts.push(fact({ id: `web.device.${d.label}`, area: 'website', label: `Visits on ${d.label}`, value: d.count, unit: 'count', window: v2 })));
+    (a.website.campaigns ?? []).slice(0, 3).forEach((c, i) => facts.push(fact({ id: `web.campaign.${i + 1}`, area: 'website', label: `Visits from campaign "${c.label}"`, value: c.count, unit: 'count', window: v2 })));
   }
   const step = (k: string) => a.funnel.find((s) => s.key === k)?.count ?? 0;
   const installs = step('install');
@@ -170,4 +201,39 @@ export function productFacts(a: AnalyticsInput): Fact[] {
   ] as const)
     facts.push(fact({ id: `loops.${n}`, area: 'loops', label, value: feature(n)?.users30 ?? 0, unit: 'count', window: '30 days' }));
   return facts;
+}
+
+// ---------- demand and interest (growth-sources.ts): every label names its source and scale ----------
+
+type BingTrend = { keyword: string; country: string; last12Weeks: number; previous12Weeks: number; change: number | null };
+type WikiTrend = { article: string; last3Months: number; sameMonthsYearBefore: number | null; change: number | null };
+
+/** Bing searches per seed keyword and country, Wikipedia interest per topic, relevant trending searches. */
+export function demandFacts(bing: BingTrend[], wiki: WikiTrend[], trending: { geo: string; total: number; relevant: string[] }[]): Fact[] {
+  const out: Fact[] = [];
+  for (const b of bing) {
+    const id = `demand.bing.${b.country}.${b.keyword.replace(/[^a-z0-9]+/g, '_')}`;
+    out.push(fact({ id, area: 'demand', label: `Bing searches for "${b.keyword}" in ${b.country.toUpperCase()} (Bing only, broad match; not Google volume)`, value: b.last12Weeks, previous: b.previous12Weeks, unit: 'count', window: '12 weeks vs the 12 before' }));
+  }
+  for (const w of wiki)
+    out.push(fact({ id: `demand.wiki.${w.article.toLowerCase()}`, area: 'demand', label: `Wikipedia views of "${w.article.replace(/_/g, ' ')}" (English; long-term interest, not searches)`, value: w.last3Months, previous: w.sameMonthsYearBefore ?? undefined, unit: 'count', window: 'last 3 full months vs the same months a year before' }));
+  for (const t of trending)
+    out.push(fact({ id: `demand.trending.${t.geo.toLowerCase()}`, area: 'demand', label: `Google "Trending now" searches in ${t.geo} touching our space${t.relevant.length ? `: ${t.relevant.slice(0, 5).join('; ')}` : ''}`, value: t.relevant.length, unit: 'count', window: `today, of ${t.total} trending` }));
+  return out;
+}
+
+/** GA4 (consented visitors only where consent is required): sessions, engagement and key events by channel. */
+export function ga4Facts(byChannel: { sessionDefaultChannelGroup?: string; sessions?: number; engagedSessions?: number; keyEvents?: number }[], total: { sessions?: number; engagementRate?: number; averageSessionDuration?: number } | undefined): Fact[] {
+  if (!total?.sessions) return [];
+  const w = '28 days (GA4; consented visitors where required)';
+  const out = [
+    fact({ id: 'ga4.sessions', area: 'ga4', label: 'GA4 sessions', value: total.sessions, unit: 'count', window: w }),
+    fact({ id: 'ga4.engagement_rate', area: 'ga4', label: 'GA4 engagement rate', value: total.engagementRate ?? null, unit: 'pct', window: w }),
+    fact({ id: 'ga4.avg_session_seconds', area: 'ga4', label: 'GA4 average session length, seconds', value: total.averageSessionDuration === undefined ? null : Math.round(total.averageSessionDuration), unit: 'count', window: w }),
+  ];
+  byChannel.slice(0, 6).forEach((c, i) => {
+    out.push(fact({ id: `ga4.channel.${i + 1}.sessions`, area: 'ga4', label: `GA4 sessions from ${c.sessionDefaultChannelGroup ?? 'unknown'}`, value: c.sessions ?? 0, unit: 'count', window: w }));
+    out.push(fact({ id: `ga4.channel.${i + 1}.key_events`, area: 'ga4', label: `GA4 key events from ${c.sessionDefaultChannelGroup ?? 'unknown'}`, value: c.keyEvents ?? 0, unit: 'count', window: w }));
+  });
+  return out;
 }

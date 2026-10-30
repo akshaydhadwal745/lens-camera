@@ -5,6 +5,7 @@
 //   GROWTH / PROP#<id>            level-3 proposals (propose_change): status proposed → approved | rejected
 //   GROWTH / WATCH#<path>         pages to follow after a recommendation: reason, since, baseline
 //   GROWTH / TOOLS                { enabled: [...level-2 tool names] }, set by the owner
+//   GROWTH / OPP#<slug>           content opportunities: brief, evidence, score; idea → planned → drafting → pr-open → published → measured | rejected
 // The report runs in its own Lambda (GrowthAnalyst, a container with the Claude Code CLI, weekly and
 // on demand). The Console reads and edits rows here. The analyst only reads facts; it changes nothing.
 import { spawn } from 'node:child_process';
@@ -19,18 +20,20 @@ import { DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } fr
 import { ddb, env, getParam, HttpError, json, rateLimit, Req, Res } from '../api/lib';
 import { googleToken, indexCoverage } from '../api/search-console';
 import { compute } from './analytics';
-import { fact, indexFacts, productFacts, searchFacts, type Fact, type SearchDay, type SearchRow } from './growth-facts';
-import { ANALYST_SYSTEM, analystPrompt, numbersIn, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type OpenRec } from './growth-report';
+import { demandFacts, fact, ga4Facts, indexFacts, productFacts, searchFacts, type Fact, type SearchDay, type SearchRow } from './growth-facts';
+import { bingTrend, ga4Report, SEED_KEYWORDS, trendingNow, WIKI_ARTICLES, wikiTrend, wikiViews } from './growth-sources';
+import { ANALYST_SYSTEM, analystPrompt, numbersIn, opportunityScore, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type OpenRec, type Opportunity } from './growth-report';
 import { log } from './log';
 import { teamMembers } from './roles';
 
 const DAY = 86_400_000;
+const GA4_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 const CONSOLE = process.env.CONSOLE_ORIGIN ?? 'https://console.lens.instagrowapp.com';
 const STATUSES = ['proposed', 'approved', 'shipped', 'measured', 'kept', 'dropped'] as const;
 const OPEN = new Set(['proposed', 'approved', 'shipped', 'measured']);
 /** Level-2 tools the owner may switch on (growth-mcp.ts enforces it). */
 export const LEVEL2_TOOLS = ['submit_sitemap'] as const;
-const TOOL_NAMES = ['search_analytics', 'compare_periods', 'inspect_url', 'list_sitemaps', 'audit_page', 'find_in_code', 'read_code', 'watch_page', 'submit_sitemap', 'propose_change'];
+const TOOL_NAMES = ['search_analytics', 'compare_periods', 'inspect_url', 'list_sitemaps', 'audit_page', 'find_in_code', 'read_code', 'keyword_volume', 'related_keywords', 'topic_interest', 'trending_now', 'ga4_report', 'watch_page', 'submit_sitemap', 'propose_change'];
 const REPO = 'akshaydhadwal745/lens-camera';
 const CODE_DIR = '/tmp/growth-code';
 const TOOL_LOG = '/tmp/growth-tools.jsonl';
@@ -79,7 +82,53 @@ export async function collectFacts(now = Date.now()): Promise<{ facts: Fact[]; n
   }
   facts.push(...productFacts(await compute(30)));
   facts.push(...(await watchFacts(now, coverageState)));
+  facts.push(...(await demand(now, notes)));
+  facts.push(...(await ga4(notes)));
   return { facts, notes };
+}
+
+/** `items` through `f`, 4 at a time (bursts of connections time out); failures become undefined. */
+async function fourAtATime<T, R>(items: readonly T[], f: (x: T) => Promise<R>): Promise<(R | undefined)[]> {
+  const out: (R | undefined)[] = [];
+  for (let i = 0; i < items.length; i += 4) out.push(...(await Promise.all(items.slice(i, i + 4).map((x) => retry(() => f(x), 2).catch(() => undefined)))));
+  return out;
+}
+
+/** Bing searches (India and US) for the seed keywords, Wikipedia interest, relevant trending searches. */
+async function demand(now: number, notes: string[]): Promise<Fact[]> {
+  const key = await getParam('/lens/growth/bing-key');
+  const pairs = SEED_KEYWORDS.flatMap((k) => (['in', 'us'] as const).map((c) => ({ k, c })));
+  const bing = key ? await fourAtATime(pairs, (p) => bingTrend(key, p.k, p.c, now)) : [];
+  if (!key) notes.push('Bing keyword data skipped: /lens/growth/bing-key is not set.');
+  else if (bing.some((b) => !b)) notes.push(`Bing keyword data: ${bing.filter((b) => !b).length} of ${pairs.length} lookups failed.`);
+  const wiki = await fourAtATime(WIKI_ARTICLES, async (a) => wikiTrend(a, await wikiViews(a, now)));
+  if (wiki.some((w) => !w)) notes.push(`Wikipedia interest: ${wiki.filter((w) => !w).length} of ${WIKI_ARTICLES.length} articles failed.`);
+  const trending = await fourAtATime(['IN', 'US'], async (geo) => {
+    const items = await trendingNow(geo);
+    return { geo, total: items.length, relevant: items.filter((i) => i.relevant).map((i) => i.title) };
+  });
+  return demandFacts(
+    bing.filter((b): b is NonNullable<typeof b> => !!b),
+    wiki.filter((w): w is NonNullable<typeof w> => !!w),
+    trending.filter((t): t is NonNullable<typeof t> => !!t),
+  );
+}
+
+/** GA4: the last 28 days in total and by channel group. Empty until the tag has data. */
+async function ga4(notes: string[]): Promise<Fact[]> {
+  try {
+    const token = await retry(() => googleToken(GA4_SCOPE));
+    if (!token) return [];
+    const range = [{ startDate: '28daysAgo', endDate: 'yesterday' }];
+    const [byChannel, total] = await Promise.all([
+      ga4Report(token, { dateRanges: range, dimensions: [{ name: 'sessionDefaultChannelGroup' }], metrics: [{ name: 'sessions' }, { name: 'engagedSessions' }, { name: 'keyEvents' }], orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 10 }),
+      ga4Report(token, { dateRanges: range, metrics: [{ name: 'sessions' }, { name: 'engagementRate' }, { name: 'averageSessionDuration' }] }),
+    ]);
+    return ga4Facts(byChannel.rows, total.rows[0]);
+  } catch (e) {
+    notes.push(`GA4 failed: ${(e as Error).message.slice(0, 120)}`);
+    return [];
+  }
 }
 
 /** Watched pages: Search Console clicks and impressions (28 days vs the 28 before) and index state. */
@@ -180,7 +229,7 @@ const toolLog = (): ToolEntry[] =>
 
 // ---------- the analyst (Claude Code CLI, headless; its only tools are the growth MCP server) ----------
 
-type ToolSetup = { googleToken?: string; writeToken?: string; enabled: string[]; commit?: string };
+type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; ga4Token?: string; enabled: string[]; commit?: string };
 
 function runClaude(prompt: string, token: string, tools: ToolSetup, deadline: number): Promise<{ report: AiReport; model?: string }> {
   const home = '/tmp/claude-home';
@@ -197,6 +246,8 @@ function runClaude(prompt: string, token: string, tools: ToolSetup, deadline: nu
           env: {
             GROWTH_GOOGLE_TOKEN: tools.googleToken ?? '',
             GROWTH_GOOGLE_WRITE_TOKEN: tools.writeToken ?? '',
+            GROWTH_BING_KEY: tools.bingKey ?? '',
+            GROWTH_GA4_TOKEN: tools.ga4Token ?? '',
             GROWTH_ENABLED_TOOLS: tools.enabled.join(','),
             GROWTH_CODE_DIR: CODE_DIR,
             GROWTH_CODE_COMMIT: tools.commit ?? '',
@@ -324,6 +375,67 @@ function recFields(r: Record<string, unknown>) {
   }
   return out;
 }
+/** The whole lifecycle; drafting and pr-open are set by the drafting step (Phase C), not the owner. */
+export type OppStatus = 'idea' | 'planned' | 'drafting' | 'pr-open' | 'published' | 'measured' | 'rejected';
+const OWNER_OPP_STATUSES: OppStatus[] = ['idea', 'planned', 'published', 'measured', 'rejected'];
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+const list = (v: unknown, max: number, len = 200) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, max).map((x) => x.slice(0, len)) : []);
+
+/** An opportunity's stored fields: every one named, typed and capped (the model's object is never spread). */
+function oppFields(o: Opportunity) {
+  const b = (o.brief ?? {}) as Partial<Opportunity['brief']>;
+  return {
+    topic: text(o.topic, 200),
+    targetKeyword: text(o.targetKeyword, 120),
+    intent: text(o.intent, 20),
+    audience: text(o.audience, 400),
+    lensFeatures: list(o.lensFeatures, 8, 80),
+    relevance: [0, 1, 2, 3].includes(o.relevance) ? o.relevance : 0,
+    relevanceReason: text(o.relevanceReason, 800),
+    demand: text(o.demand, 20),
+    demandEvidence: text(o.demandEvidence, 1500),
+    trend: text(o.trend, 20),
+    winnability: text(o.winnability, 20),
+    competition: text(o.competition, 800),
+    action: text(o.action, 30),
+    existingPage: text(o.existingPage, 200),
+    brief: {
+      url: text(b.url, 200),
+      title: text(b.title, 120),
+      metaDescription: text(b.metaDescription, 300),
+      h1: text(b.h1, 200),
+      outline: list(b.outline, 20),
+      questions: list(b.questions, 15),
+      supportingKeywords: list(b.supportingKeywords, 20, 100),
+      internalLinksFrom: list(b.internalLinksFrom, 10),
+      internalLinksTo: list(b.internalLinksTo, 10),
+      searchResultsToday: text(b.searchResultsToday, 800),
+    },
+    businessValue: text(o.businessValue, 800),
+    measurement: text(o.measurement, 800),
+    facts: list(o.facts, 30, 120),
+  };
+}
+
+/** New ideas join the backlog; known ones get this week's evidence and score, keeping the owner's status. */
+async function saveOpportunities(opps: Opportunity[], date: string, now: number) {
+  for (const o of opps) {
+    const fields = oppFields(o);
+    if (!fields.relevance || !fields.targetKeyword) continue;
+    const id = slug(fields.targetKeyword);
+    const score = opportunityScore(o);
+    const key = { pk: 'GROWTH', sk: `OPP#${id}` };
+    const old = (await ddb.send(new GetCommand({ TableName: env.table, Key: key }))).Item;
+    const history = [...((old?.history as { date: string; score: number }[] | undefined) ?? []).filter((h) => h.date !== date), { date, score }].slice(-26);
+    await ddb.send(
+      new PutCommand({
+        TableName: env.table,
+        Item: { ...fields, score, history, status: old?.status ?? 'idea', note: old?.note, firstSeen: old?.firstSeen ?? date, lastSeen: date, updatedAt: now, decidedBy: old?.decidedBy, pr: old?.pr, ...key, id },
+      }),
+    );
+  }
+}
+
 const REC_KEYS = new Set(Object.keys((REPORT_SCHEMA as any).properties.recommendations.items.properties as Record<string, unknown>));
 
 // ---------- the run lock (one report at a time: Console button and Monday schedule) ----------
@@ -416,6 +528,8 @@ async function report(opts: { ai: boolean; by: string }) {
     const tools: ToolSetup = {
       googleToken: await retry(() => googleToken()).catch(() => undefined),
       writeToken: enabled.includes('submit_sitemap') ? await retry(() => googleToken('https://www.googleapis.com/auth/webmasters')).catch(() => undefined) : undefined,
+      bingKey: await getParam('/lens/growth/bing-key').catch(() => undefined),
+      ga4Token: await retry(() => googleToken(GA4_SCOPE)).catch(() => undefined),
       enabled,
       commit,
     };
@@ -434,6 +548,7 @@ async function report(opts: { ai: boolean; by: string }) {
         await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: old.sk }, UpdateExpression: 'SET #s = :d, note = :n, updatedAt = :t', ConditionExpression: '#s = :p', ExpressionAttributeNames: { '#s': 'status' }, ExpressionAttributeValues: { ':d': 'dropped', ':n': 'Replaced by a later report the same day.', ':t': now, ':p': 'proposed' } })).catch((e) => {
           if (e?.name !== 'ConditionalCheckFailedException') throw e;
         });
+    await saveOpportunities(ai.ai.opportunities ?? [], date, now);
     for (const [i, rec] of (ai.ai.recommendations ?? []).entries()) {
       const id = `R-${run}-${i + 1}`;
       await ifNew({ ...recFields(rec as Record<string, unknown>), status: 'proposed', report: date, createdAt: date, updatedAt: now, pk: 'GROWTH', sk: `REC#${id}`, id });
@@ -488,12 +603,13 @@ export async function growthPage(req: Req): Promise<Res> {
   const running = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'RUNNING' } }))).Item;
   const rows = async (prefix: string, limit?: number) =>
     (await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': prefix }, ScanIndexForward: false, ...(limit ? { Limit: limit } : {}) }))).Items ?? [];
-  const [proposals, watching, activity] = await Promise.all([rows('PROP#'), rows('WATCH#'), rows('ACT#', 80)]);
+  const [proposals, watching, activity, opportunities] = await Promise.all([rows('PROP#'), rows('WATCH#'), rows('ACT#', 80), rows('OPP#')]);
   return json(200, {
     dates,
     report: report ?? null,
     recommendations: await recs(),
     proposals,
+    opportunities: opportunities.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
     watching,
     activity,
     tools: { available: LEVEL2_TOOLS, enabled: await enabledTools() },
@@ -564,6 +680,31 @@ export async function growthProposal(id: string, req: Req, email: string): Promi
       throw e;
     });
   await log({ entity: `growth:${id}`, action: `growth.proposal-${decision}`, actor: `console:${email}`, data: note ? { note } : undefined });
+  return json(200, { ok: true });
+}
+
+/** PUT /growth/opportunities/<id> {status, note?}: the owner plans, rejects or marks published/measured. */
+export async function growthOpportunity(id: string, req: Req, email: string): Promise<Res> {
+  const status = req.body?.status;
+  if (!OWNER_OPP_STATUSES.includes(status)) throw new HttpError(400, `status must be one of ${OWNER_OPP_STATUSES.join(', ')}`);
+  if (!/^[a-z0-9-]{1,60}$/.test(id)) throw new HttpError(400, 'Bad id');
+  const note = typeof req.body?.note === 'string' ? req.body.note.slice(0, 500) : undefined;
+  await ddb
+    .send(
+      new UpdateCommand({
+        TableName: env.table,
+        Key: { pk: 'GROWTH', sk: `OPP#${id}` },
+        UpdateExpression: `SET #s = :s, decidedAt = :t, decidedBy = :b${note !== undefined ? ', note = :n' : ''}`,
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':s': status, ':t': Date.now(), ':b': email, ...(note !== undefined ? { ':n': note } : {}) },
+      }),
+    )
+    .catch((e) => {
+      if (e?.name === 'ConditionalCheckFailedException') throw new HttpError(404, 'No such opportunity');
+      throw e;
+    });
+  await log({ entity: `growth:opp:${id}`, action: 'growth.opportunity-status', actor: `console:${email}`, data: { status, ...(note !== undefined ? { note } : {}) } });
   return json(200, { ok: true });
 }
 

@@ -55,6 +55,27 @@ async function website(now: number) {
   }));
   const visits = daily.reduce((s, d) => s + d.visits, 0);
   const getLens = daily.reduce((s, d) => s + d.getLens, 0);
+  const total = (key: string) => rows.reduce((s, d) => s + (d.items.find((i) => i.sk === key)?.count ?? 0), 0);
+  const counts = (prefix: string) => new Map(sum(prefix).map((x) => [x.label, x.count]));
+  // Landing pages: visits that started there, how many engaged, how many clicked Get Lens (any of the three).
+  const engagedFrom = counts('engl#');
+  const getLensFrom = new Map<string, number>();
+  for (const e of ['get_lens', 'apk_download', 'play_store']) for (const [k, n] of counts(`evl#${e}#`)) getLensFrom.set(k, (getLensFrom.get(k) ?? 0) + n);
+  const landing = sum('land#')
+    .slice(0, 25)
+    .map(({ label, count }) => ({ path: label, visits: count, engaged: engagedFrom.get(label) ?? 0, getLens: getLensFrom.get(label) ?? 0 }));
+  // Pages: views, average seconds visible, share engaged (≥10 s) and scrolled to 75 %.
+  const timed = counts('tv#');
+  const seconds = counts('tsum#');
+  const engagedViews = counts('eng#');
+  const deep = counts('sc75#');
+  const pageQuality = sum('pv#')
+    .slice(0, 25)
+    .map(({ label, count }) => {
+      const tv = timed.get(label) ?? 0;
+      return { path: label, views: count, avgSeconds: tv ? Math.round((seconds.get(label) ?? 0) / tv) : null, engagedRate: tv ? (engagedViews.get(label) ?? 0) / tv : null, scrollRate: tv ? (deep.get(label) ?? 0) / tv : null };
+    });
+  const engagedVisits = total('engv');
   return {
     daily,
     visits,
@@ -65,6 +86,15 @@ async function website(now: number) {
     sources: sum('src#').filter((s) => s.label !== 'internal').slice(0, 15),
     events: sum('ev#'),
     getLensFrom: sum('evp#get_lens#').slice(0, 10),
+    // From 2026-10-30 (beacon v2): engagement, landing pages, campaigns, countries, devices.
+    engagedVisits,
+    engagedRate: visits ? engagedVisits / visits : null,
+    landing,
+    pageQuality,
+    mediums: sum('med#').slice(0, 10),
+    campaigns: sum('camp#').slice(0, 15),
+    countries: sum('cty#').slice(0, 15),
+    devices: sum('dev#'),
   };
 }
 

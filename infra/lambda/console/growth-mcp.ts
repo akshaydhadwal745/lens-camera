@@ -10,6 +10,8 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 
 import { join, normalize, relative } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import { bingRelated, bingTrend, ga4Report, trendingNow, wikiTrend, wikiViews } from './growth-sources';
+
 const SITE = 'https://lens.instagrowapp.com';
 const PROPERTY = `${SITE}/`;
 const TOKEN = process.env.GROWTH_GOOGLE_TOKEN ?? '';
@@ -17,7 +19,9 @@ const SUBMIT_TOKEN = process.env.GROWTH_GOOGLE_WRITE_TOKEN ?? '';
 const ENABLED = new Set((process.env.GROWTH_ENABLED_TOOLS ?? '').split(',').filter(Boolean));
 const CODE = process.env.GROWTH_CODE_DIR ?? '/tmp/growth-code';
 const LOG = process.env.GROWTH_TOOL_LOG ?? '/tmp/growth-tools.jsonl';
-const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1 };
+const BING_KEY = process.env.GROWTH_BING_KEY ?? '';
+const GA4_TOKEN = process.env.GROWTH_GA4_TOKEN ?? '';
+const LIMITS: Record<string, number> = { inspect_url: 40, audit_page: 30, search_analytics: 40, compare_periods: 30, find_in_code: 60, read_code: 60, propose_change: 5, watch_page: 10, submit_sitemap: 1, keyword_volume: 40, related_keywords: 15, topic_interest: 15, trending_now: 4, ga4_report: 25 };
 // Per report, not per process: the retry run starts a new server, so earlier calls count too.
 const used: Record<string, number> = {};
 if (existsSync(LOG))
@@ -221,6 +225,82 @@ const TOOLS: Record<string, Tool> = {
       const start = Math.max(1, Number(a.startLine) || 1);
       const end = Math.min(lines.length, Number(a.endLine) || start + 79, start + 199);
       return { commit: process.env.GROWTH_CODE_COMMIT, file: f, lines: lines.slice(start - 1, end).map((l, i) => `${start + i}: ${l}`).join('\n') };
+    },
+  },
+  keyword_volume: {
+    level: 1,
+    description:
+      'Bing searches for keywords in a country: the last 12 weeks vs the 12 before (broad and exact match). Real counts, but Bing only (small in India); use it to compare keywords and see direction, never as Google volume. Up to 5 keywords per call.',
+    inputSchema: { type: 'object', properties: { keywords: { type: 'array', items: { type: 'string' } }, country: { enum: ['in', 'us', 'gb', 'id', 'ph', 'br'] } }, required: ['keywords', 'country'] },
+    run: async (a) => {
+      if (!BING_KEY) throw new Refused('Bing keyword data is not connected');
+      const keywords = (Array.isArray(a.keywords) ? a.keywords : []).filter((k): k is string => typeof k === 'string' && !!k.trim()).slice(0, 5).map((k) => k.slice(0, 80));
+      if (!keywords.length) throw new Refused('"keywords" must list 1-5 keywords');
+      const country = typeof a.country === 'string' ? a.country : 'in';
+      const out = [];
+      for (const k of keywords) out.push(await bingTrend(BING_KEY, k, country));
+      return { source: 'Bing Webmaster keyword research (Bing searches only)', results: out };
+    },
+  },
+  related_keywords: {
+    level: 1,
+    description: 'Searches related to a keyword on Bing in a country over the last 12 weeks, biggest first: the words people actually use, and questions to answer.',
+    inputSchema: { type: 'object', properties: { keyword: { type: 'string' }, country: { enum: ['in', 'us', 'gb', 'id', 'ph', 'br'] } }, required: ['keyword', 'country'] },
+    run: async (a) => {
+      if (!BING_KEY) throw new Refused('Bing keyword data is not connected');
+      return { source: 'Bing Webmaster keyword research (Bing searches only)', related: await bingRelated(BING_KEY, str(a, 'keyword', 80), typeof a.country === 'string' ? a.country : 'in') };
+    },
+  },
+  topic_interest: {
+    level: 1,
+    description: 'Long-term interest in a topic: monthly English Wikipedia views of its article (e.g. Google_Photos, Cloud_storage, Wedding_photography), last 3 months vs the same months a year before. A seasonality-safe direction signal, not search volume.',
+    inputSchema: { type: 'object', properties: { article: { type: 'string', description: 'English Wikipedia article title with underscores' } }, required: ['article'] },
+    run: async (a) => {
+      const article = str(a, 'article', 100).replace(/ /g, '_');
+      if (!/^[\w().,'-]+$/.test(article)) throw new Refused('article must be a Wikipedia title like Cloud_storage');
+      const months = await wikiViews(article);
+      return { source: 'Wikipedia pageviews (people, all devices)', ...wikiTrend(article, months), monthly: months.slice(-13) };
+    },
+  },
+  trending_now: {
+    level: 1,
+    description: 'Google Trends "Trending now" in a country today (official feed): what is spiking, with news headlines; "relevant" marks ones touching photos, storage, phones or events. Most days nothing is relevant: say so rather than stretch.',
+    inputSchema: { type: 'object', properties: { geo: { enum: ['IN', 'US', 'GB', 'ID', 'PH', 'BR'] } }, required: ['geo'] },
+    run: async (a) => {
+      const items = await trendingNow(typeof a.geo === 'string' ? a.geo : 'IN');
+      return { source: 'Google Trends Trending now (relative spikes, not volume)', total: items.length, relevant: items.filter((i) => i.relevant), others: items.filter((i) => !i.relevant).slice(0, 10).map((i) => i.title) };
+    },
+  },
+  ga4_report: {
+    level: 1,
+    description:
+      'Google Analytics 4 report for the website (visitors who allowed analytics cookies where consent is required; our own analytics facts count everyone). Dimensions e.g. landingPage, sessionDefaultChannelGroup, sessionSource, sessionCampaignName, country, deviceCategory, eventName, pagePath; metrics e.g. sessions, engagedSessions, engagementRate, averageSessionDuration, keyEvents, eventCount, screenPageViews, newUsers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dimensions: { type: 'array', items: { type: 'string' } },
+        metrics: { type: 'array', items: { type: 'string' } },
+        startDate: { type: 'string', description: 'YYYY-MM-DD or NdaysAgo' },
+        endDate: { type: 'string', description: 'YYYY-MM-DD, yesterday or today' },
+        limit: { type: 'number' },
+      },
+      required: ['metrics'],
+    },
+    run: async (a) => {
+      if (!GA4_TOKEN) throw new Refused('GA4 is not connected');
+      const names = (v: unknown, max: number) => (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === 'string' && /^[a-zA-Z0-9_:]{1,60}$/.test(x)).slice(0, max);
+      const metrics = names(a.metrics, 8);
+      if (!metrics.length) throw new Refused('"metrics" must list GA4 metric names');
+      const day = (v: unknown, d: string) => (typeof v === 'string' && /^(\d{4}-\d{2}-\d{2}|\d{1,3}daysAgo|yesterday|today)$/.test(v) ? v : d);
+      return {
+        source: 'GA4 (consented visitors where required)',
+        ...(await ga4Report(GA4_TOKEN, {
+          dateRanges: [{ startDate: day(a.startDate, '28daysAgo'), endDate: day(a.endDate, 'yesterday') }],
+          dimensions: names(a.dimensions, 4).map((name) => ({ name })),
+          metrics: metrics.map((name) => ({ name })),
+          limit: Math.min(100, Math.max(1, Number(a.limit) || 50)),
+        })),
+      };
     },
   },
   watch_page: {

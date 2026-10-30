@@ -128,3 +128,38 @@ test('a whole report: unknown fact ids and invented numbers are reported', () =>
   assert.match(problems[0], /unknown fact id "web.visit"/);
   assert.match(problems[1], /63/);
 });
+
+test('opportunity score: relevance × demand × trend × winnability; relevance 0 scores 0', () => {
+  const { opportunityScore } = require('./growth-report') as typeof import('./growth-report');
+  assert.equal(opportunityScore({ relevance: 3, demand: 'high', trend: 'rising', winnability: 'high' }), 20.3);
+  assert.equal(opportunityScore({ relevance: 2, demand: 'unmeasured', trend: 'unknown', winnability: 'medium' }), 0.9);
+  assert.equal(opportunityScore({ relevance: 0, demand: 'high', trend: 'rising', winnability: 'high' }), 0);
+});
+
+test('product features come from the Features list only', () => {
+  const { productFeatures } = require('./growth-report') as typeof import('./growth-report');
+  const md = '# x\n## Features\n- **Share links**: a\n- **Event albums**: b\n## Not available\n- **Unlimited storage**: no\n';
+  assert.deepEqual(productFeatures(md), ['Share links', 'Event albums']);
+});
+
+test('opportunities: invented features, numbers, long titles and bad URLs are caught', () => {
+  const { validateReport } = require('./growth-report') as typeof import('./growth-report');
+  const { fact } = require('./growth-facts') as typeof import('./growth-facts');
+  const facts = [fact({ id: 'demand.bing.us.free_cloud_storage', area: 'demand', label: 'Bing searches', value: 5795, unit: 'count', window: '12 weeks' })];
+  const files: Record<string, string> = { 'docs/growth/product-facts.md': '## Features\n- **Share links**: a\n## Not available\n' };
+  const brief = { url: '/guides/free-cloud-storage/', title: 'Free cloud storage for photos', metaDescription: 'd', h1: 'h', outline: [], questions: [], supportingKeywords: [], internalLinksFrom: [], internalLinksTo: [], searchResultsToday: 'not checked' };
+  const opp = { topic: 't', targetKeyword: 'free cloud storage', intent: 'problem', audience: 'a', lensFeatures: ['Share links'], relevance: 3, relevanceReason: 'r', demand: 'high', demandEvidence: 'Bing shows 5795 searches in the US', trend: 'steady', winnability: 'low', competition: 'c', action: 'new-guide', existingPage: '', brief, businessValue: 'v', measurement: 'm', facts: ['demand.bing.us.free_cloud_storage'] } as const;
+  const base = { summary: 's', findings: [], recommendations: [], reviewOfPrevious: [] };
+  assert.deepEqual(validateReport({ ...base, opportunities: [opp as any] }, facts, new Set(), (f) => files[f]), []);
+  const bad = validateReport(
+    { ...base, opportunities: [{ ...opp, lensFeatures: ['Unlimited storage'], demandEvidence: '9000 searches', brief: { ...brief, title: 'x'.repeat(61), url: '/Guides/X' } } as any] },
+    facts,
+    new Set(),
+    (f) => files[f],
+  );
+  assert.equal(bad.length, 4);
+  assert.match(bad.join('\n'), /9000/);
+  assert.match(bad.join('\n'), /"Unlimited storage" is not a feature/);
+  assert.match(bad.join('\n'), /61 characters/);
+  assert.match(bad.join('\n'), /lowercase path/);
+});

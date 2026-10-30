@@ -143,3 +143,12 @@ test('call limits hold across a second server in the same report (the retry run)
   child.kill();
   assert.match(r.content[0].text, /REFUSED: propose_change: limit of 5 calls per report reached/);
 });
+
+test('demand tools refuse cleanly when their source is not connected', async () => {
+  const s = server();
+  const kw = await s.callTool('keyword_volume', { keywords: ['photo backup'], country: 'in' });
+  const ga = await s.callTool('ga4_report', { metrics: ['sessions'] });
+  s.stop();
+  assert.match(kw.content[0].text, /REFUSED: Bing keyword data is not connected/);
+  assert.match(ga.content[0].text, /REFUSED: GA4 is not connected/);
+});

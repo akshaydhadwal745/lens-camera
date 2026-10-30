@@ -89,6 +89,52 @@ type Proposal = {
   decidedBy?: string;
   note?: string;
 };
+type Opp = {
+  id: string;
+  topic: string;
+  targetKeyword: string;
+  intent: string;
+  audience: string;
+  lensFeatures: string[];
+  relevance: number;
+  relevanceReason: string;
+  demand: string;
+  demandEvidence: string;
+  trend: string;
+  winnability: string;
+  competition: string;
+  action: string;
+  existingPage: string;
+  brief: {
+    url: string;
+    title: string;
+    metaDescription: string;
+    h1: string;
+    outline: string[];
+    questions: string[];
+    supportingKeywords: string[];
+    internalLinksFrom: string[];
+    internalLinksTo: string[];
+    searchResultsToday: string;
+  };
+  businessValue: string;
+  measurement: string;
+  score: number;
+  status: string;
+  firstSeen: string;
+  lastSeen: string;
+  note?: string;
+  pr?: { url: string };
+};
+const ACTION: Record<string, string> = {
+  "improve-page": "Improve existing page",
+  "new-guide": "New guide",
+  "landing-page": "New landing page",
+  "faq-and-links": "FAQ + internal links",
+  "conversion-fix": "Conversion fix",
+  "social-post": "Social post",
+  experiment: "Experiment",
+};
 type Watch = { path: string; reason: string; since: string };
 type Activity = {
   at: number;
@@ -106,6 +152,7 @@ type GrowthData = {
   report: Report | null;
   recommendations: Rec[];
   proposals: Proposal[];
+  opportunities?: Opp[];
   watching: Watch[];
   activity: Activity[];
   tools: { available: string[]; enabled: string[] };
@@ -137,6 +184,8 @@ const AREAS: Record<string, string> = {
   channels: "Install channels",
   money: "Money",
   loops: "Growth loops",
+  demand: "Demand and interest",
+  ga4: "Google Analytics",
 };
 const tone = (s: string) =>
   s === "high" ? "bad" : s === "medium" ? "warn" : "plain";
@@ -206,6 +255,17 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
       ) ?? undefined;
     await api("PUT", `/growth/proposals/${encodeURIComponent(id)}`, {
       decision,
+      ...(note ? { note } : {}),
+    });
+    setReload((r) => r + 1);
+  };
+  const setOpp = async (id: string, status: string) => {
+    const note =
+      status === "rejected"
+        ? (prompt("Why not? (the analyst learns from it)") ?? undefined)
+        : undefined;
+    await api("PUT", `/growth/opportunities/${encodeURIComponent(id)}`, {
+      status,
       ...(note ? { note } : {}),
     });
     setReload((r) => r + 1);
@@ -412,6 +472,132 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
                           a pull request you review and merge (nothing changes
                           on the site by itself).
                         </p>
+                      </Card>
+                    ))}
+                </>
+              )}
+
+              {!!g.opportunities?.length && (
+                <>
+                  <div className="row-head">
+                    <h2>Content opportunities</h2>
+                  </div>
+                  <p className="muted small">
+                    What people are interested in that Lens genuinely helps
+                    with, ranked by score = relevance × demand × trend ×
+                    winnability. Demand sources differ (Bing searches, Wikipedia
+                    interest, our Search Console and website); each brief says
+                    which. Plan one to have it written as a pull request you
+                    review.
+                  </p>
+                  {g.opportunities
+                    .filter((o) => o.status !== "rejected")
+                    .map((o) => (
+                      <Card
+                        key={o.id}
+                        title={`${o.score} · ${o.brief.title || o.topic}`}
+                      >
+                        <p className="small">
+                          <span className="chip">{o.status}</span>{" "}
+                          <span className="chip">
+                            {ACTION[o.action] ?? o.action}
+                          </span>{" "}
+                          <span className="chip">“{o.targetKeyword}”</span>{" "}
+                          <span className="chip">
+                            relevance {o.relevance}/3 · demand {o.demand} ·{" "}
+                            {o.trend} · winnable {o.winnability}
+                          </span>
+                          {o.pr?.url && (
+                            <>
+                              {" "}
+                              <a
+                                href={o.pr.url}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                pull request
+                              </a>
+                            </>
+                          )}
+                        </p>
+                        <details>
+                          <summary>Brief and evidence</summary>
+                          <dl className="kv">
+                            <dt>Who and why</dt>
+                            <dd>
+                              {o.audience} {o.relevanceReason}
+                            </dd>
+                            <dt>Demand</dt>
+                            <dd>{o.demandEvidence}</dd>
+                            <dt>Competition</dt>
+                            <dd>{o.competition}</dd>
+                            <dt>Lens features</dt>
+                            <dd>{o.lensFeatures.join(", ")}</dd>
+                            <dt>Page</dt>
+                            <dd>
+                              {o.existingPage
+                                ? `Improve ${o.existingPage}`
+                                : o.brief.url}
+                            </dd>
+                            <dt>Title</dt>
+                            <dd>{o.brief.title}</dd>
+                            <dt>Description</dt>
+                            <dd>{o.brief.metaDescription}</dd>
+                            <dt>H1</dt>
+                            <dd>{o.brief.h1}</dd>
+                            <dt>Outline</dt>
+                            <dd>
+                              <ol>
+                                {o.brief.outline.map((h) => (
+                                  <li key={h}>{h}</li>
+                                ))}
+                              </ol>
+                            </dd>
+                            <dt>Questions</dt>
+                            <dd>{o.brief.questions.join(" · ")}</dd>
+                            <dt>Keywords</dt>
+                            <dd>{o.brief.supportingKeywords.join(", ")}</dd>
+                            <dt>Links</dt>
+                            <dd className="small">
+                              from {o.brief.internalLinksFrom.join(", ") || "—"}
+                              ; to {o.brief.internalLinksTo.join(", ") || "—"}
+                            </dd>
+                            <dt>Ranks today</dt>
+                            <dd>{o.brief.searchResultsToday}</dd>
+                            <dt>Value</dt>
+                            <dd>{o.businessValue}</dd>
+                            <dt>Measure</dt>
+                            <dd>{o.measurement}</dd>
+                          </dl>
+                        </details>
+                        {canWrite && (
+                          <div className="actions">
+                            {o.status === "idea" && (
+                              <button
+                                className="btn"
+                                onClick={() => void setOpp(o.id, "planned")}
+                              >
+                                Plan it
+                              </button>
+                            )}{" "}
+                            {o.status === "pr-open" && (
+                              <button
+                                className="btn"
+                                onClick={() => void setOpp(o.id, "published")}
+                              >
+                                Mark published
+                              </button>
+                            )}{" "}
+                            {o.status !== "rejected" && (
+                              <button
+                                className="btn ghost"
+                                onClick={() => void setOpp(o.id, "rejected")}
+                              >
+                                Not for us
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </Card>
                     ))}
                 </>

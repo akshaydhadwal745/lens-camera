@@ -79,6 +79,8 @@ export type Req = {
   cookies: Record<string, string>;
   /** The visitor's IP: CloudFront's viewer address when proxied, else the direct caller. */
   sourceIp?: string;
+  /** Visitor's country (ISO code) from CloudFront; only through our edge. */
+  country?: string;
   /** Approximate city (CloudFront geo header), for "who is signing in" prompts. */
   city?: string;
   /** The body as sent (webhook signatures are over these exact bytes). */
@@ -112,6 +114,7 @@ export function parseEvent(event: APIGatewayProxyEventV2): Req {
   const viewer = viaEdge ? headers['cloudfront-viewer-address'] : undefined;
   const viewerIp = viewer ? viewer.slice(0, viewer.lastIndexOf(':')) : undefined;
   const city = viaEdge ? headers['cloudfront-viewer-city'] : undefined;
+  const country = viaEdge ? headers['cloudfront-viewer-country'] : undefined;
   return {
     method: event.requestContext.http.method,
     path: event.rawPath.replace(/\/+$/, '') || '/',
@@ -121,6 +124,7 @@ export function parseEvent(event: APIGatewayProxyEventV2): Req {
     cookies,
     sourceIp: viewerIp || event.requestContext.http.sourceIp,
     city: city ? decodeURIComponent(city) : undefined,
+    country: country && /^[A-Z]{2}$/.test(country) ? country : undefined,
     rawBody,
   };
 }
