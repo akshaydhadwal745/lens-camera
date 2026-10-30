@@ -78,7 +78,7 @@ type Seo = {
     checkedAt?: number;
   }[];
 };
-type Tab = "keywords" | "audit" | "speed" | "links";
+type Tab = "keywords" | "audit" | "meta" | "speed" | "links";
 const TONE: Record<string, "bad" | "warn" | "plain"> = {
   error: "bad",
   warn: "warn",
@@ -127,6 +127,7 @@ export function SeoTools({
           [
             ["keywords", "Keywords"],
             ["audit", "Technical audit"],
+            ["meta", "Titles & descriptions"],
             ["speed", "Speed"],
             ["links", "Backlinks & link building"],
           ] as const
@@ -149,6 +150,7 @@ export function SeoTools({
               <Keywords ws={ws} s={s} onChanged={reload} />
             )}
             {tab === "audit" && <Audit ws={ws} s={s} />}
+            {tab === "meta" && <MetaEditor ws={ws} s={s} />}
             {tab === "speed" && <Speed s={s} />}
             {tab === "links" && <Links ws={ws} s={s} onChanged={reload} />}
           </>
@@ -542,6 +544,154 @@ function Audit({ ws, s }: { ws: Workspace; s: Seo }) {
         </div>
       </Card>
     </>
+  );
+}
+
+/** Edit page titles and descriptions; the agent turns them into one pull request for review. */
+function MetaEditor({ ws, s }: { ws: Workspace; s: Seo }) {
+  const [edits, setEdits] = useState<
+    Record<string, { title: string; description: string }>
+  >({});
+  const [filter, setFilter] = useState("");
+  const [busy, setBusy] = useState(false);
+  const a = s.audit;
+  if (!a)
+    return (
+      <Card>
+        <Empty>
+          Run the technical audit first: it reads every page’s title and
+          description.
+        </Empty>
+      </Card>
+    );
+  const edit = can(ws, "growth.contribute");
+  const pages = a.pages.filter(
+    (p) => p.status === 200 && p.path.includes(filter.trim()),
+  );
+  const changed = Object.entries(edits).filter(([path, e]) => {
+    const p = a.pages.find((x) => x.path === path);
+    return p && (e.title !== p.title || e.description !== p.description);
+  });
+  const set = (path: string, k: "title" | "description", v: string) => {
+    const p = a.pages.find((x) => x.path === path)!;
+    setEdits({
+      ...edits,
+      [path]: {
+        title: edits[path]?.title ?? p.title,
+        description: edits[path]?.description ?? p.description,
+        [k]: v,
+      },
+    });
+  };
+  const count = (v: string, lo: number, hi: number) => (
+    <span
+      className={`small ${v.length < lo || v.length > hi ? "gw-bad" : "muted"}`}
+    >
+      {v.length}/{hi}
+    </span>
+  );
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ task: { id: string } }>(
+        "POST",
+        "/growth/seo/meta",
+        {
+          changes: changed.map(([path, e]) => {
+            const p = a.pages.find((x) => x.path === path)!;
+            return {
+              path,
+              title: e.title !== p.title ? e.title : "",
+              description: e.description !== p.description ? e.description : "",
+              oldTitle: p.title,
+              oldDescription: p.description,
+            };
+          }),
+        },
+      );
+      location.assign(`/growth/tasks?task=${r.task.id}`);
+    } catch (e) {
+      alert((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Titles & descriptions"
+      actions={
+        <span className="btns">
+          <input
+            placeholder="Filter pages"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filter pages"
+          />
+          {edit && (
+            <button
+              className="btn primary"
+              disabled={!changed.length || busy}
+              onClick={() => void submit()}
+            >
+              Send {changed.length || ""} change
+              {changed.length === 1 ? "" : "s"} to the agent
+            </button>
+          )}
+        </span>
+      }
+    >
+      <p className="muted small">
+        Titles 15–60 characters, descriptions 70–155. Changes become one task;
+        the agent edits the site’s content files and opens a pull request that
+        someone reviews and merges. Nothing changes on the website until then.
+      </p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Page</th>
+              <th>Title</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pages.map((p) => {
+              const e = edits[p.path] ?? {
+                title: p.title,
+                description: p.description,
+              };
+              return (
+                <tr key={p.path}>
+                  <td className="small">{p.path}</td>
+                  <td>
+                    <input
+                      className="gw-meta-in"
+                      value={e.title}
+                      disabled={!edit}
+                      onChange={(x) => set(p.path, "title", x.target.value)}
+                      aria-label={`Title of ${p.path}`}
+                    />
+                    {count(e.title, 15, 60)}
+                  </td>
+                  <td>
+                    <textarea
+                      className="gw-meta-in"
+                      rows={2}
+                      value={e.description}
+                      disabled={!edit}
+                      onChange={(x) =>
+                        set(p.path, "description", x.target.value)
+                      }
+                      aria-label={`Description of ${p.path}`}
+                    />
+                    {count(e.description, 70, 155)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

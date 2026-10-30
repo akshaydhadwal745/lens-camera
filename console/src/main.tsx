@@ -85,6 +85,24 @@ const SECTIONS: Section[] = [
     group: "Workstreams",
   },
   {
+    path: "/growth/calendar",
+    label: "Content calendar",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/analytics",
+    label: "Website analytics (GA4)",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
+    path: "/growth/integrations",
+    label: "Integrations",
+    permission: "growth",
+    group: "Workstreams",
+  },
+  {
     path: "/growth/ws/social",
     label: "Social & distribution",
     permission: "growth",

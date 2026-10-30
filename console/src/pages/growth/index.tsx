@@ -12,6 +12,7 @@ import { MoneyPage } from "./money";
 import { MonthlyReviews } from "./monthly";
 import { SeoTools } from "./seo";
 import { NewTask, TaskPanel } from "./task-panel";
+import { ContentCalendar, Ga4Page, Integrations } from "./website";
 import { WorkstreamPage } from "./workstreams";
 
 const TITLES: Record<string, string> = {
@@ -24,6 +25,9 @@ const TITLES: Record<string, string> = {
   seo: "SEO tools",
   competitors: "Competitors",
   money: "Campaigns & budget",
+  analytics: "Website analytics (GA4)",
+  calendar: "Content calendar",
+  integrations: "Integrations",
 };
 
 export function GrowthWorkspace({ path }: { path: string }) {
@@ -72,6 +76,9 @@ export function GrowthWorkspace({ path }: { path: string }) {
             {sub === "seo" && <SeoTools ws={ws} search={search} />}
             {sub === "competitors" && <Competitors ws={ws} />}
             {sub === "money" && <MoneyPage ws={ws} />}
+            {sub === "analytics" && <Ga4Page />}
+            {sub === "calendar" && <ContentCalendar />}
+            {sub === "integrations" && <Integrations />}
             {wsKey && WS[wsKey] && (
               <WorkstreamPage
                 ws={ws}

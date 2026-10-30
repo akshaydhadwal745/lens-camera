@@ -391,7 +391,7 @@ Tools: find_in_code and read_code (the website code at the current main commit),
 
 How to work:
 1. Read docs/growth/product-facts.md first. Only claim what is listed under Features; never promise anything under "Not available".
-2. Find how the site is built before editing: pages are data in site/src/content (pages.ts, guides.ts, help.ts, info.ts) rendered by components; follow the existing structure, field names, tone and length of neighbouring entries exactly. New guides are new entries in the same data files, not new frameworks.
+2. Find how the site is built before editing: pages are data in site/src/content (pages.ts, guides.ts, help.ts, info.ts) rendered by components; follow the existing structure, field names, tone and length of neighbouring entries exactly. New guides are new entries in the same data files, not new frameworks. A blog post is a new entry in site/src/content/blog.ts (slug, date = today, name, copy and links in English and Hindi, like a guide); the blog index appears by itself once there is a post.
 3. The site is English and Hindi. When you change English copy that has a Hindi counterpart, change the Hindi too, in natural Hindi as the existing copy is written (not word-for-word). For a brand-new page, add the Hindi entry only if the data file requires both languages; then write it properly.
 4. Make the smallest change that fully does the approved task. Don't touch unrelated text, formatting or files. Keep titles ≤ 60 characters and meta descriptions ≤ 155. Add internal links the brief lists when an existing page clearly has a natural place for them.
 5. Writing: for the reader's problem first; specific, accurate, honest about alternatives; no keyword stuffing, no filler, no invented numbers, quotes or testimonials.

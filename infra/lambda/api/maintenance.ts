@@ -13,7 +13,8 @@ import { reconcileDue } from './payments';
 import { resumeStalled, runMove, settleAwaiting } from './drive-move';
 import { resumeExports, runExport } from './export';
 import { lambdaContinue } from './continue';
-import { pullSearchConsole } from './search-console';
+import { pullIntegrations } from './growth-integrations';
+import { pullGa4Snapshot, pullSearchConsole } from './search-console';
 
 type Event = {
   now?: unknown;
@@ -92,6 +93,8 @@ export async function handler(event: Event, context?: { getRemainingTimeInMillis
   if (!simulated) Object.assign(stats, { commissionsApproved: await approveDueCommissions(now), feedbackEmails: await retryFeedbackEmails() });
   // Growth data (docs/growth/growth-engine.md M5): never lets a Google hiccup fail the daily run.
   if (!simulated) Object.assign(stats, { searchConsole: await pullSearchConsole(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
+  if (!simulated) Object.assign(stats, { ga4: await pullGa4Snapshot(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
+  if (!simulated) Object.assign(stats, { integrations: await pullIntegrations(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
   console.log('maintenance', JSON.stringify(stats));
   return stats;
 }

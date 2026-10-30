@@ -15,6 +15,7 @@ import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
 import { competitorCheck, competitorResearch, growthDraft, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { calendarPage, ga4Page, integrationsPage, metaRequest } from './growth-content';
 import { competitorSave, competitorsPage } from './growth-competitors';
 import { campaignSave, moneyPage, spendSave } from './growth-money';
 import { keywordSave, prospectSave, seoPage } from './growth-seo';
@@ -113,6 +114,11 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     // SEO tools (growth-seo.ts)
     if (route === 'GET /growth/seo') return await allowed('growth', () => seoPage(email));
     if (route === 'POST /growth/seo/audit') return await allowed('growth.write', () => seoAuditRun(email));
+    if (route === 'POST /growth/seo/meta') return await allowed('growth.contribute', () => metaRequest(req, email));
+    // Website tools (growth-content.ts)
+    if (route === 'GET /growth/ga4') return await allowed('growth', () => ga4Page());
+    if (route === 'GET /growth/integrations') return await allowed('growth', () => integrationsPage());
+    if (route === 'GET /growth/calendar') return await allowed('growth', () => calendarPage(req));
     if (route === 'PUT /growth/keywords') return await allowed('growth.contribute', () => keywordSave(req, email));
     if (route === 'DELETE /growth/keywords') return await allowed('growth.contribute', () => keywordSave(req, email, true));
     if (seg[0] === 'growth' && seg[1] === 'prospects' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.contribute', () => prospectSave(seg[2], req, email));

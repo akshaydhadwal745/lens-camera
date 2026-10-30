@@ -693,6 +693,11 @@ function draftTask(t: Task): string {
       `Internal links from: ${(b.internalLinksFrom ?? []).join(', ')}; to: ${(b.internalLinksTo ?? []).join(', ')}`,
     ].join('\n');
   }
+  if (s.kind === 'meta')
+    return [
+      `APPROVED TITLE AND DESCRIPTION CHANGES (task ${t.id}). Set exactly these values; change nothing else. Each page's title and meta description live in site/src/content/*.ts (the copy for its language: /hi/ paths are the Hindi copy).`,
+      ...(s.changes ?? []).map((c: Record<string, string>) => `${c.path}${c.title ? `\n  title: "${c.title}"` : ''}${c.description ? `\n  description: "${c.description}"` : ''}`),
+    ].join('\n');
   if (s.kind === 'competitor')
     return `COMPETITOR RESEARCH (task ${t.id}): ${s.name} (${s.site}).\nRead their homepage, pricing and feature pages with competitor_page (start from ${s.site}; follow links you see in the text), and our own pages (audit_page) and docs/growth/product-facts.md. ${t.description}`;
   // A task written by a person: the title, description, evidence and page are the brief.
