@@ -1,6 +1,7 @@
 // The growth agent's output as workspace tasks (docs/growth/growth-workspace.md W1.5): weekly
 // recommendations, content opportunities and code proposals become Suggested tasks (one per dedupe
 // key, refreshed while still Suggested), and the old ledger/proposal/opportunity rows migrate once.
+import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, json, type Res } from '../api/lib';
@@ -200,4 +201,119 @@ export async function workspace(email: string, role: Role): Promise<Res> {
     analytics: { at: analytics.at, funnel: analytics.funnel, channels: analytics.channels, website: analytics.website, active: analytics.active?.today, features: analytics.features },
     report: report ? { date: report.date, at: report.at, summary: report.ai?.summary ?? null, findings: report.ai?.findings ?? report.rules ?? [], investigations: report.ai?.seoInvestigations ?? [], reviewOfPrevious: report.ai?.reviewOfPrevious ?? [], notes: report.notes ?? [], aiError: report.aiError ?? null, aiProblems: report.aiProblems ?? null, model: report.model } : null,
   });
+}
+
+// ---------- results loop and Monday digest (W4.1, W4.3): run from the Console's hourly job ----------
+
+/** The verdict for a measured task: did the metric move from its baseline toward its target? */
+export function verdictFor(baseline: number, current: number, target?: number): 'worked' | 'no_change' | 'worse' {
+  const dir = target !== undefined && Number.isFinite(target) && target !== baseline ? Math.sign(target - baseline) : 1;
+  const delta = current - baseline;
+  const noise = Math.max(Math.abs(baseline) * 0.05, baseline === 0 ? 0.5 : 0);
+  if (Math.abs(delta) <= noise) return 'no_change';
+  return delta * dir > 0 ? 'worked' : 'worse';
+}
+const num = (s: string) => {
+  const n = Number(String(s).replace(/[,%$₹\s]/g, ''));
+  return Number.isFinite(n) && String(s).trim() !== '' ? (String(s).includes('%') ? n / 100 : n) : undefined;
+};
+
+/** Current metrics without recomputing: the latest report overlaid with the cached product analytics. */
+async function cachedFacts(): Promise<Map<string, Fact>> {
+  const facts = new Map<string, Fact>();
+  for (const f of ((await latestReport())?.facts ?? []) as Fact[]) facts.set(f.id, f);
+  const cached = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'STATS', sk: 'ANALYTICS#30' } }))).Item;
+  if (cached?.data) for (const f of productFacts(cached.data)) facts.set(f.id, f);
+  return facts;
+}
+
+/** Once a day: capture baselines when work finishes, measure tasks whose check date came, nudge owners. */
+export async function measureDue(now = Date.now()): Promise<{ baselines: number; measured: number; nudged: number }> {
+  const today = new Date(now).toISOString().slice(0, 10);
+  const facts = await cachedFacts();
+  let baselines = 0;
+  let measured = 0;
+  let nudged = 0;
+  for (const t of await listTasks()) {
+    const f = t.metric.fact ? facts.get(t.metric.fact) : undefined;
+    // Baseline: the metric's value when the work started being reviewed or shipped, if nobody set one.
+    if (f && f.value !== null && !t.metric.baseline && ['in_progress', 'in_review', 'done'].includes(t.status)) {
+      await systemUpdate(t.id, { metric: { ...t.metric, baseline: String(f.value), baselineAt: today } }, `Baseline recorded: ${f.label} = ${f.value}`);
+      baselines++;
+      continue;
+    }
+    if (t.status !== 'done' || !t.metric.checkOn || t.metric.checkOn > today || t.result) continue;
+    const base = num(t.metric.baseline);
+    if (f && f.value !== null && base !== undefined) {
+      const verdict = verdictFor(base, f.value, num(t.metric.target));
+      await systemUpdate(t.id, { status: 'measured', measuredAt: now, result: { value: `${f.label}: ${t.metric.baseline} → ${f.value} (${f.window})`, verdict, learning: '', at: now, by: 'agent' } }, `Measured on the check date: ${verdict.replace('_', ' ')}`);
+      measured++;
+    } else if (!(t as Task & { measurePrompted?: string }).measurePrompted) {
+      // No machine-readable metric: ask the owner to record the result.
+      await systemUpdate(t.id, { measurePrompted: today } as Partial<Task>, 'Check date reached: record the result (no metric the agent can read)');
+      if (t.owner && t.owner !== 'agent') await notify([t.owner], `Record the result: ${t.title}`, `The check date for this task has come (${t.metric.checkOn}).\nWhat happened to "${t.metric.label || 'its metric'}"? Record the result so we learn what works:\n${CONSOLE}/growth/tasks?task=${t.id}`);
+      nudged++;
+    }
+  }
+  return { baselines, measured, nudged };
+}
+
+const CONSOLE = process.env.CONSOLE_ORIGIN ?? 'https://console.lens.instagrowapp.com';
+async function notify(to: string[], subject: string, body: string) {
+  const sender = process.env.CODE_SENDER ?? '';
+  if (!sender.startsWith('no-reply@') || !to.length) return;
+  await new SESv2Client({}).send(new SendEmailCommand({ FromEmailAddress: `Lens Console <${sender}>`, Destination: { ToAddresses: to }, Content: { Simple: { Subject: { Data: subject.slice(0, 180) }, Body: { Text: { Data: body } } } } })).catch((e) => console.error('growth notify', e));
+}
+
+/** The Monday digest for one person (pure: tested). Empty when there's nothing for them. */
+export function digestFor(email: string, tasks: Task[], today: string): string {
+  const open = (t: Task) => ['ready', 'in_progress', 'in_review', 'blocked'].includes(t.status);
+  const week = new Date(Date.parse(`${today}T00:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10);
+  const mine = tasks.filter((t) => t.owner === email && open(t));
+  const overdue = mine.filter((t) => t.due && t.due < today);
+  const thisWeek = mine.filter((t) => t.due && t.due >= today && t.due <= week);
+  const review = tasks.filter((t) => t.reviewer === email && t.status === 'in_review');
+  const results = tasks.filter((t) => t.owner === email && t.status === 'measured' && t.result && (t.measuredAt ?? 0) > Date.parse(`${today}T00:00:00Z`) - 7 * 86_400_000);
+  if (!mine.length && !review.length && !results.length) return '';
+  const line = (t: Task) => `- [P${t.priority}] ${t.title}${t.due ? ` (due ${t.due})` : ''}\n  ${CONSOLE}/growth/tasks?task=${t.id}`;
+  return [
+    `Your growth week (${today})`,
+    overdue.length ? `\nOverdue (${overdue.length}):\n${overdue.map(line).join('\n')}` : '',
+    thisWeek.length ? `\nDue this week (${thisWeek.length}):\n${thisWeek.map(line).join('\n')}` : '',
+    review.length ? `\nWaiting for your review (${review.length}):\n${review.map(line).join('\n')}` : '',
+    results.length ? `\nResults measured last week:\n${results.map((t) => `- ${t.title}: ${t.result!.verdict.replace('_', ' ')} (${t.result!.value})`).join('\n')}` : '',
+    `\nAll your open tasks (${mine.length}): ${CONSOLE}/growth/tasks?view=mine`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Hourly from the Console Lambda: the results loop once a day, the digest on Mondays 03:00 UTC (08:30 IST). */
+export async function growthHousekeeping(now = Date.now()) {
+  const d = new Date(now);
+  const today = d.toISOString().slice(0, 10);
+  const once = async (key: string) => {
+    try {
+      await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: key, at: now, ttl: Math.floor(now / 1000) + 40 * 86400 }, ConditionExpression: 'attribute_not_exists(pk)' }));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const out: Record<string, unknown> = {};
+  if (d.getUTCHours() >= 1 && (await once(`DAILY#${today}`))) out.measure = await measureDue(now);
+  if (d.getUTCDay() === 1 && d.getUTCHours() >= 3 && (await once(`DIGEST#${today}`))) {
+    const tasks = await listTasks();
+    const team = (await teamMembers()).filter((m) => can(m.role, 'growth'));
+    let sent = 0;
+    for (const m of team) {
+      const body = digestFor(m.email, tasks, today);
+      if (body) {
+        await notify([m.email], `Your growth week: ${tasks.filter((t) => t.owner === m.email && ['ready', 'in_progress', 'in_review', 'blocked'].includes(t.status)).length} open tasks`, body);
+        sent++;
+      }
+    }
+    out.digests = sent;
+  }
+  return out;
 }

@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { goalStatus, krProgress, milestoneProgress, period } from './growth-goals';
 import { codeOf, partnerFields, partnerLink, postFields } from './growth-records';
 import { cleanFields, mentionedEmails, priorityOf, transitionProblem, type Task } from './growth-tasks';
-import { oppTask, propTask, recTask } from './growth-workspace';
+import { digestFor, oppTask, propTask, recTask, verdictFor } from './growth-workspace';
 
 const base = { id: 'T-1', title: 't', status: 'ready', links: { page: '', keyword: '', campaign: '', partner: '', post: '' }, wontDoReason: '', blockedBy: '', reviewer: '', proof: '' } as unknown as Task;
 
@@ -111,4 +111,25 @@ test('partners and posts: known fields only, a tagged link per partner', () => {
   assert.match(code, /^studio-rangoli-[a-f0-9]{4}$/);
   assert.equal(partnerLink(code), `https://lens.instagrowapp.com/?utm_source=partner&utm_medium=referral&utm_campaign=${code}`);
   assert.equal(postFields({ channel: 'tiktok', status: 'published' }).channel, 'other');
+});
+
+test('results verdict: moved toward the target = worked; within 5% noise = no change; away = worse', () => {
+  assert.equal(verdictFor(10, 15, 20), 'worked');
+  assert.equal(verdictFor(10, 10.3, 20), 'no_change');
+  assert.equal(verdictFor(10, 7, 20), 'worse');
+  assert.equal(verdictFor(10, 7, 0), 'worked'); // lower is better
+  assert.equal(verdictFor(0, 0.2), 'no_change');
+  assert.equal(verdictFor(0, 3), 'worked');
+});
+
+test('Monday digest: overdue, due this week, reviews and last week’s results; nothing → no email', async () => {
+  const t = (id: string, extra: Partial<Task>) => ({ ...base, id, title: id, priority: 1, owner: 'p@x.com', status: 'ready', due: '', metric: { label: '', fact: '', baseline: '', baselineAt: '', target: '', checkOn: '' }, ...extra }) as Task;
+  const today = '2026-11-02';
+  const tasks = [t('late', { due: '2026-10-30' }), t('soon', { due: '2026-11-05' }), t('later', { due: '2026-12-01' }), t('rev', { owner: 'a@x.com', reviewer: 'p@x.com', status: 'in_review' }), t('res', { status: 'measured', measuredAt: Date.parse('2026-11-01T00:00:00Z'), result: { value: '1 → 3', verdict: 'worked', learning: '', at: 0, by: 'agent' } })];
+  const d = digestFor('p@x.com', tasks, today);
+  assert.match(d, /Overdue \(1\):\n- \[P1\] late/);
+  assert.match(d, /Due this week \(1\):\n- \[P1\] soon/);
+  assert.match(d, /Waiting for your review \(1\):\n- \[P1\] rev/);
+  assert.match(d, /Results measured last week:\n- res: worked/);
+  assert.equal(digestFor('nobody@x.com', tasks, today), '');
 });

@@ -416,3 +416,45 @@ export type DraftResult = { prTitle: string; summary: string; changes: { file: s
 
 /** Words that must never be added to the site (product-facts "Not available"), whatever the brief says. */
 export const FORBIDDEN_CLAIMS = /\bunlimited\b|अनलिमिटेड|असीमित|\bfree forever\b/i;
+
+// ---------- text drafts (W4.2): social posts, Play listing text, partner outreach ----------
+
+export const TEXT_SYSTEM = `You are the growth agent for Lens (lens.instagrowapp.com), drafting text a person will review and then post or send themselves. You never post or send anything.
+
+Tools: find_in_code and read_code (the website code and docs/growth), audit_page (a live page).
+
+Rules:
+1. Read docs/growth/product-facts.md first. Claim only what is under Features; never anything under "Not available". No invented numbers, users, reviews or testimonials.
+2. Positioning: lead with the problem ("Phone full? Shoot everything.", full quality, events), not gigabytes. Honest about alternatives. English unless the task asks for Hindi; Hindi in natural Hindi.
+3. Social posts: write for the channel (Instagram caption with a hook in the first line; Reddit helpful and non-promotional, answering the community's question first, following typical subreddit rules; LinkedIn build-in-public with a real lesson; WhatsApp short and personal; YouTube Shorts a 30-second script). Each post points to ONE website page that answers it.
+4. Play listing: title ≤ 30 characters, short description ≤ 80, full description ≤ 4000 with a clear first line; no claims Play forbids (no "best", "#1", prices in the title, or calls to review).
+5. Partner outreach: short, specific to the partner type, the value for them (their clients get photos from guests in full quality, free for them during the pilot), one clear ask; no pressure.
+6. Give 2–4 options for each piece so the owner can choose. If the task can't be done well, say why in "notes" and give no drafts.`;
+
+export const TEXT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['drafts', 'notes'],
+  properties: {
+    drafts: {
+      type: 'array',
+      maxItems: 8,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'channel', 'title', 'body', 'page', 'dayOffset'],
+        properties: {
+          kind: { enum: ['social-post', 'listing', 'outreach', 'other'] },
+          channel: { enum: ['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin', 'x', 'facebook', 'blog', 'play', 'email', 'other'] },
+          title: { type: 'string' },
+          body: { type: 'string' },
+          page: { type: 'string', description: 'website path the post links to, e.g. /guides/collect-wedding-photos-qr-code/' },
+          dayOffset: { type: 'number', description: 'for posts: suggested days from today to publish (0–14)' },
+        },
+      },
+    },
+    notes: { type: 'string' },
+  },
+} as const;
+
+export type TextDraft = { drafts: { kind: string; channel: string; title: string; body: string; page: string; dayOffset: number }[]; notes: string };

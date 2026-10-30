@@ -9,6 +9,7 @@
 // The report runs in its own Lambda (GrowthAnalyst, a container with the Claude Code CLI, weekly and
 // on demand). The Console reads and edits rows here. The analyst only reads facts; it changes nothing.
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 
@@ -25,6 +26,7 @@ import { bingTrend, ga4Report, SEED_KEYWORDS, trendingNow, WIKI_ARTICLES, wikiTr
 import { EDITABLE, installationToken, openPullRequest, pullRequestState } from './growth-github';
 import { getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
 import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
+import { TEXT_SCHEMA, TEXT_SYSTEM, type TextDraft } from './growth-report';
 import { ANALYST_SYSTEM, analystPrompt, DRAFT_SCHEMA, DRAFT_SYSTEM, FORBIDDEN_CLAIMS, numbersIn, opportunityScore, REPORT_SCHEMA, ruleFindings, validateReport, type AiReport, type DraftResult, type OpenRec, type Opportunity } from './growth-report';
 import { log } from './log';
 import { teamMembers } from './roles';
@@ -689,6 +691,41 @@ function prBody(t: Task, d: DraftResult, by: string, commit: string) {
   ].join('\n');
 }
 
+/** Tasks the agent drafts as text for a person to post or send (no code change, no PR). */
+export const TEXT_TYPES = ['social', 'listing', 'partner'];
+const TEXT_MODE: Mode = { system: TEXT_SYSTEM, schema: TEXT_SCHEMA, toolNames: ['find_in_code', 'read_code', 'audit_page'], mode: 'report' };
+const CHANNEL_OK = new Set(['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin', 'x', 'facebook', 'blog', 'other']);
+
+/** Text drafts: posts land in the calendar as "drafted"; listing and outreach text goes on the task. */
+async function runTextDraft(t: Task, by: string, started: number) {
+  const token = await getParam('/lens/growth/claude-token');
+  if (!token) throw new Error('Claude token not set up');
+  rmSync(TOOL_LOG, { force: true });
+  const commit = await fetchCode();
+  const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), enabled: [], commit };
+  const { report: d } = await runClaude<TextDraft>(draftTask(t), token, tools, started + 12 * 60_000, TEXT_MODE);
+  await saveToolActivity(`draft:${t.id}`, `D-${t.id}`, Date.now());
+  const drafts = (d.drafts ?? []).filter((x) => typeof x.body === 'string' && x.body.trim()).slice(0, 8);
+  if (!drafts.length) throw new Error(`No drafts. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
+  const problems = drafts.filter((x) => new RegExp(FORBIDDEN_CLAIMS, 'i').test(`${x.title} ${x.body}`)).map((x) => x.title);
+  if (problems.length) throw new Error(`Drafts made a claim product-facts.md forbids (unlimited / free forever): ${problems.join(', ')}`);
+  let posts = 0;
+  for (const x of drafts.filter((y) => y.kind === 'social-post' && CHANNEL_OK.has(y.channel))) {
+    const date = new Date(started + Math.max(0, Math.min(14, Math.round(x.dayOffset || 0))) * DAY).toISOString().slice(0, 10);
+    const code = `${taskSlug(x.title || x.channel).slice(0, 30) || 'post'}-${Math.random().toString(16).slice(2, 6)}`;
+    const page = /^\/[\w\-/]*$/.test(x.page) ? x.page : '/';
+    const id = randomUUID().replace(/-/g, '').slice(0, 10);
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { channel: x.channel, date, title: text(x.title, 160), body: text(x.body, 5000), status: 'drafted', url: '', page, owner: t.owner === 'agent' ? '' : t.owner, taskId: t.id, code, link: `https://lens.instagrowapp.com${page}?utm_source=${x.channel}&utm_medium=social&utm_campaign=${code}`, createdAt: Date.now(), createdBy: 'agent', updatedAt: Date.now(), pk: 'GROWTH', sk: `POST#${id}`, id } }));
+    posts++;
+  }
+  const rest = drafts.filter((y) => y.kind !== 'social-post' || !CHANNEL_OK.has(y.channel));
+  const note = [posts ? `${posts} post draft${posts > 1 ? 's' : ''} added to the social calendar as "drafted".` : '', ...rest.map((x, i) => `Option ${i + 1} · ${x.channel} · ${x.title}\n${x.body}`), d.notes ? `Notes: ${d.notes}` : ''].filter(Boolean).join('\n\n');
+  const reviewer = t.reviewer || (by.includes('@') ? by : '');
+  await systemUpdate(t.id, { status: 'in_review', reviewer, spec: { ...(t.spec ?? {}), drafts } }, `Drafts ready for review:\n\n${note.slice(0, 6000)}`);
+  await sendToOwners(`Drafts ready for review: ${t.title.slice(0, 80)}`, `${note.slice(0, 3000)}\n\nReview: ${CONSOLE}/growth/tasks?task=${t.id}\n\nNothing is posted or sent: a person does that.`).catch(() => {});
+  return { drafts: drafts.length };
+}
+
 /** The draft run (GrowthAnalyst Lambda): fresh code copy → Claude edits it → checks → PR → task In review. */
 export async function runDraft(opts: { taskId: string; by: string; lockAt?: number }) {
   const lockAt = opts.lockAt ?? (await takeLock(`draft:${opts.by}`, true));
@@ -698,7 +735,13 @@ export async function runDraft(opts: { taskId: string; by: string; lockAt?: numb
   try {
     const t = await getTask(id);
     if (!t || !['ready', 'in_progress'].includes(t.status)) throw new Error(`${id} is not ready to draft`);
-    if (!['page', 'content', 'fix'].includes(t.type) && !t.spec) throw new Error('The agent drafts website changes (page, content or fix tasks)');
+    if (TEXT_TYPES.includes(t.type)) {
+      await systemUpdate(id, { status: 'in_progress' }, 'The growth agent started drafting text for review');
+      const r = await runTextDraft(t, opts.by, started);
+      await releaseLock(lockAt);
+      return r;
+    }
+    if (!['page', 'content', 'fix'].includes(t.type) && !t.spec) throw new Error('The agent drafts website changes (page, content or fix tasks) and text (social, listing, partner tasks)');
     await systemUpdate(id, { status: 'in_progress' }, 'The growth agent started drafting a pull request');
     const token = await getParam('/lens/growth/claude-token');
     if (!token) throw new Error('Claude token not set up');
@@ -758,7 +801,7 @@ export async function growthDraft(taskId: string, email: string): Promise<Res> {
   const t = await getTask(taskId);
   if (!t) throw new HttpError(404, 'No such task');
   if (!['ready', 'in_progress'].includes(t.status)) throw new HttpError(409, 'Accept the task first (only Ready or In progress tasks can be drafted)');
-  if (!['page', 'content', 'fix'].includes(t.type) && !t.spec) throw new HttpError(400, 'The agent drafts website changes: page, content or fix tasks');
+  if (![...TEXT_TYPES, 'page', 'content', 'fix'].includes(t.type) && !t.spec) throw new HttpError(400, 'The agent drafts website changes (page, content, fix) and text (social, listing, partner)');
   const result = await startDraft(taskId, email);
   if (result === 'busy') throw new HttpError(409, 'The analyst is busy (a report or another draft). Try again in about 10 minutes.');
   if (result === 'not-set-up') throw new HttpError(503, 'The growth analyst is not deployed');

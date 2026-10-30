@@ -24,39 +24,61 @@ production date (unset → "starts at launch"); team = owner + growth agent; bui
 | New hire can start alone | W4.4 Start here |
 
 ## W1 Work (tasks, today, roles)
-- [ ] W1.1 Task model `GROWTH / TASK#<id>` (fields above, lifecycle Suggested → Ready → In progress → In review → Done → Measured, + Blocked, Won't do), ids from an atomic counter; `TASKLOG#<id>#<ts>` comments + history
-- [ ] W1.2 Roles `growth_lead` (manage) and `growth_contributor` (work on own/assigned tasks, comment); permissions `growth.manage`, `growth.contribute`; enforced in routes
-- [ ] W1.3 Routes: list/get/create/update tasks, comment, change status (with rules: Won't do needs a reason, Blocked needs a blocker, Done needs proof for non-PR tasks)
-- [ ] W1.4 Assignment + mention + review-request emails
-- [ ] W1.5 AI output becomes tasks (recommendations, opportunities, proposals → Suggested, deduped by key, workstream set by the agent); migration of existing REC#/PROP#/OPP# rows; analyst sees open tasks instead of the ledger
-- [ ] W1.6 Today screen: north star, my work, goal status, needs-decision, what changed, recent wins
-- [ ] W1.7 Tasks screen: board by status, list, Mine; filters (workstream, owner, goal); task drawer
-- [ ] W1.8 Task drawer: all fields editable by permission, evidence, metric, links, comments, history
-- [ ] W1.9 Agent drafts work on tasks (Ask agent to draft → PR → In review → merged → Done)
-- [ ] W1.10 North-star metric `app.weekly_backup_users` (+ weekly series) in analytics and facts
-- [ ] W1.11 Console navigation: Growth group (Today, Goals & roadmap, Tasks, Insights, workstreams, Growth settings)
+- [x] W1.1 Task model `GROWTH / TASK#<id>` (fields above, lifecycle Suggested → Ready → In progress → In review → Done → Measured, + Blocked, Won't do), ids from an atomic counter; `TASKLOG#<id>#<ts>` comments + history
+- [x] W1.2 Roles `growth_lead` (manage) and `growth_contributor` (work on own/assigned tasks, comment); permissions `growth.manage`, `growth.contribute`; enforced in routes
+- [x] W1.3 Routes: list/get/create/update tasks, comment, change status (with rules: Won't do needs a reason, Blocked needs a blocker, Done needs proof for non-PR tasks)
+- [x] W1.4 Assignment + mention + review-request emails
+- [x] W1.5 AI output becomes tasks (recommendations, opportunities, proposals → Suggested, deduped by key, workstream set by the agent); migration of existing REC#/PROP#/OPP# rows; analyst sees open tasks instead of the ledger
+- [x] W1.6 Today screen: north star, my work, goal status, needs-decision, what changed, recent wins
+- [x] W1.7 Tasks screen: board by status, list, Mine; filters (workstream, owner, goal); task drawer
+- [x] W1.8 Task drawer: all fields editable by permission, evidence, metric, links, comments, history
+- [x] W1.9 Agent drafts work on tasks (Ask agent to draft → PR → In review → merged → Done)
+- [x] W1.10 North-star metric `app.weekly_backup_users` (+ weekly series) in analytics and facts
+- [x] W1.11 Console navigation: Growth group (Today, Goals & roadmap, Tasks, Insights, workstreams, Growth settings)
 
 ## W2 Direction (goals, roadmap, insights)
-- [ ] W2.1 Goals `GOAL#`, key results bound to a metric (fact id) or manual value with history; milestones `MS#`; month focus `SETTINGS`
-- [ ] W2.2 Seed from growth-strategy.md: O1 launch, O2 day 30, O3 day 90, Health; milestones A/B/C; strategy tasks A1–A10 and owner decisions as tasks
-- [ ] W2.3 KR progress = (current − baseline)/(target − baseline); status vs period elapsed (on track / at risk / behind / not started)
-- [ ] W2.4 Milestone progress = verified-done tasks ÷ all, weighted by effort; blockers list
-- [ ] W2.5 Insights screen: weekly brief, triage of Suggested tasks (Accept/Dismiss with reason), anomalies, data-source health, history, facts, tool activity (admins)
-- [ ] W2.6 Live metrics for goals between reports (product/website facts from the analytics cache)
+- [x] W2.1 Goals `GOAL#`, key results bound to a metric (fact id) or manual value with history; milestones `MS#`; month focus `SETTINGS`
+- [x] W2.2 Seed from growth-strategy.md: O1 launch, O2 day 30, O3 day 90, Health; milestones A/B/C; strategy tasks A1–A10 and owner decisions as tasks
+- [x] W2.3 KR progress = (current − baseline)/(target − baseline); status vs period elapsed (on track / at risk / behind / not started)
+- [x] W2.4 Milestone progress = verified-done tasks ÷ all, weighted by effort; blockers list
+- [x] W2.5 Insights screen: weekly brief, triage of Suggested tasks (Accept/Dismiss with reason), anomalies, data-source health, history, facts, tool activity (admins)
+- [x] W2.6 Live metrics for goals between reports (product/website facts from the analytics cache)
 
 ## W3 Workstreams
-- [ ] W3.1 Workstream template: outcome, outcome metrics, status counts (open/blocked/overdue/done), work, opportunities, results
-- [ ] W3.2 Search & content: demand table, pages needing attention (index state, titles, thin), opportunities, published content + results
-- [ ] W3.3 Social & distribution: post calendar `POST#` (idea → drafted → approved → published), tagged links, visits per post
-- [ ] W3.4 Website & Play Store: website funnel by landing page, listing tasks, ratings (when Play access), ASO checklist
-- [ ] W3.5 Activation & retention: funnel, D1/D7/D30, channels, Plus conversion
-- [ ] W3.6 Referrals & events: invites, event albums, guests, share links, affiliates
-- [ ] W3.7 Partnerships: pipeline `PARTNER#` (lead → contacted → meeting → pilot → live → won/lost), next step/date, owner, tagged link, visits per partner
+- [x] W3.1 Workstream template: outcome, outcome metrics, status counts (open/blocked/overdue/done), work, opportunities, results
+- [x] W3.2 Search & content: demand table, pages needing attention (index state, titles, thin), opportunities, published content + results
+- [x] W3.3 Social & distribution: post calendar `POST#` (idea → drafted → approved → published), tagged links, visits per post
+- [x] W3.4 Website & Play Store: website funnel by landing page, listing tasks, ratings (when Play access), ASO checklist
+- [x] W3.5 Activation & retention: funnel, D1/D7/D30, channels, Plus conversion
+- [x] W3.6 Referrals & events: invites, event albums, guests, share links, affiliates
+- [x] W3.7 Partnerships: pipeline `PARTNER#` (lead → contacted → meeting → pilot → live → won/lost), next step/date, owner, tagged link, visits per partner
 
 ## W4 Results, agent drafts, team
-- [ ] W4.1 Results loop: at a task's check date, current metric vs baseline/target → verdict (worked / no change / worse / too early) → Measured; PR merge → Done automatically
-- [ ] W4.2 Agent text drafts: social posts, Play listing text, partner outreach (no PR; stored on the task/post for approval)
-- [ ] W4.3 Monday digest per person (their open, overdue, due this week, waiting for their review)
-- [ ] W4.4 Start here page: mission, north star, strategy, how the workspace works, your role
-- [ ] W4.5 Growth settings: workstream owners (auto-assign), launch date, north star, month focus, agent permissions, data sources, product facts
+- [x] W4.1 Results loop: at a task's check date, current metric vs baseline/target → verdict (worked / no change / worse / too early) → Measured; PR merge → Done automatically
+- [x] W4.2 Agent text drafts: social posts, Play listing text, partner outreach (no PR; stored on the task/post for approval)
+- [x] W4.3 Monday digest per person (their open, overdue, due this week, waiting for their review)
+- [x] W4.4 Start here page: mission, north star, strategy, how the workspace works, your role
+- [x] W4.5 Growth settings: workstream owners (auto-assign), launch date, north star, month focus, agent permissions, data sources, product facts
 - [ ] W4.6 Docs (growth-engine.md, README status), tests, e2e, deploy, owner walkthrough
+
+## Status (2026-10-30)
+Built and verified locally: infra unit tests 89/89 (growth-workspace.test.ts: priority, lifecycle rules,
+mentions, KR/goal/milestone progress, AI → tasks, partners/posts, results verdict, digest), typecheck,
+Console build, every screen rendered in headless Chrome against a mock API with this week's real metrics
+(no runtime errors). **Live: waiting for the deploy** (W4.6).
+
+### Where things are
+- Backend: `infra/lambda/console/growth-tasks.ts` (tasks, lifecycle, comments/history, emails),
+  `growth-goals.ts` (settings, goals/KRs, milestones, progress, strategy seed), `growth-records.ts`
+  (partners, posts, tagged links), `growth-workspace.ts` (AI output → tasks, migration, the workspace
+  endpoint, results loop, Monday digest), `growth.ts` (weekly analysis; drafts on tasks: PRs for
+  page/content/fix, text for social/listing/partner), `roles.ts` (growth_lead, growth_contributor).
+- Routes: `GET /growth/workspace`, `GET|POST /growth/tasks`, `GET|PATCH /growth/tasks/<id>`,
+  `POST /growth/tasks/<id>/comments`, `POST /growth/tasks/<id>/draft`, `PUT /growth/settings`,
+  `PUT /growth/goals/<id>`, `PUT|DELETE /growth/partners/<id>`, `PUT|DELETE /growth/posts/<id>`,
+  `GET /growth` (Insights detail), `POST /growth/run`, `PUT /growth/tools`.
+- Console: `console/src/pages/growth/` (index, shared, main-views: Today/Goals/Tasks, task-panel,
+  workstreams incl. partnerships pipeline and social calendar, other-views: Insights/Settings/Start here).
+- Hourly Console job (`index.ts` alerts): `growthHousekeeping` = daily results loop + Monday 03:00 UTC digest.
+- First load seeds goals O1/O2/O3/Health, milestones A/B/C and 23 strategy tasks (incl. the 5 owner
+  decisions), and migrates the old recommendations, proposals and opportunities into tasks (once).

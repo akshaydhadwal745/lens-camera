@@ -17,7 +17,7 @@ import { analytics } from './analytics';
 import { growthDraft, growthPage, growthRun, growthTools, growthUnwatch } from './growth';
 import { goalUpdate, settingsUpdate } from './growth-goals';
 import { partnerSave, postSave, recordDelete } from './growth-records';
-import { migrateLegacy, workspace } from './growth-workspace';
+import { growthHousekeeping, migrateLegacy, workspace } from './growth-workspace';
 import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
 import { activity, log } from './log';
 import { campaigns, createNotification, estimate, lifecycleStats, stopNotification } from './notifications';
@@ -44,7 +44,12 @@ import { runAlerts } from './alerts';
 
 export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }): Promise<Res> {
   // Hourly owner alerts (EventBridge, not HTTP; console-stack.ts).
-  if ('alerts' in event && event.alerts === true) return (await runAlerts()) as unknown as Res;
+  if ('alerts' in event && event.alerts === true) {
+    const alerts = await runAlerts();
+    // Growth workspace: daily results loop and the Monday digest (growth-workspace.ts).
+    const growth = await growthHousekeeping().catch((e) => (console.error('growth housekeeping', e), { error: String(e) }));
+    return { ...(alerts as object), growth } as unknown as Res;
+  }
   event = event as APIGatewayProxyEventV2;
   try {
     // Only the console's CloudFront knows the edge secret: direct calls to the function URL stop here.
