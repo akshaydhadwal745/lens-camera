@@ -669,7 +669,7 @@ export function draftProblems(files: { path: string; content: string; before: st
   for (const f of files) {
     if (!EDITABLE.test(f.path)) out.push(`${f.path} is outside what drafts may change`);
     const count = (t: string) => (t.match(new RegExp(FORBIDDEN_CLAIMS, 'gi')) ?? []).length;
-    if (count(f.content) > count(f.before)) out.push(`${f.path} adds a claim product-facts.md forbids (unlimited / free forever)`);
+    if (count(f.content) > count(f.before)) out.push(`${f.path} adds a claim product-facts.md forbids (unlimited storage)`);
   }
   return out;
 }
@@ -745,7 +745,7 @@ async function runTextDraft(t: Task, by: string, started: number) {
   const drafts = (d.drafts ?? []).filter((x) => typeof x.body === 'string' && x.body.trim()).slice(0, 8);
   if (!drafts.length) throw new Error(`No drafts. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
   const problems = drafts.filter((x) => new RegExp(FORBIDDEN_CLAIMS, 'i').test(`${x.title} ${x.body}`)).map((x) => x.title);
-  if (problems.length) throw new Error(`Drafts made a claim product-facts.md forbids (unlimited / free forever): ${problems.join(', ')}`);
+  if (problems.length) throw new Error(`Drafts made a claim product-facts.md forbids (unlimited storage): ${problems.join(', ')}`);
   let posts = 0;
   for (const x of drafts.filter((y) => y.kind === 'social-post' && CHANNEL_OK.has(y.channel))) {
     const date = new Date(started + Math.max(0, Math.min(14, Math.round(x.dayOffset || 0))) * DAY).toISOString().slice(0, 10);

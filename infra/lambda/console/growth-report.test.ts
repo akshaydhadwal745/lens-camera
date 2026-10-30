@@ -172,6 +172,8 @@ test('drafts: nothing changed, too many files, wrong paths and forbidden claims 
   assert.match(draftProblems([f('site/src/content/pages.ts', 'Unlimited backup', 'Backup')]).join(), /forbids/);
   // An existing claim that stays (not added) is not the draft's fault.
   assert.deepEqual(draftProblems([f('site/src/content/pages.ts', '10 GB free forever. New text.', '10 GB free forever.')]), []);
+  assert.deepEqual(draftProblems([f('site/src/content/pages.ts', 'Then 10 GB free forever.', 'Then 10 GB free.')]), []); // allowed since 2026-10-30
+  assert.equal(draftProblems([f('site/src/content/pages.ts', 'Unlimited storage.', 'Storage.')]).length, 1);
   assert.match(draftProblems([f('.github/workflows/web.yml', 'x')]).join(), /outside/);
   assert.match(draftProblems(Array.from({ length: 11 }, (_, i) => f(`site/src/content/p${i}.ts`, 'x'))).join(), /max 10/);
 });

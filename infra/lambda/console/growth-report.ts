@@ -415,7 +415,7 @@ export const DRAFT_SCHEMA = {
 export type DraftResult = { prTitle: string; summary: string; changes: { file: string; what: string }[]; checks: string[]; risks: string };
 
 /** Words that must never be added to the site (product-facts "Not available"), whatever the brief says. */
-export const FORBIDDEN_CLAIMS = /\bunlimited\b|अनलिमिटेड|असीमित|\bfree forever\b/i;
+export const FORBIDDEN_CLAIMS = /\bunlimited\b|अनलिमिटेड|असीमित/i; // "10 GB free forever" is true (owner decision 2026-10-30)
 
 // ---------- text drafts (W4.2): social posts, Play listing text, partner outreach ----------
 
