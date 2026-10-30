@@ -88,6 +88,22 @@ export function AgentBar({
   taskTitle: (id: string) => string | undefined;
 }) {
   const { jobs } = useJobs();
+  // "OK" hides this failure for the rest of the visit (remembered per browser).
+  const [hidden, setHiddenState] = useState(() => {
+    try {
+      return Number(sessionStorage.getItem("growth-agent-note") ?? 0);
+    } catch {
+      return 0;
+    }
+  });
+  const setHidden = (at: number) => {
+    setHiddenState(at);
+    try {
+      sessionStorage.setItem("growth-agent-note", String(at));
+    } catch {
+      /* private mode: hidden for this page only */
+    }
+  };
   const lines: string[] = [];
   const a = jobs.analyst;
   if (a)
@@ -108,11 +124,25 @@ export function AgentBar({
     );
   // No job running, but the last one failed in the past hour: say so (otherwise people just wait).
   const err = jobs.lastError;
-  if (!lines.length && err && (jobs.checkedAt ?? 0) - err.at < 3_600_000)
+  if (
+    !lines.length &&
+    err &&
+    err.at !== hidden &&
+    (jobs.checkedAt ?? 0) - err.at < 3_600_000
+  )
     return (
-      <div className="notice error" role="status">
-        <strong>The agent’s last job stopped</strong> ({when(err.at)}):{" "}
-        {agentError(err.message)}
+      <div className="notice gw-agentnote" role="status">
+        <span>
+          <strong>The agent’s last job stopped</strong> ({when(err.at)}):{" "}
+          {agentError(err.message)}
+        </span>
+        <button
+          className="btn ghost small"
+          onClick={() => setHidden(err.at)}
+          aria-label="Hide this note"
+        >
+          OK
+        </button>
       </div>
     );
   if (!lines.length) return null;

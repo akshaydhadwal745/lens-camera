@@ -1033,3 +1033,4 @@ tr.gw-click:hover td { background: var(--side); }
 }
 .gw-copyrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; } .gw-copyrow input { flex: 1; min-width: 0; }
 @media (max-width: 720px) { .gw-roadmap { grid-template-columns: 1fr; overflow-x: visible; } }
+.gw-agentnote { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; background: var(--warn-soft); color: var(--text); border-color: transparent; }
