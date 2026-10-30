@@ -265,6 +265,9 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
   const draft = async (kind: "opp" | "prop", id: string) => {
     try {
       await api("POST", "/growth/draft", { kind, id });
+      alert(
+        "Drafting started. The agent takes about 5–10 minutes; you'll get an email with the pull request.",
+      );
     } catch (e) {
       alert((e as Error).message);
     }
@@ -283,6 +286,10 @@ export function Growth({ canWrite }: { canWrite: boolean }) {
         ...(note ? { note } : {}),
       },
     );
+    if (res?.draft === "started")
+      alert(
+        "Planned, and drafting started. The agent takes about 5–10 minutes; you'll get an email with the pull request.",
+      );
     if (res?.draft === "busy")
       alert(
         "Planned. The analyst is busy right now: press Draft it in about 10 minutes.",
