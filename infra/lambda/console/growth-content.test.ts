@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { calendarItems, checkMeta } from './growth-content';
+import { jobsFrom } from './growth';
 import { unsubscribeToken } from '../api/growth-integrations';
 
 test('meta changes: path, lengths and "same as now" are checked; whitespace is cleaned', () => {
@@ -41,4 +42,17 @@ test('unsubscribe tokens are per account and per secret', () => {
   assert.notEqual(unsubscribeToken('abc', 's1'), unsubscribeToken('abd', 's1'));
   assert.notEqual(unsubscribeToken('abc', 's1'), unsubscribeToken('abc', 's2'));
   assert.equal(unsubscribeToken('abc', 's1').length, 32);
+});
+
+test('agent jobs: the lock tells what runs (report, draft of a task, monthly), side jobs until they finish, stale ones vanish', () => {
+  const now = 1_000_000_000;
+  assert.deepEqual(jobsFrom({ at: now - 60_000, by: 'draft:a@x.com', ref: 'T-9' }, {}, now).analyst, { kind: 'draft', by: 'a@x.com', at: now - 60_000, ref: 'T-9' });
+  assert.equal(jobsFrom({ at: now - 60_000, by: 'monthly:schedule', ref: '2026-10' }, {}, now).analyst?.kind, 'monthly');
+  assert.equal(jobsFrom({ at: now - 60_000, by: 'a@x.com' }, {}, now).analyst?.kind, 'report');
+  assert.equal(jobsFrom({ at: 0, by: 'a@x.com', lastError: 'boom', lastErrorAt: 5 }, {}, now).analyst, null);
+  assert.equal(jobsFrom({ at: now - 21 * 60_000, by: 'a' }, {}, now).analyst, null);
+  const j = jobsFrom(undefined, { seoAudit: { startedAt: now - 1000, by: 'b' }, competitors: { startedAt: now - 5000, finishedAt: now - 1000, by: 'b' } }, now);
+  assert.deepEqual(j.seoAudit, { at: now - 1000, by: 'b' });
+  assert.equal(j.competitors, null);
+  assert.equal(jobsFrom(undefined, { seoAudit: { startedAt: now - 16 * 60_000 } }, now).seoAudit, null);
 });

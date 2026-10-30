@@ -14,7 +14,7 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { competitorCheck, competitorResearch, growthDraft, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { competitorCheck, competitorResearch, growthDraft, jobsPage, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
 import { calendarPage, ga4Page, integrationsPage, metaRequest } from './growth-content';
 import { competitorSave, competitorsPage } from './growth-competitors';
 import { campaignSave, moneyPage, spendSave } from './growth-money';
@@ -96,6 +96,7 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'GET /growth') return await allowed('growth', () => growthPage(req));
     if (route === 'POST /growth/run') return await allowed('growth.write', () => growthRun(req, email));
     // Growth workspace tasks (growth-tasks.ts): see with growth, work with growth.contribute, manage with growth.write.
+    if (route === 'GET /growth/jobs') return await allowed('growth', () => jobsPage());
     if (route === 'GET /growth/workspace') return await allowed('growth', () => workspace(email, role));
     if (route === 'GET /growth/monthly') return await allowed('growth', () => monthlyPage(req));
     if (route === 'POST /growth/monthly/run') return await allowed('growth.write', () => monthlyRun(req, email));

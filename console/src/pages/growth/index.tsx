@@ -13,6 +13,7 @@ import { MonthlyReviews } from "./monthly";
 import { SeoTools } from "./seo";
 import { NewTask, TaskPanel } from "./task-panel";
 import { ContentCalendar, Ga4Page, Integrations } from "./website";
+import { AgentBar, JobsProvider } from "./jobs";
 import { WorkstreamPage } from "./workstreams";
 
 const TITLES: Record<string, string> = {
@@ -55,57 +56,66 @@ export function GrowthWorkspace({ path }: { path: string }) {
   return (
     <Page title={title}>
       <span className="gw-wide" hidden />
-      <Loaded state={state}>
-        {(ws) => (
-          <>
-            {sub === "" && <Today ws={ws} onNew={() => setCreating(true)} />}
-            {sub === "goals" && <Goals ws={ws} onChanged={reload} />}
-            {sub === "tasks" && (
-              <Tasks ws={ws} search={search} onNew={() => setCreating(true)} />
-            )}
-            {sub === "insights" && (
-              <div className="gw-stack">
-                <MonthlyReviews ws={ws} search={search} />
-                <Insights ws={ws} onChanged={reload} />
-              </div>
-            )}
-            {sub === "settings" && (
-              <GrowthSettings ws={ws} onChanged={reload} />
-            )}
-            {sub === "start" && <StartHere ws={ws} />}
-            {sub === "seo" && <SeoTools ws={ws} search={search} />}
-            {sub === "competitors" && <Competitors ws={ws} />}
-            {sub === "money" && <MoneyPage ws={ws} />}
-            {sub === "analytics" && <Ga4Page />}
-            {sub === "calendar" && <ContentCalendar />}
-            {sub === "integrations" && <Integrations />}
-            {wsKey && WS[wsKey] && (
-              <WorkstreamPage
-                ws={ws}
-                k={wsKey}
-                onNew={() => setCreating(true)}
+      <JobsProvider>
+        <Loaded state={state}>
+          {(ws) => (
+            <>
+              <AgentBar
+                taskTitle={(id) => ws.tasks.find((t) => t.id === id)?.title}
               />
-            )}
-            {taskId && <TaskPanel id={taskId} ws={ws} onChanged={reload} />}
-            {creating && (
-              <NewTask
-                ws={ws}
-                defaults={wsKey ? { workstream: wsKey } : undefined}
-                onDone={(id) => {
-                  setCreating(false);
-                  if (id) {
-                    reload();
-                    const u = new URL(location.href);
-                    u.searchParams.set("task", id);
-                    history.pushState(null, "", u);
-                    dispatchEvent(new PopStateEvent("popstate"));
-                  }
-                }}
-              />
-            )}
-          </>
-        )}
-      </Loaded>
+              {sub === "" && <Today ws={ws} onNew={() => setCreating(true)} />}
+              {sub === "goals" && <Goals ws={ws} onChanged={reload} />}
+              {sub === "tasks" && (
+                <Tasks
+                  ws={ws}
+                  search={search}
+                  onNew={() => setCreating(true)}
+                />
+              )}
+              {sub === "insights" && (
+                <div className="gw-stack">
+                  <MonthlyReviews ws={ws} search={search} />
+                  <Insights ws={ws} onChanged={reload} />
+                </div>
+              )}
+              {sub === "settings" && (
+                <GrowthSettings ws={ws} onChanged={reload} />
+              )}
+              {sub === "start" && <StartHere ws={ws} />}
+              {sub === "seo" && <SeoTools ws={ws} search={search} />}
+              {sub === "competitors" && <Competitors ws={ws} />}
+              {sub === "money" && <MoneyPage ws={ws} />}
+              {sub === "analytics" && <Ga4Page />}
+              {sub === "calendar" && <ContentCalendar />}
+              {sub === "integrations" && <Integrations />}
+              {wsKey && WS[wsKey] && (
+                <WorkstreamPage
+                  ws={ws}
+                  k={wsKey}
+                  onNew={() => setCreating(true)}
+                />
+              )}
+              {taskId && <TaskPanel id={taskId} ws={ws} onChanged={reload} />}
+              {creating && (
+                <NewTask
+                  ws={ws}
+                  defaults={wsKey ? { workstream: wsKey } : undefined}
+                  onDone={(id) => {
+                    setCreating(false);
+                    if (id) {
+                      reload();
+                      const u = new URL(location.href);
+                      u.searchParams.set("task", id);
+                      history.pushState(null, "", u);
+                      dispatchEvent(new PopStateEvent("popstate"));
+                    }
+                  }}
+                />
+              )}
+            </>
+          )}
+        </Loaded>
+      </JobsProvider>
     </Page>
   );
 }

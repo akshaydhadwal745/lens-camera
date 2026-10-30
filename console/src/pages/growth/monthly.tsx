@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { api, get } from "../../api";
 import { Card, date, Empty, Loaded, useLoad } from "../../ui";
+import { analystButton, useGrowthReload, useJobs } from "./jobs";
 import { can, Chip, fmt, openTask, type Fact, type Workspace } from "./shared";
 
 type Review = {
@@ -33,20 +34,24 @@ export function MonthlyReviews({
   search: URLSearchParams;
 }) {
   const [month, setMonth] = useState(search.get("monthly") ?? "");
+  const { jobs, refresh } = useJobs();
+  const reloadKey = useGrowthReload();
+  const btn = analystButton(
+    jobs,
+    (a) => a.kind === "monthly",
+    "Write last month's review",
+    "Writing the review…",
+  );
   const state = useLoad(
     () =>
       get<{ months: string[]; review: Review | null }>(
         `/growth/monthly${month ? `?month=${month}` : ""}`,
       ),
-    [month],
+    [month, reloadKey],
   );
   const run = () =>
     void api("POST", "/growth/monthly/run", {})
-      .then(() =>
-        alert(
-          "Writing last month's review (about 5 minutes). Owners get an email.",
-        ),
-      )
+      .then(refresh)
       .catch((e: Error) => alert(e.message));
   return (
     <Loaded state={state}>
@@ -67,8 +72,8 @@ export function MonthlyReviews({
                 </select>
               )}
               {can(ws, "growth.write") && (
-                <button className="btn" onClick={run}>
-                  Write last month's review
+                <button className="btn" disabled={btn.disabled} onClick={run}>
+                  {btn.label}
                 </button>
               )}
             </span>

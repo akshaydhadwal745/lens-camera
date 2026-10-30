@@ -460,12 +460,12 @@ const REC_KEYS = new Set(Object.keys((REPORT_SCHEMA as any).properties.recommend
 const STALE = 20 * 60_000;
 
 /** Takes the lock unless a run started in the last 20 minutes. Returns its start time, or undefined if busy. */
-export async function takeLock(by: string, ai: boolean, now = Date.now()): Promise<number | undefined> {
+export async function takeLock(by: string, ai: boolean, now = Date.now(), ref?: string): Promise<number | undefined> {
   try {
     await ddb.send(
       new PutCommand({
         TableName: env.table,
-        Item: { pk: 'GROWTH', sk: 'RUNNING', at: now, by, ai },
+        Item: { pk: 'GROWTH', sk: 'RUNNING', at: now, by, ai, ...(ref ? { ref } : {}) },
         ConditionExpression: 'attribute_not_exists(pk) OR #a < :stale',
         ExpressionAttributeNames: { '#a': 'at' },
         ExpressionAttributeValues: { ':stale': now - STALE },
@@ -491,6 +491,38 @@ async function releaseLock(at: number, error?: string) {
       }),
     )
     .catch((e) => console.error('growth lock release', e));
+}
+
+// ---------- what the agent is doing now (every growth page shows it; buttons wait for it) ----------
+//   GROWTH / RUNNING          the analyst lock above: weekly analysis, a draft (ref = task) or a monthly review (ref = month)
+//   GROWTH / JOB#<name>       jobs outside the lock: seoAudit, competitors { startedAt, by, finishedAt?, error? }
+
+const JOB_STALE = 15 * 60_000;
+export type JobName = 'seoAudit' | 'competitors';
+
+export async function markJob(name: JobName, by: string) {
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `JOB#${name}`, startedAt: Date.now(), by } }));
+}
+
+export async function finishJob(name: JobName, error?: string) {
+  await ddb
+    .send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `JOB#${name}` }, UpdateExpression: error ? 'SET finishedAt = :t, #e = :e' : 'SET finishedAt = :t REMOVE #e', ExpressionAttributeNames: { '#e': 'error' }, ExpressionAttributeValues: { ':t': Date.now(), ...(error ? { ':e': error.slice(0, 300) } : {}) } }))
+    .catch((e) => console.error('growth job finish', e));
+}
+
+/** The running job, from its rows (pure: tested in growth-content.test.ts). */
+export function jobsFrom(run: Record<string, any> | undefined, rows: Partial<Record<JobName, Record<string, any>>>, now = Date.now()) {
+  const who = (by: string) => by.replace(/^(draft|monthly):/, '');
+  const analyst = run?.at && now - run.at < STALE ? { kind: String(run.by).startsWith('draft:') ? 'draft' : String(run.by).startsWith('monthly:') ? 'monthly' : 'report', by: who(String(run.by)), at: run.at as number, ref: (run.ref as string | undefined) ?? null } : null;
+  const job = (r?: Record<string, any>) => (r?.startedAt && !(r.finishedAt >= r.startedAt) && now - r.startedAt < JOB_STALE ? { at: r.startedAt as number, by: String(r.by ?? '') } : null);
+  return { analyst, seoAudit: job(rows.seoAudit), competitors: job(rows.competitors), lastError: run?.lastError ? { message: String(run.lastError), at: run.lastErrorAt as number } : null };
+}
+
+/** GET /growth/jobs */
+export async function jobsPage(): Promise<Res> {
+  const get = (sk: string) => ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk } })).then((r) => r.Item);
+  const [run, seoAudit, competitors] = await Promise.all([get('RUNNING'), get('JOB#seoAudit'), get('JOB#competitors')]);
+  return json(200, jobsFrom(run, { seoAudit, competitors }));
 }
 
 // ---------- recommendations ledger ----------
@@ -771,7 +803,7 @@ async function runTextDraft(t: Task, by: string, started: number) {
 
 /** The draft run (GrowthAnalyst Lambda): fresh code copy → Claude edits it → checks → PR → task In review. */
 export async function runDraft(opts: { taskId: string; by: string; lockAt?: number }) {
-  const lockAt = opts.lockAt ?? (await takeLock(`draft:${opts.by}`, true));
+  const lockAt = opts.lockAt ?? (await takeLock(`draft:${opts.by}`, true, Date.now(), opts.taskId));
   if (lockAt === undefined) return { skipped: true };
   const started = Date.now();
   const id = opts.taskId;
@@ -828,7 +860,7 @@ async function syncPullRequests() {
  * (least privilege): the draft run checks it and reports a missing setup on the task. */
 async function startDraft(taskId: string, email: string): Promise<'started' | 'busy' | 'not-set-up'> {
   if (!process.env.GROWTH_FUNCTION) return 'not-set-up';
-  const lockAt = await takeLock(`draft:${email}`, true);
+  const lockAt = await takeLock(`draft:${email}`, true, Date.now(), taskId);
   if (lockAt === undefined) return 'busy';
   await new LambdaClient({})
     .send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ draft: { taskId }, by: email, lockAt })) }))
@@ -869,6 +901,7 @@ export async function competitorResearch(id: string, email: string): Promise<Res
 export async function competitorCheck(email: string): Promise<Res> {
   if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
   await rateLimit('console-competitor-check', 6, 'A check was started recently. Try again in an hour.');
+  await markJob('competitors', email);
   await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ competitors: true, by: email })) }));
   return json(202, { started: true });
 }
@@ -877,6 +910,7 @@ export async function competitorCheck(email: string): Promise<Res> {
 export async function seoAuditRun(email: string): Promise<Res> {
   if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
   await rateLimit('console-seo-audit', 6, 'An audit was started recently. Try again in an hour.');
+  await markJob('seoAudit', email);
   await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ seoAudit: true, by: email })) }));
   await log({ entity: 'growth:seo', action: 'growth.seo-audit', actor: `console:${email}` });
   return json(202, { started: true });
@@ -1070,7 +1104,7 @@ export async function monthlyRun(req: Req, email: string): Promise<Res> {
   if (!process.env.GROWTH_FUNCTION) throw new HttpError(503, 'The growth analyst is not deployed');
   await rateLimit('console-monthly-run', 4, 'A review was started recently. Try again in an hour.');
   const month = typeof req.body?.month === 'string' && /^\d{4}-\d{2}$/.test(req.body.month) ? req.body.month : undefined;
-  const lockAt = await takeLock(`monthly:${email}`, true);
+  const lockAt = await takeLock(`monthly:${email}`, true, Date.now(), month ?? prevMonth(Date.now()));
   if (lockAt === undefined) throw new HttpError(409, 'The analyst is busy. Try again in about 10 minutes.');
   await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ monthly: true, month, by: email, lockAt })) }));
   return json(202, { started: true });

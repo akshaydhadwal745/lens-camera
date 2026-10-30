@@ -3,7 +3,15 @@ import { useState } from "react";
 
 import { api, get } from "../../api";
 import { Card, date, Empty, Loaded, Stat, useLoad } from "../../ui";
-import { can, Chip, Person, Sparkline, type Workspace } from "./shared";
+import { useGrowthReload, useJobs } from "./jobs";
+import {
+  can,
+  CardTable,
+  Chip,
+  Person,
+  Sparkline,
+  type Workspace,
+} from "./shared";
 
 type Issue = {
   code: string;
@@ -118,7 +126,8 @@ export function SeoTools({
 }) {
   const [tab, setTab] = useState<Tab>((search.get("tab") as Tab) || "keywords");
   const [n, setN] = useState(0);
-  const state = useLoad(() => get<Seo>("/growth/seo"), [n]);
+  const reloadKey = useGrowthReload();
+  const state = useLoad(() => get<Seo>("/growth/seo"), [n, reloadKey]);
   const reload = () => setN((x) => x + 1);
   return (
     <>
@@ -214,7 +223,7 @@ function Keywords({
           )
         }
       >
-        <div className="table-wrap">
+        <CardTable>
           <table>
             <thead>
               <tr>
@@ -277,7 +286,7 @@ function Keywords({
                 ))}
             </tbody>
           </table>
-        </div>
+        </CardTable>
         <p className="muted small">
           Google position = average position in results over 28 days (lower is
           better), from Search Console's daily data. A keyword shows once Google
@@ -323,24 +332,25 @@ function Keywords({
 
 function AuditRun({ ws, at }: { ws: Workspace; at?: number }) {
   const [busy, setBusy] = useState(false);
+  const { jobs, refresh } = useJobs();
   if (!can(ws, "growth.write")) return null;
   return (
     <button
       className="btn"
-      disabled={busy}
+      disabled={busy || !!jobs.seoAudit}
       onClick={() => {
         setBusy(true);
         void api("POST", "/growth/seo/audit")
-          .then(() =>
-            alert(
-              "Audit started. It takes 1–3 minutes; reload this page then.",
-            ),
-          )
+          .then(refresh)
           .catch((e: Error) => alert(e.message))
           .finally(() => setBusy(false));
       }}
     >
-      {at ? "Run audit again" : "Run the first audit"}
+      {jobs.seoAudit
+        ? "Audit running…"
+        : at
+          ? "Run audit again"
+          : "Run the first audit"}
     </button>
   );
 }
@@ -499,7 +509,7 @@ function Audit({ ws, s }: { ws: Workspace; s: Seo }) {
           </span>
         }
       >
-        <div className="table-wrap">
+        <CardTable>
           <table>
             <thead>
               <tr>
@@ -541,7 +551,7 @@ function Audit({ ws, s }: { ws: Workspace; s: Seo }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </CardTable>
       </Card>
     </>
   );

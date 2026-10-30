@@ -15,6 +15,7 @@ import {
   type Workspace,
   type Workstream,
 } from "./shared";
+import { analystButton, useGrowthReload, useJobs } from "./jobs";
 
 type ReportPage = {
   dates: string[];
@@ -73,9 +74,17 @@ export function Insights({
 }) {
   const [day, setDay] = useState("");
   const [busy, setBusy] = useState(false);
+  const { jobs, refresh } = useJobs();
+  const reloadKey = useGrowthReload();
   const state = useLoad(
     () => get<ReportPage>(`/growth${day ? `?date=${day}` : ""}`),
-    [day, busy],
+    [day, reloadKey],
+  );
+  const runBtn = analystButton(
+    jobs,
+    (a) => a.kind === "report",
+    "Run analysis now",
+    "Analysis running…",
   );
   const manage = can(ws, "growth.write");
   const suggested = ws.tasks.filter((t) => t.status === "suggested");
@@ -83,9 +92,7 @@ export function Insights({
     setBusy(true);
     try {
       await api("POST", "/growth/run", { ai: true });
-      alert(
-        "Analysis started. It takes about 10 minutes; owners get an email.",
-      );
+      refresh();
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -132,10 +139,10 @@ export function Insights({
                 {manage && (
                   <button
                     className="btn primary"
-                    disabled={busy || !!g.running}
+                    disabled={busy || runBtn.disabled}
                     onClick={() => void run()}
                   >
-                    {g.running ? "Running…" : "Run analysis now"}
+                    {runBtn.label}
                   </button>
                 )}
               </div>

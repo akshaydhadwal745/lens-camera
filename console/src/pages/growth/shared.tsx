@@ -1,5 +1,5 @@
 // Growth workspace: shared types and small pieces (docs/growth/growth-workspace.md).
-import { ReactNode } from "react";
+import { ReactNode, useLayoutEffect, useRef } from "react";
 
 import { navigate } from "../../ui";
 
@@ -441,5 +441,27 @@ export function GoalChip({ g }: { g: Goal }) {
     return <Chip tone="plain">Just started</Chip>;
   return (
     <Chip tone={GOAL_STATUS[g.status].tone}>{GOAL_STATUS[g.status].label}</Chip>
+  );
+}
+
+/** A table that becomes one card per row on phones (each cell labelled with its column). */
+export function CardTable({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const t = ref.current?.querySelector("table");
+    if (!t) return;
+    const heads = [...t.querySelectorAll("thead th")].map(
+      (th) => th.textContent ?? "",
+    );
+    t.querySelectorAll("tbody tr").forEach((tr) =>
+      [...tr.children].forEach((td, i) =>
+        td.setAttribute("data-label", heads[i] ?? ""),
+      ),
+    );
+  });
+  return (
+    <div ref={ref} className="table-wrap gw-cards">
+      {children}
+    </div>
   );
 }

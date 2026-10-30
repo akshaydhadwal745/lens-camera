@@ -515,7 +515,9 @@ export function Tasks({
   search: URLSearchParams;
   onNew: () => void;
 }) {
-  const view = (search.get("view") as "board" | "list" | "mine") || "board";
+  const view =
+    (search.get("view") as "board" | "list" | "mine") ||
+    (matchMedia("(max-width: 720px)").matches ? "list" : "board");
   const [wsF, setWsF] = useState(search.get("ws") ?? "all");
   const owner = search.get("owner");
   const goal = search.get("goal");

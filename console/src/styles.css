@@ -999,3 +999,23 @@ tr.gw-click:hover td { background: var(--side); }
 .gw-brief { white-space: pre-wrap; background: var(--side); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; max-height: 520px; overflow-y: auto; }
 .gw-stack { display: flex; flex-direction: column; gap: 16px; }
 .gw-meta-in { width: 100%; min-width: 220px; font: inherit; }
+/* What the agent is doing now (growth pages) */
+.gw-agentbar { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; margin-bottom: 16px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.gw-spinner { flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: gw-spin 0.9s linear infinite; }
+@keyframes gw-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gw-spinner { animation: none; } }
+@media (max-width: 720px) {
+  /* Suggestions: the buttons go under the title instead of squeezing it. */
+  .gw-triage { grid-template-columns: 1fr; gap: 0; padding-bottom: 10px; }
+  .gw-triage .btns { padding-left: 44px; }
+  /* Tables that read as one card per row on a phone. */
+  .gw-cards table, .gw-cards tbody, .gw-cards tr, .gw-cards td { display: block; width: auto !important; }
+  .gw-cards thead { display: none; }
+  .gw-cards tr { border-top: 1px solid var(--line); padding: 10px 0; }
+  .gw-cards td { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; border: 0; padding: 3px 0; text-align: right; }
+  .gw-cards td::before { content: attr(data-label); flex: none; max-width: 45%; color: var(--muted); font-size: 0.85em; text-align: left; }
+  .gw-cards td:first-child { display: block; text-align: left; font-weight: 600; }
+  .gw-cards td:first-child::before, .gw-cards td[data-label=""]::before { content: none; }
+  .gw-cards td[data-label=""] { justify-content: flex-start; }
+  .gw-cards .gw-meta-in { min-width: 0; }
+}

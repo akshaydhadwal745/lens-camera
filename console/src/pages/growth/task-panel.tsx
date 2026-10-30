@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { api, get } from "../../api";
 import { date } from "../../ui";
+import { analystButton, useGrowthReload, useJobs } from "./jobs";
 import {
   BOARD,
   can,
@@ -44,6 +45,14 @@ export function TaskPanel({
   const [comment, setComment] = useState("");
   const [pending, setPending] = useState<Status | null>(null);
   const [extra, setExtra] = useState("");
+  const { jobs, refresh } = useJobs();
+  const reloadKey = useGrowthReload();
+  const drafting = analystButton(
+    jobs,
+    (a) => a.kind === "draft" && a.ref === id,
+    "Ask agent to draft",
+    "Drafting…",
+  );
   const load = () =>
     get<{ task: Task; log: LogEntry[] }>(
       `/growth/tasks/${encodeURIComponent(id)}`,
@@ -55,6 +64,10 @@ export function TaskPanel({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  useEffect(() => {
+    if (reloadKey) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && closeTask();
     addEventListener("keydown", k);
@@ -105,6 +118,7 @@ export function TaskPanel({
     setError("");
     try {
       await api("POST", `/growth/tasks/${encodeURIComponent(id)}/draft`);
+      refresh();
       await load();
       onChanged();
     } catch (e) {
@@ -290,10 +304,10 @@ export function TaskPanel({
                   <div className="btns">
                     <button
                       className="btn primary"
-                      disabled={busy}
+                      disabled={busy || drafting.disabled}
                       onClick={() => void draft()}
                     >
-                      Ask agent to draft
+                      {drafting.label}
                     </button>
                   </div>
                 </div>
@@ -303,9 +317,11 @@ export function TaskPanel({
                 <strong>Pull request #{t.links.pr.number}</strong>{" "}
                 <a href={t.links.pr.url} target="_blank" rel="noreferrer">
                   Review on GitHub
-                </a>{" "}
-                · approve and merge it there; the task moves to Done when it
-                merges.
+                </a>
+                <div className="small">
+                  Approve and merge it there; the task moves to Done when it
+                  merges.
+                </div>
               </div>
             )}
             {t.status === "blocked" && t.blockedBy && (

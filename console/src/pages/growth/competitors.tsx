@@ -3,7 +3,8 @@ import { useState } from "react";
 
 import { api, get } from "../../api";
 import { Card, date, Empty, Loaded, Stat, useLoad } from "../../ui";
-import { can, Chip, openTask, type Workspace } from "./shared";
+import { analystButton, useGrowthReload, useJobs } from "./jobs";
+import { can, CardTable, Chip, openTask, type Workspace } from "./shared";
 
 type Comp = {
   id: string;
@@ -43,7 +44,15 @@ const KIND: Record<string, string> = {
 
 export function Competitors({ ws }: { ws: Workspace }) {
   const [n, setN] = useState(0);
-  const state = useLoad(() => get<Data>("/growth/competitors"), [n]);
+  const { jobs, refresh } = useJobs();
+  const reloadKey = useGrowthReload();
+  const state = useLoad(() => get<Data>("/growth/competitors"), [n, reloadKey]);
+  const researchBtn = analystButton(
+    jobs,
+    (a) => a.kind === "draft",
+    "Research with the agent",
+    "Agent busy…",
+  );
   const [open, setOpen] = useState<string | null>(null);
   const [edit, setEdit] = useState<Comp | "new" | null>(null);
   const manage = can(ws, "growth.write");
@@ -53,11 +62,11 @@ export function Competitors({ ws }: { ws: Workspace }) {
         "POST",
         `/growth/competitors/${c.id}/research`,
       );
-      alert(
-        r.started === "started"
-          ? `The agent is researching ${c.name} (about 5–10 minutes). The brief appears here and on task ${r.taskId}.`
-          : `Task ${r.taskId} created. The analyst is busy: press "Ask agent to draft" on the task in a few minutes.`,
-      );
+      if (r.started !== "started")
+        alert(
+          `Task ${r.taskId} created. The agent is busy: press "Ask agent to draft" on the task when it's free.`,
+        );
+      refresh();
       setN((x) => x + 1);
     } catch (e) {
       alert((e as Error).message);
@@ -65,9 +74,7 @@ export function Competitors({ ws }: { ws: Workspace }) {
   };
   const check = async () => {
     await api("POST", "/growth/competitors/check")
-      .then(() =>
-        alert("Checking every competitor now. Reload in about 2 minutes."),
-      )
+      .then(refresh)
       .catch((e: Error) => alert(e.message));
   };
   return (
@@ -104,8 +111,12 @@ export function Competitors({ ws }: { ws: Workspace }) {
               actions={
                 manage && (
                   <span className="btns">
-                    <button className="btn" onClick={() => void check()}>
-                      Check now
+                    <button
+                      className="btn"
+                      disabled={!!jobs.competitors}
+                      onClick={() => void check()}
+                    >
+                      {jobs.competitors ? "Checking…" : "Check now"}
                     </button>
                     <button className="btn" onClick={() => setEdit("new")}>
                       + Add
@@ -114,7 +125,7 @@ export function Competitors({ ws }: { ws: Workspace }) {
                 )
               }
             >
-              <div className="table-wrap">
+              <CardTable>
                 <table>
                   <thead>
                     <tr>
@@ -199,11 +210,14 @@ export function Competitors({ ws }: { ws: Workspace }) {
                             {manage && (
                               <button
                                 className="btn small"
+                                disabled={researchBtn.disabled}
                                 onClick={() => void research(c)}
                               >
-                                {c.brief
-                                  ? "Research again"
-                                  : "Research with the agent"}
+                                {researchBtn.disabled
+                                  ? researchBtn.label
+                                  : c.brief
+                                    ? "Research again"
+                                    : "Research with the agent"}
                               </button>
                             )}
                           </span>
@@ -212,7 +226,7 @@ export function Competitors({ ws }: { ws: Workspace }) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </CardTable>
               <p className="muted small">
                 Each Monday the analysis reads every competitor's homepage and
                 sitemap and notes what changed. The agent can read their public
