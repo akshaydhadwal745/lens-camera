@@ -4,7 +4,14 @@ import { useState } from "react";
 import { api, get } from "../../api";
 import { Card, date, Empty, Loaded, Stat, useLoad } from "../../ui";
 import { analystButton, useGrowthReload, useJobs } from "./jobs";
-import { can, CardTable, Chip, openTask, type Workspace } from "./shared";
+import {
+  can,
+  CardTable,
+  Chip,
+  openTask,
+  Prose,
+  type Workspace,
+} from "./shared";
 
 type Comp = {
   id: string;
@@ -299,7 +306,9 @@ export function Competitors({ ws }: { ws: Workspace }) {
                             </button>
                           )}
                         </p>
-                        <div className="gw-brief">{c.brief}</div>
+                        <div className="gw-brief">
+                          <Prose text={c.brief} />
+                        </div>
                       </>
                     ) : (
                       <Empty>

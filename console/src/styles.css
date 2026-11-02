@@ -997,6 +997,9 @@ tr.gw-click:hover td { background: var(--side); }
 .gw-today-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .gw-today-work { align-items: start; }
 .gw-brief { white-space: pre-wrap; background: var(--side); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; max-height: 520px; overflow-y: auto; }
+.gw-brief.full { max-height: none; overflow: visible; margin-bottom: 10px; }
+.gw-brief h4 { margin: 14px 0 6px; font-size: 14px; }
+.gw-brief h4:first-child { margin-top: 0; }
 .gw-stack { display: flex; flex-direction: column; gap: 16px; }
 .gw-meta-in { width: 100%; min-width: 220px; font: inherit; }
 /* What the agent is doing now (growth pages) */
