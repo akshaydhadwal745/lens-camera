@@ -11,6 +11,7 @@ import {
   closeTask,
   Person,
   Pri,
+  Prose,
   STATUS,
   StatusChip,
   VERDICT,
@@ -86,6 +87,11 @@ export function TaskPanel({
   const draftStopped = lastDraftStop?.text?.startsWith("Draft stopped:")
     ? lastDraftStop
     : undefined;
+  // Text the agent drafted on this task (a research brief, listing or outreach options).
+  const drafts = (Array.isArray(t?.spec?.drafts) ? t.spec.drafts : []).filter(
+    (d): d is { title?: string; body: string } =>
+      typeof (d as { body?: unknown })?.body === "string",
+  );
   const mine = !!t && (t.owner === ws.me.email || t.reviewer === ws.me.email);
   const editable = manage || (can(ws, "growth.contribute") && mine);
 
@@ -346,6 +352,33 @@ export function TaskPanel({
                   merges.
                 </div>
               </div>
+            )}
+            {drafts.length > 0 && (
+              <section className="gw-sec">
+                <h3>
+                  {t.type === "research"
+                    ? "The agent's brief"
+                    : "The agent's drafts"}
+                </h3>
+                {t.status === "in_review" && (
+                  <p className="muted small">
+                    {t.type === "research"
+                      ? "Read it, then mark the task Done. Want it redone? Move it back to Ready, add a note, and ask the agent again."
+                      : "Pick an option, edit it and post or send it yourself, then mark the task Done."}
+                  </p>
+                )}
+                {drafts.map((d, i) => (
+                  <div key={i} className="gw-brief full">
+                    {drafts.length > 1 && (
+                      <h4>
+                        Option {i + 1}
+                        {d.title ? ` · ${d.title}` : ""}
+                      </h4>
+                    )}
+                    <Prose text={d.body} />
+                  </div>
+                ))}
+              </section>
             )}
             {t.status === "blocked" && t.blockedBy && (
               <div className="notice">Blocked: {t.blockedBy}</div>
@@ -655,7 +688,11 @@ export function TaskPanel({
                         : l.by === "seed"
                           ? "From the strategy"
                           : l.by}
-                      : {l.text ?? ""}
+                      :{" "}
+                      {drafts.length > 0 &&
+                      l.text?.startsWith("Drafts ready for review")
+                        ? "Drafts ready for review (shown above)"
+                        : (l.text ?? "")}
                       {l.changes &&
                         Object.entries(l.changes)
                           .map(

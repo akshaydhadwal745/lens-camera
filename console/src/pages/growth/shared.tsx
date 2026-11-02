@@ -466,7 +466,7 @@ export function CardTable({ children }: { children: ReactNode }) {
   );
 }
 
-/** The agent's text with its light formatting: **bold**, and "- " items as a list. */
+/** The agent's text with its light formatting: "## " headings, **bold**, and "- " items as a list. */
 export function Prose({ text }: { text: string }) {
   const bold = (s: string) =>
     s
@@ -474,6 +474,7 @@ export function Prose({ text }: { text: string }) {
       .map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
   // Items written inline ("…this week: - **Get…** … - **Ask…**") start on their own line.
   const lines = text
+    .replace(/\\"/g, '"')
     .replace(/\s+-\s+(?=\*\*)/g, "\n- ")
     .split(/\n+/)
     .map((l) => l.trim())
@@ -493,7 +494,10 @@ export function Prose({ text }: { text: string }) {
   };
   for (const l of lines) {
     if (/^[-•*]\s+/.test(l)) items.push(l.replace(/^[-•*]\s+/, ""));
-    else {
+    else if (/^#{1,4}\s+/.test(l)) {
+      flush();
+      out.push(<h4 key={out.length}>{bold(l.replace(/^#{1,4}\s+/, ""))}</h4>);
+    } else {
       flush();
       out.push(<p key={out.length}>{bold(l)}</p>);
     }
