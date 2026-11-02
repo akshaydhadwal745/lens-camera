@@ -72,6 +72,22 @@ export class ConsoleStack extends Stack {
 
     const table = dynamodb.Table.fromTableAttributes(this, 'Table', { tableName: props.tableName, globalIndexes: ['gsi1'] });
 
+    // Content engine files (docs/growth/content-engine.md): a/ assets (uploads, renders, licensed media),
+    // e/ licence evidence, x/ export zips (30 days). Private; the Console shows them through 5-minute links.
+    const content = new s3.Bucket(this, 'GrowthContent', {
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+      cors: [{ allowedMethods: [s3.HttpMethods.PUT], allowedOrigins: [origin], allowedHeaders: ['content-type'], maxAge: 3600 }],
+      lifecycleRules: [
+        { prefix: 'x/', expiration: Duration.days(30) },
+        { prefix: 'u/', expiration: Duration.days(1) },
+        { abortIncompleteMultipartUploadAfter: Duration.days(1) },
+      ],
+    });
+    const contentHost = `https://${content.bucketRegionalDomainName}`;
+
     const fn = new nodejs.NodejsFunction(this, 'ConsoleApi', {
       entry: path.join(__dirname, '../lambda/console/index.ts'),
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -86,6 +102,7 @@ export class ConsoleStack extends Stack {
         AUDIT_BUCKET: props.auditBucketName,
         // Screenshots users attach to feedback: the only user images it may read.
         FEEDBACK_BUCKET: props.feedbackBucketName,
+        GROWTH_CONTENT_BUCKET: content.bucketName,
         ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
         EDGE_SECRET: edgeSecret,
         CONSOLE_ORIGIN: origin,
@@ -105,6 +122,9 @@ export class ConsoleStack extends Stack {
     table.grantReadWriteData(fn);
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:PutObject'], resources: [`arn:aws:s3:::${props.auditBucketName}/audit/*`] }));
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:GetObject'], resources: [`arn:aws:s3:::${props.feedbackBucketName}/f/*`] }));
+    // Content files: people upload to u/ (moved to a/ once checked), view a/ e/ x/, delete unused assets.
+    fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'], resources: [content.arnForObjects('u/*'), content.arnForObjects('a/*')] }));
+    fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:GetObject'], resources: [content.arnForObjects('e/*'), content.arnForObjects('x/*')] }));
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['ssm:GetParameter'],
@@ -145,6 +165,7 @@ export class ConsoleStack extends Stack {
       environment: {
         TABLE: props.tableName,
         AUDIT_BUCKET: props.auditBucketName,
+        GROWTH_CONTENT_BUCKET: content.bucketName,
         ADMIN_EMAILS: (this.node.tryGetContext('adminEmails') as string | undefined) ?? '',
         CONSOLE_ORIGIN: origin,
         WEB_ORIGIN: (this.node.tryGetContext('webOrigin') as string | undefined) ?? '',
@@ -164,6 +185,8 @@ export class ConsoleStack extends Stack {
     growth.addToRolePolicy(
       new iam.PolicyStatement({ actions: ['ssm:GetParameter'], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/lens/growth/*`] }),
     );
+    // Content engine: renders, licensed media and their evidence, export zips.
+    growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:PutObject', 's3:GetObject'], resources: [content.arnForObjects('a/*'), content.arnForObjects('e/*'), content.arnForObjects('x/*')] }));
     growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`] }));
     // Mondays 02:30 UTC (08:00 IST), after the daily Search Console pull.
     new events.Rule(this, 'WeeklyGrowthReport', {
@@ -201,7 +224,7 @@ function handler(event) {
       securityHeadersBehavior: {
         contentSecurityPolicy: {
           contentSecurityPolicy:
-            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+            `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: ${contentHost}; media-src ${contentHost}; font-src 'self'; connect-src 'self' ${contentHost}; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
           override: true,
         },
         strictTransportSecurity: { accessControlMaxAge: Duration.days(730), includeSubdomains: true, override: true },
