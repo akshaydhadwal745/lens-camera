@@ -118,11 +118,13 @@ export function parseTrending(xml: string) {
 
 /** GA4 Data API runReport on our property (service account with Viewer access). */
 export const GA4_PROPERTY = '558351960';
+/** Only visits to the live site: test runs on localhost (Lighthouse in CI, local checks) also reached GA. */
+export const GA4_LIVE_SITE = { filter: { fieldName: 'hostName', stringFilter: { matchType: 'EXACT', value: 'lens.instagrowapp.com' } } };
 export async function ga4Report(token: string, body: Record<string, unknown>) {
   const res = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${GA4_PROPERTY}:runReport`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, dimensionFilter: GA4_LIVE_SITE }),
     signal: AbortSignal.timeout(20_000),
   });
   const text = await res.text();

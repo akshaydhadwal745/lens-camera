@@ -41,8 +41,8 @@ export function Ga4Page() {
         !g.connected ? (
           <Card>
             <Empty>
-              Google Analytics data arrives with the next daily run (about 03:00
-              IST). It counts only visitors who allow analytics on the website;
+              Google Analytics data arrives with the next daily run (around
+              noon IST). It counts only visitors who allow analytics on the website;
               our own website analytics (Analytics page) counts everyone.
             </Empty>
           </Card>

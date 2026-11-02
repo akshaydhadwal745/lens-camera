@@ -135,9 +135,11 @@ export async function indexCoverage(): Promise<{ urls: number; indexed: number; 
 // The Console can't read the Google key (least privilege), so the daily run stores what its GA4
 // charts show: GROWTH / GA4SNAP. Empty rows until visitors who allow analytics arrive.
 const GA4_PROPERTY = '558351960';
+// Only visits to the live site: test runs on localhost (Lighthouse in CI, local checks) also reached GA.
+const LIVE_SITE = { filter: { fieldName: 'hostName', stringFilter: { matchType: 'EXACT', value: 'lens.instagrowapp.com' } } };
 
 async function ga4(token: string, body: Record<string, unknown>) {
-  const res = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${GA4_PROPERTY}:runReport`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
+  const res = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${GA4_PROPERTY}:runReport`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ ...body, dimensionFilter: LIVE_SITE }), signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new Error(`GA4 ${res.status} ${(await res.text()).slice(0, 160)}`);
   const r = (await res.json()) as { dimensionHeaders?: { name: string }[]; metricHeaders?: { name: string }[]; rows?: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }[] };
   const dims = (r.dimensionHeaders ?? []).map((h) => h.name);

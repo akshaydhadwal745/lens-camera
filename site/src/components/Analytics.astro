@@ -64,7 +64,11 @@ const text =
     document.head.appendChild(tag);
   };
   const whenIdle = () => setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(loadTag, { timeout: 3000 }) : loadTag()), 3500);
-  if (document.readyState === 'complete') whenIdle();
+  // Only real visits: not test copies (localhost in Lighthouse/CI) and not automated browsers.
+  const real = location.hostname === 'lens.instagrowapp.com' && !navigator.webdriver && !/HeadlessChrome|Lighthouse/.test(navigator.userAgent);
+  if (!real) {
+    // no Google tag
+  } else if (document.readyState === 'complete') whenIdle();
   else addEventListener('load', whenIdle, { once: true });
 
   // The banner is only needed where cookies are off until consent (time zone is a good-enough guess;
