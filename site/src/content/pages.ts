@@ -203,6 +203,7 @@ export const pages: ContentPage[] = [
         ],
         faq: [
           { q: 'Why don’t I see manual ISO on my phone?', a: 'Some phones don’t let apps control the sensor directly. Lens checks this and shows only controls that work. Settings → Camera info shows what your phone supports.' },
+          { q: 'Can I shoot RAW?', a: 'Yes, on cameras that support it Lens saves RAW (DNG) files, and they are backed up byte for byte like every other photo.' },
         ],
       },
       hi: {
@@ -229,6 +230,7 @@ export const pages: ContentPage[] = [
         ],
         faq: [
           { q: 'मेरे फ़ोन पर मैनुअल ISO क्यों नहीं दिखता?', a: 'कुछ फ़ोन ऐप्स को सेंसर सीधे कंट्रोल नहीं करने देते। Lens यह जाँचता है और सिर्फ़ चलने वाले कंट्रोल दिखाता है। Settings → Camera info में देखें कि आपका फ़ोन क्या सपोर्ट करता है।' },
+          { q: 'क्या मैं RAW में फ़ोटो ले सकता हूँ?', a: 'हाँ, जिन कैमरों में यह सपोर्ट है वहाँ Lens RAW (DNG) फ़ाइलें सेव करता है, और वे बाकी फ़ोटो की तरह बाइट-दर-बाइट बैकअप होती हैं।' },
         ],
       },
     },
@@ -257,6 +259,11 @@ export const pages: ContentPage[] = [
             body: ['Anything that moved between shots, like a person walking past, is left out of the merge so it doesn’t turn into a see-through ghost. The result is saved at your camera’s full resolution.'],
           },
         ],
+        faq: [
+          { q: 'Do I need a tripod?', a: 'No. Hold the phone still for a moment. Lens lines the shots up, so a little hand movement is fine.' },
+          { q: 'Does it work on my phone?', a: 'Yes. Lens uses your phone maker’s Night mode where the maker offers it to apps, and its own multi-shot merge on every other phone.' },
+          { q: 'Is the night photo smaller or compressed?', a: 'No. It is saved at your camera’s full resolution and backed up byte for byte, like every other photo.' },
+        ],
       },
       hi: {
         title: 'कम रोशनी में साफ़ फ़ोटो के लिए नाइट मोड कैमरा',
@@ -276,6 +283,11 @@ export const pages: ContentPage[] = [
             body: ['शॉट्स के बीच जो चीज़ हिली, जैसे पास से गुज़रता कोई व्यक्ति, उसे मिलाने से बाहर रखा जाता है ताकि वह आर-पार दिखने वाली परछाईं न बने। नतीजा कैमरे के पूरे रेज़ोल्यूशन में सेव होता है।'],
           },
         ],
+        faq: [
+          { q: 'क्या ट्राइपॉड चाहिए?', a: 'नहीं। फ़ोन को एक पल स्थिर रखें। Lens सभी शॉट्स को मिलाकर सीधा करता है, इसलिए हाथ का हल्का हिलना ठीक है।' },
+          { q: 'क्या यह मेरे फ़ोन पर चलेगा?', a: 'हाँ। जहाँ फ़ोन कंपनी ऐप्स को अपना नाइट मोड देती है, वहाँ Lens उसे इस्तेमाल करता है, और बाकी सभी फ़ोन पर अपना मल्टी-शॉट मर्ज।' },
+          { q: 'क्या नाइट फ़ोटो छोटी या कंप्रेस होती है?', a: 'नहीं। यह आपके कैमरे के फ़ुल रेज़ोल्यूशन पर सेव होती है और बाकी फ़ोटो की तरह बाइट-दर-बाइट बैकअप होती है।' },
+        ],
       },
     },
   },
@@ -294,6 +306,11 @@ export const pages: ContentPage[] = [
           { h2: 'Works on more phones', body: ['On iPhone, Lens uses the depth camera. On Android, the person is found by an on-device AI model that is built into the app, so it works on front and back cameras, offline, without sending your photo anywhere.'] },
           { h2: 'Your original stays untouched', body: ['The subject outline is stored inside the photo file. The blur is applied when you view, share or save, from f/1.4 (strong) to f/16 (almost none).'] },
         ],
+        faq: [
+          { q: 'Can I change the blur after taking the photo?', a: 'Yes. Open the photo in the editor and set the blur from f/1.4 (strong) to f/16 (almost none), or turn it off. The original is never changed.' },
+          { q: 'Is my photo sent anywhere to find the person?', a: 'No. On Android the person outline is made on your phone by a model built into the app, and it works offline.' },
+          { q: 'Does it work with the front camera?', a: 'Yes, portrait mode works on both the front and the back camera.' },
+        ],
       },
       hi: {
         title: 'पोर्ट्रेट मोड, बैकग्राउंड ब्लर जिसे बाद में बदल सकें',
@@ -303,6 +320,11 @@ export const pages: ContentPage[] = [
         sections: [
           { h2: 'ज़्यादा फ़ोन पर चलता है', body: ['iPhone पर Lens डेप्थ कैमरा इस्तेमाल करता है। Android पर व्यक्ति को ऐप में ही मौजूद ऑन-डिवाइस AI मॉडल पहचानता है, इसलिए यह आगे और पीछे दोनों कैमरों पर, ऑफ़लाइन, आपकी फ़ोटो कहीं भेजे बिना चलता है।'] },
           { h2: 'ओरिजिनल वैसा ही रहता है', body: ['व्यक्ति की आउटलाइन फ़ोटो फ़ाइल के अंदर रखी जाती है। ब्लर देखने, शेयर या सेव करते समय लगता है, f/1.4 (तेज़) से f/16 (लगभग नहीं) तक।'] },
+        ],
+        faq: [
+          { q: 'क्या फ़ोटो लेने के बाद ब्लर बदल सकते हैं?', a: 'हाँ। एडिटर में फ़ोटो खोलें और ब्लर f/1.4 (ज़्यादा) से f/16 (लगभग नहीं) तक सेट करें, या बंद कर दें। ओरिजिनल कभी नहीं बदलता।' },
+          { q: 'क्या व्यक्ति को पहचानने के लिए मेरी फ़ोटो कहीं भेजी जाती है?', a: 'नहीं। Android पर व्यक्ति की आउटलाइन ऐप में मौजूद मॉडल से आपके फ़ोन पर ही बनती है, और यह ऑफ़लाइन भी चलता है।' },
+          { q: 'क्या यह फ़्रंट कैमरे से चलता है?', a: 'हाँ, पोर्ट्रेट मोड फ़्रंट और बैक दोनों कैमरों पर चलता है।' },
         ],
       },
     },
@@ -327,6 +349,11 @@ export const pages: ContentPage[] = [
           },
           { h2: 'Big photos, small phones', body: ['Edits are rendered on your phone’s graphics chip in tiles, so even 50 to 200 megapixel photos export at full size on phones with little memory.'] },
         ],
+        faq: [
+          { q: 'Does editing change my original photo?', a: 'No. Every edit is saved as a recipe next to the original, so you can adjust or remove it any time and the original stays untouched.' },
+          { q: 'Can I edit many photos the same way?', a: 'Yes. Copy an edit from one photo and paste it onto as many others as you like.' },
+          { q: 'Can I use a look while shooting?', a: 'Yes. Pick one of the 13 looks before you shoot and you see it live in the viewfinder, with an intensity slider.' },
+        ],
       },
       hi: {
         title: 'फ़ोटो एडिटर और 13 फ़िल्म लुक्स, ओरिजिनल सुरक्षित',
@@ -341,6 +368,11 @@ export const pages: ContentPage[] = [
             body: [],
           },
           { h2: 'बड़ी फ़ोटो, छोटे फ़ोन', body: ['एडिट आपके फ़ोन के ग्राफ़िक्स चिप पर टुकड़ों में बनते हैं, इसलिए 50 से 200 मेगापिक्सल की फ़ोटो भी कम मेमोरी वाले फ़ोन पर पूरे साइज़ में एक्सपोर्ट होती हैं।'] },
+        ],
+        faq: [
+          { q: 'क्या एडिट करने से मेरी ओरिजिनल फ़ोटो बदलती है?', a: 'नहीं। हर एडिट ओरिजिनल के साथ एक रेसिपी की तरह सेव होता है, इसलिए आप उसे कभी भी बदल या हटा सकते हैं और ओरिजिनल वैसा ही रहता है।' },
+          { q: 'क्या कई फ़ोटो पर एक जैसा एडिट कर सकते हैं?', a: 'हाँ। एक फ़ोटो का एडिट कॉपी करें और जितनी चाहें उतनी फ़ोटो पर पेस्ट करें।' },
+          { q: 'क्या फ़ोटो लेते समय लुक इस्तेमाल कर सकते हैं?', a: 'हाँ। फ़ोटो लेने से पहले 13 लुक्स में से एक चुनें, वह व्यूफ़ाइंडर में लाइव दिखता है और उसकी तीव्रता का स्लाइडर भी है।' },
         ],
       },
     },
@@ -360,6 +392,11 @@ export const pages: ContentPage[] = [
           { h2: 'Supported storage', bullets: ['Google Drive', 'Microsoft OneDrive', 'Dropbox', 'Box', 'S3-compatible storage (AWS, Cloudflare R2, Backblaze B2, MinIO…)', 'WebDAV: Synology, Nextcloud and most NAS boxes'], body: [] },
           { h2: 'Your accounts stay yours', body: ['Sign-in to your storage happens with the provider directly. On the free plan, the access keys stay on your phone; Lens’s servers don’t keep them. Lens stores only small previews so your gallery stays fast.'] },
         ],
+        faq: [
+          { q: 'Does it use my Lens storage?', a: 'No. Your originals go to your own storage. Lens keeps only small previews so the gallery stays fast, so there is no Lens limit on how much you back up.' },
+          { q: 'Can I move photos already in Lens to Google Drive?', a: 'Yes. "Move to my Google Drive" sends what is in Lens storage to your own Drive. The first 10 GB are free, then ₹15 per GB.' },
+          { q: 'Which storage should I choose?', a: 'If you already pay for Google Drive, OneDrive or Dropbox, use that. A NAS (WebDAV) or S3-compatible storage keeps everything fully under your control.' },
+        ],
       },
       hi: {
         title: 'अपने Drive, Dropbox या NAS पर फ़ोटो बैकअप',
@@ -369,6 +406,11 @@ export const pages: ContentPage[] = [
         sections: [
           { h2: 'सपोर्टेड स्टोरेज', bullets: ['Google Drive', 'Microsoft OneDrive', 'Dropbox', 'Box', 'S3-कम्पैटिबल स्टोरेज (AWS, Cloudflare R2, Backblaze B2, MinIO…)', 'WebDAV: Synology, Nextcloud और ज़्यादातर NAS'], body: [] },
           { h2: 'आपके अकाउंट आपके ही रहते हैं', body: ['स्टोरेज में साइन इन सीधे प्रोवाइडर के साथ होता है। फ़्री प्लान में एक्सेस कीज़ आपके फ़ोन पर ही रहती हैं; Lens के सर्वर उन्हें नहीं रखते। गैलरी तेज़ रखने के लिए Lens सिर्फ़ छोटे प्रीव्यू रखता है।'] },
+        ],
+        faq: [
+          { q: 'क्या इससे मेरा Lens स्टोरेज इस्तेमाल होता है?', a: 'नहीं। आपके ओरिजिनल आपके अपने स्टोरेज में जाते हैं। गैलरी तेज़ रहे इसके लिए Lens सिर्फ़ छोटे प्रीव्यू रखता है, इसलिए बैकअप पर कोई Lens लिमिट नहीं है।' },
+          { q: 'क्या Lens में पहले से रखी फ़ोटो Google Drive में भेज सकते हैं?', a: 'हाँ। "Move to my Google Drive" से Lens स्टोरेज की चीज़ें आपकी अपनी Drive में चली जाती हैं। पहले 10 GB मुफ़्त, फिर ₹15 प्रति GB।' },
+          { q: 'कौन-सा स्टोरेज चुनें?', a: 'अगर आप पहले से Google Drive, OneDrive या Dropbox के पैसे देते हैं, तो वही इस्तेमाल करें। NAS (WebDAV) या S3-कम्पैटिबल स्टोरेज में सब कुछ पूरी तरह आपके कंट्रोल में रहता है।' },
         ],
       },
     },
@@ -388,6 +430,11 @@ export const pages: ContentPage[] = [
           { h2: 'Adaptive quality', body: ['The first time someone plays a long video, Lens makes streaming versions from 540p up to the original resolution, including 4K and 60 fps. Players switch between them as the connection changes, instead of stalling.'] },
           { h2: 'The original stays the original', body: ['Streaming copies are extra. Your original video is kept as recorded, including HDR, and you can always download it.'] },
         ],
+        faq: [
+          { q: 'Does streaming lower the quality of my video?', a: 'No. Streaming versions are extra copies. Your original stays exactly as recorded, including HDR, and you can always download it.' },
+          { q: 'What happens on a slow connection?', a: 'The video still starts quickly at a lower quality, from 540p, and switches up as the connection gets better instead of stalling.' },
+          { q: 'Where can I watch my videos?', a: 'In the Lens app on another phone, or in the Lens web app in any browser.' },
+        ],
       },
       hi: {
         title: 'किसी भी कनेक्शन पर लंबे वीडियो आराम से देखें, 4K तक',
@@ -397,6 +444,11 @@ export const pages: ContentPage[] = [
         sections: [
           { h2: 'अपने-आप बदलती क्वालिटी', body: ['जब कोई पहली बार लंबा वीडियो चलाता है, Lens 540p से लेकर ओरिजिनल रेज़ोल्यूशन तक, 4K और 60 fps समेत, स्ट्रीमिंग वर्शन बनाता है। कनेक्शन बदलने पर प्लेयर रुकने के बजाय इनके बीच बदलता रहता है।'] },
           { h2: 'ओरिजिनल, ओरिजिनल ही रहता है', body: ['स्ट्रीमिंग कॉपी अलग से होती हैं। आपका ओरिजिनल वीडियो वैसा ही रहता है जैसा रिकॉर्ड हुआ, HDR समेत, और आप उसे हमेशा डाउनलोड कर सकते हैं।'] },
+        ],
+        faq: [
+          { q: 'क्या स्ट्रीमिंग से मेरे वीडियो की क्वालिटी कम होती है?', a: 'नहीं। स्ट्रीमिंग वर्ज़न अलग कॉपी हैं। आपका ओरिजिनल HDR समेत वैसा ही रहता है जैसा रिकॉर्ड हुआ, और आप उसे कभी भी डाउनलोड कर सकते हैं।' },
+          { q: 'धीमे इंटरनेट पर क्या होता है?', a: 'वीडियो फिर भी जल्दी शुरू होता है, कम क्वालिटी (540p से) पर, और रुकने के बजाय कनेक्शन बेहतर होने पर क्वालिटी बढ़ जाती है।' },
+          { q: 'मैं अपने वीडियो कहाँ देख सकता हूँ?', a: 'दूसरे फ़ोन पर Lens ऐप में, या किसी भी ब्राउज़र में Lens वेब ऐप में।' },
         ],
       },
     },
@@ -465,6 +517,11 @@ export const pages: ContentPage[] = [
           { h2: 'Everything you need on a computer', bullets: ['Browse and zoom at full quality', 'Upload photos and videos from your computer', 'Download originals', 'Share with friends', 'Trash and Archive', 'Changes from your phone appear automatically'], body: [] },
           { h2: 'Safe by design', body: ['The website keeps your session in a secure cookie that page scripts can’t read. See and sign out every browser from your phone.'] },
         ],
+        faq: [
+          { q: 'Do I need to install anything on my computer?', a: 'No. Open lens.instagrowapp.com in any browser and sign in. There is no desktop app to install.' },
+          { q: 'Can I upload photos from my computer?', a: 'Yes. Upload photos and videos from the browser and they appear on your phone too.' },
+          { q: 'How do I sign out a browser I no longer use?', a: 'From your phone: you can see every browser that is signed in and sign any of them out.' },
+        ],
       },
       hi: {
         title: 'किसी भी कंप्यूटर पर आपकी फ़ोटो: QR कोड से साइन इन',
@@ -475,6 +532,11 @@ export const pages: ContentPage[] = [
           { h2: 'कुछ सेकंड में साइन इन', body: ['वेबसाइट पर QR कोड फ़ोन से स्कैन करें और मंज़ूरी दें। आप ईमेल या Google अकाउंट से भी साइन इन कर सकते हैं, वही अकाउंट जो ऐप में है।'] },
           { h2: 'कंप्यूटर पर ज़रूरत की हर चीज़', bullets: ['पूरी क्वालिटी में देखें और ज़ूम करें', 'कंप्यूटर से फ़ोटो और वीडियो अपलोड करें', 'ओरिजिनल डाउनलोड करें', 'दोस्तों के साथ शेयर करें', 'ट्रैश और आर्काइव', 'फ़ोन के बदलाव अपने-आप दिखते हैं'], body: [] },
           { h2: 'सुरक्षा पहले से', body: ['वेबसाइट आपका सेशन एक सुरक्षित कुकी में रखती है जिसे पेज की स्क्रिप्ट नहीं पढ़ सकतीं। हर ब्राउज़र को फ़ोन से देखें और साइन आउट करें।'] },
+        ],
+        faq: [
+          { q: 'क्या कंप्यूटर पर कुछ इंस्टॉल करना होगा?', a: 'नहीं। किसी भी ब्राउज़र में lens.instagrowapp.com खोलें और साइन इन करें। कोई डेस्कटॉप ऐप इंस्टॉल नहीं करना।' },
+          { q: 'क्या कंप्यूटर से फ़ोटो अपलोड कर सकते हैं?', a: 'हाँ। ब्राउज़र से फ़ोटो और वीडियो अपलोड करें, वे आपके फ़ोन पर भी दिखेंगे।' },
+          { q: 'जो ब्राउज़र अब इस्तेमाल नहीं करते उससे साइन आउट कैसे करें?', a: 'अपने फ़ोन से: आप साइन-इन हुए हर ब्राउज़र को देख सकते हैं और किसी से भी साइन आउट कर सकते हैं।' },
         ],
       },
     },
@@ -543,6 +605,11 @@ export const pages: ContentPage[] = [
           { h2: 'Made for trips', bullets: ['Backup on Wi-Fi only, or mobile data if you allow it', 'Night mode for city lights and campfires', '4K video that uploads while you record (Android)', 'Share the best shots with your group at full quality'], body: [] },
           { h2: 'Safe if your phone isn’t', body: ['If your phone is lost or broken on the trip, everything already backed up is waiting in your account. Sign in on a new phone and it’s all there.'] },
         ],
+        faq: [
+          { q: 'Will backup use my mobile data?', a: 'Only if you allow it. Back up on Wi-Fi only, and turn on mobile data when you need it.' },
+          { q: 'Can everyone on the trip put their photos in one place?', a: 'Yes. Make an event album and share its QR code or link. Friends open it in their browser to add and see photos, with no app needed.' },
+          { q: 'My phone is full in the middle of the trip. What now?', a: 'Once your photos are backed up, Lens can free up space on your phone. The gallery keeps showing previews and the originals are safe in the cloud.' },
+        ],
       },
       hi: {
         title: 'ट्रैवल कैमरा ऐप जो साथ-साथ बैकअप करता है',
@@ -552,6 +619,11 @@ export const pages: ContentPage[] = [
         sections: [
           { h2: 'ट्रिप के लिए बना', bullets: ['सिर्फ़ Wi-Fi पर बैकअप, या आप चाहें तो मोबाइल डेटा पर', 'शहर की रोशनी और कैंपफ़ायर के लिए नाइट मोड', 'रिकॉर्ड होते-होते अपलोड होने वाला 4K वीडियो (Android)', 'बेहतरीन शॉट ग्रुप के साथ फ़ुल क्वालिटी में शेयर करें'], body: [] },
           { h2: 'फ़ोन गया, फ़ोटो नहीं', body: ['ट्रिप पर फ़ोन खो जाए या टूट जाए, तो जो बैकअप हो चुका है वह आपके अकाउंट में इंतज़ार कर रहा है। नए फ़ोन पर साइन इन करें और सब वहाँ है।'] },
+        ],
+        faq: [
+          { q: 'क्या बैकअप में मेरा मोबाइल डेटा लगेगा?', a: 'सिर्फ़ तब, जब आप इजाज़त दें। सिर्फ़ Wi-Fi पर बैकअप रखें, और ज़रूरत हो तो मोबाइल डेटा चालू करें।' },
+          { q: 'क्या ट्रिप पर सबकी फ़ोटो एक जगह आ सकती हैं?', a: 'हाँ। एक इवेंट एल्बम बनाएँ और उसका QR कोड या लिंक शेयर करें। दोस्त उसे ब्राउज़र में खोलकर फ़ोटो जोड़ और देख सकते हैं, किसी ऐप की ज़रूरत नहीं।' },
+          { q: 'ट्रिप के बीच फ़ोन भर गया, अब क्या करें?', a: 'फ़ोटो का बैकअप होते ही Lens आपके फ़ोन में जगह ख़ाली कर सकता है। गैलरी में प्रीव्यू दिखते रहते हैं और ओरिजिनल क्लाउड में सुरक्षित रहते हैं।' },
         ],
       },
     },
