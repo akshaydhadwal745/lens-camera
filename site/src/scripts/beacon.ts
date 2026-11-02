@@ -2,7 +2,11 @@
 // important click and when a page is left (time visible, scroll depth). No cookies, no IDs, nothing
 // about the visitor: the server keeps daily totals only. The browser tab (session storage, cleared
 // when the tab closes) remembers only this visit's landing page, page count and whether it engaged.
+import { internalDevice } from './internal';
+
+const internal = internalDevice();
 const send = (data: Record<string, unknown>) => {
+  if (internal) return;
   try {
     const body = JSON.stringify(data);
     if (!navigator.sendBeacon?.('/api/v1/web-events', new Blob([body], { type: 'application/json' }))) {

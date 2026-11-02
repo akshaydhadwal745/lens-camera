@@ -26,6 +26,8 @@ const text =
 ---
 
 <script>
+  import { internalDevice } from '../scripts/internal';
+
   const GA_ID = 'G-MR339VK2QB';
   // Processed (not inline) so the site's Content-Security-Policy hashes it; googletagmanager.com is
   // allowed in astro.config.mjs.
@@ -64,8 +66,9 @@ const text =
     document.head.appendChild(tag);
   };
   const whenIdle = () => setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(loadTag, { timeout: 3000 }) : loadTag()), 3500);
-  // Only real visits: not test copies (localhost in Lighthouse/CI) and not automated browsers.
-  const real = location.hostname === 'lens.instagrowapp.com' && !navigator.webdriver && !/HeadlessChrome|Lighthouse/.test(navigator.userAgent);
+  // Only real visits: not test copies (localhost in Lighthouse/CI), not automated browsers and not
+  // our own devices (?internal=1, scripts/internal.ts).
+  const real = location.hostname === 'lens.instagrowapp.com' && !navigator.webdriver && !/HeadlessChrome|Lighthouse/.test(navigator.userAgent) && !internalDevice();
   if (!real) {
     // no Google tag
   } else if (document.readyState === 'complete') whenIdle();
