@@ -104,6 +104,18 @@ export function Today({ ws, onNew }: { ws: Workspace; onNew: () => void }) {
               This month: <strong>{ws.settings.focus.text}</strong>
             </p>
           )}
+          {ws.posts.some((p) => p.status === "in_review") && (
+            <p>
+              <Link to="/growth/ws/social">
+                {ws.posts.filter((p) => p.status === "in_review").length}{" "}
+                post
+                {ws.posts.filter((p) => p.status === "in_review").length > 1
+                  ? "s"
+                  : ""}{" "}
+                waiting for review
+              </Link>
+            </p>
+          )}
         </div>
         <div className="btns">
           {can(ws, "growth.contribute") && (

@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { api, get } from "../../api";
 import { Card, date, Empty, Link, Loaded, useLoad } from "../../ui";
+import { BrandKit } from "./content";
 import {
   can,
   Chip,
@@ -563,6 +564,7 @@ export function GrowthSettings({
           </p>
         </Card>
       </div>
+      <BrandKit ws={ws} />
     </>
   );
 }

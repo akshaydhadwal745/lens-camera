@@ -461,6 +461,69 @@ export const TEXT_SCHEMA = {
 
 export type TextDraft = { drafts: { kind: string; channel: string; title: string; body: string; page: string; dayOffset: number }[]; notes: string };
 
+// ---------- content packages (docs/growth/content-engine.md): social tasks ----------
+
+export const CONTENT_SYSTEM = `You are the growth agent for Lens (lens.instagrowapp.com), creating social content packages a person reviews, approves and then publishes. You never publish anything.
+
+Tools: find_in_code and read_code (the website code and docs/growth), audit_page (a live page), competitor_page (listed competitor sites).
+
+A package is ONE idea made for each platform it suits: format, hook, slides (carousel) or a scene script (reel/short), and one version per platform (caption, hashtags, call to action, title where the platform needs one, alt text for images).
+
+Rules:
+1. Read docs/growth/product-facts.md first. Claim only what is under Features; never anything under "Not available". No invented numbers, users, reviews or testimonials. Never say "unlimited".
+2. Follow the BRAND KIT in the task (voice, do's and don'ts, calls to action, hashtags, pillars). English unless the task asks for Hindi.
+3. Visuals are made by Lens itself from your slide and scene notes: on-brand templates, simple illustrations, real app screens and screen recordings. In "visual", describe what to show (e.g. "app screen: Backup progress with 'All 1,204 photos backed up'", "illustration: phone overflowing with photos", "screen recording: open camera → Night mode → shoot"). Never describe stock photos of people. Never write "shot on Lens" or similar: the post has no real Lens photo yet.
+4. Hook first: the first line (and the first slide or first 2 seconds) names the problem the viewer feels. One idea per post; one website page that answers it ("page").
+5. Platform craft: Instagram caption ≤ 2,200 characters with 3–8 hashtags and no link in the caption (say "link in bio"); Facebook conversational, ≤ 3 hashtags; YouTube Shorts: title ≤ 100 characters, ≤ 3 hashtags, description with the link; Pinterest: keyword-rich title ≤ 100, description ≤ 500, no hashtags; LinkedIn: build-in-public, a real lesson, ≤ 3 hashtags; X ≤ 280 characters including the link, ≤ 2 hashtags; Reddit: helpful first, answer the community's question, no hashtags, title required.
+6. Formats: carousel = 4–8 slides (slide 1 the hook, last slide the call to action); reel/short = 15–35 seconds of scenes, each 2–6 seconds with on-screen text ≤ 8 words; post = one image; story = one vertical frame; pin = one tall image.
+7. Give 1–3 packages (different angles on the task), each for the platforms that suit its format (a reel → instagram, facebook, youtube; a carousel → instagram, facebook, linkedin; a pin → pinterest). If the task can't be done well, say why in "notes" and give no packages.`;
+
+const VARIANT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['caption', 'hashtags', 'cta', 'title', 'altText'],
+  properties: { caption: { type: 'string' }, hashtags: { type: 'array', items: { type: 'string' }, maxItems: 8 }, cta: { type: 'string' }, title: { type: 'string', description: 'YouTube, Pinterest and Reddit; empty elsewhere' }, altText: { type: 'string', description: 'describes the image; empty for videos and text-only posts' } },
+} as const;
+
+export const CONTENT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['packages', 'notes'],
+  properties: {
+    packages: {
+      type: 'array',
+      maxItems: 3,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'format', 'pillar', 'hook', 'page', 'dayOffset', 'why', 'slides', 'script', 'variants'],
+        properties: {
+          name: { type: 'string', description: 'short internal name for the calendar' },
+          format: { enum: ['post', 'carousel', 'story', 'reel', 'short', 'pin', 'thread', 'article'] },
+          pillar: { type: 'string', description: 'one of the brand kit pillars' },
+          hook: { type: 'string' },
+          page: { type: 'string', description: 'website path the post points to, e.g. /guides/google-photos-storage-full/' },
+          dayOffset: { type: 'number', description: 'suggested days from today to publish (0–14)' },
+          why: { type: 'string', description: 'why this post, for whom, and which goal or trend it serves' },
+          slides: { type: 'array', maxItems: 10, items: { type: 'object', additionalProperties: false, required: ['headline', 'body', 'visual'], properties: { headline: { type: 'string' }, body: { type: 'string' }, visual: { type: 'string' } } } },
+          script: { type: 'array', maxItems: 12, items: { type: 'object', additionalProperties: false, required: ['seconds', 'onScreen', 'visual'], properties: { seconds: { type: 'number' }, onScreen: { type: 'string' }, visual: { type: 'string' } } } },
+          variants: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { instagram: VARIANT_SCHEMA, facebook: VARIANT_SCHEMA, youtube: VARIANT_SCHEMA, pinterest: VARIANT_SCHEMA, linkedin: VARIANT_SCHEMA, x: VARIANT_SCHEMA, reddit: VARIANT_SCHEMA },
+          },
+        },
+      },
+    },
+    notes: { type: 'string' },
+  },
+} as const;
+
+export type ContentDraft = {
+  packages: { name: string; format: string; pillar: string; hook: string; page: string; dayOffset: number; why: string; slides: unknown[]; script: unknown[]; variants: Record<string, unknown> }[];
+  notes: string;
+};
+
 // ---------- the monthly review (group 3) ----------
 
 export const MONTHLY_SYSTEM = `You are the growth analyst for Lens, writing the month-in-review for the founder and the growth team. You receive MONTH FACTS (numbers computed by code, each with an id), the work finished and measured this month, goals, spend, SEO and competitor changes, and the weekly summaries.

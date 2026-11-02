@@ -916,6 +916,28 @@ R=$(capi POST /auth/backup-codes); [[ $(echo "$R" | j .codes.length) == 10 && $(
 [[ $(capi GET /auth/backup-codes | j .left) == 10 ]] && ok "console: backup codes left = 10"
 [[ $(aws dynamodb get-item --profile lens --table-name Lens --key "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}" --output json | grep -c "$(echo "$R" | j '.codes[0]')") == 0 ]] && ok "console: only hashes are stored"
 [[ $(capi PUT /team -d '{"email":"x@example.com","role":"owner"}' -o /dev/null -w '%{http_code}') == 404 ]] && ok "console: an admin can't add owners (Team is owners-only)"
+# Content packages (docs/growth/content-engine.md): checks on save, manager-only approval, approval taken
+# back by an edit, nothing marked published unapproved, export per platform.
+[[ $(capi GET /growth/brand | j '.limits.x.caption') == 280 ]] && ok "content: brand kit and platform limits"
+CV='{"caption":"Phone full? Back up every photo at full quality.","hashtags":["photobackup"],"cta":"Try Lens free","title":"","altText":"Backup complete on a phone"}'
+R=$(capi PUT /growth/posts/new -d "{\"title\":\"[e2e] content\",\"format\":\"carousel\",\"hook\":\"Phone full?\",\"slides\":[{\"headline\":\"Unlimited space\",\"body\":\"\",\"visual\":\"\"}],\"variants\":{\"instagram\":$CV}}")
+PID=$(echo "$R" | j .post.id); [[ $PID =~ ^[a-f0-9]{10}$ && $(echo "$R" | j '.post.problems.join("|")') == *"2–10 slides"*"forbids"* ]] && ok "content: save lists what to fix (slides, forbidden claim)" || fail "content save: $R"
+[[ $(capi POST "/growth/posts/$PID/approve" | j .error) == "Fix first:"* ]] && ok "content: can't approve with problems"
+R=$(capi PUT "/growth/posts/$PID" -d '{"slides":[{"headline":"Phone full?","body":"","visual":"app screen"},{"headline":"Back up to Lens","body":"","visual":"app screen"}]}')
+[[ $(echo "$R" | j '.post.problems.length') == 0 && $(echo "$R" | j '.post.links.instagram') == *"utm_source=instagram"* ]] && ok "content: fixed; a tagged link per platform" || fail "content fix: $R"
+[[ $(capi PUT "/growth/posts/$PID" -d '{"published":{"instagram":"https://www.instagram.com/p/e2e/"}}' | j .error) == "Approve this post"* ]] && ok "content: can't be marked published before approval"
+CTOK2=$(openssl rand -hex 32); CHASH2=$(printf %s "$CTOK2" | sha256sum | cut -d' ' -f1); CCON="con$(date +%s%N)@e2e.lens.invalid"
+ddbput "{\"pk\":{\"S\":\"ADMIN#$CCON\"},\"sk\":{\"S\":\"ROLE\"},\"role\":{\"S\":\"growth_contributor\"}}"
+ddbput "{\"pk\":{\"S\":\"CSESS#$CHASH2\"},\"sk\":{\"S\":\"S\"},\"stage\":{\"S\":\"full\"},\"email\":{\"S\":\"$CCON\"},\"createdAt\":{\"N\":\"$NOWMS\"},\"lastSeen\":{\"N\":\"$(date +%s%3N)\"},\"ttl\":{\"N\":\"$(( NOWMS / 1000 + 7200 ))\"}}"
+[[ $(curl -sS -X POST "$CONSOLE/growth/posts/$PID/approve" -H "cookie: __Host-lc=$CTOK2" -H 'x-console: 1' -H "origin: ${CONSOLE%/api}" -o /dev/null -w '%{http_code}') == 403 ]] && ok "content: a contributor can't approve"
+ddbdel "{\"pk\":{\"S\":\"ADMIN#$CCON\"},\"sk\":{\"S\":\"ROLE\"}}"; ddbdel "{\"pk\":{\"S\":\"CSESS#$CHASH2\"},\"sk\":{\"S\":\"S\"}}"
+[[ $(capi POST "/growth/posts/$PID/approve" | j .post.status) == approved ]] && ok "content: a manager approves"
+[[ $(capi PUT "/growth/posts/$PID" -d '{"date":"2030-01-01"}' | j .post.status) == approved ]] && ok "content: changing the date keeps the approval"
+R=$(capi PUT "/growth/posts/$PID" -d "{\"hook\":\"Phone full again?\"}"); [[ $(echo "$R" | j .post.status) == in_review && -z $(echo "$R" | j .post.approvedBy) ]] && ok "content: changing the content takes the approval back" || fail "approval kept: $R"
+capi POST "/growth/posts/$PID/approve" >/dev/null
+[[ $(capi GET "/growth/posts/$PID/export" | j '.platforms[0].text') == *"Try Lens free"*"#photobackup"* ]] && ok "content: export text per platform"
+[[ $(capi PUT "/growth/posts/$PID" -d '{"published":{"instagram":"https://www.instagram.com/p/e2e/"}}' | j .post.status) == published ]] && ok "content: approved post marked published with its link"
+capi DELETE "/growth/posts/$PID" >/dev/null
 ddbdel "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}"
 call DELETE /account "$TH" -d '{"confirm":"DELETE"}' >/dev/null
 echo "ALL PASSED"

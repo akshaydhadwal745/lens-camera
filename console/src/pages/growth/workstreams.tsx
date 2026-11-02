@@ -2,6 +2,7 @@
 import { ReactNode, useState } from "react";
 
 import { api } from "../../api";
+import { ContentStudio } from "./content";
 import { Card, Empty, Stat } from "../../ui";
 import {
   can,
@@ -17,7 +18,6 @@ import {
   VERDICT,
   WS,
   type Partner,
-  type Post,
   type Workspace,
   type Workstream,
 } from "./shared";
@@ -67,7 +67,7 @@ export function WorkstreamPage({
       </Card>
       <div className="stats">{STATS[k](ws)}</div>
       {k === "partners" && <Pipeline ws={ws} />}
-      {k === "social" && <Calendar ws={ws} />}
+      {k === "social" && <ContentStudio ws={ws} />}
       <div className="grid2">
         <Card title="Work">
           {open.length ? (
@@ -693,229 +693,6 @@ function PartnerForm({
                 onClick={() =>
                   void remove("partners", p.id, `partner "${p.name}"`)
                 }
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-// ---------- social calendar ----------
-
-const CHANNELS = [
-  "instagram",
-  "youtube",
-  "reddit",
-  "whatsapp",
-  "linkedin",
-  "x",
-  "facebook",
-  "blog",
-  "other",
-];
-
-function Calendar({ ws }: { ws: Workspace }) {
-  const [edit, setEdit] = useState<Post | "new" | null>(null);
-  const start = new Date();
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  const days = Array.from({ length: 14 }, (_, i) =>
-    new Date(start.getTime() + i * 86_400_000).toISOString().slice(0, 10),
-  );
-  const undated = ws.posts.filter((p) => !p.date);
-  return (
-    <Card
-      title="Calendar: this week and next"
-      actions={
-        can(ws, "growth.contribute") && (
-          <button className="btn" onClick={() => setEdit("new")}>
-            + New post
-          </button>
-        )
-      }
-    >
-      <div className="gw-cal">
-        {days.map((d) => (
-          <div
-            key={d}
-            className={`gw-day ${d === new Date().toISOString().slice(0, 10) ? "today" : ""}`}
-          >
-            <b>
-              {new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", {
-                weekday: "short",
-                day: "numeric",
-              })}
-            </b>
-            {ws.posts
-              .filter((p) => p.date === d)
-              .map((p) => (
-                <button
-                  key={p.id}
-                  className={`gw-post ${p.channel}`}
-                  onClick={() => setEdit(p)}
-                >
-                  <strong>{p.channel}</strong>
-                  <span>{p.title || p.body.slice(0, 50)}</span>
-                  <span className="small">
-                    {p.status}
-                    {p.visits ? ` · ${p.visits} visits` : ""}
-                  </span>
-                </button>
-              ))}
-          </div>
-        ))}
-      </div>
-      {undated.length > 0 && (
-        <p className="small">
-          Ideas without a date:{" "}
-          {undated.map((p) => (
-            <button
-              key={p.id}
-              className="gw-linkbtn"
-              onClick={() => setEdit(p)}
-            >
-              {p.title || p.channel}
-            </button>
-          ))}
-        </p>
-      )}
-      <p className="muted small">
-        Every post gets a tagged link, so its visits are counted. The agent
-        drafts posts; a person reviews and posts them.
-      </p>
-      {edit && (
-        <PostForm
-          ws={ws}
-          p={edit === "new" ? undefined : edit}
-          onDone={() => setEdit(null)}
-        />
-      )}
-    </Card>
-  );
-}
-
-function PostForm({
-  ws,
-  p,
-  onDone,
-}: {
-  ws: Workspace;
-  p?: Post;
-  onDone: () => void;
-}) {
-  const [v, setV] = useState({
-    channel: p?.channel ?? "instagram",
-    date: p?.date ?? "",
-    title: p?.title ?? "",
-    body: p?.body ?? "",
-    status: p?.status ?? "idea",
-    url: p?.url ?? "",
-    page: p?.page ?? "/",
-    owner: p?.owner ?? ws.me.email,
-  });
-  const [error, setError] = useState("");
-  const save = async () => {
-    try {
-      await api("PUT", `/growth/posts/${p?.id ?? "new"}`, v);
-      onDone();
-      dispatchEvent(new Event("growth-reload"));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  const remove = async (kind: string, id: string, what: string) => {
-    if (!confirm(`Delete this ${what}? Its link stops being counted.`)) return;
-    try {
-      await api("DELETE", `/growth/${kind}/${id}`);
-      onDone();
-      dispatchEvent(new Event("growth-reload"));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  const set = (k: keyof typeof v) => (e: { target: { value: string } }) =>
-    setV({ ...v, [k]: e.target.value });
-  return (
-    <>
-      <div className="gw-scrim" onClick={onDone} />
-      <aside className="gw-drawer" aria-label="Post">
-        <div className="gw-drawer-head">
-          <h2 className="gw-drawer-title">{p ? "Post" : "New post"}</h2>
-          <button className="btn ghost" onClick={onDone}>
-            Close
-          </button>
-        </div>
-        {error && <div className="notice error">{error}</div>}
-        {p && (
-          <div className="gw-callout">
-            <strong>Link to use in the post</strong> ({p.visits} visits so far)
-            <div className="gw-copyrow">
-              <input
-                readOnly
-                value={p.link}
-                onFocus={(e) => e.target.select()}
-                aria-label="Post link"
-              />
-              <CopyButton text={p.link} />
-            </div>
-          </div>
-        )}
-        <div className="gw-form">
-          <div className="gw-form-row">
-            <label className="gw-field">
-              <span>Channel</span>
-              <select value={v.channel} onChange={set("channel")}>
-                {CHANNELS.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            <label className="gw-field">
-              <span>Date</span>
-              <input type="date" value={v.date} onChange={set("date")} />
-            </label>
-            <label className="gw-field">
-              <span>Status</span>
-              <select value={v.status} onChange={set("status")}>
-                {["idea", "drafted", "approved", "published"].map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label className="gw-field">
-            <span>Title</span>
-            <input value={v.title} onChange={set("title")} />
-          </label>
-          <label className="gw-field">
-            <span>Post text</span>
-            <textarea rows={7} value={v.body} onChange={set("body")} />
-          </label>
-          <div className="gw-form-row">
-            <label className="gw-field">
-              <span>Website page it links to</span>
-              <input value={v.page} onChange={set("page")} />
-            </label>
-            <label className="gw-field">
-              <span>Published post URL</span>
-              <input value={v.url} onChange={set("url")} />
-            </label>
-          </div>
-          <div className="btns">
-            <button
-              className="btn primary"
-              disabled={!v.title.trim() && !v.body.trim()}
-              onClick={() => void save()}
-            >
-              Save
-            </button>
-            {p && can(ws, "growth.write") && (
-              <button
-                className="btn danger"
-                onClick={() => void remove("posts", p.id, "post")}
               >
                 Delete
               </button>

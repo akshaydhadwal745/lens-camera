@@ -147,6 +147,26 @@ export type Post = {
   code: string;
   link: string;
   visits: number;
+  // Content package (docs/growth/content-engine.md)
+  format?: string;
+  pillar?: string;
+  hook?: string;
+  slides?: { headline: string; body: string; visual: string }[];
+  script?: { seconds: number; onScreen: string; visual: string }[];
+  variants?: Record<string, PostVariant>;
+  links?: Record<string, string>;
+  problems?: string[];
+  published?: Record<string, { url: string; at: number; how: string }>;
+  approvedBy?: string;
+  approvedAt?: number;
+  createdBy?: string;
+};
+export type PostVariant = {
+  caption: string;
+  hashtags: string[];
+  cta: string;
+  title: string;
+  altText: string;
 };
 export type Workspace = {
   me: { email: string; role: string; permissions: string[] };
@@ -208,9 +228,9 @@ export const WS: Record<Workstream, { label: string; outcome: string }> = {
     outcome: "More relevant people discover Lens through Google and Bing.",
   },
   social: {
-    label: "Social & distribution",
+    label: "Content",
     outcome:
-      "People outside our circle see Lens every week, and we know which posts bring visitors.",
+      "People outside our circle see Lens every week, and we know which posts bring visitors and installs.",
   },
   store: {
     label: "Website & Play Store",
