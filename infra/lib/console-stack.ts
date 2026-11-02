@@ -266,6 +266,9 @@ function handler(event) {
       new s3deploy.BucketDeployment(this, 'ConsoleDeploy', {
         sources: [s3deploy.Source.asset(DIST)],
         destinationBucket: site,
+        // Browsers check for a newer index.html on every visit, so people get a deploy at once
+        // (without it Chrome kept showing the previous Console after a deploy).
+        cacheControl: [s3deploy.CacheControl.noCache()],
         distribution,
         distributionPaths: ['/*'],
         memoryLimit: 512,
