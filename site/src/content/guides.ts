@@ -155,43 +155,62 @@ export const guidePages: GuidePage[] = [
       en: {
         title: 'Google Photos storage full? What to do, step by step',
         description:
-          'Your Google storage is full and photos stopped backing up. What uses the space, what you can safely clean up, and how to keep backing up at full quality.',
+          'Google storage full and photos stopped backing up? See what uses the space, what to clean up safely, and how to keep backing up at full quality.',
         h1: 'Google storage full? Here’s what to do',
-        lead: 'When your Google storage is full, new photos stop backing up and email can stop arriving. Here is how to get space back, and how to keep every new photo safe.',
+        lead: 'When your Google storage is full, new photos stop backing up and email can stop arriving. Here is what counts against the free limit, how to get space back, when paying Google makes sense, and how to keep every new photo at full quality.',
         sections: [
           {
-            h2: 'Why it fills up',
-            body: ['Google gives 15 GB free per account, shared across Gmail, Google Drive and Google Photos. Photos and videos at original quality are usually the biggest part, and one phone full of 4K video can use it all.'],
+            h2: 'How much free Google storage you get',
+            body: [
+              'Every Google account gets 15 GB free (as of November 2026), shared across Gmail, Google Drive and Google Photos. Emails and attachments, files in Drive, and the photos and videos you back up all count, whether you use Original quality or Storage saver. Deleted items count until the trash is emptied.',
+              'Photos and videos are usually the biggest part, and one phone full of 4K video can use the whole 15 GB. Once you are over the limit, Google Photos stops backing up new photos, which is often the first sign.',
+            ],
           },
           {
-            h2: '1. See what is using the space',
-            body: ['Open Google’s storage management page from Google One or from the storage line in Google Photos. It lists large files, large emails and items you have deleted but are still in the trash.'],
+            h2: '1. See what is using your space',
+            body: ['To manage your Google storage, open the storage management page from the Google One app or from the storage line in Google Photos. It shows how much Gmail, Drive and Photos each use, and lists large files, large emails and items you have deleted but are still in the trash.'],
           },
           {
-            h2: '2. Clean up what you don’t need',
-            body: [],
+            h2: '2. Clean up what you can safely delete',
+            body: ['Start with what you are sure you don’t need. Space comes back only after the trash is emptied.'],
             bullets: [
               'Empty the trash in Gmail, Drive and Google Photos: deleted items still count until the trash is emptied',
               'Delete emails with large attachments you have saved elsewhere',
+              'Remove large Drive files you no longer need, or copy them to your computer first',
               'Remove blurry photos, screenshots and duplicate videos',
               'Careful: with backup on, deleting a photo in Google Photos can remove it from your phone too',
+              '"Free up space" in Google Photos clears your phone, not your Google storage',
             ],
           },
           {
-            h2: '3. Choose where new photos go',
-            body: ['You can buy more Google storage, or switch to Storage saver, which compresses photos and videos. If you want to keep originals without paying, use a second backup for photos:'],
+            h2: '3. Google One plans: when paying Google makes sense',
+            body: [
+              'Google One sells bigger plans for the same shared space, paid monthly or yearly. Prices depend on your country and change from time to time, so check the current plans in the Google One app before you buy.',
+              'Paying Google makes sense if Gmail and Drive are what fill your account, or if you want one library with Google’s search. If photos and videos are the problem, you have other options that keep originals.',
+            ],
+          },
+          {
+            h2: '4. Other ways to keep backing up at full quality',
+            body: ['Storage saver slows things down, but it compresses photos and videos, and they still count against your 15 GB. To keep originals, give your photos their own backup:'],
             bullets: [
-              'Lens: 40 GB free for your first 3 months, then 10 GB free forever, always at original quality',
+              'Lens: 40 GB free for your first 3 months, then 10 GB free forever, only for photos and videos and always at original quality',
               '+10 GB for every friend who joins Lens and backs up (up to 10 friends)',
               'Already have Dropbox, OneDrive, Box, S3 or a NAS? Lens backs up there with no Lens limit',
+              'Phone storage saver: once originals are safe in the cloud, Lens can free space on your phone while your gallery keeps working',
             ],
           },
           {
-            h2: '4. Move old photos, if you want',
-            body: ['Download your library with Google Takeout, then upload it at full quality from the Lens web app on your computer. Check everything arrived before you delete anything from Google.'],
+            h2: '5. Move your photos without losing originals',
+            body: [
+              'Download your library with Google Takeout, then upload it at full quality from the Lens web app on your computer, or import it in the Lens app (up to 100 at a time). Check everything arrived before you delete anything from Google, then empty the Google Photos trash to get the space back.',
+              'Lens doesn’t lock you in either: Download everything gives you a free export of your whole library whenever you want it.',
+            ],
           },
         ],
         faq: [
+          { q: 'What is the Google Drive free storage limit?', a: '15 GB per Google account, as of November 2026. It is shared by Gmail, Google Drive and Google Photos, so a full photo library can also stop new email.' },
+          { q: 'What do Google storage plans cost?', a: 'Google One prices depend on your country and the plan size, and they change over time, so check the Google One app for today’s prices. For photos and videos only, Lens gives 10 GB free forever at original quality, or you can connect your own storage.' },
+          { q: 'Why have my photos stopped backing up?', a: 'Most often because your Google account is over its 15 GB. Check storage management in Google One: if it is full, free up space or add more. Also check that backup is turned on in Google Photos.' },
           { q: 'Will my photos be deleted when Google storage is full?', a: 'Google stops backing up new photos when you are over the limit. Check Google’s current policy for accounts that stay over the limit for a long time.' },
           { q: 'Does Lens use my Google storage?', a: 'Not unless you choose to connect your Google Drive. By default, Lens stores your photos in its own storage, separate from Google.' },
           { q: 'What happens when the Lens 40 GB welcome ends?', a: 'Nothing is deleted. Everything stays viewable and downloadable. Only new backups to Lens storage pause above the free 10 GB, until you invite friends, free space, or switch to your own storage. You get reminders 14, 3 and 1 days before. If you stay above the limit for 5 months, what is above it is deleted (most recent first), with reminders 90, 30, 7 and 1 days before.' },
@@ -200,43 +219,62 @@ export const guidePages: GuidePage[] = [
       hi: {
         title: 'Google Photos स्टोरेज फ़ुल? क्या करें, क़दम-दर-क़दम',
         description:
-          'आपका Google स्टोरेज भर गया और फ़ोटो का बैकअप रुक गया। जगह किसने ली, क्या सुरक्षित तरीके से हटा सकते हैं, और फ़ोटो का फ़ुल क्वालिटी बैकअप कैसे जारी रखें।',
+          'Google स्टोरेज फ़ुल और फ़ोटो का बैकअप रुक गया? देखें जगह किसने ली, क्या सुरक्षित तरीके से हटाएँ, और फ़ुल क्वालिटी में बैकअप कैसे जारी रखें।',
         h1: 'Google स्टोरेज फ़ुल? ये करें',
-        lead: 'Google स्टोरेज भर जाने पर नई फ़ोटो का बैकअप रुक जाता है और ईमेल आना भी बंद हो सकता है। जगह वापस पाने और हर नई फ़ोटो सुरक्षित रखने का तरीका यह है।',
+        lead: 'Google स्टोरेज भर जाने पर नई फ़ोटो का बैकअप रुक जाता है और ईमेल आना भी बंद हो सकता है। मुफ़्त सीमा में क्या गिना जाता है, जगह वापस कैसे पाएँ, Google को पैसे देना कब ठीक है, और हर नई फ़ोटो फ़ुल क्वालिटी में कैसे संभालें, यह सब यहाँ है।',
         sections: [
           {
-            h2: 'यह क्यों भरता है',
-            body: ['Google हर अकाउंट को 15 GB मुफ़्त देता है, जो Gmail, Google Drive और Google Photos में साझा है। ओरिजिनल क्वालिटी वाली फ़ोटो और वीडियो आमतौर पर सबसे बड़ा हिस्सा होते हैं, और 4K वीडियो से भरा एक फ़ोन पूरा कोटा ले सकता है।'],
+            h2: 'Google कितना मुफ़्त स्टोरेज देता है',
+            body: [
+              'हर Google अकाउंट को 15 GB मुफ़्त मिलता है (नवंबर 2026 तक), जो Gmail, Google Drive और Google Photos में साझा है। ईमेल और अटैचमेंट, Drive की फ़ाइलें, और बैकअप हुई फ़ोटो और वीडियो, सब इसमें गिने जाते हैं, चाहे ओरिजिनल क्वालिटी हो या स्टोरेज सेवर। डिलीट की गई चीज़ें भी ट्रैश ख़ाली होने तक गिनी जाती हैं।',
+              'फ़ोटो और वीडियो आमतौर पर सबसे बड़ा हिस्सा होते हैं, और 4K वीडियो से भरा एक फ़ोन पूरे 15 GB ले सकता है। सीमा पार होते ही Google Photos नई फ़ोटो का बैकअप रोक देता है, और अक्सर यही पहला संकेत होता है।',
+            ],
           },
           {
             h2: '1. देखें कि जगह किसने ली',
-            body: ['Google One से या Google Photos की स्टोरेज लाइन से Google का स्टोरेज मैनेजमेंट पेज खोलें। उसमें बड़ी फ़ाइलें, बड़े ईमेल और वे चीज़ें दिखती हैं जो डिलीट करने के बाद भी ट्रैश में हैं।'],
+            body: ['अपना Google स्टोरेज मैनेज करने के लिए Google One ऐप से या Google Photos की स्टोरेज लाइन से स्टोरेज मैनेजमेंट पेज खोलें। उसमें दिखता है कि Gmail, Drive और Photos कितनी जगह ले रहे हैं, साथ में बड़ी फ़ाइलें, बड़े ईमेल और वे चीज़ें जो डिलीट करने के बाद भी ट्रैश में हैं।'],
           },
           {
-            h2: '2. जिसकी ज़रूरत नहीं, उसे हटाएँ',
-            body: [],
+            h2: '2. जो सुरक्षित तरीके से हट सकता है, उसे हटाएँ',
+            body: ['पहले वही हटाएँ जिसकी ज़रूरत पक्के तौर पर नहीं है। जगह तभी वापस मिलती है जब ट्रैश ख़ाली हो।'],
             bullets: [
               'Gmail, Drive और Google Photos का ट्रैश ख़ाली करें: ट्रैश ख़ाली होने तक डिलीट की गई चीज़ें भी गिनी जाती हैं',
               'बड़े अटैचमेंट वाले ईमेल डिलीट करें जिन्हें आपने कहीं और सेव कर लिया है',
+              'Drive की बड़ी फ़ाइलें हटाएँ जिनकी अब ज़रूरत नहीं, या पहले उन्हें कंप्यूटर पर कॉपी कर लें',
               'धुँधली फ़ोटो, स्क्रीनशॉट और दोहरे वीडियो हटाएँ',
               'ध्यान दें: बैकअप चालू हो तो Google Photos में फ़ोटो डिलीट करने से वह आपके फ़ोन से भी हट सकती है',
+              'Google Photos का "Free up space" आपके फ़ोन की जगह ख़ाली करता है, Google स्टोरेज की नहीं',
             ],
           },
           {
-            h2: '3. तय करें कि नई फ़ोटो कहाँ जाएँ',
-            body: ['आप और Google स्टोरेज ख़रीद सकते हैं, या स्टोरेज सेवर पर जा सकते हैं, जो फ़ोटो और वीडियो कंप्रेस करता है। अगर बिना भुगतान के ओरिजिनल रखने हैं, तो फ़ोटो के लिए दूसरा बैकअप इस्तेमाल करें:'],
+            h2: '3. Google One प्लान: Google को पैसे देना कब ठीक है',
+            body: [
+              'Google One उसी साझा जगह के लिए बड़े प्लान बेचता है, महीने या साल के हिसाब से। कीमतें देश के हिसाब से अलग होती हैं और समय-समय पर बदलती हैं, इसलिए ख़रीदने से पहले Google One ऐप में मौजूदा प्लान देख लें।',
+              'अगर Gmail और Drive से अकाउंट भर रहा है, या आप Google की सर्च के साथ एक ही लाइब्रेरी चाहते हैं, तो Google को पैसे देना ठीक है। अगर दिक़्क़त फ़ोटो और वीडियो की है, तो ओरिजिनल संभालने के दूसरे रास्ते भी हैं।',
+            ],
+          },
+          {
+            h2: '4. फ़ुल क्वालिटी में बैकअप जारी रखने के दूसरे तरीके',
+            body: ['स्टोरेज सेवर से जगह धीरे भरती है, पर वह फ़ोटो और वीडियो कंप्रेस करता है, और वे फिर भी आपके 15 GB में गिने जाते हैं। ओरिजिनल रखने हैं तो फ़ोटो के लिए अलग बैकअप रखें:'],
             bullets: [
-              'Lens: पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त, हमेशा ओरिजिनल क्वालिटी में',
+              'Lens: पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त, सिर्फ़ फ़ोटो और वीडियो के लिए और हमेशा ओरिजिनल क्वालिटी में',
               'Lens से जुड़कर बैकअप करने वाले हर दोस्त पर +10 GB (10 दोस्तों तक)',
               'पहले से Dropbox, OneDrive, Box, S3 या NAS है? Lens वहाँ बैकअप करता है, Lens की कोई सीमा नहीं',
+              'फ़ोन स्टोरेज सेवर: ओरिजिनल क्लाउड में सुरक्षित होने के बाद Lens फ़ोन की जगह ख़ाली कर सकता है, और गैलरी चलती रहती है',
             ],
           },
           {
-            h2: '4. चाहें तो पुरानी फ़ोटो ले आएँ',
-            body: ['Google Takeout से अपनी लाइब्रेरी डाउनलोड करें, फिर कंप्यूटर पर Lens वेब ऐप से पूरी क्वालिटी में अपलोड करें। Google से कुछ भी डिलीट करने से पहले जाँच लें कि सब पहुँच गया।'],
+            h2: '5. ओरिजिनल खोए बिना फ़ोटो ले आएँ',
+            body: [
+              'Google Takeout से अपनी लाइब्रेरी डाउनलोड करें, फिर कंप्यूटर पर Lens वेब ऐप से पूरी क्वालिटी में अपलोड करें, या Lens ऐप में इम्पोर्ट करें (एक बार में 100 तक)। Google से कुछ भी डिलीट करने से पहले जाँच लें कि सब पहुँच गया, फिर जगह वापस पाने के लिए Google Photos का ट्रैश ख़ाली करें।',
+              'Lens भी आपको बाँधता नहीं: "सब कुछ डाउनलोड करें" से आप जब चाहें अपनी पूरी लाइब्रेरी मुफ़्त में एक्सपोर्ट कर सकते हैं।',
+            ],
           },
         ],
         faq: [
+          { q: 'Google Drive की मुफ़्त स्टोरेज सीमा कितनी है?', a: 'हर Google अकाउंट पर 15 GB, नवंबर 2026 तक। यह Gmail, Google Drive और Google Photos में साझा है, इसलिए फ़ोटो से भरी लाइब्रेरी नए ईमेल भी रोक सकती है।' },
+          { q: 'Google स्टोरेज प्लान कितने के हैं?', a: 'Google One की कीमतें देश और प्लान के साइज़ पर निर्भर करती हैं और समय के साथ बदलती हैं, इसलिए आज की कीमत Google One ऐप में देखें। सिर्फ़ फ़ोटो और वीडियो के लिए Lens ओरिजिनल क्वालिटी में हमेशा 10 GB मुफ़्त देता है, या आप अपना स्टोरेज जोड़ सकते हैं।' },
+          { q: 'मेरी फ़ोटो का बैकअप क्यों रुक गया?', a: 'ज़्यादातर इसलिए कि आपका Google अकाउंट 15 GB से ऊपर चला गया है। Google One में स्टोरेज मैनेजमेंट देखें: भरा हो तो जगह ख़ाली करें या और जोड़ें। यह भी देखें कि Google Photos में बैकअप चालू है।' },
           { q: 'Google स्टोरेज फ़ुल होने पर क्या मेरी फ़ोटो डिलीट हो जाएँगी?', a: 'सीमा से ऊपर होने पर Google नई फ़ोटो का बैकअप रोक देता है। लंबे समय तक सीमा से ऊपर रहने वाले अकाउंट के लिए Google की मौजूदा पॉलिसी देखें।' },
           { q: 'क्या Lens मेरा Google स्टोरेज इस्तेमाल करता है?', a: 'नहीं, जब तक आप अपना Google Drive न जोड़ें। डिफ़ॉल्ट रूप से Lens आपकी फ़ोटो अपने स्टोरेज में रखता है, Google से अलग।' },
           { q: 'Lens का 40 GB वेलकम ख़त्म होने पर क्या होगा?', a: 'कुछ भी डिलीट नहीं होता। सब कुछ देख और डाउनलोड कर सकते हैं। मुफ़्त 10 GB से ऊपर सिर्फ़ Lens स्टोरेज में नए बैकअप रुकते हैं, जब तक आप दोस्तों को इनवाइट न करें, जगह ख़ाली न करें या अपने स्टोरेज पर न जाएँ। 14, 3 और 1 दिन पहले याद दिलाया जाता है। अगर आप 5 महीने तक सीमा से ऊपर रहते हैं, तो सीमा से ऊपर का कंटेंट डिलीट होता है (सबसे हाल का पहले), 90, 30, 7 और 1 दिन पहले याद दिलाकर।' },
@@ -244,8 +282,8 @@ export const guidePages: GuidePage[] = [
       },
     },
     links: {
-      en: [['Lens vs Google Photos', 'compare/google-photos'], ['Free cloud backup', 'features/free-cloud-backup'], ['Pricing', 'pricing'], ['Web app', 'features/web-app']],
-      hi: [['Lens बनाम Google Photos', 'compare/google-photos'], ['मुफ़्त क्लाउड बैकअप', 'features/free-cloud-backup'], ['कीमत', 'pricing'], ['वेब ऐप', 'features/web-app']],
+      en: [['Lens vs Google Photos', 'compare/google-photos'], ['Free cloud backup', 'features/free-cloud-backup'], ['Use your own storage', 'features/your-own-storage'], ['Pricing', 'pricing'], ['Web app', 'features/web-app']],
+      hi: [['Lens बनाम Google Photos', 'compare/google-photos'], ['मुफ़्त क्लाउड बैकअप', 'features/free-cloud-backup'], ['अपना स्टोरेज जोड़ें', 'features/your-own-storage'], ['कीमत', 'pricing'], ['वेब ऐप', 'features/web-app']],
     },
   },
 
