@@ -24,9 +24,9 @@ export const guidePages: GuidePage[] = [
     name: { en: 'Lens vs Google Photos', hi: 'Lens बनाम Google Photos' },
     copy: {
       en: {
-        title: 'Lens vs Google Photos: storage and quality',
+        title: 'Lens vs Google Photos: quality, storage, sharing',
         description:
-          'An honest comparison (October 2026): free storage, original quality vs Storage saver, own storage, camera, event albums, and where Google Photos wins.',
+          'An honest October 2026 comparison: free storage, original quality vs Storage saver, own storage, event albums, and where Google Photos is still better.',
         h1: 'Lens vs Google Photos',
         lead: 'An honest look, as of October 2026. Google Photos is a great library. Lens is built for people who want every original kept, a better camera, and more free space for photos.',
         sections: [
@@ -40,51 +40,71 @@ export const guidePages: GuidePage[] = [
                 ['Free storage', '40 GB for your first 3 months, then 10 GB free forever, only for photos and videos', '15 GB free, shared across Gmail, Google Drive and Google Photos'],
                 ['Quality', 'Always the original file, never re-compressed', 'Original quality, or "Storage saver", which compresses photos and videos to save space'],
                 ['Your own storage', 'Back up to your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV, with no Lens limit', 'Google storage only'],
-                ['Camera', 'Built in: Night, Portrait with blur you can change later, PRO manual controls, RAW, 4K', 'A library app; the camera is a separate app'],
+                ['Camera', 'Built in: Night, Portrait with blur you can change later, PRO manual controls matched to what your phone supports, RAW and 4K where available', 'A library app; the camera is a separate app'],
                 ['Collecting event photos', 'Event albums with a QR code: guests add photos from the browser, no app needed', 'Shared albums'],
                 ['Search and iPhone', 'Basic; the iPhone app is coming later', 'Excellent search; mature iPhone app'],
               ],
             },
           },
           {
-            h2: 'Where Lens is better',
-            body: [],
-            bullets: [
-              'Originals only: Lens never offers a lower-quality mode, so nothing you back up is ever compressed',
-              'More free space for photos: 40 GB to start and 10 GB forever, not shared with your email',
-              'No limit from Lens when you use your own Google Drive, Dropbox, OneDrive, Box, S3 or WebDAV',
-              'A pro camera and a non-destructive editor in the same app as your backup',
-              'Event albums: one QR code collects everyone’s wedding or party photos, no app needed',
-              'Share links that send the original, expire after 1, 7 or 30 days, and can be limited to one person',
-              'No ads, no selling your data, no training AI on your photos',
+            h2: 'Free storage compared',
+            body: [
+              'Google gives 15 GB free per account, shared across Gmail, Google Drive and Google Photos. When it is full, new photos and videos stop backing up, and email can stop arriving, until you free space or buy more Google storage.',
+              'Lens storage is only for photos and videos: 40 GB free for your first 3 months after you sign in, then 10 GB free forever, or 5 GB to try without an account. Each friend who joins and backs up adds 10 GB (up to 10 friends). If you need more, Lens Plus gives you 50 GB of Lens storage (see Pricing).',
             ],
           },
           {
-            h2: 'Where Google Photos is better',
+            h2: 'Original quality vs Storage saver',
+            body: [
+              'Google Photos offers two backup qualities. "Original quality" keeps the file as you shot it, but it counts against your shared 15 GB. "Storage saver" compresses photos and videos so they take less space, so the backed-up copy is no longer the file your camera made.',
+              'Lens has one setting: the original. Every photo and video goes to the cloud the moment it is taken, byte for byte, and each upload is checked when it arrives. Edits are saved separately, so the original is never overwritten.',
+            ],
+          },
+          {
+            h2: 'Using your own storage',
+            body: [
+              'Google Photos keeps everything in your Google storage. Lens can also use storage you already have: connect Google Drive, OneDrive, Dropbox, Box, S3-compatible storage or a NAS over WebDAV, and Lens saves your originals there.',
+              'Lens keeps only small previews, so it adds no limit of its own; the space is whatever your provider gives you. The camera, gallery and sharing work the same either way.',
+            ],
+          },
+          {
+            h2: 'Sharing and event albums without an app',
+            body: [
+              'Lens share links send the original file, and the person you send it to needs no app. You choose whether a link works for 1, 7 or 30 days, and whether anyone with the link or only one person can open it.',
+              'For weddings, parties and trips, a Lens event album collects everyone’s photos in one place: guests scan a QR code or open a link in their browser to add and see photos, with no app to install. Google Photos has shared albums too.',
+            ],
+          },
+          {
+            h2: 'Where Google Photos is still better',
             body: ['We would rather you choose with the full picture.'],
             bullets: [
               'Search: finding a photo by what is in it works very well in Google Photos',
               'iPhone: Google Photos has a mature iPhone app; Lens for iPhone is built but not released yet',
               'History: Google Photos has years of polish, and your old library may already be there',
               'One account: it works with the Google services you already use',
+              'Choice of quality: if you would rather fit more photos than keep originals, Storage saver gives you that option; Lens always stores the original',
             ],
           },
           {
-            h2: 'Use both',
-            body: ['Many people keep Google Photos for search and use Lens as the camera and the full-quality backup for new photos. Lens doesn’t lock you in: you can download everything, or keep your originals in your own storage from day one.'],
+            h2: 'Moving from Google Photos to Lens',
+            body: [
+              'You don’t have to move everything at once. Many people keep their old library in Google Photos for search, and use Lens as the camera and the full-quality backup for new photos.',
+              'To bring old photos over, download them with Google Takeout, then upload them at full quality from the Lens web app on your computer. Check that everything arrived before you delete anything from Google. Lens doesn’t lock you in either: you can download your whole library for free at any time.',
+            ],
           },
         ],
         faq: [
+          { q: 'What happens when Google Photos storage is full?', a: 'Google stops backing up new photos and videos, and email can stop arriving, until you free space or buy more storage. Check Google’s current policy for accounts that stay over the limit for a long time. Our guide "Google storage full?" shows what you can safely clean up, step by step.' },
           { q: 'Does Google Photos compress my photos?', a: 'Only if you choose "Storage saver". With "Original quality", Google keeps the original but it counts against your 15 GB, which is shared with Gmail and Drive.' },
           { q: 'Can I move my photos from Google Photos to Lens?', a: 'Yes. Download them with Google Takeout, then upload them at full quality from the Lens web app on your computer, or import them in the Lens app (up to 100 at a time).' },
-          { q: 'Is Lens storage really free?', a: 'Yes. 40 GB for your first 3 months after you sign in, then 10 GB free forever, plus +10 GB for every friend who joins and backs up (up to 10 friends). Paid plans with more Lens storage are coming; the free plan stays free.' },
+          { q: 'Is Lens storage really free?', a: 'Yes. 40 GB for your first 3 months after you sign in, then 10 GB free forever, plus +10 GB for every friend who joins and backs up (up to 10 friends). If you need more, Lens Plus gives you 50 GB of Lens storage (see Pricing); the free plan stays free.' },
           { q: 'If I back up to my own Google Drive, does it use my Google storage?', a: 'Yes. Lens adds no limit of its own, but the space in your own storage is whatever your provider gives you. Dropbox, OneDrive, Box, S3 or a NAS work the same way.' },
         ],
       },
       hi: {
-        title: 'Lens बनाम Google Photos: स्टोरेज और क्वालिटी',
+        title: 'Lens बनाम Google Photos: क्वालिटी, स्टोरेज, शेयरिंग',
         description:
-          'अक्टूबर 2026 तक की ईमानदार तुलना: मुफ़्त स्टोरेज, ओरिजिनल क्वालिटी बनाम स्टोरेज सेवर, अपना स्टोरेज, कैमरा, इवेंट एल्बम, और कहाँ Google Photos अब भी बेहतर है।',
+          'अक्टूबर 2026 की ईमानदार तुलना: मुफ़्त स्टोरेज, ओरिजिनल क्वालिटी बनाम स्टोरेज सेवर, अपना स्टोरेज, इवेंट एल्बम, और कहाँ Google Photos अब भी बेहतर है।',
         h1: 'Lens बनाम Google Photos',
         lead: 'एक ईमानदार नज़र, अक्टूबर 2026 तक। Google Photos एक बेहतरीन लाइब्रेरी है। Lens उन लोगों के लिए है जो हर ओरिजिनल संभालना, बेहतर कैमरा और फ़ोटो के लिए ज़्यादा मुफ़्त जगह चाहते हैं।',
         sections: [
@@ -98,44 +118,64 @@ export const guidePages: GuidePage[] = [
                 ['मुफ़्त स्टोरेज', 'पहले 3 महीने 40 GB, फिर हमेशा 10 GB मुफ़्त, सिर्फ़ फ़ोटो और वीडियो के लिए', '15 GB मुफ़्त, Gmail, Google Drive और Google Photos में साझा'],
                 ['क्वालिटी', 'हमेशा ओरिजिनल फ़ाइल, कभी दोबारा कंप्रेस नहीं', 'ओरिजिनल क्वालिटी, या "स्टोरेज सेवर", जो जगह बचाने के लिए फ़ोटो और वीडियो कंप्रेस करता है'],
                 ['अपना स्टोरेज', 'अपने Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV में बैकअप, Lens की कोई सीमा नहीं', 'सिर्फ़ Google स्टोरेज'],
-                ['कैमरा', 'साथ में: नाइट, बाद में बदलने लायक ब्लर वाला पोर्ट्रेट, PRO मैनुअल कंट्रोल, RAW, 4K', 'लाइब्रेरी ऐप; कैमरा अलग ऐप है'],
+                ['कैमरा', 'साथ में: नाइट, बाद में बदलने लायक ब्लर वाला पोर्ट्रेट, आपके फ़ोन के हिसाब से PRO मैनुअल कंट्रोल, जहाँ सपोर्ट हो वहाँ RAW और 4K', 'लाइब्रेरी ऐप; कैमरा अलग ऐप है'],
                 ['इवेंट की फ़ोटो इकट्ठा करना', 'QR कोड वाले इवेंट एल्बम: मेहमान ब्राउज़र से फ़ोटो जोड़ते हैं, ऐप की ज़रूरत नहीं', 'शेयर्ड एल्बम'],
                 ['सर्च और iPhone', 'बेसिक; iPhone ऐप बाद में आएगा', 'बेहतरीन सर्च; पुराना, भरोसेमंद iPhone ऐप'],
               ],
             },
           },
           {
-            h2: 'जहाँ Lens बेहतर है',
-            body: [],
-            bullets: [
-              'सिर्फ़ ओरिजिनल: Lens में कम क्वालिटी वाला मोड है ही नहीं, इसलिए आपका कोई बैकअप कभी कंप्रेस नहीं होता',
-              'फ़ोटो के लिए ज़्यादा मुफ़्त जगह: शुरुआत में 40 GB और हमेशा 10 GB, ईमेल के साथ साझा नहीं',
-              'अपना Google Drive, Dropbox, OneDrive, Box, S3 या WebDAV इस्तेमाल करने पर Lens की कोई सीमा नहीं',
-              'बैकअप वाले उसी ऐप में प्रो कैमरा और ओरिजिनल को न छूने वाला एडिटर',
-              'इवेंट एल्बम: एक QR कोड से शादी या पार्टी की सबकी फ़ोटो, ऐप की ज़रूरत नहीं',
-              'शेयर लिंक जो ओरिजिनल भेजते हैं, 1, 7 या 30 दिन में ख़त्म होते हैं, और सिर्फ़ एक व्यक्ति तक सीमित हो सकते हैं',
-              'कोई विज्ञापन नहीं, आपका डेटा बेचना नहीं, आपकी फ़ोटो पर AI ट्रेनिंग नहीं',
+            h2: 'मुफ़्त स्टोरेज की तुलना',
+            body: [
+              'Google हर अकाउंट को 15 GB मुफ़्त देता है, जो Gmail, Google Drive और Google Photos में साझा है। यह भर जाए तो नई फ़ोटो और वीडियो का बैकअप रुक जाता है, और ईमेल आना भी बंद हो सकता है, जब तक आप जगह ख़ाली न करें या और Google स्टोरेज न ख़रीदें।',
+              'Lens का स्टोरेज सिर्फ़ फ़ोटो और वीडियो के लिए है: साइन इन के बाद पहले 3 महीने 40 GB मुफ़्त, फिर हमेशा 10 GB मुफ़्त, या बिना अकाउंट आज़माने के लिए 5 GB। जुड़कर बैकअप करने वाले हर दोस्त पर +10 GB (10 दोस्तों तक)। और जगह चाहिए तो Lens Plus में 50 GB Lens स्टोरेज मिलता है (कीमत पेज देखें)।',
             ],
           },
           {
-            h2: 'जहाँ Google Photos बेहतर है',
+            h2: 'ओरिजिनल क्वालिटी बनाम स्टोरेज सेवर',
+            body: [
+              'Google Photos में बैकअप की दो क्वालिटी हैं। "ओरिजिनल क्वालिटी" फ़ाइल वैसी ही रखती है जैसी आपने ली, पर वह आपके साझा 15 GB में गिनी जाती है। "स्टोरेज सेवर" फ़ोटो और वीडियो कंप्रेस करता है ताकि कम जगह लगे, यानी बैकअप वाली कॉपी अब वह फ़ाइल नहीं रहती जो आपके कैमरे ने बनाई थी।',
+              'Lens में एक ही सेटिंग है: ओरिजिनल। हर फ़ोटो और वीडियो लेते ही क्लाउड में चला जाता है, हूबहू वैसा ही, और हर अपलोड पहुँचते ही जाँचा जाता है। एडिट अलग सेव होते हैं, इसलिए ओरिजिनल कभी नहीं बदलता।',
+            ],
+          },
+          {
+            h2: 'अपना स्टोरेज इस्तेमाल करना',
+            body: [
+              'Google Photos सब कुछ आपके Google स्टोरेज में रखता है। Lens उस स्टोरेज में भी बैकअप कर सकता है जो आपके पास पहले से है: Google Drive, OneDrive, Dropbox, Box, S3-कम्पैटिबल स्टोरेज या WebDAV वाला NAS जोड़ें, और Lens आपके ओरिजिनल वहीं सेव करेगा।',
+              'Lens सिर्फ़ छोटे प्रीव्यू रखता है, इसलिए अपनी कोई सीमा नहीं लगाता; जगह उतनी ही है जितनी आपका प्रोवाइडर देता है। कैमरा, गैलरी और शेयरिंग दोनों तरह से वैसे ही चलते हैं।',
+            ],
+          },
+          {
+            h2: 'बिना ऐप के शेयरिंग और इवेंट एल्बम',
+            body: [
+              'Lens के शेयर लिंक ओरिजिनल फ़ाइल भेजते हैं, और जिसे आप भेजें उसे कोई ऐप नहीं चाहिए। लिंक 1, 7 या 30 दिन चले, और उसे लिंक वाला कोई भी खोले या सिर्फ़ एक व्यक्ति, यह आप तय करते हैं।',
+              'शादी, पार्टी या ट्रिप के लिए Lens का इवेंट एल्बम सबकी फ़ोटो एक जगह इकट्ठा करता है: मेहमान QR कोड स्कैन करके या लिंक खोलकर ब्राउज़र में ही फ़ोटो जोड़ते और देखते हैं, कोई ऐप इंस्टॉल नहीं करना पड़ता। Google Photos में भी शेयर्ड एल्बम हैं।',
+            ],
+          },
+          {
+            h2: 'जहाँ Google Photos अब भी बेहतर है',
             body: ['हम चाहते हैं कि आप पूरी तस्वीर देखकर चुनें।'],
             bullets: [
               'सर्च: फ़ोटो में क्या है, उससे फ़ोटो ढूँढना Google Photos में बहुत अच्छा चलता है',
               'iPhone: Google Photos का iPhone ऐप पुराना और भरोसेमंद है; Lens का iPhone ऐप बना हुआ है पर अभी रिलीज़ नहीं हुआ',
               'इतिहास: Google Photos में सालों की बारीकी है, और आपकी पुरानी लाइब्रेरी शायद पहले से वहाँ है',
               'एक अकाउंट: यह उन Google सेवाओं के साथ चलता है जो आप पहले से इस्तेमाल करते हैं',
+              'क्वालिटी का विकल्प: अगर आपको ओरिजिनल से ज़्यादा फ़ोटो की गिनती की परवाह है, तो स्टोरेज सेवर यह विकल्प देता है; Lens हमेशा ओरिजिनल ही रखता है',
             ],
           },
           {
-            h2: 'दोनों इस्तेमाल करें',
-            body: ['कई लोग सर्च के लिए Google Photos रखते हैं और नई फ़ोटो के लिए कैमरा और फ़ुल क्वालिटी बैकअप के तौर पर Lens इस्तेमाल करते हैं। Lens आपको बाँधता नहीं: आप सब कुछ डाउनलोड कर सकते हैं, या पहले दिन से अपने ओरिजिनल अपने स्टोरेज में रख सकते हैं।'],
+            h2: 'Google Photos से Lens पर आना',
+            body: [
+              'सब कुछ एक साथ लाने की ज़रूरत नहीं। कई लोग अपनी पुरानी लाइब्रेरी सर्च के लिए Google Photos में रखते हैं, और नई फ़ोटो के लिए कैमरा और फ़ुल क्वालिटी बैकअप के तौर पर Lens इस्तेमाल करते हैं।',
+              'पुरानी फ़ोटो लाने के लिए Google Takeout से डाउनलोड करें, फिर कंप्यूटर पर Lens वेब ऐप से पूरी क्वालिटी में अपलोड करें। Google से कुछ भी डिलीट करने से पहले जाँच लें कि सब पहुँच गया। Lens भी आपको बाँधता नहीं: आप कभी भी अपनी पूरी लाइब्रेरी मुफ़्त में डाउनलोड कर सकते हैं।',
+            ],
           },
         ],
         faq: [
+          { q: 'Google Photos का स्टोरेज फ़ुल होने पर क्या होता है?', a: 'Google नई फ़ोटो और वीडियो का बैकअप रोक देता है, और ईमेल आना भी बंद हो सकता है, जब तक आप जगह ख़ाली न करें या और स्टोरेज न ख़रीदें। लंबे समय तक सीमा से ऊपर रहने वाले अकाउंट के लिए Google की मौजूदा पॉलिसी देखें। हमारी गाइड "Google स्टोरेज फ़ुल?" क़दम-दर-क़दम बताती है कि क्या सुरक्षित तरीके से हटा सकते हैं।' },
           { q: 'क्या Google Photos मेरी फ़ोटो कंप्रेस करता है?', a: 'सिर्फ़ तब जब आप "स्टोरेज सेवर" चुनें। "ओरिजिनल क्वालिटी" में Google ओरिजिनल रखता है, पर वह आपके 15 GB में गिना जाता है, जो Gmail और Drive के साथ साझा है।' },
           { q: 'क्या मैं Google Photos से अपनी फ़ोटो Lens में ला सकता हूँ?', a: 'हाँ। Google Takeout से डाउनलोड करें, फिर कंप्यूटर पर Lens वेब ऐप से पूरी क्वालिटी में अपलोड करें, या Lens ऐप में इम्पोर्ट करें (एक बार में 100 तक)।' },
-          { q: 'क्या Lens स्टोरेज सच में मुफ़्त है?', a: 'हाँ। साइन इन के बाद पहले 3 महीने 40 GB, फिर हमेशा 10 GB मुफ़्त, साथ में जुड़कर बैकअप करने वाले हर दोस्त पर +10 GB (10 दोस्तों तक)। ज़्यादा Lens स्टोरेज वाले पेड प्लान आ रहे हैं; फ़्री प्लान मुफ़्त ही रहेगा।' },
+          { q: 'क्या Lens स्टोरेज सच में मुफ़्त है?', a: 'हाँ। साइन इन के बाद पहले 3 महीने 40 GB, फिर हमेशा 10 GB मुफ़्त, साथ में जुड़कर बैकअप करने वाले हर दोस्त पर +10 GB (10 दोस्तों तक)। और जगह चाहिए तो Lens Plus में 50 GB Lens स्टोरेज मिलता है (कीमत पेज देखें); फ़्री प्लान मुफ़्त ही रहेगा।' },
           { q: 'अपने Google Drive में बैकअप करूँ तो क्या मेरा Google स्टोरेज इस्तेमाल होगा?', a: 'हाँ। Lens अपनी कोई सीमा नहीं लगाता, पर आपके स्टोरेज में उतनी ही जगह है जितनी आपका प्रोवाइडर देता है। Dropbox, OneDrive, Box, S3 या NAS भी ऐसे ही चलते हैं।' },
         ],
       },
