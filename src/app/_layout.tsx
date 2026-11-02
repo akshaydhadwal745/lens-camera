@@ -132,6 +132,7 @@ function RootLayout() {
         <Stack.Screen name="s/[token]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="signin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="oauth" options={{ animation: 'none' }} />
+        <Stack.Screen name="plus-return" options={{ animation: 'none' }} />
         <Stack.Screen name="link" />
         <Stack.Screen name="edit/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack>

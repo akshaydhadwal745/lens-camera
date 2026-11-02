@@ -43,7 +43,7 @@ Shows plan, welcome, over-limit date and deletion date; support can give N month
 - `infra/lambda/api/razorpay.ts` (client, webhook signature), `payments.ts` (offer, checkout, reconcile, cancel, webhook,
   15-minute backstop), `lifecycle.ts` (`plus_first_charge` reminder 3 days before), app `src/app/plus.tsx`,
   `src/components/PlusOffer.tsx`, `src/lib/plus-prompt-rules.ts`, Settings → Storage row.
-- People pay on Razorpay's hosted subscription page (`short_url`): UPI Autopay or card. No card data at Lens.
+- People pay in Razorpay Checkout on our own page `GET /api/v1/plus/pay/<subscription id>` (`?ret=web` from the web app): UPI Autopay or card, no card data at Lens. The page says "₹0 today, first charge on <date>" (Razorpay's hosted `short_url` page said "₹59 billed for this month" and never sent people back). Checkout runs in redirect mode and posts the signed result to `POST /api/v1/plus/paid`, which checks the signature (HMAC of `payment_id|subscription_id` with the key secret), reconciles at once and hands back to `lens://plus-return` (app; the in-app browser closes) or `/app/plus` (web). Added 2026-11-02.
 - Razorpay is the source of truth: `reconcile()` reads the subscription and maps it:
   `authenticated` → locked in (`PROFILE.sub.status = scheduled`), `active` → `activatePlan(plus50, current_end)`
   (+ affiliate commission per paid invoice), `pending/halted` → grace, `cancelled/completed` → `cancelPlan`.

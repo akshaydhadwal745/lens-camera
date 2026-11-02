@@ -17,9 +17,9 @@ import { recordPurchase } from './affiliates';
 import { settleLink } from './drive-move';
 import { audit } from './audit';
 import { Identity } from './identity';
-import { ddb, env, HttpError, inWelcome, json, Req, Res } from './lib';
+import { ddb, env, getParam, HttpError, inWelcome, json, rateLimit, Req, Res } from './lib';
 import { activatePlan, cancelPlan, getPlan, paymentFailed, planActive, PLANS } from './plans';
-import { planIds, razorpayConfigured, RzpInvoice, RzpSubscription, rzp, testMode, verifyWebhook } from './razorpay';
+import { planIds, razorpayConfigured, RzpInvoice, RzpSubscription, rzp, testMode, verifyCheckout, verifyWebhook } from './razorpay';
 
 const DAY = 86_400_000;
 
@@ -94,13 +94,15 @@ export async function getPlus(identity: Identity): Promise<Res> {
 }
 
 /**
- * POST /v1/plus/checkout {kind}: a Razorpay subscription and its hosted page (UPI Autopay, cards).
- * The app opens `url` in the browser, then calls POST /v1/plus/refresh when the person comes back.
+ * POST /v1/plus/checkout {kind, ret?}: a Razorpay subscription and our payment page for it (UPI
+ * Autopay, cards). The app opens `url` in the browser, then calls POST /v1/plus/refresh when the
+ * person comes back. `ret` = 'web' sends people back to the web app instead of lens://.
  */
 export async function checkout(identity: Identity, req: Req): Promise<Res> {
   if (!identity.email) throw new HttpError(403, 'Sign in to get Lens Plus', 'sign-in');
   const kind = req.body.kind as OfferKind;
   if (!OFFERS[kind]) throw new HttpError(400, 'Unknown plan');
+  const ret = req.body.ret === 'web' ? 'web' : 'app';
   const now = Date.now();
   const current = await getSub(identity.id);
   if (current && (current.status === 'scheduled' || current.status === 'active') && !current.cancelled) {
@@ -111,7 +113,7 @@ export async function checkout(identity: Identity, req: Req): Promise<Res> {
   // An unfinished checkout for the same choice (made in the last day) is reused.
   if (current?.status === 'created' && current.kind === kind && now - current.createdAt < DAY) {
     const s = await rzp<RzpSubscription>('GET', `/subscriptions/${current.id}`);
-    if (s.status === 'created' && s.short_url) return json(200, { url: s.short_url, id: s.id });
+    if (s.status === 'created' && s.short_url) return json(200, { url: payUrl(s, ret), id: s.id });
   }
 
   const planId = (await planIds())[kind];
@@ -133,7 +135,97 @@ export async function checkout(identity: Identity, req: Req): Promise<Res> {
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: `RZP#${s.id}`, sk: 'SUB', accountId: identity.id, createdAt: now } }));
   await saveSub(identity.id, { id: s.id, kind, status: 'created', chargeAt: startAt, paidCount: 0, createdAt: now, updatedAt: now });
   await audit({ entity: `plan:${identity.id}`, action: 'plus.checkout', actor: identity.id, data: { kind, subscription: s.id, startAt } });
-  return json(200, { url: s.short_url, id: s.id });
+  return json(200, { url: payUrl(s, ret), id: s.id });
+}
+
+// ---------- Our payment page ----------
+// Razorpay's hosted subscription page never sends people back (they had to close the tab) and says
+// "₹59 billed for this month" even when nothing is charged today. Our page opens Razorpay Checkout
+// for the same subscription in redirect mode: Razorpay posts the result to /v1/plus/paid, which
+// checks the signature and hands back to the app (lens://plus-return) or the web app.
+
+const SUB_ID = /^sub_[A-Za-z0-9]{6,30}$/;
+type Ret = 'app' | 'web';
+
+const payUrl = (s: RzpSubscription, ret: Ret) => (env.webOrigin ? `${env.webOrigin}/api/v1/plus/pay/${s.id}${ret === 'web' ? '?ret=web' : ''}` : s.short_url!);
+const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const day = (ms: number) => new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+
+async function accountFor(subId: string): Promise<string | undefined> {
+  if (!SUB_ID.test(subId)) return undefined;
+  const row = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: `RZP#${subId}`, sk: 'SUB' } }))).Item;
+  return row?.accountId as string | undefined;
+}
+
+/** A small page: a message, the way back, and (on the pay page) Razorpay Checkout. */
+function page(o: { title: string; text: string; ret: Ret; done?: boolean; checkout?: Record<string, unknown> }): Res {
+  const back = o.ret === 'web' ? '/app/plus' : `lens://plus-return${o.done ? '?paid=1' : ''}`;
+  const other = o.ret === 'web' ? '' : '<a class="link" href="/app/plus">Use Lens on the web instead</a>';
+  const script = o.checkout
+    ? `<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+var opts = ${JSON.stringify(o.checkout).replace(/</g, '\\u003c')};
+opts.modal = { ondismiss: function () { document.getElementById('pay').hidden = false; } };
+function pay() { document.getElementById('pay').hidden = true; new Razorpay(opts).open(); }
+document.getElementById('pay').onclick = pay;
+pay();
+</script>`
+    : o.done
+      ? `<script>setTimeout(function () { location.href = ${JSON.stringify(back)}; }, 600);</script>`
+      : '';
+  const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>${esc(o.title)} · Lens</title>
+<style>body{margin:0;background:#000;color:#fff;font:16px/1.5 system-ui,sans-serif}main{max-width:28em;margin:0 auto;padding:15vh 16px}
+h1{font-size:24px;margin:0 0 8px}p{color:#bbb;margin:0 0 24px}.btn{display:block;text-align:center;background:#fff;color:#000;border:0;border-radius:999px;padding:14px;font:600 16px system-ui,sans-serif;text-decoration:none;margin-bottom:12px;width:100%;box-sizing:border-box}
+.btn.alt{background:#222;color:#fff}.link{display:block;text-align:center;color:#999;font-size:14px}</style></head>
+<body><main><h1>${esc(o.title)}</h1><p>${esc(o.text)}</p>
+${o.checkout ? '<button class="btn" id="pay" hidden>Continue to payment</button>' : ''}
+<a class="btn${o.checkout ? ' alt' : ''}" href="${esc(back)}">Back to Lens</a>${other}</main>
+${script}</body></html>`;
+  return { statusCode: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex, nofollow' }, body };
+}
+
+/** GET /v1/plus/pay/<subscription id>[?ret=web] (public: the id is only known to its account). */
+export async function payPage(subId: string, req: Req): Promise<Res> {
+  if (req.sourceIp) await rateLimit(`plus-pay#${req.sourceIp}`, 120);
+  const ret: Ret = req.query.ret === 'web' ? 'web' : 'app';
+  const accountId = await accountFor(subId);
+  const sub = accountId ? await getSub(accountId) : undefined;
+  if (!sub || sub.id !== subId || sub.status === 'ended') return page({ title: 'This payment page has expired', text: 'Nothing was charged. Start again from Lens Plus in the app.', ret });
+  if (sub.status !== 'created') return page({ title: 'Lens Plus is already set up', text: 'Nothing more to do here.', ret, done: true });
+  const offer = OFFERS[sub.kind];
+  const price = `₹${offer.paise / 100}`;
+  const later = sub.chargeAt && sub.chargeAt > Date.now() + DAY;
+  const text = later
+    ? `₹0 today. Your first ${price} charge is on ${day(sub.chargeAt!)}, then ${price} a ${offer.period}. Cancel any time in the app.`
+    : `${price} a ${offer.period}. Cancel any time in the app.`;
+  return page({
+    title: 'Lens Plus: 50 GB',
+    text,
+    ret,
+    checkout: {
+      key: await getParam('/lens/razorpay/key-id'),
+      subscription_id: sub.id,
+      name: 'Lens',
+      description: later ? `Lens Plus, ₹0 today, first charge ${day(sub.chargeAt!)}` : `Lens Plus, ${price} a ${offer.period}`,
+      callback_url: `${env.webOrigin}/api/v1/plus/paid${ret === 'web' ? '?ret=web' : ''}`,
+      redirect: true,
+      theme: { color: '#000000' },
+    },
+  });
+}
+
+/** POST /v1/plus/paid (public; Razorpay Checkout posts the signed result here, then we hand back). */
+export async function paidPage(req: Req): Promise<Res> {
+  const ret: Ret = req.query.ret === 'web' ? 'web' : 'app';
+  const b = (req.body ?? {}) as Record<string, string>;
+  const subId = b.razorpay_subscription_id;
+  if (!(await verifyCheckout(b.razorpay_payment_id, subId, b.razorpay_signature))) {
+    return page({ title: 'The payment didn’t go through', text: `${b['error[description]'] ? `${b['error[description]']} ` : ''}Nothing was charged. Go back to Lens and try again.`, ret });
+  }
+  const accountId = await accountFor(subId);
+  if (accountId) await reconcile(accountId, 'razorpay-checkout').catch((e) => console.error('plus paid reconcile', e));
+  return page({ title: 'Lens Plus is set up', text: 'Taking you back to Lens…', ret, done: true });
 }
 
 /** Paid invoices → affiliate commissions (idempotent per payment id). */

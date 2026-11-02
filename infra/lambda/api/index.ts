@@ -61,7 +61,7 @@ import {
   webVerifyEmail,
   webVerifyGoogle,
 } from './auth';
-import { cancelPlus, checkout as plusCheckout, getPlus, refreshPlus, webhook as razorpayWebhook } from './payments';
+import { cancelPlus, checkout as plusCheckout, getPlus, paidPage as plusPaidPage, payPage as plusPayPage, refreshPlus, webhook as razorpayWebhook } from './payments';
 import { cancelMove, getMove, refreshMove, startMove } from './drive-move';
 import { getExport, startExport } from './export';
 import { setMarketingEmail, unsubscribe } from './growth-integrations';
@@ -87,6 +87,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<Res> {
     if (route === 'GET /oauth/callback') return await oauthCallback(req);
     // Razorpay → Lens (signed with the dashboard webhook secret; payments.ts).
     if (route === 'POST /razorpay/webhook') return await razorpayWebhook(req);
+    // Our Lens Plus payment page (Razorpay Checkout) and where Checkout posts the signed result.
+    if (seg[1] === 'plus' && seg[2] === 'pay' && seg.length === 4 && method === 'GET') return await plusPayPage(seg[3], req);
+    if (route === 'POST /plus/paid') return await plusPaidPage(req);
     // Invite (/r/<code>) and affiliate (/go/<code>) links on the website.
     if (seg[1] === 'r' && seg.length === 3 && method === 'GET') return await followLink(req, 'referral', seg[2]);
     if (seg[1] === 'go' && seg.length === 3 && method === 'GET') return await followLink(req, 'affiliate', seg[2]);
