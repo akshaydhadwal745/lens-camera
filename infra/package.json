@@ -31,6 +31,8 @@
     "@aws-sdk/client-ssm": "^3.1147.0",
     "@aws-sdk/cloudfront-signer": "^3.1138.0",
     "@aws-sdk/lib-dynamodb": "^3.1147.0",
-    "@aws-sdk/s3-request-presigner": "^3.1147.0"
+    "@aws-sdk/s3-request-presigner": "^3.1147.0",
+    "@sparticuz/chromium": "153.0.0",
+    "puppeteer-core": "25.16.0"
   }
 }
