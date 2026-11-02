@@ -191,7 +191,7 @@ export const guidePages: GuidePage[] = [
           },
           {
             h2: '4. Other ways to keep backing up at full quality',
-            body: ['Storage saver slows things down, but it compresses photos and videos, and they still count against your 15 GB. To keep originals, give your photos their own backup:'],
+            body: ['Storage saver makes the space fill more slowly, but it compresses photos and videos, and they still count against your 15 GB. To keep originals, give your photos their own backup:'],
             bullets: [
               'Lens: 40 GB free for your first 3 months, then 10 GB free forever, only for photos and videos and always at original quality',
               '+10 GB for every friend who joins Lens and backs up (up to 10 friends)',
