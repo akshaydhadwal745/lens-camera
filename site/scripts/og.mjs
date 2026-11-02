@@ -7,8 +7,8 @@ const icon = readFileSync(new URL('../../assets/brand/icon.svg', import.meta.url
   .replace('<svg ', '<svg x="80" y="175" width="280" height="280" ');
 
 const variants = {
-  en: { title: 'Lens by InstaGrow', line1: 'Shoot endlessly.', line2: 'Your phone never fills up.', foot: 'Pro camera · 100 GB free backup · Original quality', font: 'Noto Sans' },
-  hi: { title: 'Lens by InstaGrow', line1: 'जितनी चाहें फ़ोटो लें।', line2: 'फ़ोन कभी फ़ुल नहीं होगा।', foot: 'प्रो कैमरा · 100 GB मुफ़्त बैकअप · ओरिजिनल क्वालिटी', font: 'Noto Sans Devanagari' },
+  en: { title: 'Lens by InstaGrow', line1: 'Shoot endlessly.', line2: 'Your phone never fills up.', foot: 'Pro camera · 10 GB free forever · Original quality', font: 'Noto Sans' },
+  hi: { title: 'Lens by InstaGrow', line1: 'जितनी चाहें फ़ोटो लें।', line2: 'फ़ोन कभी फ़ुल नहीं होगा।', foot: 'प्रो कैमरा · हमेशा 10 GB मुफ़्त · ओरिजिनल क्वालिटी', font: 'Noto Sans Devanagari' },
 };
 
 for (const [lang, v] of Object.entries(variants)) {
