@@ -68,3 +68,6 @@ Shows plan, welcome, over-limit date and deletion date; support can give N month
 
 ## Cancellation and refund policy page (2026-11-02)
 Public page `/refunds/` (EN + HI, `site/src/content/legal.ts` → `refunds`, linked in the footer), written for Razorpay's website review. It restates terms §4: cancel any time in one tap (Settings → Storage → Manage Lens Plus), ₹0 before the first charge, no refunds for partial periods except where the law requires. Added: **full refund within 30 days for charges made by mistake** (double charge, charged after cancelling, not delivered because of our fault); requests go through the contact form (topic "Help") with the Razorpay `pay_…` ID, refunded to the original method via the Razorpay dashboard (bank shows it in 5–7 working days). If the owner later wants a no-questions refund window (e.g. 7 days), change this page and terms §4 together.
+
+## Merchant brand (2026-11-02)
+Razorpay's brand name is now **InstaGrow** (owner changed the primary website from the old test domain via a support ticket). Our checkout page (`payPage` in `infra/lambda/api/payments.ts`) shows the same name at the top of Razorpay Checkout; the product stays in the description ("Lens Plus, ₹0 today…"). Remaining for one identity everywhere (task T-25): Play developer name and the email sender name.
