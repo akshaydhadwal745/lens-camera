@@ -12,6 +12,7 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeF
 import { join, normalize, relative } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import { renderPage } from './growth-render';
 import { bingRelated, bingTrend, ga4Report, trendingNow, wikiTrend, wikiViews } from './growth-sources';
 
 const SITE = 'https://lens.instagrowapp.com';
@@ -106,6 +107,20 @@ const safeFile = (f: string) => {
   return p;
 };
 const decode = (s: string) => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+/** Title, headings, prices and text of a page's HTML (competitor_page). */
+function readHtml(html: string) {
+  const head = html.split(/<\/head>/i)[0] ?? '';
+  const body = html.slice(head.length).replace(/<(script|style|svg|noscript)[\s\S]*?<\/\1>/gi, ' ');
+  const text = decode(body.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  return {
+    title: decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1] ?? ''),
+    headings: [...body.matchAll(/<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi)].map((m) => decode(m[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 30),
+    prices: [...new Set(text.match(/(₹|\$|€|£|\bRs\.?\s?|\bINR\s?|\bUSD\s?)\s?\d[\d,]*(\.\d{1,2})?(\s?\/\s?(mo|month|yr|year))?/g) ?? [])].slice(0, 20),
+    text: text.slice(0, 12_000),
+    words: text ? text.split(' ').length : 0,
+  };
+}
 function find(text: string, max = 20) {
   const variants = [...new Set([text, text.replace(/'/g, '’'), text.replace(/’/g, "'"), text.replace(/'/g, "\\'")])];
   const hits: { file: string; line: number; excerpt: string }[] = [];
@@ -326,19 +341,36 @@ const TOOLS: Record<string, Tool> = {
       const host = u.hostname.toLowerCase();
       if (u.protocol !== 'https:' || !COMPETITOR_HOSTS.some((h) => host === h || host.endsWith(`.${h.replace(/^www\./, '')}`) || host === h.replace(/^www\./, '')))
         throw new Refused(`only listed competitor sites can be read (${COMPETITOR_HOSTS.join(', ') || 'none listed'})`);
-      const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; LensGrowthAudit/1.0; +https://lens.instagrowapp.com)' }, redirect: 'follow', signal: AbortSignal.timeout(20_000) });
-      const html = res.ok ? await res.text() : '';
-      const head = html.split(/<\/head>/i)[0] ?? '';
-      const body = html.slice(head.length).replace(/<(script|style|svg|noscript)[\s\S]*?<\/\1>/gi, ' ');
-      const text = decode(body.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+      let page = readHtml('');
+      let status = 0;
+      let finalUrl = u.toString();
+      let rendered = false;
+      try {
+        const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; LensGrowthAudit/1.0; +https://lens.instagrowapp.com)' }, redirect: 'follow', signal: AbortSignal.timeout(20_000) });
+        page = readHtml(res.ok ? await res.text() : '');
+        [status, finalUrl] = [res.status, res.url || finalUrl];
+      } catch {
+        // Some sites refuse plain clients or time out: the browser below gets a second try.
+      }
+      // Pages drawn by JavaScript: load them in headless Chromium and read what it shows.
+      if (page.words < 80) {
+        try {
+          const r = await renderPage(u.toString());
+          const after = readHtml(r.html);
+          if (after.words > page.words) [page, status, finalUrl, rendered] = [after, r.status || status, r.finalUrl, true];
+        } catch (e) {
+          log({ tool: 'competitor_page', note: `render failed: ${(e as Error).message.slice(0, 200)}` });
+        }
+      }
       return {
-        url: u.toString(),
-        status: res.status,
-        title: decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1] ?? ''),
-        headings: [...body.matchAll(/<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi)].map((m) => decode(m[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 30),
-        prices: [...new Set(text.match(/(₹|\$|€|£|\bRs\.?\s?|\bINR\s?|\bUSD\s?)\s?\d[\d,]*(\.\d{1,2})?(\s?\/\s?(mo|month|yr|year))?/g) ?? [])].slice(0, 20),
-        text: text.slice(0, 12_000),
-        note: text.split(' ').length < 80 ? 'Almost no text: the page may be drawn by JavaScript' : undefined,
+        url: finalUrl,
+        status,
+        ...(rendered ? { rendered: 'read in a browser (the page is drawn by JavaScript)' } : {}),
+        title: page.title,
+        headings: page.headings,
+        prices: page.prices,
+        text: page.text,
+        note: page.words < 80 ? 'Almost no text, even in a browser: the page may need a sign-in or block automated readers' : undefined,
       };
     },
   },

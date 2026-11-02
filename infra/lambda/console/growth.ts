@@ -268,6 +268,9 @@ function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup
             GROWTH_CODE_COMMIT: tools.commit ?? '',
             GROWTH_TOOL_LOG: TOOL_LOG,
             GROWTH_MODE: mode.mode,
+            // The runtime name, not a secret: @sparticuz/chromium unpacks its Amazon Linux libraries only when it
+            // sees it (competitor_page renders JavaScript pages, growth-render.ts).
+            AWS_EXECUTION_ENV: process.env.AWS_EXECUTION_ENV ?? '',
           },
         },
       },
