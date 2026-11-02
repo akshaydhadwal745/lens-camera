@@ -468,3 +468,109 @@ export const affiliateTerms: Record<Lang, LegalDoc> = {
     ],
   },
 };
+
+// Refunds and cancellation (Razorpay website review). Must match terms §4: cancel any time, nothing
+// charged before the first charge, no refunds for partial periods except where the law requires,
+// plus full refunds for charges made by mistake. Owner decision 2026-11-02.
+const H = 'lens.instagrowapp.com/contact/?topic=support';
+
+export const refunds: Record<Lang, LegalDoc> = {
+  en: {
+    title: 'Cancellation and refund policy',
+    description: 'How to cancel Lens Plus in one tap, why nothing is charged before your first charge date, when you get a full refund, and how long refunds take.',
+    h1: 'Cancellation and refund policy',
+    intro: `This policy covers payments to ${LEGAL.operator} for Lens: Lens Plus, extra storage and moving originals to your own Google Drive. Payments are handled by Razorpay. It sits alongside our Terms of service (section 4), which say the same thing in full.`,
+    blocks: [
+      {
+        h2: '1. Cancel any time, in one tap',
+        ul: [
+          'In the app: Settings → Storage → Manage Lens Plus → Cancel Lens Plus.',
+          'On the website: sign in at lens.instagrowapp.com/app, then open Storage → Manage Lens Plus → Cancel Lens Plus.',
+          'Cancelling stops all future charges and ends the UPI Autopay or card mandate. You don’t need to contact us.',
+        ],
+      },
+      {
+        h2: '2. Before your first charge: ₹0',
+        p: [
+          'During your welcome period you can set up Lens Plus without paying anything. The first charge is on the date shown when you set it up, and we remind you 3 days before. If you cancel before that date, nothing is ever charged.',
+          'When you set up a UPI Autopay or card mandate, your bank or UPI app may show a small verification amount. Razorpay returns it automatically.',
+        ],
+      },
+      {
+        h2: '3. After a charge',
+        p: [
+          'If you cancel after a charge, Lens Plus keeps working until the end of the month or year you paid for, and is not renewed. Payments are not refunded for partial periods, except where the law requires.',
+          'Extra storage is charged only for what you actually kept above your plan, and we tell you the exact amount 3 days before it is added. Space you paid for to move originals to Google Drive and did not use stays available for your next move.',
+          'Nothing is deleted when a plan ends: your account returns to the free plan as described in the Terms of service.',
+        ],
+      },
+      {
+        h2: '4. When we refund in full',
+        ul: [
+          'You were charged twice for the same period',
+          'You were charged after you cancelled',
+          'You were charged but did not get what you paid for because of a problem on our side',
+        ],
+        p: ['Contact us within 30 days of the charge and we will refund it in full to the way you paid.'],
+      },
+      {
+        h2: '5. How to ask for a refund',
+        p: [
+          `Use the contact form (${H}) with the email address on your Lens account and the Razorpay payment ID from your payment receipt (it starts with "pay_"). We check it with Razorpay and reply by email.`,
+          'Approved refunds go back to the card, UPI account or bank account you paid with. Razorpay sends them at once; your bank usually shows them within 5–7 working days.',
+        ],
+      },
+      { h2: '6. The free plan', p: ['The free plan costs nothing and needs no payment details. Nothing is ever charged unless you choose a paid plan.'] },
+      { h2: '7. Contact', p: [`Contact form: ${C}`] },
+    ],
+  },
+  hi: {
+    title: 'रद्द करने और रिफ़ंड की नीति',
+    description: 'Lens Plus एक टैप में कैसे रद्द करें, पहले शुल्क की तारीख़ से पहले कुछ क्यों नहीं कटता, पूरा रिफ़ंड कब मिलता है, और रिफ़ंड में कितना समय लगता है।',
+    h1: 'रद्द करने और रिफ़ंड की नीति',
+    intro: `यह नीति Lens के लिए ${LEGAL.operator} को किए गए भुगतानों पर लागू है: Lens Plus, अतिरिक्त स्टोरेज और ओरिजिनल को अपने Google Drive में ले जाना। भुगतान Razorpay संभालता है। यह हमारी सेवा की शर्तों (सेक्शन 4) के साथ है, जिनमें यही बात पूरी लिखी है।`,
+    blocks: [
+      {
+        h2: '1. एक टैप में, कभी भी रद्द करें',
+        ul: [
+          'ऐप में: Settings → Storage → Manage Lens Plus → Cancel Lens Plus।',
+          'वेबसाइट पर: lens.instagrowapp.com/app पर साइन इन करें, फिर Storage → Manage Lens Plus → Cancel Lens Plus खोलें।',
+          'रद्द करने से आगे के सारे शुल्क रुक जाते हैं और UPI Autopay या कार्ड मैंडेट ख़त्म हो जाता है। हमसे संपर्क करने की ज़रूरत नहीं।',
+        ],
+      },
+      {
+        h2: '2. पहले शुल्क से पहले: ₹0',
+        p: [
+          'वेलकम अवधि में आप बिना कुछ दिए Lens Plus सेट कर सकते हैं। पहला शुल्क सेट करते समय दिखाई गई तारीख़ पर होता है, और हम 3 दिन पहले याद दिलाते हैं। उस तारीख़ से पहले रद्द करने पर कभी कुछ नहीं कटता।',
+          'UPI Autopay या कार्ड मैंडेट सेट करते समय आपका बैंक या UPI ऐप जाँच के लिए एक छोटी राशि दिखा सकता है। Razorpay उसे अपने-आप लौटा देता है।',
+        ],
+      },
+      {
+        h2: '3. शुल्क के बाद',
+        p: [
+          'शुल्क के बाद रद्द करने पर Lens Plus उस महीने या साल के अंत तक चलता है जिसका भुगतान हुआ है, और रिन्यू नहीं होता। अधूरी अवधि का पैसा वापस नहीं होता, जब तक क़ानून ऐसा न कहे।',
+          'अतिरिक्त स्टोरेज का शुल्क सिर्फ़ उतने का लगता है जितना आपने सच में प्लान से ऊपर रखा, और जोड़ने से 3 दिन पहले हम सटीक राशि बताते हैं। Google Drive में ओरिजिनल ले जाने के लिए भुगतान की गई जो जगह इस्तेमाल नहीं हुई, वह अगली बार के लिए रहती है।',
+          'प्लान ख़त्म होने पर कुछ भी डिलीट नहीं होता: आपका अकाउंट सेवा की शर्तों के अनुसार फ़्री प्लान पर आ जाता है।',
+        ],
+      },
+      {
+        h2: '4. पूरा रिफ़ंड कब मिलता है',
+        ul: [
+          'एक ही अवधि के लिए आपसे दो बार शुल्क लिया गया',
+          'रद्द करने के बाद आपसे शुल्क लिया गया',
+          'शुल्क लिया गया पर हमारी तरफ़ की किसी समस्या से आपको वह नहीं मिला जिसका भुगतान किया',
+        ],
+        p: ['शुल्क के 30 दिन के अंदर हमसे संपर्क करें, हम पूरी राशि उसी तरीके में लौटा देंगे जिससे आपने भुगतान किया।'],
+      },
+      {
+        h2: '5. रिफ़ंड कैसे माँगें',
+        p: [
+          `संपर्क फ़ॉर्म (${H}) में अपने Lens अकाउंट वाला ईमेल और भुगतान रसीद से Razorpay पेमेंट ID ("pay_" से शुरू) लिखें। हम Razorpay से जाँचकर ईमेल से जवाब देते हैं।`,
+          'मंज़ूर रिफ़ंड उसी कार्ड, UPI या बैंक खाते में जाते हैं जिससे भुगतान हुआ था। Razorpay उन्हें तुरंत भेजता है; आपका बैंक आमतौर पर 5–7 कामकाजी दिनों में दिखाता है।',
+        ],
+      },
+      { h2: '6. फ़्री प्लान', p: ['फ़्री प्लान मुफ़्त है और इसके लिए भुगतान की कोई जानकारी नहीं चाहिए। जब तक आप पेड प्लान न चुनें, कभी कुछ नहीं कटता।'] },
+      { h2: '7. संपर्क', p: [`संपर्क फ़ॉर्म: ${C}`] },
+    ],
+  },
+};
