@@ -15,7 +15,11 @@ const t = ui[lang];
 const c = page.copy[lang];
 const path = `${page.group}/${page.slug}`;
 const hubName = page.group === 'features' ? t.nav.features : t.footer.useCases;
-const related = (page.group === 'features' ? featurePages : useCasePages).filter((p) => p.slug !== page.slug).slice(0, 3);
+// The next three pages in the list (wrapping around), so every page is linked from three others;
+// always taking the first three left the later pages almost unlinked (SEO check: internal-links).
+const group = page.group === 'features' ? featurePages : useCasePages;
+const at = group.findIndex((p) => p.slug === page.slug);
+const related = [1, 2, 3].map((i) => group[(at + i) % group.length]).filter((p) => p.slug !== page.slug);
 ---
 
 <Layout lang={lang} path={path} title={c.title} description={c.description}>
