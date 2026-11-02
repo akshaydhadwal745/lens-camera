@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -31,7 +32,25 @@ import { Construct } from 'constructs';
 const EDGE_SECRET_FILE = path.join(__dirname, '../keys/console-edge-secret.key');
 const PRIVATE_KEY_PARAM = '/lens/cloudfront/private-key';
 const CONSOLE_PARAMS = '/lens/console';
-const DIST = path.join(__dirname, '../../console/dist');
+const CONSOLE_APP = path.join(__dirname, '../../console');
+const DIST = path.join(CONSOLE_APP, 'dist');
+
+/** The newest modification time of any file under `dir` (ms). */
+function newest(dir: string): number {
+  return fs.readdirSync(dir, { withFileTypes: true }).reduce((m, e) => {
+    const p = path.join(dir, e.name);
+    return Math.max(m, e.isDirectory() ? newest(p) : fs.statSync(p).mtimeMs);
+  }, 0);
+}
+
+/** The deploy uploads console/dist as it is on this machine, so rebuild it when the source is newer
+ * (on 2026-11-02 a deploy shipped a build from three days before). */
+function freshConsoleBuild() {
+  const index = path.join(DIST, 'index.html');
+  const built = fs.existsSync(index) ? fs.statSync(index).mtimeMs : 0;
+  const changed = Math.max(newest(path.join(CONSOLE_APP, 'src')), ...['index.html', 'package.json', 'vite.config.ts'].map((f) => fs.statSync(path.join(CONSOLE_APP, f)).mtimeMs));
+  if (changed > built) execSync('npm run build', { cwd: CONSOLE_APP, stdio: 'inherit' });
+}
 
 export type ConsoleStackProps = StackProps & {
   domain: string;
@@ -242,6 +261,7 @@ function handler(event) {
       },
     });
 
+    freshConsoleBuild();
     if (fs.existsSync(path.join(DIST, 'index.html'))) {
       new s3deploy.BucketDeployment(this, 'ConsoleDeploy', {
         sources: [s3deploy.Source.asset(DIST)],
