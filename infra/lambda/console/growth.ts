@@ -28,7 +28,9 @@ import { competitorHosts, watchCompetitors } from './growth-competitors';
 import { runSeoAudit } from './growth-seo';
 import { createTask, getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
 import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
-import { MONTHLY_SCHEMA, MONTHLY_SYSTEM, TEXT_SCHEMA, TEXT_SYSTEM, unsupportedNumbers, type MonthlyAi, type TextDraft } from './growth-report';
+import { CONTENT_SCHEMA, CONTENT_SYSTEM, MONTHLY_SCHEMA, MONTHLY_SYSTEM, TEXT_SCHEMA, TEXT_SYSTEM, unsupportedNumbers, type ContentDraft, type MonthlyAi, type TextDraft } from './growth-report';
+import { brand as loadBrand } from './growth-brand';
+import { codeOf, platformLink, postFields, postProblems } from './growth-records';
 import { goals as loadGoals } from './growth-goals';
 import { spendRows } from './growth-money';
 import { liveAnalytics } from './growth-workspace';
@@ -805,6 +807,48 @@ async function runTextDraft(t: Task, by: string, started: number) {
   return { drafts: drafts.length };
 }
 
+const CONTENT_MODE: Mode = { system: CONTENT_SYSTEM, schema: CONTENT_SCHEMA, toolNames: ['find_in_code', 'read_code', 'audit_page', 'competitor_page'], mode: 'report' };
+
+/** Social tasks: 1–3 content packages land on the Content board as In review (docs/growth/content-engine.md).
+ * The same checks as a person's save run here; problems are shown on the post and block approval. */
+async function runContentDraft(t: Task, by: string, started: number) {
+  const token = await getParam('/lens/growth/claude-token');
+  if (!token) throw new Error('Claude token not set up');
+  rmSync(TOOL_LOG, { force: true });
+  const commit = await fetchCode();
+  const kit = await loadBrand();
+  const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), competitorHosts: await competitorHosts().catch(() => []), enabled: [], commit };
+  const prompt = [
+    draftTask(t),
+    `BRAND KIT\nVoice: ${kit.voice}\nDo: ${kit.dos.join(' | ')}\nDon't: ${kit.donts.join(' | ')}\nCalls to action: ${kit.ctas.join(' | ')}\nHashtags to draw from: ${kit.hashtags.join(' ')}\nPillars: ${kit.pillars.join(', ')}\nLanguages: ${kit.languages.join(', ')}`,
+  ].join('\n\n');
+  const { report: d } = await runClaude<ContentDraft>(prompt, token, tools, started + 12 * 60_000, CONTENT_MODE);
+  await saveToolActivity(`draft:${t.id}`, `D-${t.id}`, Date.now());
+  const packages = (d.packages ?? []).slice(0, 3);
+  if (!packages.length) throw new Error(`No content. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
+  const saved: { id: string; name: string; format: string; problems: string[] }[] = [];
+  for (const x of packages) {
+    const f = postFields({ ...x, title: x.name, body: x.why, status: 'in_review', owner: t.owner === 'agent' ? '' : t.owner, taskId: t.id, realPhoto: false, date: new Date(started + Math.max(0, Math.min(14, Math.round(x.dayOffset || 0))) * DAY).toISOString().slice(0, 10), page: /^\/[\w\-/]*$/.test(x.page) ? x.page : '/' });
+    if (!Object.keys(f.variants).length) continue;
+    const code = codeOf(f.title || f.hook || 'post');
+    const problems = postProblems(f, code);
+    const id = randomUUID().replace(/-/g, '').slice(0, 10);
+    const links = Object.fromEntries(Object.keys(f.variants).map((k) => [k, platformLink(k, code, f.page)]));
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...f, code, link: platformLink(f.channel, code, f.page), links, problems, published: {}, createdAt: Date.now(), createdBy: 'agent', updatedAt: Date.now(), updatedBy: 'agent', pk: 'GROWTH', sk: `POST#${id}`, id } }));
+    saved.push({ id, name: f.title, format: f.format, problems });
+  }
+  if (!saved.length) throw new Error(`No usable packages (no platform versions). Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
+  const note = [
+    `${saved.length} content package${saved.length > 1 ? 's' : ''} on the Content board, In review:`,
+    ...saved.map((x) => `- ${x.name} (${x.format})${x.problems.length ? ` · fix before approving: ${x.problems.join('; ')}` : ''}`),
+    d.notes ? `Notes: ${d.notes}` : '',
+  ].filter(Boolean).join('\n');
+  const reviewer = t.reviewer || (by.includes('@') ? by : '');
+  await systemUpdate(t.id, { status: 'in_review', reviewer, spec: { ...(t.spec ?? {}), posts: saved.map((x) => x.id) } }, note);
+  await sendToOwners(`Content ready for review: ${t.title.slice(0, 80)}`, `${note.slice(0, 3000)}\n\nReview and approve: ${CONSOLE}/growth/ws/social\n\nNothing is published until you approve it.`).catch(() => {});
+  return { packages: saved.length };
+}
+
 /** The draft run (GrowthAnalyst Lambda): fresh code copy → Claude edits it → checks → PR → task In review. */
 export async function runDraft(opts: { taskId: string; by: string; lockAt?: number }) {
   const lockAt = opts.lockAt ?? (await takeLock(`draft:${opts.by}`, true, Date.now(), opts.taskId));
@@ -814,6 +858,12 @@ export async function runDraft(opts: { taskId: string; by: string; lockAt?: numb
   try {
     const t = await getTask(id);
     if (!t || !['ready', 'in_progress'].includes(t.status)) throw new Error(`${id} is not ready to draft`);
+    if (t.type === 'social' && !(t.spec as Record<string, unknown> | undefined)?.kind) {
+      await systemUpdate(id, { status: 'in_progress' }, 'The growth agent started making content packages for review');
+      const r = await runContentDraft(t, opts.by, started);
+      await releaseLock(lockAt);
+      return r;
+    }
     if (TEXT_TYPES.includes(t.type)) {
       await systemUpdate(id, { status: 'in_progress' }, 'The growth agent started drafting text for review');
       const r = await runTextDraft(t, opts.by, started);

@@ -1,18 +1,25 @@
 // Growth workspace records (docs/growth/growth-workspace.md W3): the partnership pipeline and the
-// social/content calendar. Each gets a tagged link so its visits are counted by our analytics.
+// content calendar. Each gets a tagged link so its visits are counted by our analytics.
 //   GROWTH / PARTNER#<id>  organisation, type, contact, stage, value, next step + date, owner, notes, code
-//   GROWTH / POST#<id>     channel, date, text, status, url, owner, campaign code, task
+//   GROWTH / POST#<id>     a content package (docs/growth/content-engine.md): format, hook, slides or script,
+//                          one version per platform (caption, hashtags, CTA, title, alt text), status,
+//                          approval (cleared by any later edit), published links, campaign code, task
 import { randomBytes } from 'node:crypto';
 
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Req, Res } from '../api/lib';
+import { packageProblems, PLATFORMS, postText, readPackage, type Platform } from './growth-content-rules';
 import { log } from './log';
 
 export const STAGES = ['lead', 'contacted', 'meeting', 'pilot', 'live', 'won', 'lost'] as const;
 export const PARTNER_TYPES = ['photographer', 'planner', 'venue', 'college', 'influencer', 'company', 'community', 'other'] as const;
-export const CHANNELS = ['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin', 'x', 'facebook', 'blog', 'other'] as const;
-export const POST_STATUSES = ['idea', 'drafted', 'approved', 'published'] as const;
+export const CHANNELS = ['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin', 'x', 'facebook', 'pinterest', 'blog', 'other'] as const;
+/** approved and scheduled are set only by POST /growth/posts/<id>/approve (managers), never by a save. */
+export const POST_STATUSES = ['idea', 'drafted', 'in_review', 'approved', 'scheduled', 'published', 'archived'] as const;
+const SET_BY_SAVE = ['idea', 'drafted', 'in_review', 'published', 'archived'] as const;
+/** Fields whose change means the approved version is no longer what would go out. */
+const CONTENT_KEYS = ['format', 'hook', 'slides', 'script', 'variants', 'realPhoto', 'page'] as const;
 const SITE = 'https://lens.instagrowapp.com';
 
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -42,8 +49,10 @@ export function partnerFields(b: Record<string, any>, old?: Record<string, any>)
 }
 
 export function postFields(b: Record<string, any>, old?: Record<string, any>) {
+  const pkg = readPackage(b, old);
+  const first = (Object.keys(pkg.variants)[0] as string | undefined) ?? '';
   return {
-    channel: oneOf(b.channel ?? old?.channel, CHANNELS, 'other'),
+    channel: oneOf(b.channel ?? old?.channel ?? first, CHANNELS, 'other'),
     date: day(b.date ?? old?.date),
     title: text(b.title ?? old?.title, 160),
     body: text(b.body ?? old?.body, 5000),
@@ -52,7 +61,17 @@ export function postFields(b: Record<string, any>, old?: Record<string, any>) {
     page: text(b.page ?? old?.page, 200),
     owner: text(b.owner ?? old?.owner, 200),
     taskId: text(b.taskId ?? old?.taskId, 20),
+    pillar: text(b.pillar ?? old?.pillar, 40),
+    ...pkg,
   };
+}
+
+/** The tagged link for one platform (utm_source = the platform, so visits are counted per platform). */
+export const platformLink = (platform: string, code: string, page: string) => postLink(platform, code, page && page.startsWith('/') ? page : '/');
+
+/** What stops approval, for the editor and the approve button. */
+export function postProblems(p: ReturnType<typeof postFields>, code: string): string[] {
+  return packageProblems(p, (k) => platformLink(k, code, p.page));
 }
 
 async function rows(prefix: string) {
@@ -86,13 +105,89 @@ export async function postSave(id: string, req: Req, by: string): Promise<Res> {
   const old = isNew ? undefined : (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${id}` } }))).Item;
   if (!isNew && !old) throw new HttpError(404, 'No such post');
   const f = postFields(req.body ?? {}, old);
-  if (!f.title && !f.body) throw new HttpError(400, 'Write a title or the post');
+  if (!f.title && !f.body && !f.hook && !Object.keys(f.variants).length) throw new HttpError(400, 'Write a title, a hook or a caption');
+  // Approval is a decision about exact content: a save can't grant it, and changing the content takes it back.
+  const changed = !!old && CONTENT_KEYS.some((k) => JSON.stringify(old[k] ?? null) !== JSON.stringify((f as any)[k] ?? null));
+  const wasApproved = old?.status === 'approved' || old?.status === 'scheduled';
+  let status = f.status;
+  if (!(SET_BY_SAVE as readonly string[]).includes(status)) status = wasApproved && !changed ? (old!.status as typeof status) : 'in_review';
+  else if (wasApproved && changed && status !== 'archived' && status !== 'published') status = 'in_review';
+  const keepApproval = wasApproved && !changed && (status === 'approved' || status === 'scheduled');
   const pid = isNew ? newId() : id;
-  const code = (old?.code as string | undefined) ?? codeOf(f.title || f.channel);
-  const item = { ...f, code, link: postLink(f.channel, code, f.page && f.page.startsWith('/') ? f.page : '/'), createdAt: old?.createdAt ?? Date.now(), createdBy: old?.createdBy ?? by, updatedAt: Date.now(), ...(f.status === 'published' && old?.status !== 'published' ? { publishedAt: Date.now() } : { publishedAt: old?.publishedAt }), pk: 'GROWTH', sk: `POST#${pid}`, id: pid };
+  const code = (old?.code as string | undefined) ?? codeOf(f.title || f.hook || f.channel);
+  const problems = postProblems(f, code);
+  const links = Object.fromEntries(Object.keys(f.variants).map((k) => [k, platformLink(k, code, f.page)]));
+  const published = { ...(old?.published ?? {}), ...readPublished(req.body?.published) };
+  if (status !== 'published' && Object.keys(readPublished(req.body?.published)).length) status = 'published';
+  // Nothing goes out unapproved: only the approved, unchanged version can be marked published.
+  if (status === 'published' && old?.status !== 'published' && (!wasApproved || changed)) throw new HttpError(400, 'Approve this post before marking it published');
+  const item = {
+    ...f,
+    status,
+    code,
+    link: postLink(f.channel, code, f.page && f.page.startsWith('/') ? f.page : '/'),
+    links,
+    problems,
+    published,
+    approvedBy: keepApproval ? old?.approvedBy : undefined,
+    approvedAt: keepApproval ? old?.approvedAt : undefined,
+    createdAt: old?.createdAt ?? Date.now(),
+    createdBy: old?.createdBy ?? by,
+    updatedAt: Date.now(),
+    updatedBy: by,
+    ...(status === 'published' && old?.status !== 'published' ? { publishedAt: Date.now() } : { publishedAt: old?.publishedAt }),
+    pk: 'GROWTH',
+    sk: `POST#${pid}`,
+    id: pid,
+  };
   await ddb.send(new PutCommand({ TableName: env.table, Item: item }));
-  await log({ entity: `growth:post:${pid}`, action: isNew ? 'growth.post-add' : 'growth.post-update', actor: `console:${by}`, data: { status: f.status, channel: f.channel } });
+  await log({ entity: `growth:post:${pid}`, action: isNew ? 'growth.post-add' : 'growth.post-update', actor: `console:${by}`, data: { status, format: f.format, platforms: Object.keys(f.variants), approvalCleared: wasApproved && !keepApproval } });
   return json(200, { post: item });
+}
+
+/** {platform: "https://…"} published links a person pasted after posting by hand. */
+function readPublished(v: unknown): Record<string, { url: string; at: number; how: 'manual' }> {
+  if (!v || typeof v !== 'object') return {};
+  const out: Record<string, { url: string; at: number; how: 'manual' }> = {};
+  for (const [k, url] of Object.entries(v as Record<string, unknown>)) {
+    if ((PLATFORMS as readonly string[]).includes(k) && typeof url === 'string' && /^https:\/\/[^\s]{4,300}$/.test(url.trim())) out[k] = { url: url.trim(), at: Date.now(), how: 'manual' };
+  }
+  return out;
+}
+
+/** POST /growth/posts/<id>/approve (growth.write): only a package without problems can be approved. */
+export async function postApprove(id: string, by: string, undo = false): Promise<Res> {
+  if (!/^[a-f0-9]{10}$/.test(id)) throw new HttpError(400, 'Bad id');
+  const old = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${id}` } }))).Item;
+  if (!old) throw new HttpError(404, 'No such post');
+  if (undo) {
+    if (old.status !== 'approved' && old.status !== 'scheduled') throw new HttpError(400, 'This post is not approved');
+  } else {
+    if (!['drafted', 'in_review', 'idea'].includes(old.status)) throw new HttpError(400, `A ${old.status.replace('_', ' ')} post can't be approved`);
+    const problems = postProblems(postFields({}, old), old.code);
+    if (problems.length) throw new HttpError(400, `Fix first: ${problems.join('; ')}`);
+  }
+  const item = { ...old, status: undo ? 'in_review' : 'approved', approvedBy: undo ? undefined : by, approvedAt: undo ? undefined : Date.now(), updatedAt: Date.now(), updatedBy: by, problems: [] };
+  await ddb.send(new PutCommand({ TableName: env.table, Item: item }));
+  await log({ entity: `growth:post:${id}`, action: undo ? 'growth.post-unapprove' : 'growth.post-approve', actor: `console:${by}`, data: { platforms: Object.keys(old.variants ?? {}), format: old.format } });
+  return json(200, { post: item });
+}
+
+/** GET /growth/posts/<id>/export: ready-to-paste text per platform, for posting by hand. */
+export async function postExport(id: string): Promise<Res> {
+  if (!/^[a-f0-9]{10}$/.test(id)) throw new HttpError(400, 'Bad id');
+  const p = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${id}` } }))).Item;
+  if (!p) throw new HttpError(404, 'No such post');
+  const f = postFields({}, p);
+  const platforms = Object.keys(f.variants) as Platform[];
+  return json(200, {
+    approved: p.status === 'approved' || p.status === 'scheduled' || p.status === 'published',
+    platforms: platforms.map((k) => {
+      const v = f.variants[k]!;
+      const link = platformLink(k, p.code, f.page);
+      return { platform: k, title: v.title, text: postText(v, link, k), altText: v.altText, link };
+    }),
+  });
 }
 
 /** DELETE /growth/<partners|posts>/<id> */

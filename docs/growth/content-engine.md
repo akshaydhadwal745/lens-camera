@@ -1,0 +1,183 @@
+<!-- Design approved by the owner 2026-11-02 (planning session). Status per phase at the end. -->
+# Content engine for the Growth panel (discovery → AI creation → review → publish → learn)
+
+## Context
+The owner gives 0 hours a week to growth (T-26), so the Console's growth agent has to produce content, not only website PRs. Lens has no social accounts yet and **₹0 budget for new services**. The panel already has half the pieces: posts (`POST#`), the content calendar, agent text drafts for "social" tasks, the results loop, trend sources, product facts, and (since 2026-11-02) headless Chromium in the GrowthAnalyst Lambda. What's missing: visuals and video, an asset library with copyright records, platform versions, publishing, per-post results and a weekly content strategy.
+**Goal:** one continuous loop inside the existing workflow (task → agent drafts → owner reviews → approve → publish/export → results → next week's plan), with copyright compliance enforced in code.
+
+**Owner decisions (2026-11-02):** ₹0 new spend · platforms: Instagram + Facebook, YouTube Shorts, Pinterest, LinkedIn/X/Reddit · stock only as backgrounds/reference · English first (Hindi only for India-specific posts) · 3 posts/week · nothing publishes without owner approval.
+
+## Principles (enforced in code, not prompts)
+1. **Original first:** own templates, Claude-drawn SVG, real Lens photos and screen recordings. Licensed stock only as background/reference.
+2. **Rights gate:** every asset has a rights record; a post can't be approved, scheduled or published while any asset isn't `cleared`. Unclear → `review`. NC/ND licences → `blocked`.
+3. **Honesty:** an AI or illustrated visual is never presented as a photo; "shot on Lens" only with a real-photo asset flagged as such. Product-facts and forbidden-claims checks apply to every caption (reuse `FORBIDDEN_CLAIMS` and product-facts rules from `growth.ts`/`growth-report.ts`).
+4. **Approval:** only owner or growth_lead (`manager()` in `growth-tasks.ts`) approves or publishes. Any edit after approval clears it. Publishing is off per platform until switched on in Growth settings.
+5. **No personal content:** S8 photos and recordings need a "checked: no personal content" tick before use (memory rule).
+6. **₹0:** rendering in the existing GrowthAnalyst Lambda, inside the always-free Lambda allowance. Free APIs only. Claude via the existing subscription token.
+
+## Step 0: fix a live wrong claim (small site PR, first)
+`site/scripts/og.mjs` and the generated `site/public/og-en.png` and `og-hi.png` say "**100 GB free backup**". The real offer is 10 GB free forever (40 GB for the first 3 months). Regenerate them with true wording, and add the og script's text to the forbidden-claims check.
+
+## Architecture
+
+### Data (DynamoDB `Lens`, pk `GROWTH`, same patterns as `growth-records.ts`)
+- **`POST#<id>` becomes the content item** (0 rows today, so no migration). New fields:
+  - `format`: post · carousel · story · reel · short · pin · thread · article.
+  - `pillar`, `goalId`, `hook`.
+  - `slides[]`: headline, body, visual reference.
+  - `script[]`: scenes for reels, each with duration, on-screen text and clip or asset.
+  - `variants{platform}`: caption, hashtags, CTA, title, description, alt text, a tagged link per platform, and a validation result.
+  - `assets[]`.
+  - `approvedBy`/`approvedAt`, invalidated by any edit.
+  - `scheduledAt`, `published{platform: {id, url, at}}`, `results{platform}`.
+  - **Statuses:** idea → drafted → in_review → approved → scheduled → published (plus archived).
+  - Extend `CHANNELS` with `pinterest`, plus `threads` if wanted.
+- **`ASSET#<id>`:**
+  - Media: kind (photo, screen recording, template render, SVG, video, licensed), origin (own, upload, ai-svg, template, discovered), `s3Key`, MIME type, width/height, duration, bytes, `checkedPersonal`.
+  - **Rights record:** status (cleared, review, blocked), licence and version, licence URL, source URL, author, credit line, commercial use OK, edits OK, people/brand/logo flag, `evidenceKey` (a snapshot of the licence page), checkedAt/checkedBy, decision note.
+  - `usedIn[]`.
+- **`BRAND`:** colours, fonts, logo keys, voice, do/don't list, hashtag sets, CTA list, content pillars (backup and "phone full", events and QR albums, camera tips, travel and memories, own storage, build-in-public).
+- **`CONTENTPLAN#<yyyy-ww>`:** the agent's weekly plan, 3 items, each with why, goal, platform, trend and source.
+- **`IDEA#<id>`:** trend and idea feed items, with source link, topic and score. Used for ideas only, never republished.
+
+### Storage
+- New private S3 bucket `GrowthContent` in `infra/lib/console-stack.ts`: S3-managed encryption, blocked public access.
+- **Prefixes:** `a/` assets, `e/` licence evidence, `x/` export zips. A lifecycle rule deletes `x/` after 30 days.
+- **Upload:** presigned PUT from the Console, copying the `infra/lambda/api/feedback.ts` pattern. Allowed types: jpg, png, webp, mp4, mov; up to 200 MB.
+- **View:** presigned GET valid for 5 minutes. The Console CSP (console-stack.ts:204) adds the bucket's regional domain to `img-src` and `media-src`.
+- **Roles:** the Console role gets put/get on `a/*` and `x/*`. The GrowthAnalyst role gets put/get on all three prefixes. Its ephemeral storage goes up to 2 GB for video renders.
+
+### Rendering engine (GrowthAnalyst image, ₹0)
+- **New `infra/lambda/console/growth-media.ts`:**
+  - Reuse `renderPage`/the launcher from `growth-render.ts`, refactored to export `launchBrowser()`.
+  - **Templates:** TypeScript functions produce HTML from the brand kit, slide data and assets, then a screenshot at platform sizes:
+    - 1080×1350 feed / carousel slide;
+    - 1080×1920 story / reel cover;
+    - 1000×1500 pin;
+    - 1200×627 LinkedIn;
+    - 1280×720 YouTube thumbnail.
+  - Fonts: bundle Geist (from `site/public/fonts`) and Noto Sans Devanagari into the image. Logo from `assets/brand/`.
+  - **Claude SVG illustrations:** the agent returns SVG, and `sanitizeSvg()` strips scripts, foreignObject, event handlers and external hrefs before rendering.
+  - **Reels and Shorts:**
+    - An HTML animation timeline is stepped frame by frame at 30 fps (animations paused, then seeked to each frame and screenshotted). Real screen-recording clips are composed in with ffmpeg.
+    - ffmpeg encodes H.264 1080×1920, silent, up to 30 seconds (Lambda time budget). Music is added natively on the platform when publishing (keeps trending audio, avoids copyright).
+    - Add the static ffmpeg to `infra/growth-image/Dockerfile`, the same source as `infra/transcoder/Dockerfile`.
+- **Jobs:** new GrowthAnalyst events `{render:{postId}}` and `{exportZip:{postId}}`. They're tracked with `markJob`/`finishJob` (growth.ts) and don't need the Claude lock.
+
+### Agent: content packages and discovery
+- **New `CONTENT_MODE`** next to `TEXT_MODE` (growth.ts:769):
+  - `CONTENT_SYSTEM` and `CONTENT_SCHEMA` in `growth-report.ts`. The output is the package above: format, slides or script, per-platform variants, alt text, rationale and sources.
+  - `runTextDraft` (growth.ts:775) routes `social` tasks to it and writes `POST#` items as `in_review` instead of text-only `drafted` posts.
+  - **Validation in code (`growth-content-rules.ts`, new):**
+    - per-platform limits: Instagram caption 2,200 characters and ≤ 30 hashtags (we use 3–8); X 280; Pinterest title 100 and description 500; YouTube title 100; LinkedIn 3,000;
+    - forbidden claims and product facts;
+    - the "shot on Lens" rule;
+    - one link per post, tagged via `postLink()` (growth-records.ts:26).
+- **New MCP tools** in `growth-mcp.ts`, level 1, read-only, with call limits in `LIMITS`:
+  - `find_media`:
+    - **Sources:** Openverse API (no key), Wikimedia Commons API (no key), and Pexels, Unsplash and Pixabay (free keys, SSM `/lens/growth/media-keys`).
+    - **Returns** candidates with licence metadata only. The agent picks; code decides the rights.
+  - `trend_ideas`:
+    - **Sources:** the existing sources (Bing, Wikipedia, Trending-now RSS, GA4, Search Console), plus the YouTube Data API `mostPopular` chart (free key, region IN/US) and RSS feeds from photography and travel publications and subreddits.
+    - **Returns** headlines and links only, stored as `IDEA#`.
+- **Rights verification after the run (`growth-rights.ts`, new, pure and tested):**
+  - Re-fetch each chosen asset's licence from the source API (never trust the model).
+  - `licenseVerdict()`:
+    - **cleared:** CC0, public domain, CC BY 2.0–4.0, and the Pexels, Unsplash and Pixabay licences when there are no recognisable people or brands;
+    - **review:** CC BY-SA, anything with people or brands, unknown licences;
+    - **blocked:** NC and ND licences.
+  - Download the asset to `a/`, snapshot the licence page via Chromium to `e/`, and build the credit line.
+
+### Publishing (free APIs) and export
+- **New `infra/lambda/console/growth-publish.ts`:**
+  - **Instagram:** Graph API content publishing (image, carousel up to 10, reel, story), using a presigned S3 URL as `image_url`/`video_url`. Requires a Business account, a Facebook Page and a Meta app in development mode.
+  - **Facebook Page:** photos, videos, feed.
+  - **YouTube:** `videos.insert` via OAuth refresh token. Uploads stay private until Google's free audit; the owner flips them to public.
+  - **Pinterest:** `/v5/pins`, after Pinterest's app review.
+  - **LinkedIn, X, Reddit:** export only. X's API is paid, LinkedIn needs partner approval, and Reddit's rules favour manual posting.
+- **Gate (`canPublish()`, pure and tested):** status approved, approval newer than the last edit, all assets cleared, platform publishing switched on, variant valid.
+- **Scheduler:** an EventBridge rule every 15 minutes runs GrowthAnalyst `{publishDue:true}`. Token refresh (Meta 60-day tokens) emails the owner 7 days before expiry.
+- **Export fallback:** a zip with media, `captions-<platform>.txt` and `credits.txt`; then "Mark published" with the URL. Keys go in the existing SSM params (`/lens/growth/instagram`, `/youtube`, `/pinterest`), extended with write tokens. **SSM writes need the owner's OK.**
+
+### Results and strategy loop
+- **Results:**
+  - Extend `pullIntegrations` (`infra/lambda/api/growth-integrations.ts`) to fetch per-post insights by stored platform ID: Instagram reach, likes, comments, saves, shares and plays; Facebook; YouTube stats; Pinterest pin analytics.
+  - Clicks and downloads come from our own UTM analytics (existing visits per post). Sign-ups and installs are counted only where the tagged link carries through.
+- **Learning:**
+  - New `contentFacts()` in `growth-facts.ts`: performance by format, pillar and platform, fed to the weekly analysis.
+  - Each published post gets a metric and check date, so the existing results loop (Measured, with a verdict) applies.
+- **Weekly plan:**
+  - The Monday analysis (`REPORT_SCHEMA`) gains `contentPlan` (3 items), saved as `CONTENTPLAN#` and turned into 3 `social` tasks (Ready, owner = agent).
+  - One "content batch" draft run, using the same lock, drafts all 3 packages. Then renders run, and the owner gets one email: "3 posts ready for review".
+
+### Console UI (no new tool: the Social & distribution workstream becomes **Content**)
+- **`console/src/pages/growth/workstreams.tsx`** (social calendar, lines 707+): the workstream is labelled "Content", with four tabs:
+  - **Plan:** the existing calendar, the weekly plan, and the ideas feed.
+  - **Posts:** a board by status.
+  - **Library:** assets, a rights filter, the review queue, upload.
+  - **Results:** per post, per format, per platform.
+- **Post editor** (replaces the post drawer at workstreams.tsx:806):
+  - format; slides or script editor;
+  - platform tabs with live character and hashtag counters and validation;
+  - a phone-frame preview per platform; assets with rights badges; auto credits;
+  - "Approve" (managers only), schedule date and time, "Publish now", "Download package", "Mark published".
+- **Library:** grid with filters (rights status, origin, kind). Asset drawer shows the rights record and evidence, with Cleared/Blocked decisions by a manager and a note. The personal-content check applies to uploads.
+- **Today page** (`main-views.tsx`): "N posts waiting for review", "N assets need a rights decision".
+- **Growth settings:** a brand kit section, publishing switches per platform (default off), cadence (3/week), languages (English default).
+- **Backend routes** in the Console API router, beside the posts routes:
+  - posts: `PUT/GET /growth/posts/<id>`, `POST …/approve`, `…/render`, `…/publish`, `…/export`;
+  - library: `GET/POST /growth/assets`, `PUT …/rights`, `POST /growth/assets/upload-url`;
+  - brand and plan: `GET/PUT /growth/brand`, `GET /growth/content-plan`.
+
+## Build phases (each ships alone: PR → owner merges → `cdk deploy LensConsole` → S8 walkthrough)
+| # | Phase | Main files | Owner needs |
+|---|---|---|---|
+| 0 | Fix og "100 GB" images | `site/scripts/og.mjs`, `site/public/og-*.png` | merge |
+| 1 | Content items, board, editor (text and variants), brand kit, agent content packages, validation, text export | growth-records.ts, growth.ts, growth-report.ts, growth-content-rules.ts, workstreams.tsx, settings | — |
+| 2 | Library, bucket, upload, rights records and review queue, presigned view, CSP | console-stack.ts, growth-assets.ts (new), growth-rights.ts (new), Library UI | deploy |
+| 3 | Render engine: templates, carousels, stories, pins, thumbnails, Claude SVG, previews, zip export | growth-media.ts (new), growth-render.ts refactor, Dockerfile fonts | deploy |
+| 4 | Reels and Shorts: animated templates, screen recordings, ffmpeg | growth-media.ts, Dockerfile (ffmpeg), ephemeral storage | S8 recordings (no personal content) |
+| 5 | Discovery: `find_media`, `trend_ideas`, rights verification, evidence snapshots, ideas feed | growth-mcp.ts, growth-sources.ts, growth-rights.ts | free Pexels/Unsplash/Pixabay/YouTube keys (SSM OK) |
+| 6 | Publishing: Instagram/Facebook direct, YouTube private upload, Pinterest (after review), scheduler, gate, token refresh | growth-publish.ts (new), console-stack.ts rule, growth-integrations.ts | accounts plus Meta app, YouTube OAuth, Pinterest review |
+| 7 | Results and strategy: per-post insights, contentFacts, weekly plan → 3 tasks → batch drafts → one review email | growth-integrations.ts, growth-facts.ts, growth.ts (report), Results tab | — |
+
+**Owner setup, all free, needed by phase 5–6:**
+- Create accounts under the InstaGrowApp/Lens identity (T-25): Instagram Business plus a Facebook Page, a YouTube channel, Pinterest business, a LinkedIn page, X, Reddit.
+- A Meta developer app.
+- YouTube OAuth in the existing GCP project `lens-5df67`.
+- Free media API keys.
+
+## Reuse (don't rebuild)
+- `postFields`/`postSave`/`postLink`/`codeOf` (growth-records.ts); `calendarItems`/`calendarPage` (growth-content.ts); `runTextDraft`, `runClaude`, `takeLock`/`releaseLock`, `markJob`/`finishJob`, `systemUpdate`, `sendToOwners` (growth.ts).
+- `renderPage` + `privateHost` (growth-render.ts); `competitorHosts` allowlist pattern; MCP `LIMITS` and level model (growth-mcp.ts).
+- `pullIntegrations` + `keys()` (api/growth-integrations.ts); presigned upload (api/feedback.ts); file serving pattern (console/attachments.ts); audit `log()` (console/log.ts).
+- Results loop (task metric → Measured); product-facts and `FORBIDDEN_CLAIMS`; ffmpeg install lines (infra/transcoder/Dockerfile).
+
+## Costs (₹0 new)
+- Lambda renders sit inside the always-free allowance: about 50 images and 12 reels a month is about 10–20k GB-seconds of the free 400k.
+- S3 is a few hundred MB, so paise. EventBridge and the APIs are free.
+- Claude usage is within the subscription: +1 batch run a week, and the weekly analysis grows slightly.
+- **Risk:** subscription rate limits. Keep the batch to one run a week.
+
+## Verification
+- **Unit tests** (`npx tsx --test`):
+  - growth-rights (`licenseVerdict` table, people/brand flag);
+  - growth-content-rules (per-platform limits, forbidden claims, the "shot on Lens" rule);
+  - `sanitizeSvg` (script, foreignObject, external href stripped);
+  - `canPublish` (approval invalidated by edit, uncleared asset blocks);
+  - growth-mcp tests for `find_media`/`trend_ideas` (refusals, limits).
+- **Render tests in the built image** (as done 2026-11-02): read-only file system, non-root, 2 GB. Carousel PNG sizes match; a reel MP4 plays (ffprobe: H.264, 1080×1920, ≤ 30 s, silent).
+- **e2e** (`infra/scripts/e2e.sh`): new routes; a manager-only approve; rights gate refusal; upload-url limits.
+- **Live:**
+  - an agent batch drafts 3 packages from a test social task;
+  - a manual zip export opens correctly;
+  - after accounts exist: one real Instagram post published from the Console, its insights appear the next day, then deleted if it was a test.
+- **S8 walkthrough** of every new button (memory rule): board, editor, preview, library, rights decision, approve, export.
+- **Docs:** new `docs/growth/content-engine.md`; status lines in `docs/growth/growth-workspace.md`; README status table.
+
+## Status
+| Phase | State |
+|---|---|
+| 0 og images | PR #26 (10 GB free forever, EN + HI) |
+| 1 content packages | Built 2026-11-02: `growth-content-rules.ts` (platforms, formats, limits, `packageProblems`, hashtags, `postText`; tests `growth-content-rules.test.ts`), `growth-brand.ts` (`GROWTH / BRAND`, `GET/PUT /growth/brand`), `growth-records.ts` (package fields, links per platform, problems on save, approval cleared by content edits, `POST/DELETE /growth/posts/<id>/approve` for managers, `GET …/export`, no "published" without approval), agent `CONTENT_MODE` (`CONTENT_SYSTEM`/`CONTENT_SCHEMA` in growth-report.ts, `runContentDraft` in growth.ts: social tasks → 1–3 packages In review, one email), Console `content.tsx` (Content workstream: Posts board + Calendar, package editor with slides/script, platform tabs, live counters, ready-to-paste text, approve/take back, mark published; Brand kit in Growth settings; Today shows posts waiting for review), e2e "content:" checks. Visuals arrive in phase 3. |
+| 2–7 | Not started |

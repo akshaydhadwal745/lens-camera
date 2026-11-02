@@ -20,7 +20,8 @@ import { competitorSave, competitorsPage } from './growth-competitors';
 import { campaignSave, moneyPage, spendSave } from './growth-money';
 import { keywordSave, prospectSave, seoPage } from './growth-seo';
 import { goalUpdate, settingsUpdate } from './growth-goals';
-import { partnerSave, postSave, recordDelete } from './growth-records';
+import { brandPage, brandUpdate } from './growth-brand';
+import { partnerSave, postApprove, postExport, postSave, recordDelete } from './growth-records';
 import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
 import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
 import { activity, log } from './log';
@@ -126,6 +127,12 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (seg[0] === 'growth' && seg[1] === 'prospects' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => prospectSave(seg[2], req, email, true));
     if (route === 'PUT /growth/settings') return await allowed('growth.write', () => settingsUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'goals' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => goalUpdate(seg[2], req, email));
+    // Content packages and the brand kit (docs/growth/content-engine.md): managers approve, anyone in growth exports.
+    if (route === 'GET /growth/brand') return await allowed('growth', () => brandPage());
+    if (route === 'PUT /growth/brand') return await allowed('growth.write', () => brandUpdate(req, email));
+    if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'approve' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
+      return await allowed('growth.write', () => postApprove(seg[2], email, method === 'DELETE'));
+    if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'export' && seg.length === 4 && method === 'GET') return await allowed('growth', () => postExport(seg[2]));
     if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'PUT')
       return await allowed('growth.contribute', () => (seg[1] === 'partners' ? partnerSave(seg[2], req, email) : postSave(seg[2], req, email)));
     if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'DELETE')

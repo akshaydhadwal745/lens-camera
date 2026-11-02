@@ -104,7 +104,7 @@ const SECTIONS: Section[] = [
   },
   {
     path: "/growth/ws/social",
-    label: "Social & distribution",
+    label: "Content",
     permission: "growth",
     group: "Workstreams",
   },
