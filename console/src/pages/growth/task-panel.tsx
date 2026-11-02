@@ -302,13 +302,14 @@ export function TaskPanel({
                 <div className="gw-callout">
                   {TEXT_DRAFTS.includes(t.type) ? (
                     <>
-                      <strong>The agent can draft the text.</strong>{" "}
+                      <strong>
+                        {t.type === "social"
+                          ? "The agent can make the content."
+                          : "The agent can draft the text."}
+                      </strong>{" "}
                       {t.type === "social"
-                        ? "Post options land in the social calendar as drafts"
-                        : t.type === "listing"
-                          ? "Play listing options appear on this task"
-                          : "Outreach message options appear on this task"}
-                      ; you review, edit and post or send them yourself.
+                        ? "1–3 content packages (one idea made for each platform) land on the Content board In review; you edit, a growth lead approves, and only approved posts go out."
+                        : `${t.type === "listing" ? "Play listing options appear on this task" : "Outreach message options appear on this task"}; you review, edit and post or send them yourself.`}
                     </>
                   ) : (
                     <>

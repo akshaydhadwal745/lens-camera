@@ -864,6 +864,10 @@ ul.list {
   padding: 2px 8px;
   font-variant-numeric: tabular-nums;
 }
+button.chip { background: none; font-family: inherit; cursor: pointer; }
+button.chip:disabled { opacity: .45; cursor: default; }
+.chip.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+fieldset.gw-form { border: 0; padding: 0; margin: 0; min-width: 0; }
 .kv {
   display: grid;
   grid-template-columns: max-content 1fr;
