@@ -9,7 +9,7 @@ import LegalView from '../components/LegalView.astro';
 import { blogPosts } from '../content/blog';
 import { guidePages } from '../content/guides';
 import { infoPages } from '../content/info';
-import { affiliateTerms, deletion, privacy, terms } from '../content/legal';
+import { affiliateTerms, deletion, privacy, refunds, terms } from '../content/legal';
 import { pages } from '../content/pages';
 import { type Lang, LANGS } from '../i18n/ui';
 
@@ -21,7 +21,7 @@ type Route =
   | { kind: 'page'; slug: string }
   | { kind: 'info'; slug: string }
   | { kind: 'help' }
-  | { kind: 'legal'; doc: 'privacy' | 'terms' | 'delete-account' | 'affiliate-terms' };
+  | { kind: 'legal'; doc: 'privacy' | 'terms' | 'refunds' | 'delete-account' | 'affiliate-terms' };
 
 export function getStaticPaths() {
   const routes: [string, Route][] = [
@@ -37,6 +37,7 @@ export function getStaticPaths() {
     ['help', { kind: 'help' }],
     ['privacy', { kind: 'legal', doc: 'privacy' }],
     ['terms', { kind: 'legal', doc: 'terms' }],
+    ['refunds', { kind: 'legal', doc: 'refunds' }],
     ['delete-account', { kind: 'legal', doc: 'delete-account' }],
     ['affiliate-terms', { kind: 'legal', doc: 'affiliate-terms' }],
   ];
@@ -81,4 +82,4 @@ const securityLinks: [string, string][] = lang === 'en' ? [['Why you can trust L
     })()
 }
 {route.kind === 'help' && <Help lang={lang} />}
-{route.kind === 'legal' && <LegalView lang={lang} path={path} doc={{ privacy, terms, 'delete-account': deletion, 'affiliate-terms': affiliateTerms }[route.doc][lang]} />}
+{route.kind === 'legal' && <LegalView lang={lang} path={path} doc={{ privacy, terms, refunds, 'delete-account': deletion, 'affiliate-terms': affiliateTerms }[route.doc][lang]} />}
