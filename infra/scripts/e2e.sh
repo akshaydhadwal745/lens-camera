@@ -918,26 +918,43 @@ R=$(capi POST /auth/backup-codes); [[ $(echo "$R" | j .codes.length) == 10 && $(
 [[ $(capi PUT /team -d '{"email":"x@example.com","role":"owner"}' -o /dev/null -w '%{http_code}') == 404 ]] && ok "console: an admin can't add owners (Team is owners-only)"
 # Content packages (docs/growth/content-engine.md): checks on save, manager-only approval, approval taken
 # back by an edit, nothing marked published unapproved, export per platform.
-[[ $(capi GET /growth/brand | j '.limits.x.caption') == 280 ]] && ok "content: brand kit and platform limits"
+[[ $(capi GET /growth/brand | j '.limits.x.caption') == 280 ]] && ok "content: brand kit and platform limits" || fail "content: brand kit and platform limits"
 CV='{"caption":"Phone full? Back up every photo at full quality.","hashtags":["photobackup"],"cta":"Try Lens free","title":"","altText":"Backup complete on a phone"}'
 R=$(capi PUT /growth/posts/new -d "{\"title\":\"[e2e] content\",\"format\":\"carousel\",\"hook\":\"Phone full?\",\"slides\":[{\"headline\":\"Unlimited space\",\"body\":\"\",\"visual\":\"\"}],\"variants\":{\"instagram\":$CV}}")
 PID=$(echo "$R" | j .post.id); [[ $PID =~ ^[a-f0-9]{10}$ && $(echo "$R" | j '.post.problems.join("|")') == *"2–10 slides"*"forbids"* ]] && ok "content: save lists what to fix (slides, forbidden claim)" || fail "content save: $R"
-[[ $(capi POST "/growth/posts/$PID/approve" | j .error) == "Fix first:"* ]] && ok "content: can't approve with problems"
+[[ $(capi POST "/growth/posts/$PID/approve" | j .error) == "Fix first:"* ]] && ok "content: can't approve with problems" || fail "content: can't approve with problems"
 R=$(capi PUT "/growth/posts/$PID" -d '{"slides":[{"headline":"Phone full?","body":"","visual":"app screen"},{"headline":"Back up to Lens","body":"","visual":"app screen"}]}')
 [[ $(echo "$R" | j '.post.problems.length') == 0 && $(echo "$R" | j '.post.links.instagram') == *"utm_source=instagram"* ]] && ok "content: fixed; a tagged link per platform" || fail "content fix: $R"
-[[ $(capi PUT "/growth/posts/$PID" -d '{"published":{"instagram":"https://www.instagram.com/p/e2e/"}}' | j .error) == "Approve this post"* ]] && ok "content: can't be marked published before approval"
+[[ $(capi PUT "/growth/posts/$PID" -d '{"published":{"instagram":"https://www.instagram.com/p/e2e/"}}' | j .error) == "Approve this post"* ]] && ok "content: can't be marked published before approval" || fail "content: can't be marked published before approval"
 CTOK2=$(openssl rand -hex 32); CHASH2=$(printf %s "$CTOK2" | sha256sum | cut -d' ' -f1); CCON="con$(date +%s%N)@e2e.lens.invalid"
 ddbput "{\"pk\":{\"S\":\"ADMIN#$CCON\"},\"sk\":{\"S\":\"ROLE\"},\"role\":{\"S\":\"growth_contributor\"}}"
 ddbput "{\"pk\":{\"S\":\"CSESS#$CHASH2\"},\"sk\":{\"S\":\"S\"},\"stage\":{\"S\":\"full\"},\"email\":{\"S\":\"$CCON\"},\"createdAt\":{\"N\":\"$NOWMS\"},\"lastSeen\":{\"N\":\"$(date +%s%3N)\"},\"ttl\":{\"N\":\"$(( NOWMS / 1000 + 7200 ))\"}}"
-[[ $(curl -sS -X POST "$CONSOLE/growth/posts/$PID/approve" -H "cookie: __Host-lc=$CTOK2" -H 'x-console: 1' -H "origin: ${CONSOLE%/api}" -o /dev/null -w '%{http_code}') == 403 ]] && ok "content: a contributor can't approve"
+[[ $(curl -sS -X POST "$CONSOLE/growth/posts/$PID/approve" -H "cookie: __Host-lc=$CTOK2" -H 'x-console: 1' -H "origin: ${CONSOLE%/api}" -o /dev/null -w '%{http_code}') == 404 ]] && ok "content: a contributor can't approve (hidden as not found)" || fail "content: a contributor can't approve (hidden as not found)"
 ddbdel "{\"pk\":{\"S\":\"ADMIN#$CCON\"},\"sk\":{\"S\":\"ROLE\"}}"; ddbdel "{\"pk\":{\"S\":\"CSESS#$CHASH2\"},\"sk\":{\"S\":\"S\"}}"
-[[ $(capi POST "/growth/posts/$PID/approve" | j .post.status) == approved ]] && ok "content: a manager approves"
-[[ $(capi PUT "/growth/posts/$PID" -d '{"date":"2030-01-01"}' | j .post.status) == approved ]] && ok "content: changing the date keeps the approval"
+[[ $(capi POST "/growth/posts/$PID/approve" | j .post.status) == approved ]] && ok "content: a manager approves" || fail "content: a manager approves"
+[[ $(capi PUT "/growth/posts/$PID" -d '{"date":"2030-01-01"}' | j .post.status) == approved ]] && ok "content: changing the date keeps the approval" || fail "content: changing the date keeps the approval"
 R=$(capi PUT "/growth/posts/$PID" -d "{\"hook\":\"Phone full again?\"}"); [[ $(echo "$R" | j .post.status) == in_review && -z $(echo "$R" | j .post.approvedBy) ]] && ok "content: changing the content takes the approval back" || fail "approval kept: $R"
 capi POST "/growth/posts/$PID/approve" >/dev/null
-[[ $(capi GET "/growth/posts/$PID/export" | j '.platforms[0].text') == *"Try Lens free"*"#photobackup"* ]] && ok "content: export text per platform"
-[[ $(capi PUT "/growth/posts/$PID" -d '{"published":{"instagram":"https://www.instagram.com/p/e2e/"}}' | j .post.status) == published ]] && ok "content: approved post marked published with its link"
+[[ $(capi GET "/growth/posts/$PID/export" | j '.platforms[0].text') == *"Try Lens free"*"#photobackup"* ]] && ok "content: export text per platform" || fail "content: export text per platform"
+[[ $(capi PUT "/growth/posts/$PID" -d '{"published":{"instagram":"https://www.instagram.com/p/e2e/"}}' | j .post.status) == published ]] && ok "content: approved post marked published with its link" || fail "content: approved post marked published with its link"
 capi DELETE "/growth/posts/$PID" >/dev/null
+# Content library (phase 2): personal-content check, file signature, rights gate, "shot on Lens" only with a Lens photo.
+[[ $(capi POST /growth/assets/upload -d '{"name":"[e2e] x","contentType":"image/png","bytes":100,"madeBy":"us"}' | j .error) == "Check the file first"* ]] && ok "library: our own files need the personal-content check" || fail "library: our own files need the personal-content check"
+PNG="$TMP/e2e.png"; printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' > "$PNG"; PNGB=$(stat -c %s "$PNG")
+up() { local r; r=$(capi POST /growth/assets/upload -d "$1"); curl -sS -X PUT "$(echo "$r" | j .url)" -H "content-type: $(echo "$r" | j '.headers["content-type"]')" --data-binary @"$2" >/dev/null; echo "$r" | j .asset.id; }
+FAKE="$TMP/fake.png"; echo "<svg onload=alert(1)>padding.." > "$FAKE"
+AF=$(up "{\"name\":\"[e2e] fake\",\"contentType\":\"image/png\",\"bytes\":$(stat -c %s "$FAKE"),\"madeBy\":\"us\",\"checkedPersonal\":true}" "$FAKE")
+[[ $(capi POST "/growth/assets/$AF/done" | j .error) == *"isn’t what it says"* ]] && ok "library: a renamed file is refused and removed" || fail "library: a renamed file is refused and removed"
+AL=$(up "{\"name\":\"[e2e] lens photo\",\"contentType\":\"image/png\",\"bytes\":$PNGB,\"madeBy\":\"us\",\"checkedPersonal\":true,\"lensPhoto\":true}" "$PNG")
+[[ $(capi POST "/growth/assets/$AL/done" | j .asset.status) == ready ]] && ok "library: upload checked and moved into the library" || fail "library: upload checked and moved into the library"
+AN=$(up "{\"name\":\"[e2e] nc\",\"contentType\":\"image/png\",\"bytes\":$PNGB,\"madeBy\":\"other\",\"source\":\"https://example.com/p\",\"license\":\"CC BY-NC 4.0\",\"author\":\"X\"}" "$PNG"); capi POST "/growth/assets/$AN/done" >/dev/null
+R=$(capi GET /growth/assets); [[ $(echo "$R" | j ".assets.find(a=>a.id==='$AN').rightsStatus") == blocked && $(echo "$R" | j ".assets.find(a=>a.id==='$AL').url") == https://*X-Amz-Signature* ]] && ok "library: NC licence blocked; files viewed through short-lived links" || fail "library list: $R"
+[[ $(capi PUT "/growth/assets/$AN/rights" -d '{"status":"cleared","note":"please"}' | j .error) == "This licence can't be cleared"* ]] && ok "library: a blocked licence can't be cleared by hand" || fail "library: a blocked licence can't be cleared by hand"
+R=$(capi PUT /growth/posts/new -d "{\"title\":\"[e2e] media\",\"format\":\"post\",\"slides\":[{\"headline\":\"Night\",\"body\":\"\",\"visual\":\"\"}],\"variants\":{\"instagram\":{\"caption\":\"Shot on Lens at night.\",\"hashtags\":[],\"cta\":\"\",\"title\":\"\",\"altText\":\"Street at night\"}},\"assets\":[{\"id\":\"$AN\",\"role\":\"background\"}]}")
+PM=$(echo "$R" | j .post.id); [[ $(echo "$R" | j '.post.problems.join("|")') == *"can't be used"*"no real Lens photo"* ]] && ok "library: blocked media and an untrue 'shot on Lens' stop approval" || fail "media post: $R"
+R=$(capi PUT "/growth/posts/$PM" -d "{\"assets\":[{\"id\":\"$AL\",\"role\":\"media\"}]}"); [[ $(echo "$R" | j '.post.problems.length') == 0 ]] && ok "library: with a cleared Lens photo the post can say 'shot on Lens'" || fail "lens photo: $R"
+[[ $(capi DELETE "/growth/assets/$AL" | j .error) == "Used in"* ]] && ok "library: files in use can't be deleted" || fail "library: files in use can't be deleted"
+capi DELETE "/growth/posts/$PM" >/dev/null; capi DELETE "/growth/assets/$AL" >/dev/null; capi DELETE "/growth/assets/$AN" >/dev/null
 ddbdel "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}"
 call DELETE /account "$TH" -d '{"confirm":"DELETE"}' >/dev/null
 echo "ALL PASSED"

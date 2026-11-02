@@ -87,7 +87,7 @@ function postText(v: PostVariant, link: string, platform: string) {
 // ---------- the studio ----------
 
 export function ContentStudio({ ws }: { ws: Workspace }) {
-  const [tab, setTab] = useState<"posts" | "calendar">("posts");
+  const [tab, setTab] = useState<"posts" | "calendar" | "library">("posts");
   const [edit, setEdit] = useState<Post | "new" | null>(null);
   const [archived, setArchived] = useState(false);
   const kit = useLoad(() => get<BrandPage>("/growth/brand"), []);
@@ -102,6 +102,7 @@ export function ContentStudio({ ws }: { ws: Workspace }) {
               [
                 ["posts", "Posts"],
                 ["calendar", "Calendar"],
+                ["library", "Library"],
               ] as const
             ).map(([k, label]) => (
               <button
@@ -123,7 +124,9 @@ export function ContentStudio({ ws }: { ws: Workspace }) {
         </span>
       }
     >
-      {tab === "calendar" ? (
+      {tab === "library" ? (
+        <Library ws={ws} />
+      ) : tab === "calendar" ? (
         <CalendarGrid ws={ws} onOpen={setEdit} />
       ) : (
         <>
@@ -234,11 +237,7 @@ function CalendarGrid({
         <p className="small">
           Ideas without a date:{" "}
           {undated.map((p) => (
-            <button
-              key={p.id}
-              className="gw-linkbtn"
-              onClick={() => onOpen(p)}
-            >
+            <button key={p.id} className="gw-linkbtn" onClick={() => onOpen(p)}>
               {p.title || p.hook || p.channel}
             </button>
           ))}
@@ -268,9 +267,7 @@ function PostCard({ p, onOpen }: { p: Post; onOpen: () => void }) {
         {p.visits ? ` · ${p.visits} visits` : ""}
       </span>
       {(p.problems?.length ?? 0) > 0 && (
-        <Chip tone="warn">
-          {p.problems!.length} to fix before approval
-        </Chip>
+        <Chip tone="warn">{p.problems!.length} to fix before approval</Chip>
       )}
       {p.createdBy === "agent" && p.status === "in_review" && (
         <span className="muted small">Drafted by the agent</span>
@@ -293,6 +290,7 @@ type Draft = {
   slides: { headline: string; body: string; visual: string }[];
   script: { seconds: number; onScreen: string; visual: string }[];
   variants: Record<string, PostVariant>;
+  assets: { id: string; role: string }[];
 };
 
 const emptyVariant = (): PostVariant => ({
@@ -326,7 +324,9 @@ function PostEditor({
     slides: p?.slides ?? [],
     script: p?.script ?? [],
     variants: p?.variants ?? {},
+    assets: p?.assets ?? [],
   });
+  const library = useAssets();
   const [post, setPost] = useState<Post | undefined>(p);
   const [platform, setPlatform] = useState(
     Object.keys(p?.variants ?? {})[0] ?? "",
@@ -539,6 +539,16 @@ function PostEditor({
             />
           ) : null}
 
+          <Loaded state={library}>
+            {({ assets }) => (
+              <MediaPicker
+                assets={assets}
+                value={v.assets}
+                onChange={(x) => set("assets", x)}
+              />
+            )}
+          </Loaded>
+
           <div className="gw-field">
             <span>Platforms</span>
             <div className="chips">
@@ -549,7 +559,9 @@ function PostEditor({
                   className={v.variants[k] ? "chip on" : "chip"}
                   disabled={!fits(k) && !v.variants[k]}
                   title={
-                    fits(k) ? "" : `${PLATFORM_LABEL[k]} doesn't take this format`
+                    fits(k)
+                      ? ""
+                      : `${PLATFORM_LABEL[k]} doesn't take this format`
                   }
                   onClick={() => togglePlatform(k)}
                 >
@@ -626,7 +638,11 @@ function PostEditor({
                   <input
                     value={cur.hashtags.join(" ")}
                     disabled={limit.hashtags === 0}
-                    placeholder={limit.hashtags ? kit.brand.hashtags.slice(0, 3).join(" ") : "Not used here"}
+                    placeholder={
+                      limit.hashtags
+                        ? kit.brand.hashtags.slice(0, 3).join(" ")
+                        : "Not used here"
+                    }
                     onChange={(e) =>
                       setVariant(platform, {
                         hashtags: e.target.value
@@ -651,12 +667,8 @@ function PostEditor({
               )}
               {post && (
                 <div className="gw-callout">
-                  <strong>
-                    Ready to paste for {PLATFORM_LABEL[platform]}
-                  </strong>
-                  <pre className="gw-pre">
-                    {postText(cur, link, platform)}
-                  </pre>
+                  <strong>Ready to paste for {PLATFORM_LABEL[platform]}</strong>
+                  <pre className="gw-pre">{postText(cur, link, platform)}</pre>
                   <div className="gw-row">
                     <CopyButton text={postText(cur, link, platform)} />
                     {platform === "instagram" && post.links?.instagram && (
@@ -802,6 +814,105 @@ function PostEditor({
   );
 }
 
+function MediaPicker({
+  assets,
+  value,
+  onChange,
+}: {
+  assets: Asset[];
+  value: { id: string; role: string }[];
+  onChange: (v: { id: string; role: string }[]) => void;
+}) {
+  const ready = assets.filter(
+    (a) => a.status === "ready" && !value.some((x) => x.id === a.id),
+  );
+  return (
+    <div className="gw-field">
+      <span>Media from the library</span>
+      <span className="muted small">
+        Main visuals are our own photos, recordings and designs; licensed stock
+        only as a background or reference. Anything not cleared blocks approval.
+      </span>
+      {value.map((r) => {
+        const a = assets.find((x) => x.id === r.id);
+        return (
+          <div key={r.id} className="gw-media">
+            {a ? (
+              <Thumb a={a} />
+            ) : (
+              <div className="gw-thumb empty">Deleted</div>
+            )}
+            <span>
+              {a?.name ?? "Deleted file"}
+              {a && (
+                <>
+                  <br />
+                  <Chip tone={RIGHTS_TONE[a.rightsStatus]}>
+                    {RIGHTS_LABEL[a.rightsStatus]}
+                  </Chip>
+                </>
+              )}
+            </span>
+            <select
+              aria-label="Role"
+              value={r.role}
+              onChange={(e) =>
+                onChange(
+                  value.map((x) =>
+                    x.id === r.id ? { ...x, role: e.target.value } : x,
+                  ),
+                )
+              }
+            >
+              <option value="media">Main visual</option>
+              <option value="background">Background</option>
+              <option value="reference">Reference only</option>
+            </select>
+            <button
+              type="button"
+              className="btn ghost small"
+              aria-label="Remove"
+              onClick={() => onChange(value.filter((x) => x.id !== r.id))}
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      {ready.length > 0 ? (
+        <select
+          aria-label="Add from the library"
+          value=""
+          onChange={(e) => {
+            const a = assets.find((x) => x.id === e.target.value);
+            if (a)
+              onChange([
+                ...value,
+                {
+                  id: a.id,
+                  role: a.rights.license === "own" ? "media" : "background",
+                },
+              ]);
+          }}
+        >
+          <option value="">+ Add from the library…</option>
+          {ready.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} ({RIGHTS_LABEL[a.rightsStatus].toLowerCase()})
+            </option>
+          ))}
+        </select>
+      ) : (
+        !value.length && (
+          <span className="muted small">
+            The library is empty: upload in the Library tab.
+          </span>
+        )
+      )}
+    </div>
+  );
+}
+
 function ListEditor<T extends Record<string, string | number>>({
   title,
   hint,
@@ -822,7 +933,9 @@ function ListEditor<T extends Record<string, string | number>>({
   const update = (i: number, k: keyof T, val: string) =>
     onChange(
       rows.map((r, j) =>
-        j === i ? { ...r, [k]: typeof blank[k] === "number" ? Number(val) : val } : r,
+        j === i
+          ? { ...r, [k]: typeof blank[k] === "number" ? Number(val) : val }
+          : r,
       ),
     );
   const move = (i: number, d: number) => {
@@ -880,6 +993,493 @@ function ListEditor<T extends Record<string, string | number>>({
         </button>
       )}
     </div>
+  );
+}
+
+// ---------- library (phase 2): files with their rights ----------
+
+export type Asset = {
+  id: string;
+  name: string;
+  kind: string;
+  origin: string;
+  mime: string;
+  bytes: number;
+  lensPhoto: boolean;
+  status: "uploading" | "ready";
+  rightsStatus: "cleared" | "review" | "blocked";
+  credit: string;
+  url: string;
+  usedIn: { id: string; title: string }[];
+  createdAt: number;
+  createdBy: string;
+  rights: {
+    license: string;
+    licenseUrl: string;
+    source: string;
+    author: string;
+    reason: string;
+    peopleOrBrands: boolean;
+    decision?: { status: string; note: string; by: string; at: number };
+  };
+};
+const RIGHTS_TONE = {
+  cleared: "good",
+  review: "warn",
+  blocked: "bad",
+} as const;
+const RIGHTS_LABEL = {
+  cleared: "Cleared",
+  review: "Needs a rights decision",
+  blocked: "Can't be used",
+};
+
+export const useAssets = () =>
+  useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), []);
+
+function Thumb({ a }: { a: Asset }) {
+  if (!a.url) return <div className="gw-thumb empty">Uploading…</div>;
+  return a.mime.startsWith("video/") ? (
+    <video className="gw-thumb" src={a.url} muted preload="metadata" />
+  ) : (
+    <img className="gw-thumb" src={a.url} alt={a.name} loading="lazy" />
+  );
+}
+
+function Library({ ws }: { ws: Workspace }) {
+  const [n, setN] = useState(0);
+  const state = useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), [n]);
+  const [filter, setFilter] = useState<
+    "all" | "review" | "cleared" | "blocked"
+  >("all");
+  const [open, setOpen] = useState<Asset | null>(null);
+  const [adding, setAdding] = useState(false);
+  const reload = () => setN((x) => x + 1);
+  return (
+    <Loaded state={state}>
+      {({ assets }) => {
+        const shown = assets.filter(
+          (a) => filter === "all" || a.rightsStatus === filter,
+        );
+        return (
+          <div className="gw-stack">
+            <div className="gw-row">
+              <div className="chips">
+                {(["all", "review", "cleared", "blocked"] as const).map((f) => (
+                  <button
+                    key={f}
+                    className={filter === f ? "chip on" : "chip"}
+                    onClick={() => setFilter(f)}
+                  >
+                    {f === "all" ? "All" : RIGHTS_LABEL[f]} (
+                    {f === "all"
+                      ? assets.length
+                      : assets.filter((a) => a.rightsStatus === f).length}
+                    )
+                  </button>
+                ))}
+              </div>
+              {can(ws, "growth.contribute") && (
+                <button className="btn" onClick={() => setAdding(true)}>
+                  + Upload
+                </button>
+              )}
+            </div>
+            {shown.length ? (
+              <div className="gw-assets">
+                {shown.map((a) => (
+                  <button
+                    key={a.id}
+                    className="gw-card"
+                    onClick={() => setOpen(a)}
+                  >
+                    <Thumb a={a} />
+                    <span className="gw-task-title">{a.name}</span>
+                    <span className="gw-row">
+                      <Chip tone={RIGHTS_TONE[a.rightsStatus]}>
+                        {RIGHTS_LABEL[a.rightsStatus]}
+                      </Chip>
+                      <span className="muted small">
+                        {a.lensPhoto ? "Lens photo · " : ""}
+                        {a.usedIn.length
+                          ? `in ${a.usedIn.length} post${a.usedIn.length > 1 ? "s" : ""}`
+                          : "unused"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">
+                Nothing here yet. Upload photos taken with Lens, screen
+                recordings of the app and designs. Licensed images from other
+                sites can be backgrounds or references only.
+              </p>
+            )}
+            {adding && (
+              <UploadForm
+                onDone={(ok) => {
+                  setAdding(false);
+                  if (ok) reload();
+                }}
+              />
+            )}
+            {open && (
+              <AssetPanel
+                ws={ws}
+                a={open}
+                onDone={(changed) => {
+                  setOpen(null);
+                  if (changed) reload();
+                }}
+              />
+            )}
+          </div>
+        );
+      }}
+    </Loaded>
+  );
+}
+
+function UploadForm({ onDone }: { onDone: (ok: boolean) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [v, setV] = useState({
+    name: "",
+    kind: "photo",
+    madeBy: "us" as "us" | "other",
+    checkedPersonal: false,
+    lensPhoto: false,
+    peopleOrBrands: false,
+    source: "",
+    license: "",
+    author: "",
+    licenseUrl: "",
+  });
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const upload = async () => {
+    if (!file) return;
+    setError("");
+    try {
+      setBusy("Checking…");
+      const r = await api<{
+        asset: { id: string };
+        url: string;
+        headers: Record<string, string>;
+      }>("POST", "/growth/assets/upload", {
+        ...v,
+        name: v.name || file.name.replace(/\.[^.]+$/, ""),
+        contentType: file.type,
+        bytes: file.size,
+      });
+      setBusy("Uploading…");
+      const put = await fetch(r.url, {
+        method: "PUT",
+        headers: r.headers,
+        body: file,
+      });
+      if (!put.ok) throw new Error("The upload failed. Try again.");
+      setBusy("Finishing…");
+      await api("POST", `/growth/assets/${r.asset.id}/done`);
+      onDone(true);
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy("");
+    }
+  };
+  const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) =>
+    setV({ ...v, [k]: val });
+  return (
+    <>
+      <div className="gw-scrim" onClick={() => onDone(false)} />
+      <aside className="gw-drawer" aria-label="Upload">
+        <div className="gw-drawer-head">
+          <h2 className="gw-drawer-title">Upload to the library</h2>
+          <button className="btn ghost" onClick={() => onDone(false)}>
+            Close
+          </button>
+        </div>
+        {error && <div className="notice error">{error}</div>}
+        <fieldset className="gw-form" disabled={!!busy}>
+          <label className="gw-field">
+            <span>
+              File (JPEG, PNG, WebP up to 30 MB; MP4 or MOV up to 200 MB)
+            </span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <div className="gw-form-row">
+            <label className="gw-field">
+              <span>Name</span>
+              <input
+                value={v.name}
+                placeholder={file?.name ?? ""}
+                onChange={(e) => set("name", e.target.value)}
+              />
+            </label>
+            <label className="gw-field">
+              <span>What is it</span>
+              <select
+                value={v.kind}
+                onChange={(e) => set("kind", e.target.value)}
+              >
+                <option value="photo">Photo</option>
+                <option value="screen-recording">Screen recording</option>
+                <option value="video">Video</option>
+                <option value="image">Design or image</option>
+                <option value="illustration">Illustration</option>
+              </select>
+            </label>
+          </div>
+          <div className="gw-field">
+            <span>Who made it?</span>
+            <div className="chips">
+              <button
+                type="button"
+                className={v.madeBy === "us" ? "chip on" : "chip"}
+                onClick={() => set("madeBy", "us")}
+              >
+                Our team
+              </button>
+              <button
+                type="button"
+                className={v.madeBy === "other" ? "chip on" : "chip"}
+                onClick={() => set("madeBy", "other")}
+              >
+                Someone else (licensed)
+              </button>
+            </div>
+          </div>
+          {v.madeBy === "us" ? (
+            <>
+              <label className="gw-check">
+                <input
+                  type="checkbox"
+                  checked={v.checkedPersonal}
+                  onChange={(e) => set("checkedPersonal", e.target.checked)}
+                />
+                I checked every frame: no personal photos, faces, names,
+                messages or notifications.
+              </label>
+              {file?.type.startsWith("image/") && (
+                <label className="gw-check">
+                  <input
+                    type="checkbox"
+                    checked={v.lensPhoto}
+                    onChange={(e) => set("lensPhoto", e.target.checked)}
+                  />
+                  This photo was taken with the Lens camera (lets posts say
+                  &ldquo;shot on Lens&rdquo;).
+                </label>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="muted small">
+                Licensed images and videos can be backgrounds or references
+                only, never the main visual. Copy the details from the page you
+                got it from.
+              </p>
+              <label className="gw-field">
+                <span>Page you got it from</span>
+                <input
+                  value={v.source}
+                  placeholder="https://"
+                  onChange={(e) => set("source", e.target.value)}
+                />
+              </label>
+              <div className="gw-form-row">
+                <label className="gw-field">
+                  <span>Licence (as shown on that page)</span>
+                  <input
+                    value={v.license}
+                    placeholder="CC BY 4.0, Unsplash License, CC0…"
+                    onChange={(e) => set("license", e.target.value)}
+                  />
+                </label>
+                <label className="gw-field">
+                  <span>Author</span>
+                  <input
+                    value={v.author}
+                    onChange={(e) => set("author", e.target.value)}
+                  />
+                </label>
+              </div>
+            </>
+          )}
+          <label className="gw-check">
+            <input
+              type="checkbox"
+              checked={v.peopleOrBrands}
+              onChange={(e) => set("peopleOrBrands", e.target.checked)}
+            />
+            Recognisable people, logos or brands are visible.
+          </label>
+          <div className="btns">
+            <button
+              className="btn primary"
+              type="button"
+              disabled={
+                !file ||
+                (v.madeBy === "us" && !v.checkedPersonal) ||
+                (v.madeBy === "other" && (!v.source || !v.license))
+              }
+              onClick={() => void upload()}
+            >
+              {busy || "Upload"}
+            </button>
+          </div>
+        </fieldset>
+      </aside>
+    </>
+  );
+}
+
+function AssetPanel({
+  ws,
+  a,
+  onDone,
+}: {
+  ws: Workspace;
+  a: Asset;
+  onDone: (changed: boolean) => void;
+}) {
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const manager = can(ws, "growth.write");
+  const decide = async (status: "cleared" | "review" | "blocked") => {
+    setError("");
+    try {
+      await api("PUT", `/growth/assets/${a.id}/rights`, { status, note });
+      onDone(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const remove = async () => {
+    if (!confirm(`Delete "${a.name}" from the library?`)) return;
+    try {
+      await api("DELETE", `/growth/assets/${a.id}`);
+      onDone(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const r = a.rights;
+  return (
+    <>
+      <div className="gw-scrim" onClick={() => onDone(false)} />
+      <aside className="gw-drawer" aria-label={a.name}>
+        <div className="gw-drawer-head">
+          <h2 className="gw-drawer-title">{a.name}</h2>
+          <button className="btn ghost" onClick={() => onDone(false)}>
+            Close
+          </button>
+        </div>
+        {error && <div className="notice error">{error}</div>}
+        {a.url &&
+          (a.mime.startsWith("video/") ? (
+            <video className="gw-preview" src={a.url} controls muted />
+          ) : (
+            <img className="gw-preview" src={a.url} alt={a.name} />
+          ))}
+        <div className="gw-row">
+          <Chip tone={RIGHTS_TONE[a.rightsStatus]}>
+            {RIGHTS_LABEL[a.rightsStatus]}
+          </Chip>
+          <span className="muted small">
+            {a.kind} · {(a.bytes / 1024 / 1024).toFixed(1)} MB · added by{" "}
+            {a.createdBy.split("@")[0]}
+          </span>
+        </div>
+        <dl className="gw-kv">
+          <dt>Licence</dt>
+          <dd>{r.license === "own" ? "Made by our team" : r.license}</dd>
+          {r.source && (
+            <>
+              <dt>Source</dt>
+              <dd>
+                <a href={r.source} target="_blank" rel="noreferrer">
+                  {r.source}
+                </a>
+              </dd>
+            </>
+          )}
+          {r.author && (
+            <>
+              <dt>Author</dt>
+              <dd>{r.author}</dd>
+            </>
+          )}
+          {a.credit && (
+            <>
+              <dt>Credit</dt>
+              <dd>
+                {a.credit} <CopyButton text={a.credit} />
+              </dd>
+            </>
+          )}
+          <dt>Why</dt>
+          <dd>{r.reason}</dd>
+          <dt>People or brands</dt>
+          <dd>{r.peopleOrBrands ? "Visible" : "None"}</dd>
+          {r.decision && (
+            <>
+              <dt>Decision</dt>
+              <dd>
+                {r.decision.status} by {r.decision.by.split("@")[0]}:{" "}
+                {r.decision.note}
+              </dd>
+            </>
+          )}
+          <dt>Used in</dt>
+          <dd>
+            {a.usedIn.length
+              ? a.usedIn.map((p) => p.title || p.id).join(", ")
+              : "No posts"}
+          </dd>
+        </dl>
+        {manager && (
+          <div className="gw-callout">
+            <strong>Rights decision</strong>
+            <label className="gw-field">
+              <span>Note (why it is or isn&apos;t fine to use)</span>
+              <input
+                value={note}
+                placeholder="Model release on file / licence page changed…"
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </label>
+            <div className="btns">
+              <button className="btn" onClick={() => void decide("cleared")}>
+                Clear for use
+              </button>
+              <button className="btn" onClick={() => void decide("blocked")}>
+                Block
+              </button>
+              {r.decision && (
+                <button
+                  className="btn ghost"
+                  onClick={() => void decide("review")}
+                >
+                  Back to review
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {manager && (
+          <div className="btns">
+            <button className="btn danger" onClick={() => void remove()}>
+              Delete
+            </button>
+          </div>
+        )}
+      </aside>
+    </>
   );
 }
 
@@ -984,7 +1584,9 @@ function BrandForm({ ws, initial }: { ws: Workspace; initial: Brand }) {
             <span>Languages</span>
             <select
               value={b.languages.join(",")}
-              onChange={(e) => setB({ ...b, languages: e.target.value.split(",") })}
+              onChange={(e) =>
+                setB({ ...b, languages: e.target.value.split(",") })
+              }
             >
               <option value="en">English</option>
               <option value="en,hi">English + Hindi</option>
@@ -997,7 +1599,11 @@ function BrandForm({ ws, initial }: { ws: Workspace; initial: Brand }) {
         </p>
         {editable && (
           <div className="btns">
-            <button className="btn primary" type="button" onClick={() => void save()}>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => void save()}
+            >
               Save brand kit
             </button>
             {msg && <span className="small">{msg}</span>}

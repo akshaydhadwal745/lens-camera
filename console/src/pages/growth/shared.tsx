@@ -160,6 +160,7 @@ export type Post = {
   approvedBy?: string;
   approvedAt?: number;
   createdBy?: string;
+  assets?: { id: string; role: string }[];
 };
 export type PostVariant = {
   caption: string;

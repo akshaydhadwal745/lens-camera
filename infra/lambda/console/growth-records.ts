@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Req, Res } from '../api/lib';
+import { assetProblems, credits, hasLensPhoto, loadAssets, readAssetRefs, type Asset } from './growth-assets';
 import { packageProblems, PLATFORMS, postText, readPackage, type Platform } from './growth-content-rules';
 import { log } from './log';
 
@@ -19,7 +20,7 @@ export const CHANNELS = ['instagram', 'youtube', 'reddit', 'whatsapp', 'linkedin
 export const POST_STATUSES = ['idea', 'drafted', 'in_review', 'approved', 'scheduled', 'published', 'archived'] as const;
 const SET_BY_SAVE = ['idea', 'drafted', 'in_review', 'published', 'archived'] as const;
 /** Fields whose change means the approved version is no longer what would go out. */
-const CONTENT_KEYS = ['format', 'hook', 'slides', 'script', 'variants', 'realPhoto', 'page'] as const;
+const CONTENT_KEYS = ['format', 'hook', 'slides', 'script', 'variants', 'assets', 'page'] as const;
 const SITE = 'https://lens.instagrowapp.com';
 
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -63,15 +64,19 @@ export function postFields(b: Record<string, any>, old?: Record<string, any>) {
     taskId: text(b.taskId ?? old?.taskId, 20),
     pillar: text(b.pillar ?? old?.pillar, 40),
     ...pkg,
+    // Only a cleared photo taken with Lens in the media makes "shot on Lens" true (set by postProblems' caller).
+    realPhoto: false,
+    assets: readAssetRefs(b.assets !== undefined ? b.assets : old?.assets),
   };
 }
 
 /** The tagged link for one platform (utm_source = the platform, so visits are counted per platform). */
 export const platformLink = (platform: string, code: string, page: string) => postLink(platform, code, page && page.startsWith('/') ? page : '/');
 
-/** What stops approval, for the editor and the approve button. */
-export function postProblems(p: ReturnType<typeof postFields>, code: string): string[] {
-  return packageProblems(p, (k) => platformLink(k, code, p.page));
+/** What stops approval, for the editor and the approve button (the post's library media included). */
+export function postProblems(p: ReturnType<typeof postFields>, code: string, assets: Map<string, Asset> = new Map()): string[] {
+  const realPhoto = hasLensPhoto(p.assets, assets);
+  return [...packageProblems({ ...p, realPhoto }, (k) => platformLink(k, code, p.page)), ...assetProblems(p.assets, assets)];
 }
 
 async function rows(prefix: string) {
@@ -107,7 +112,7 @@ export async function postSave(id: string, req: Req, by: string): Promise<Res> {
   const f = postFields(req.body ?? {}, old);
   if (!f.title && !f.body && !f.hook && !Object.keys(f.variants).length) throw new HttpError(400, 'Write a title, a hook or a caption');
   // Approval is a decision about exact content: a save can't grant it, and changing the content takes it back.
-  const changed = !!old && CONTENT_KEYS.some((k) => JSON.stringify(old[k] ?? null) !== JSON.stringify((f as any)[k] ?? null));
+  const changed = !!old && CONTENT_KEYS.some((k) => stable(old[k]) !== stable((f as any)[k]));
   const wasApproved = old?.status === 'approved' || old?.status === 'scheduled';
   let status = f.status;
   if (!(SET_BY_SAVE as readonly string[]).includes(status)) status = wasApproved && !changed ? (old!.status as typeof status) : 'in_review';
@@ -115,7 +120,7 @@ export async function postSave(id: string, req: Req, by: string): Promise<Res> {
   const keepApproval = wasApproved && !changed && (status === 'approved' || status === 'scheduled');
   const pid = isNew ? newId() : id;
   const code = (old?.code as string | undefined) ?? codeOf(f.title || f.hook || f.channel);
-  const problems = postProblems(f, code);
+  const problems = postProblems(f, code, await loadAssets(f.assets.map((a) => a.id)));
   const links = Object.fromEntries(Object.keys(f.variants).map((k) => [k, platformLink(k, code, f.page)]));
   const published = { ...(old?.published ?? {}), ...readPublished(req.body?.published) };
   if (status !== 'published' && Object.keys(readPublished(req.body?.published)).length) status = 'published';
@@ -145,6 +150,14 @@ export async function postSave(id: string, req: Req, by: string): Promise<Res> {
   return json(200, { post: item });
 }
 
+/** JSON with object keys sorted: DynamoDB doesn't keep map key order, so plain JSON would see a change. */
+export function stable(v: unknown): string {
+  if (v === undefined || v === null || v === '') return 'null';
+  if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`;
+  if (typeof v === 'object') return `{${Object.keys(v as object).sort().map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+
 /** {platform: "https://…"} published links a person pasted after posting by hand. */
 function readPublished(v: unknown): Record<string, { url: string; at: number; how: 'manual' }> {
   if (!v || typeof v !== 'object') return {};
@@ -164,7 +177,8 @@ export async function postApprove(id: string, by: string, undo = false): Promise
     if (old.status !== 'approved' && old.status !== 'scheduled') throw new HttpError(400, 'This post is not approved');
   } else {
     if (!['drafted', 'in_review', 'idea'].includes(old.status)) throw new HttpError(400, `A ${old.status.replace('_', ' ')} post can't be approved`);
-    const problems = postProblems(postFields({}, old), old.code);
+    const f = postFields({}, old);
+    const problems = postProblems(f, old.code, await loadAssets(f.assets.map((a) => a.id)));
     if (problems.length) throw new HttpError(400, `Fix first: ${problems.join('; ')}`);
   }
   const item = { ...old, status: undo ? 'in_review' : 'approved', approvedBy: undo ? undefined : by, approvedAt: undo ? undefined : Date.now(), updatedAt: Date.now(), updatedBy: by, problems: [] };
@@ -180,12 +194,15 @@ export async function postExport(id: string): Promise<Res> {
   if (!p) throw new HttpError(404, 'No such post');
   const f = postFields({}, p);
   const platforms = Object.keys(f.variants) as Platform[];
+  const lines = credits(f.assets, await loadAssets(f.assets.map((a) => a.id)));
   return json(200, {
     approved: p.status === 'approved' || p.status === 'scheduled' || p.status === 'published',
+    credits: lines,
     platforms: platforms.map((k) => {
       const v = f.variants[k]!;
       const link = platformLink(k, p.code, f.page);
-      return { platform: k, title: v.title, text: postText(v, link, k), altText: v.altText, link };
+      const body = postText(v, link, k);
+      return { platform: k, title: v.title, text: lines.length ? `${body}\n\n${lines.join('\n')}` : body, altText: v.altText, link };
     }),
   });
 }

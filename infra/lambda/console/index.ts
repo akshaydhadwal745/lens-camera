@@ -20,6 +20,7 @@ import { competitorSave, competitorsPage } from './growth-competitors';
 import { campaignSave, moneyPage, spendSave } from './growth-money';
 import { keywordSave, prospectSave, seoPage } from './growth-seo';
 import { goalUpdate, settingsUpdate } from './growth-goals';
+import { assetDelete, assetDone, assetRights, assetsPage, assetUpload } from './growth-assets';
 import { brandPage, brandUpdate } from './growth-brand';
 import { partnerSave, postApprove, postExport, postSave, recordDelete } from './growth-records';
 import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
@@ -128,6 +129,12 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'PUT /growth/settings') return await allowed('growth.write', () => settingsUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'goals' && seg[2] && seg.length === 3 && method === 'PUT') return await allowed('growth.write', () => goalUpdate(seg[2], req, email));
     // Content packages and the brand kit (docs/growth/content-engine.md): managers approve, anyone in growth exports.
+    // Content library: anyone in growth uploads (with the personal-content check); managers decide rights and delete.
+    if (route === 'GET /growth/assets') return await allowed('growth', () => assetsPage());
+    if (route === 'POST /growth/assets/upload') return await allowed('growth.contribute', () => assetUpload(req, email));
+    if (seg[0] === 'growth' && seg[1] === 'assets' && seg[2] && seg[3] === 'done' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => assetDone(seg[2], email));
+    if (seg[0] === 'growth' && seg[1] === 'assets' && seg[2] && seg[3] === 'rights' && seg.length === 4 && method === 'PUT') return await allowed('growth.write', () => assetRights(seg[2], req, email));
+    if (seg[0] === 'growth' && seg[1] === 'assets' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => assetDelete(seg[2], email));
     if (route === 'GET /growth/brand') return await allowed('growth', () => brandPage());
     if (route === 'PUT /growth/brand') return await allowed('growth.write', () => brandUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'approve' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
