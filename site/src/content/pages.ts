@@ -182,7 +182,7 @@ export const pages: ContentPage[] = [
       en: {
         title: 'Pro camera app with manual controls, RAW and 4K',
         description:
-          'Manual ISO, shutter speed, white balance and focus, histogram, zebra stripes, focus peaking, RAW (DNG) and 4K HDR video. Only the controls your phone really supports.',
+          'Manual ISO, shutter speed, white balance and focus, histogram, zebras, focus peaking, RAW (DNG) and 4K HDR video. Only the controls your phone really supports.',
         h1: 'A pro camera that adapts to your phone',
         lead: 'Lens reads exactly what your camera hardware can do and gives you those controls, from a budget phone to the latest flagship.',
         sections: [
@@ -208,7 +208,7 @@ export const pages: ContentPage[] = [
       hi: {
         title: 'मैनुअल कंट्रोल, RAW और 4K वाला प्रो कैमरा ऐप',
         description:
-          'मैनुअल ISO, शटर स्पीड, व्हाइट बैलेंस और फ़ोकस, हिस्टोग्राम, ज़ेबरा, फ़ोकस पीकिंग, RAW (DNG) और 4K HDR वीडियो। सिर्फ़ वही कंट्रोल जो आपका फ़ोन सच में सपोर्ट करता है।',
+          'मैनुअल ISO, शटर स्पीड, व्हाइट बैलेंस और फ़ोकस, हिस्टोग्राम, ज़ेबरा, फ़ोकस पीकिंग, RAW (DNG) और 4K HDR वीडियो। सिर्फ़ वही कंट्रोल जो आपका फ़ोन सपोर्ट करता है।',
         h1: 'प्रो कैमरा जो आपके फ़ोन के हिसाब से ढलता है',
         lead: 'Lens देखता है कि आपके कैमरे का हार्डवेयर क्या कर सकता है और आपको वही कंट्रोल देता है, बजट फ़ोन से लेकर नए फ़्लैगशिप तक।',
         sections: [
@@ -286,7 +286,7 @@ export const pages: ContentPage[] = [
     name: { en: 'Portrait mode', hi: 'पोर्ट्रेट मोड' },
     copy: {
       en: {
-        title: 'Portrait mode with background blur you can change later',
+        title: 'Portrait mode with blur you can change later',
         description: 'Blur the background behind people, then change or remove the blur any time in the editor. The original photo is never altered.',
         h1: 'Portrait mode, with blur you can change later',
         lead: 'Lens finds the person in your photo and blurs the background, and because the blur is an edit, you can make it stronger, softer or turn it off later.',
@@ -315,7 +315,7 @@ export const pages: ContentPage[] = [
     copy: {
       en: {
         title: 'Photo editor and 13 film looks, non-destructive',
-        description: '13 looks, live in the viewfinder, plus exposure, highlights, shadows, colour, crop, straighten and more. Every edit can be changed or undone; originals stay untouched.',
+        description: '13 looks, live in the viewfinder, plus exposure, highlights, shadows, colour, crop, straighten and more. Every edit can be undone; originals stay untouched.',
         h1: 'Looks and an editor that never touch your original',
         lead: 'Pick a look before you shoot and see it live, or edit later. Every change is saved as a recipe, so you can adjust or remove it any time.',
         sections: [
@@ -330,7 +330,7 @@ export const pages: ContentPage[] = [
       },
       hi: {
         title: 'फ़ोटो एडिटर और 13 फ़िल्म लुक्स, ओरिजिनल सुरक्षित',
-        description: '13 लुक्स, व्यूफ़ाइंडर में लाइव, साथ में एक्सपोज़र, हाइलाइट, शैडो, रंग, क्रॉप, सीधा करना और भी बहुत कुछ। हर एडिट बदला या हटाया जा सकता है; ओरिजिनल वैसे ही रहते हैं।',
+        description: '13 लुक्स, व्यूफ़ाइंडर में लाइव, साथ में एक्सपोज़र, हाइलाइट, शैडो, रंग, क्रॉप और सीधा करना। हर एडिट बदला या हटाया जा सकता है; ओरिजिनल वैसे ही रहते हैं।',
         h1: 'लुक्स और एडिटर जो आपके ओरिजिनल को कभी नहीं छूते',
         lead: 'शूट से पहले लुक चुनें और लाइव देखें, या बाद में एडिट करें। हर बदलाव एक रेसिपी की तरह सेव होता है, इसलिए आप उसे कभी भी बदल या हटा सकते हैं।',
         sections: [
@@ -352,8 +352,8 @@ export const pages: ContentPage[] = [
     name: { en: 'Use your own storage', hi: 'अपना स्टोरेज जोड़ें' },
     copy: {
       en: {
-        title: 'Back up photos to Google Drive, OneDrive, Dropbox, Box or your NAS',
-        description: 'Already pay for cloud storage? Send your originals to Google Drive, OneDrive, Dropbox, Box, any S3-compatible storage or your own NAS (WebDAV), with the Lens camera and gallery on top.',
+        title: 'Back up photos to your own Drive, Dropbox or NAS',
+        description: 'Already pay for cloud storage? Send originals to Google Drive, OneDrive, Dropbox, Box, S3 or your own NAS (WebDAV), with the Lens camera and gallery on top.',
         h1: 'Keep your photos in the storage you already have',
         lead: 'Connect Google Drive, OneDrive, Dropbox, Box, S3-compatible storage or a NAS, and Lens saves your originals there. The camera, gallery and sharing work the same.',
         sections: [
@@ -362,8 +362,8 @@ export const pages: ContentPage[] = [
         ],
       },
       hi: {
-        title: 'Google Drive, OneDrive, Dropbox, Box या अपने NAS पर फ़ोटो बैकअप',
-        description: 'पहले से क्लाउड स्टोरेज है? अपने ओरिजिनल Google Drive, OneDrive, Dropbox, Box, किसी भी S3-कम्पैटिबल स्टोरेज या अपने NAS (WebDAV) पर भेजें, ऊपर से Lens कैमरा और गैलरी।',
+        title: 'अपने Drive, Dropbox या NAS पर फ़ोटो बैकअप',
+        description: 'पहले से क्लाउड स्टोरेज है? ओरिजिनल Google Drive, OneDrive, Dropbox, Box, S3 या अपने NAS (WebDAV) पर भेजें, ऊपर से Lens कैमरा और गैलरी।',
         h1: 'फ़ोटो उसी स्टोरेज में रखें जो आपके पास पहले से है',
         lead: 'Google Drive, OneDrive, Dropbox, Box, S3-कम्पैटिबल स्टोरेज या NAS जोड़ें, और Lens आपके ओरिजिनल वहीं सेव करेगा। कैमरा, गैलरी और शेयरिंग वैसे ही चलते हैं।',
         sections: [
@@ -380,8 +380,8 @@ export const pages: ContentPage[] = [
     name: { en: '4K video streaming', hi: '4K वीडियो स्ट्रीमिंग' },
     copy: {
       en: {
-        title: 'Watch long videos smoothly, up to 4K, on any connection',
-        description: 'Long and 4K videos play instantly on any device. Lens makes smooth streaming versions up to the original resolution and picks the best one your connection can carry.',
+        title: 'Smooth long videos up to 4K on any connection',
+        description: 'Long and 4K videos play instantly on any device. Lens makes smooth streaming versions up to the original resolution and picks the best one for your connection.',
         h1: 'Long videos play smoothly, up to 4K',
         lead: 'Open a 20-minute 4K video on another phone or the web and it starts right away, at the best quality your connection allows.',
         sections: [
@@ -408,7 +408,7 @@ export const pages: ContentPage[] = [
     name: { en: 'Sharing', hi: 'शेयरिंग' },
     copy: {
       en: {
-        title: 'Share full-quality photos and videos, even with people without Lens',
+        title: 'Share full-quality photos with anyone, no app needed',
         description: 'Send the original photos and videos, not a compressed copy. Share links open in any browser, expire when you choose, and can be limited to one person.',
         h1: 'Share at full quality, without the compression',
         lead: 'Chat apps shrink your photos and videos. Lens sends the original, to friends on Lens or to anyone with a link.',
@@ -428,8 +428,8 @@ export const pages: ContentPage[] = [
         ],
       },
       hi: {
-        title: 'फ़ुल क्वालिटी फ़ोटो और वीडियो शेयर करें, उन्हें भी जिनके पास Lens नहीं',
-        description: 'ओरिजिनल फ़ोटो और वीडियो भेजें, कंप्रेस की हुई कॉपी नहीं। शेयर लिंक किसी भी ब्राउज़र में खुलते हैं, आपके चुने समय पर ख़त्म होते हैं, और सिर्फ़ एक व्यक्ति तक सीमित हो सकते हैं।',
+        title: 'फ़ुल क्वालिटी फ़ोटो किसी से भी शेयर करें',
+        description: 'ओरिजिनल फ़ोटो और वीडियो भेजें, कंप्रेस की हुई कॉपी नहीं। लिंक किसी भी ब्राउज़र में खुलते हैं, तय समय पर ख़त्म होते हैं, और एक व्यक्ति तक सीमित हो सकते हैं।',
         h1: 'फ़ुल क्वालिटी में शेयर करें, बिना कंप्रेशन',
         lead: 'चैट ऐप आपकी फ़ोटो और वीडियो छोटे कर देते हैं। Lens ओरिजिनल भेजता है, Lens पर दोस्तों को या लिंक से किसी को भी।',
         sections: [
@@ -487,8 +487,8 @@ export const pages: ContentPage[] = [
     name: { en: 'Phone storage full?', hi: 'फ़ोन स्टोरेज फ़ुल?' },
     copy: {
       en: {
-        title: 'Phone storage full? Free up space without losing photos',
-        description: '"Storage full" again? Back up every photo and video at original quality, then let Lens free up your phone automatically, keeping previews so your gallery still works.',
+        title: 'Phone storage full? Free up space, keep every photo',
+        description: '"Storage full" again? Back up every photo and video at original quality, then let Lens free up your phone, keeping previews so your gallery still works.',
         h1: 'Phone storage full? Free up space without losing a single photo',
         lead: 'Photos and videos are the biggest reason phones fill up. Lens keeps every one of them safe in the cloud at full quality and frees your phone for you.',
         sections: [
@@ -563,7 +563,7 @@ export const pages: ContentPage[] = [
     name: { en: 'Weddings & events', hi: 'शादी और इवेंट' },
     copy: {
       en: {
-        title: 'Collect everyone’s wedding and event photos with one QR code',
+        title: 'Collect all wedding and event photos with one QR code',
         description: 'Make an event album, show its QR code, and guests add their photos from any phone, in the browser, no app needed. Everyone sees everything, at full quality.',
         h1: 'Everyone’s wedding photos. One QR code.',
         lead: 'After a wedding or a party, the best photos are spread over a hundred phones and get compressed in group chats. With a Lens event album, they all land in one place, in the original quality.',

@@ -82,7 +82,7 @@ export const guidePages: GuidePage[] = [
         ],
       },
       hi: {
-        title: 'Lens बनाम Google Photos: स्टोरेज, क्वालिटी और शेयरिंग की तुलना',
+        title: 'Lens बनाम Google Photos: स्टोरेज और क्वालिटी',
         description:
           'अक्टूबर 2026 तक की ईमानदार तुलना: मुफ़्त स्टोरेज, ओरिजिनल क्वालिटी बनाम स्टोरेज सेवर, अपना स्टोरेज, कैमरा, इवेंट एल्बम, और कहाँ Google Photos अब भी बेहतर है।',
         h1: 'Lens बनाम Google Photos',
@@ -155,7 +155,7 @@ export const guidePages: GuidePage[] = [
       en: {
         title: 'Google Photos storage full? What to do, step by step',
         description:
-          'Your Google storage is full and photos stopped backing up. What is using the space, what you can safely clean up, and how to keep backing up photos at full quality.',
+          'Your Google storage is full and photos stopped backing up. What uses the space, what you can safely clean up, and how to keep backing up at full quality.',
         h1: 'Google storage full? Here’s what to do',
         lead: 'When your Google storage is full, new photos stop backing up and email can stop arriving. Here is how to get space back, and how to keep every new photo safe.',
         sections: [
@@ -256,7 +256,7 @@ export const guidePages: GuidePage[] = [
     name: { en: 'Full-quality photos on WhatsApp', hi: 'WhatsApp पर फ़ुल क्वालिटी फ़ोटो' },
     copy: {
       en: {
-        title: 'How to send full-quality photos and videos on WhatsApp',
+        title: 'Send full-quality photos and videos on WhatsApp',
         description:
           'WhatsApp compresses photos and videos, even in HD. Sending as a document keeps the file but is clumsy. How to send the originals with a Lens share link instead.',
         h1: 'Send full-quality photos on WhatsApp',
@@ -398,7 +398,7 @@ export const guidePages: GuidePage[] = [
         ],
       },
       hi: {
-        title: 'QR कोड से मेहमानों की शादी और इवेंट की फ़ोटो कैसे इकट्ठा करें',
+        title: 'QR कोड से मेहमानों से शादी की फ़ोटो इकट्ठा करें',
         description:
           'Lens इवेंट एल्बम बनाएँ, उसका QR कोड दिखाएँ, और मेहमान किसी भी फ़ोन से, ब्राउज़र में, बिना ऐप के फ़ोटो जोड़ें। क़दम-दर-क़दम, उस दिन के लिए सुझावों के साथ।',
         h1: 'एक QR कोड से हर मेहमान की फ़ोटो',
@@ -458,7 +458,7 @@ export const guidePages: GuidePage[] = [
     name: { en: 'Android storage full?', hi: 'Android स्टोरेज फ़ुल?' },
     copy: {
       en: {
-        title: 'Android phone storage full? 6 safe ways to free up space',
+        title: 'Android storage full? 6 safe ways to free up space',
         description:
           '"Storage full" on Android? Find what is using space, clear chat media and apps, and free gigabytes of photos and videos safely, only after they are backed up.',
         h1: 'Android storage full? Free up space safely',
@@ -498,7 +498,7 @@ export const guidePages: GuidePage[] = [
         ],
       },
       hi: {
-        title: 'Android फ़ोन स्टोरेज फ़ुल? जगह ख़ाली करने के 6 सुरक्षित तरीके',
+        title: 'Android स्टोरेज फ़ुल? जगह ख़ाली करने के 6 तरीके',
         description:
           'Android पर "स्टोरेज फ़ुल"? देखें जगह किसने ली, चैट मीडिया और ऐप साफ़ करें, और फ़ोटो-वीडियो की गीगाबाइट जगह सुरक्षित तरीके से ख़ाली करें, बैकअप के बाद ही।',
         h1: 'Android स्टोरेज फ़ुल? सुरक्षित तरीके से जगह ख़ाली करें',
@@ -553,7 +553,7 @@ export const guidePages: GuidePage[] = [
       en: {
         title: 'Why you can trust Lens with your photos',
         description:
-          'Who makes Lens, where your photos are stored, how originals are protected, how to download everything or leave at any time, and what we will never do with your photos.',
+          'Who makes Lens, where your photos are stored, how originals are protected, how to download everything or leave any time, and what we never do with your photos.',
         h1: 'Why you can trust Lens',
         lead: 'Your photos are your memories. Here is plainly who we are, where they live, and how you stay in control.',
         sections: [
@@ -591,7 +591,7 @@ export const guidePages: GuidePage[] = [
       hi: {
         title: 'आप अपनी फ़ोटो के लिए Lens पर भरोसा क्यों कर सकते हैं',
         description:
-          'Lens कौन बनाता है, आपकी फ़ोटो कहाँ रहती हैं, ओरिजिनल कैसे सुरक्षित रहते हैं, कभी भी सब कुछ डाउनलोड करके कैसे छोड़ें, और हम आपकी फ़ोटो के साथ क्या कभी नहीं करेंगे।',
+          'Lens कौन बनाता है, आपकी फ़ोटो कहाँ रहती हैं, ओरिजिनल कैसे सुरक्षित रहते हैं, सब कुछ डाउनलोड करके कैसे छोड़ें, और हम आपकी फ़ोटो के साथ क्या कभी नहीं करेंगे।',
         h1: 'Lens पर भरोसा क्यों करें',
         lead: 'आपकी फ़ोटो आपकी यादें हैं। साफ़-साफ़ बताते हैं कि हम कौन हैं, वे कहाँ रहती हैं, और कंट्रोल आपके हाथ में कैसे रहता है।',
         sections: [
