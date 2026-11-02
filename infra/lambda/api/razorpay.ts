@@ -2,7 +2,8 @@
 //   /lens/razorpay/key-id, /key-secret      API keys (test keys until the owner switches to live)
 //   /lens/razorpay/plans                    {"plus50-month": "plan_…", "plus50-year": "plan_…"}
 //   /lens/razorpay/webhook-secret           the secret set on the dashboard webhook
-// Card/UPI details never touch Lens: people pay on Razorpay's own hosted pages (short_url).
+// Card/UPI details never touch Lens: people pay on Razorpay's own hosted pages (short_url) or in
+// Razorpay Checkout (its own frame) on our /api/v1/plus/pay page.
 import { createHmac } from 'node:crypto';
 
 import { getParam, HttpError, safeEqual } from './lib';
@@ -46,6 +47,13 @@ export async function verifyWebhook(rawBody: string | undefined, signature: stri
   const secret = await getParam('/lens/razorpay/webhook-secret');
   if (!secret || !rawBody || !signature) return false;
   return safeEqual(createHmac('sha256', secret).update(rawBody).digest('hex'), signature);
+}
+
+/** Checkout result (subscriptions): HMAC-SHA256 of "<payment id>|<subscription id>" with the key secret. */
+export async function verifyCheckout(paymentId: string | undefined, subscriptionId: string | undefined, signature: string | undefined): Promise<boolean> {
+  const secret = await getParam('/lens/razorpay/key-secret');
+  if (!secret || !paymentId || !subscriptionId || !signature) return false;
+  return safeEqual(createHmac('sha256', secret).update(`${paymentId}|${subscriptionId}`).digest('hex'), signature);
 }
 
 export type RzpSubscription = {

@@ -72,12 +72,13 @@ export default function PlusScreen() {
     if (busy) return;
     setBusy(true);
     try {
-      const { url } = await api.plusCheckout(kind);
+      const { url } = await api.plusCheckout(kind, Platform.OS === 'web' ? 'web' : 'app');
       waiting.current = true;
       track(`plus_checkout_${kind}`);
       if (Platform.OS === 'web') window.open(url, '_blank', 'noopener');
       else {
-        await WebBrowser.openBrowserAsync(url, { showTitle: true, enableBarCollapsing: true });
+        // The payment page hands back to lens://plus-return when done, which closes the browser.
+        await WebBrowser.openAuthSessionAsync(url, 'lens://plus-return');
         await load(true);
       }
     } catch (e) {

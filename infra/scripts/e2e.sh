@@ -837,8 +837,17 @@ R=$(call GET /plus "$TH")
 [[ $(echo "$R" | j .available) == true && $(echo "$R" | j .testMode) == true && $(echo "$R" | j .offer.monthly.paise) == 5900 && $(echo "$R" | j .offer.yearly.paise) == 49900 ]] && ok "Lens Plus offer: ₹59/month or ₹499/year (Razorpay test mode)" || fail "plus: $R"
 [[ $(echo "$R" | j '.offer.startsAt > Date.now() + 80*86400000') == true ]] && ok "during the welcome it's a lock-in: first charge when the welcome ends"
 R=$(call POST /plus/checkout "$TH" -d '{"kind":"plus50-month"}'); SUBID=$(echo "$R" | j .id)
-[[ $SUBID == sub_* && $(echo "$R" | j .url) == https://* ]] && ok "checkout: Razorpay subscription + hosted payment page ($SUBID)" || fail "checkout: $R"
+[[ $SUBID == sub_* && $(echo "$R" | j .url) == https://*/api/v1/plus/pay/$SUBID ]] && ok "checkout: Razorpay subscription + our payment page ($SUBID)" || fail "checkout: $R"
 [[ $(call POST /plus/checkout "$TH" -d '{"kind":"plus50-month"}' | j .id) == "$SUBID" ]] && ok "an unfinished checkout is reused"
+PP=$(curl -sS "$API/plus/pay/$SUBID")
+[[ $PP == *checkout.razorpay.com/v1/checkout.js* && $PP == *"\"subscription_id\":\"$SUBID\""* && $PP == *"₹0 today"* && $PP == *"\"redirect\":true"* ]] && ok "payment page: Razorpay Checkout for that subscription, says ₹0 today" || fail "pay page: ${PP:0:300}"
+[[ $(curl -sS "$API/plus/pay/sub_Nope12345678") == *"has expired"* ]] && ok "payment page for an unknown subscription: expired, no checkout"
+[[ $(curl -sS -X POST "$API/plus/paid" -H 'content-type: application/x-www-form-urlencoded' --data "razorpay_payment_id=pay_X1&razorpay_subscription_id=$SUBID&razorpay_signature=00ff") == *"didn’t go through"* ]] && ok "payment result with a wrong signature: not accepted"
+RKS=$(aws ssm get-parameter --profile lens --name /lens/razorpay/key-secret --with-decryption --query Parameter.Value --output text)
+PSIG=$(printf '%s' "pay_E2e1|$SUBID" | openssl dgst -sha256 -hmac "$RKS" -hex | sed 's/^.*= //'); unset RKS
+PR=$(curl -sS -X POST "$API/plus/paid" -H 'content-type: application/x-www-form-urlencoded' --data "razorpay_payment_id=pay_E2e1&razorpay_subscription_id=$SUBID&razorpay_signature=$PSIG")
+[[ $PR == *"Lens Plus is set up"* && $PR == *"lens://plus-return?paid=1"* ]] && ok "signed payment result: hands back to the app (lens://plus-return)" || fail "paid: ${PR:0:300}"
+[[ $(curl -sS -X POST "$API/plus/paid?ret=web" -H 'content-type: application/x-www-form-urlencoded' --data "razorpay_payment_id=pay_E2e1&razorpay_subscription_id=$SUBID&razorpay_signature=$PSIG") == *'href="/app/plus"'* ]] && ok "… or back to the web app"
 [[ $(call POST /plus/refresh "$TH" | j .subscription.status) == created && $(call GET /storage "$TH" | j .lens.plus) == "" ]] && ok "not paid yet: no plan, nothing shown as locked in"
 WHS=$(aws ssm get-parameter --profile lens --name /lens/razorpay/webhook-secret --with-decryption --query Parameter.Value --output text)
 WB="{\"event\":\"subscription.authenticated\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"$SUBID\"}}}}"

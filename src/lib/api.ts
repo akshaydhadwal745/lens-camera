@@ -487,7 +487,7 @@ export const api = {
   },
   // Lens Plus (Razorpay subscription; website + APK), moving originals to Google Drive, export.
   plus: () => request<PlusStatus>('GET', '/plus'),
-  plusCheckout: (kind: PlusKind) => request<{ url: string; id: string }>('POST', '/plus/checkout', { kind }),
+  plusCheckout: (kind: PlusKind, ret: 'app' | 'web') => request<{ url: string; id: string }>('POST', '/plus/checkout', { kind, ret }),
   plusRefresh: () => request<PlusStatus>('POST', '/plus/refresh'),
   plusCancel: () => request<PlusStatus>('POST', '/plus/cancel'),
   extra: () => request<ExtraStatus>('GET', '/extra'),

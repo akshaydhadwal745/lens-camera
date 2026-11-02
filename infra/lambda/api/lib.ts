@@ -95,11 +95,14 @@ export function parseEvent(event: APIGatewayProxyEventV2): Req {
   if (event.body) {
     const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
     rawBody = raw;
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      throw new HttpError(400, 'Body must be JSON');
-    }
+    // Forms posted by a payment page (Razorpay redirect mode) come as key=value pairs.
+    if ((event.headers?.['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) body = Object.fromEntries(new URLSearchParams(raw));
+    else
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        throw new HttpError(400, 'Body must be JSON');
+      }
   }
   const headers = event.headers ?? {};
   const cookies: Record<string, string> = {};
