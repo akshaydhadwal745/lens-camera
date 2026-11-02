@@ -207,7 +207,7 @@ export async function payPage(subId: string, req: Req): Promise<Res> {
       key: await getParam('/lens/razorpay/key-id'),
       subscription_id: sub.id,
       // The merchant brand, matching the Razorpay account (T-25: one company identity); the product stays in the description.
-      name: 'InstaGrowApp',
+      name: 'InstaGrow',
       description: later ? `Lens Plus, ₹0 today, first charge ${day(sub.chargeAt!)}` : `Lens Plus, ${price} a ${offer.period}`,
       callback_url: `${env.webOrigin}/api/v1/plus/paid${ret === 'web' ? '?ret=web' : ''}`,
       redirect: true,
