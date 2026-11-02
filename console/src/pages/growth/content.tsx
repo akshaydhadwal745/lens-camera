@@ -1224,7 +1224,13 @@ function UploadForm({ onDone }: { onDone: (ok: boolean) => void }) {
               <span>What is it</span>
               <select
                 value={v.kind}
-                onChange={(e) => set("kind", e.target.value)}
+                onChange={(e) =>
+                  setV({
+                    ...v,
+                    kind: e.target.value,
+                    lensPhoto: e.target.value === "photo" && v.lensPhoto,
+                  })
+                }
               >
                 <option value="photo">Photo</option>
                 <option value="screen-recording">Screen recording</option>
@@ -1264,7 +1270,7 @@ function UploadForm({ onDone }: { onDone: (ok: boolean) => void }) {
                 I checked every frame: no personal photos, faces, names,
                 messages or notifications.
               </label>
-              {file?.type.startsWith("image/") && (
+              {file?.type.startsWith("image/") && v.kind === "photo" && (
                 <label className="gw-check">
                   <input
                     type="checkbox"
@@ -1422,8 +1428,12 @@ function AssetPanel({
               </dd>
             </>
           )}
-          <dt>Why</dt>
-          <dd>{r.reason}</dd>
+          {r.reason !== "Made by our team" && (
+            <>
+              <dt>Why</dt>
+              <dd>{r.reason}</dd>
+            </>
+          )}
           <dt>People or brands</dt>
           <dd>{r.peopleOrBrands ? "Visible" : "None"}</dd>
           {r.decision && (
@@ -1454,9 +1464,11 @@ function AssetPanel({
               />
             </label>
             <div className="btns">
-              <button className="btn" onClick={() => void decide("cleared")}>
-                Clear for use
-              </button>
+              {a.rightsStatus !== "cleared" && (
+                <button className="btn" onClick={() => void decide("cleared")}>
+                  Clear for use
+                </button>
+              )}
               <button className="btn" onClick={() => void decide("blocked")}>
                 Block
               </button>

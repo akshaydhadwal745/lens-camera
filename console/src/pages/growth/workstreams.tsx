@@ -202,8 +202,12 @@ const STATS: Record<Workstream, (ws: Workspace) => ReactNode> = {
       />
       <Stat
         label="Posts planned"
-        value={ws.posts.filter((p) => p.status !== "published").length}
-        sub="ideas, drafts and approved"
+        value={
+          ws.posts.filter(
+            (p) => p.status !== "published" && p.status !== "archived",
+          ).length
+        }
+        sub="ideas, drafts, in review and approved"
       />
       <Stat
         label="Visits from posts"
