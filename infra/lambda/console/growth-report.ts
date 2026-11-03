@@ -503,7 +503,7 @@ export const CONTENT_SCHEMA = {
           pillar: { type: 'string', description: 'one of the brand kit pillars' },
           hook: { type: 'string' },
           page: { type: 'string', description: 'website path the post points to, e.g. /guides/google-photos-storage-full/' },
-          dayOffset: { type: 'number', description: 'suggested days from today to publish (0–14)' },
+          dayOffset: { type: 'number', description: 'suggested days from today to publish (0–14); for a moment task, days from the moment\'s day (-14 to 7)' },
           why: { type: 'string', description: 'why this post, for whom, and which goal or trend it serves' },
           slides: { type: 'array', maxItems: 10, items: { type: 'object', additionalProperties: false, required: ['headline', 'body', 'visual'], properties: { headline: { type: 'string' }, body: { type: 'string' }, visual: { type: 'string' } } } },
           script: { type: 'array', maxItems: 12, items: { type: 'object', additionalProperties: false, required: ['seconds', 'onScreen', 'visual'], properties: { seconds: { type: 'number' }, onScreen: { type: 'string' }, visual: { type: 'string' } } } },
