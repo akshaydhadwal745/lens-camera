@@ -15,8 +15,8 @@ export function privateHost(host: string): boolean {
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
 }
 
-/** Load the page in Chromium and return the HTML after scripts ran. */
-export async function renderPage(url: string, timeoutMs = 25_000): Promise<{ status: number; html: string; finalUrl: string }> {
+/** Headless Chromium: the Lambda build, or GROWTH_CHROME locally. Also draws content images (growth-media.ts). */
+export async function launchBrowser() {
   const puppeteer = await import('puppeteer-core');
   let executablePath = process.env.GROWTH_CHROME ?? '';
   let args = ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'];
@@ -25,7 +25,12 @@ export async function renderPage(url: string, timeoutMs = 25_000): Promise<{ sta
     executablePath = await chromium.executablePath();
     args = chromium.args;
   }
-  const browser = await puppeteer.launch({ executablePath, args, headless: true });
+  return puppeteer.launch({ executablePath, args, headless: true });
+}
+
+/** Load the page in Chromium and return the HTML after scripts ran. */
+export async function renderPage(url: string, timeoutMs = 25_000): Promise<{ status: number; html: string; finalUrl: string }> {
+  const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 LensGrowthAudit/1.0');
