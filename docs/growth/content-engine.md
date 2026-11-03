@@ -150,7 +150,7 @@ The owner gives 0 hours a week to growth (T-26), so the Console's growth agent h
 ## Moments feed (owner request 2026-11-02; built before phase 3)
 Timely content around events: **Content → Moments** lists the next 30 days, best fit for Lens first on each day.
 - **Daily pull** (`api/growth-moments.ts`, maintenance job) into `GROWTH / MOMENT#<id>` (ttl 14 days after the day) and `GROWTH / MOMENTS` (source status).
-- **Sources, no key:** Google's public holiday calendars (IN, US, GB, AU, CA; merged across countries), the seasons list in code (wedding seasons, summer holidays, monsoon trips, graduation, back to school, New Year trips), Google Trends "trending now" (only searches that are events).
+- **Sources, no key:** Google's public holiday calendars (IN, US, GB, AU, CA; merged across countries), the seasons list in code (wedding seasons, summer holidays, monsoon trips, graduation, back to school, New Year trips), Google Trends "trending now" (only searches that are events, with at least 50K searches: a player's name or a local league is not a moment).
 - **Sources with a free key** in SSM `/lens/growth/moments` (JSON `{"cricketKey","footballKey","ticketmasterKey"}`): CricketData.org (India internationals and finals), football-data.org (World Cup, Euros, Champions League, finals), Ticketmaster (music). Without a key the source shows "not connected".
 - **Score** (0–100) = photo/video moment × audience reach. **Angle** picks the Lens feature: Night mode for lights and fireworks, event albums for weddings and get-togethers, free up space for matches and concerts, backup for trips. Hashtags: the event's own (`#Diwali`, `#Diwali2026`) plus one photo tag.
 - **Never listed:** elections, disasters, days of mourning and remembrance (`SENSITIVE`).
