@@ -955,6 +955,10 @@ PM=$(echo "$R" | j .post.id); P=$(echo "$R" | j '.post.problems.join("|")'); [[ 
 R=$(capi PUT "/growth/posts/$PM" -d "{\"assets\":[{\"id\":\"$AL\",\"role\":\"media\"}]}"); [[ $(echo "$R" | j '.post.problems.length') == 0 ]] && ok "library: with a cleared Lens photo the post can say 'shot on Lens'" || fail "lens photo: $R"
 [[ $(capi DELETE "/growth/assets/$AL" | j .error) == "Used in"* ]] && ok "library: files in use can't be deleted" || fail "library: files in use can't be deleted"
 capi DELETE "/growth/posts/$PM" >/dev/null; capi DELETE "/growth/assets/$AL" >/dev/null; capi DELETE "/growth/assets/$AN" >/dev/null
+# Moments feed (read-only here: "Make content" would create a real task).
+R=$(capi GET /growth/moments); [[ $(echo "$R" | j '.moments.constructor.name') == Array && $(echo "$R" | j '.sources.constructor.name') == Object ]] && ok "moments: the feed lists moments and its sources" || fail "moments: the feed lists moments and its sources"
+[[ $(capi POST /growth/moments/nope/content | j .error) == "Bad moment id" ]] && ok "moments: a bad id is refused" || fail "moments: a bad id is refused"
+[[ $(capi POST /growth/moments/0000000000/content | j .error) == "This moment is no longer in the feed" ]] && ok "moments: an unknown moment makes no task" || fail "moments: an unknown moment makes no task"
 ddbdel "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}"
 call DELETE /account "$TH" -d '{"confirm":"DELETE"}' >/dev/null
 echo "ALL PASSED"

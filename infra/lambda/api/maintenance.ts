@@ -14,7 +14,9 @@ import { resumeStalled, runMove, settleAwaiting } from './drive-move';
 import { resumeExports, runExport } from './export';
 import { lambdaContinue } from './continue';
 import { pullIntegrations } from './growth-integrations';
+import { pullMoments } from './growth-moments';
 import { pullGa4Snapshot, pullSearchConsole } from './search-console';
+import { trendingNow } from '../console/growth-sources';
 
 type Event = {
   now?: unknown;
@@ -95,6 +97,7 @@ export async function handler(event: Event, context?: { getRemainingTimeInMillis
   if (!simulated) Object.assign(stats, { searchConsole: await pullSearchConsole(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
   if (!simulated) Object.assign(stats, { ga4: await pullGa4Snapshot(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
   if (!simulated) Object.assign(stats, { integrations: await pullIntegrations(now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
+  if (!simulated) Object.assign(stats, { moments: await pullMoments(trendingNow, now).catch((e: Error) => `failed: ${e.message.slice(0, 120)}`) });
   console.log('maintenance', JSON.stringify(stats));
   return stats;
 }

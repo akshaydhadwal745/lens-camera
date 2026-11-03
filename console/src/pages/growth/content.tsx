@@ -3,7 +3,7 @@
 // packages from social tasks; a person edits, a manager approves; nothing is published unapproved.
 import { useState } from "react";
 
-import { api, get } from "../../api";
+import { api, get, post } from "../../api";
 import { Card, Loaded, useLoad } from "../../ui";
 import {
   can,
@@ -74,7 +74,8 @@ const isVideo = (f: string) => f === "reel" || f === "short";
 
 /** Same count as the server (growth-content-rules.ts textLength): X shortens every link to 23 characters. */
 function textLength(text: string, platform: string) {
-  const t = platform === "x" ? text.replace(/https?:\/\/\S+/g, "x".repeat(23)) : text;
+  const t =
+    platform === "x" ? text.replace(/https?:\/\/\S+/g, "x".repeat(23)) : text;
   return [...t].length;
 }
 
@@ -93,7 +94,9 @@ function postText(v: PostVariant, link: string, platform: string) {
 // ---------- the studio ----------
 
 export function ContentStudio({ ws }: { ws: Workspace }) {
-  const [tab, setTab] = useState<"posts" | "calendar" | "library">("posts");
+  const [tab, setTab] = useState<"posts" | "calendar" | "moments" | "library">(
+    "posts",
+  );
   const [edit, setEdit] = useState<Post | "new" | null>(null);
   const [archived, setArchived] = useState(false);
   const kit = useLoad(() => get<BrandPage>("/growth/brand"), []);
@@ -108,6 +111,7 @@ export function ContentStudio({ ws }: { ws: Workspace }) {
               [
                 ["posts", "Posts"],
                 ["calendar", "Calendar"],
+                ["moments", "Moments"],
                 ["library", "Library"],
               ] as const
             ).map(([k, label]) => (
@@ -132,6 +136,8 @@ export function ContentStudio({ ws }: { ws: Workspace }) {
     >
       {tab === "library" ? (
         <Library ws={ws} />
+      ) : tab === "moments" ? (
+        <Moments ws={ws} />
       ) : tab === "calendar" ? (
         <CalendarGrid ws={ws} onOpen={setEdit} />
       ) : (
@@ -1629,5 +1635,165 @@ function BrandForm({ ws, initial }: { ws: Workspace; initial: Brand }) {
         )}
       </fieldset>
     </Card>
+  );
+}
+
+// ---------- moments (the next 30 days of events worth a timely post) ----------
+
+type Moment = {
+  id: string;
+  title: string;
+  kind: "festival" | "holiday" | "season" | "match" | "concert" | "trend";
+  day: string;
+  ends?: string;
+  time?: string;
+  countries: string[];
+  source: string;
+  url: string;
+  score: number;
+  angle: string;
+  formats: string[];
+  hashtags: string[];
+  taskId?: string;
+};
+const KIND_LABEL: Record<Moment["kind"], string> = {
+  festival: "Festival",
+  holiday: "Holiday",
+  season: "Season",
+  match: "Match",
+  concert: "Concert",
+  trend: "Trending",
+};
+/** Keyed sources: what to add to SSM /lens/growth/moments (free accounts) to switch them on. */
+const SOURCE_SETUP: Record<string, string> = {
+  cricket: "cricketKey (cricketdata.org)",
+  football: "footballKey (football-data.org)",
+  concerts: "ticketmasterKey (developer.ticketmaster.com)",
+};
+const weekday = (d: string) =>
+  new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short" });
+
+function Moments({ ws }: { ws: Workspace }) {
+  const [n, setN] = useState(0);
+  const state = useLoad(
+    () =>
+      get<{
+        moments: Moment[];
+        sources: Record<string, string>;
+        checkedAt: number | null;
+      }>("/growth/moments"),
+    [n],
+  );
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const make = async (m: Moment) => {
+    setBusy(m.id);
+    setError("");
+    try {
+      const r = await post<{ taskId: string }>(
+        `/growth/moments/${m.id}/content`,
+      );
+      setN((x) => x + 1);
+      openTask(r.taskId);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <Loaded state={state}>
+      {({ moments, sources, checkedAt }) => (
+        <div className="gw-stack">
+          <p className="muted small">
+            Festivals, holidays, seasons, big matches, concerts and trending
+            searches in the next 30 days, best fit for Lens first on each day.
+            “Make content” creates a task the agent drafts posts from (before,
+            on and after the day). Elections, disasters and days of mourning are
+            never listed.
+          </p>
+          {error && <p className="notice error">{error}</p>}
+          {moments.length ? (
+            <ul className="gw-list">
+              {moments.map((m) => (
+                <li key={m.id} className="gw-card">
+                  <span className="gw-row">
+                    <span className="gw-task-title">
+                      {weekday(m.day)} {shortDate(m.day)}
+                      {m.ends ? ` – ${shortDate(m.ends)}` : ""} · {m.title}
+                    </span>
+                    <span className="gw-row">
+                      <Chip
+                        tone={
+                          m.score >= 80
+                            ? "good"
+                            : m.score >= 60
+                              ? "acc"
+                              : "plain"
+                        }
+                      >
+                        Fit {m.score}
+                      </Chip>
+                      <Chip>{KIND_LABEL[m.kind]}</Chip>
+                      <span className="muted small">
+                        {m.countries.includes("WW")
+                          ? "Worldwide"
+                          : m.countries.join(", ")}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="small">{m.angle}</span>
+                  <span className="muted small">
+                    {m.formats.join(", ")} · {m.hashtags.join(" ")} ·{" "}
+                    <a href={m.url} target="_blank" rel="noreferrer">
+                      {m.source}
+                    </a>
+                  </span>
+                  <span>
+                    {m.taskId ? (
+                      <button
+                        className="btn ghost small"
+                        onClick={() => openTask(m.taskId!)}
+                      >
+                        Open task {m.taskId}
+                      </button>
+                    ) : (
+                      can(ws, "growth.contribute") && (
+                        <button
+                          className="btn"
+                          disabled={!!busy}
+                          onClick={() => make(m)}
+                        >
+                          {busy === m.id ? "Creating…" : "Make content"}
+                        </button>
+                      )
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">
+              No moments yet: the daily pull fills this list (around 11:30 IST).
+            </p>
+          )}
+          <p className="muted small">
+            Sources
+            {checkedAt
+              ? ` (checked ${new Date(checkedAt).toLocaleString("en-GB")})`
+              : ""}
+            :{" "}
+            {Object.entries(sources)
+              .filter(([k]) => k !== "sensitiveSkipped")
+              .map(([k, v]) =>
+                v === "not connected" && SOURCE_SETUP[k]
+                  ? `${k}: not connected (add ${SOURCE_SETUP[k]})`
+                  : `${k}: ${v}`,
+              )
+              .join(" · ") || "not run yet"}
+          </p>
+        </div>
+      )}
+    </Loaded>
   );
 }

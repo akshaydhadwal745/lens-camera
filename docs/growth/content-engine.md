@@ -147,6 +147,15 @@ The owner gives 0 hours a week to growth (T-26), so the Console's growth agent h
 - YouTube OAuth in the existing GCP project `lens-5df67`.
 - Free media API keys.
 
+## Moments feed (owner request 2026-11-02; built before phase 3)
+Timely content around events: **Content → Moments** lists the next 30 days, best fit for Lens first on each day.
+- **Daily pull** (`api/growth-moments.ts`, maintenance job) into `GROWTH / MOMENT#<id>` (ttl 14 days after the day) and `GROWTH / MOMENTS` (source status).
+- **Sources, no key:** Google's public holiday calendars (IN, US, GB, AU, CA; merged across countries), the seasons list in code (wedding seasons, summer holidays, monsoon trips, graduation, back to school, New Year trips), Google Trends "trending now" (only searches that are events).
+- **Sources with a free key** in SSM `/lens/growth/moments` (JSON `{"cricketKey","footballKey","ticketmasterKey"}`): CricketData.org (India internationals and finals), football-data.org (World Cup, Euros, Champions League, finals), Ticketmaster (music). Without a key the source shows "not connected".
+- **Score** (0–100) = photo/video moment × audience reach. **Angle** picks the Lens feature: Night mode for lights and fireworks, event albums for weddings and get-togethers, free up space for matches and concerts, backup for trips. Hashtags: the event's own (`#Diwali`, `#Diwali2026`) plus one photo tag.
+- **Never listed:** elections, disasters, days of mourning and remembrance (`SENSITIVE`).
+- **Make content** (`POST /growth/moments/<id>/content`, contributors) creates one social task (due 3 days before) with the moment in `spec.moment` and the rules for event content: names only as words or hashtags, no logos or footage, never "official", "partner" or "sponsor". The agent drafts packages as for any social task; their days count from the moment (−14 to +7, never in the past).
+
 ## Reuse (don't rebuild)
 - `postFields`/`postSave`/`postLink`/`codeOf` (growth-records.ts); `calendarItems`/`calendarPage` (growth-content.ts); `runTextDraft`, `runClaude`, `takeLock`/`releaseLock`, `markJob`/`finishJob`, `systemUpdate`, `sendToOwners` (growth.ts).
 - `renderPage` + `privateHost` (growth-render.ts); `competitorHosts` allowlist pattern; MCP `LIMITS` and level model (growth-mcp.ts).
@@ -183,4 +192,5 @@ The owner gives 0 hours a week to growth (T-26), so the Console's growth agent h
 | 1 fix | Approval kept on non-content edits: content compared with sorted keys (`stable()` in growth-records.ts; DynamoDB doesn't keep map key order, which wrongly took approval back and blocked "Mark published"). |
 | 1 fix | X length counts every link as 23 characters, like X does (`textLength` in growth-content-rules.ts; same count in the editor). The 85-character tracking link used to count in full. |
 | 2 library and rights | Built 2026-11-02: bucket `GrowthContent` (console-stack.ts; `u/` staging 1 day, `a/` assets, `e/` evidence, `x/` exports 30 days; CSP allows its regional host for img/media/connect), `growth-rights.ts` (licence keys, `licenseVerdict` cleared/review/blocked, `creditLine`, `effectiveStatus`: a person can clear a review, never a blocked NC/ND licence), `growth-assets.ts` (`GET /growth/assets` with 5-minute view links and where used; `POST /growth/assets/upload` asks who made it: our team → personal-content check required, "Lens photo" flag; someone else → source page + licence + author; `POST …/<id>/done` checks size and file signature, then moves u/ → a/; `PUT …/<id>/rights` managers, note required to clear; `DELETE` only when unused). Posts take `assets` [{id, role: media/background/reference}]; problems: not uploaded, rights not cleared, licensed stock as the main visual; "shot on Lens" allowed only with a cleared Lens photo; export adds credit lines. Console: Library tab (filters, upload, rights panel), Media picker in the editor. Tests: growth-rights (4), growth-assets (5), growth-records (1); e2e "library:" checks. |
+| Moments | Built 2026-11-03: `api/growth-moments.ts` (+ tests), `console/growth-moments.ts` (+ tests), Moments tab, e2e "moments:" checks. Keyed sources wait for free keys. |
 | 3–7 | Not started |

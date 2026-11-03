@@ -28,6 +28,7 @@ import { competitorHosts, watchCompetitors } from './growth-competitors';
 import { runSeoAudit } from './growth-seo';
 import { createTask, getTask, listTasks, systemUpdate, upsertAiTask, type Task } from './growth-tasks';
 import { oppTask, propTask, recTask, slug as taskSlug, tasksForAnalyst } from './growth-workspace';
+import { packageDay } from './growth-moments';
 import { CONTENT_SCHEMA, CONTENT_SYSTEM, MONTHLY_SCHEMA, MONTHLY_SYSTEM, TEXT_SCHEMA, TEXT_SYSTEM, unsupportedNumbers, type ContentDraft, type MonthlyAi, type TextDraft } from './growth-report';
 import { brand as loadBrand } from './growth-brand';
 import { codeOf, platformLink, postFields, postProblems } from './growth-records';
@@ -739,7 +740,8 @@ function draftTask(t: Task): string {
   if (s.kind === 'competitor')
     return `COMPETITOR RESEARCH (task ${t.id}): ${s.name} (${s.site}).\nRead their homepage, pricing and feature pages with competitor_page (start from ${s.site}; follow links you see in the text), and our own pages (audit_page) and docs/growth/product-facts.md. ${t.description}`;
   // A task written by a person: the title, description, evidence and page are the brief.
-  return [`APPROVED TASK ${t.id}: ${t.title}`, t.description, t.evidence.length ? `Evidence: ${t.evidence.map((e) => e.text).join(' | ')}` : '', t.links.page ? `Page: ${t.links.page}` : '', t.links.keyword ? `Keyword: ${t.links.keyword}` : '', t.metric.label ? `Success metric: ${t.metric.label}` : '']
+  const momentLine = s.moment?.day ? `Package days (dayOffset) count from the moment's day ${s.moment.day}: -14 to 7 (-3 = three days before, 0 = the day, 1 = the day after).` : '';
+  return [`APPROVED TASK ${t.id}: ${t.title}`, t.description, momentLine, t.evidence.length ? `Evidence: ${t.evidence.map((e) => e.text).join(' | ')}` : '', t.links.page ? `Page: ${t.links.page}` : '', t.links.keyword ? `Keyword: ${t.links.keyword}` : '', t.metric.label ? `Success metric: ${t.metric.label}` : '']
     .filter(Boolean)
     .join('\n');
 }
@@ -828,7 +830,7 @@ async function runContentDraft(t: Task, by: string, started: number) {
   if (!packages.length) throw new Error(`No content. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
   const saved: { id: string; name: string; format: string; problems: string[] }[] = [];
   for (const x of packages) {
-    const f = postFields({ ...x, title: x.name, body: x.why, status: 'in_review', owner: t.owner === 'agent' ? '' : t.owner, taskId: t.id, realPhoto: false, date: new Date(started + Math.max(0, Math.min(14, Math.round(x.dayOffset || 0))) * DAY).toISOString().slice(0, 10), page: /^\/[\w\-/]*$/.test(x.page) ? x.page : '/' });
+    const f = postFields({ ...x, title: x.name, body: x.why, status: 'in_review', owner: t.owner === 'agent' ? '' : t.owner, taskId: t.id, realPhoto: false, date: packageDay(started, x.dayOffset, ((t.spec as { moment?: { day?: string } } | undefined)?.moment)?.day), page: /^\/[\w\-/]*$/.test(x.page) ? x.page : '/' });
     if (!Object.keys(f.variants).length) continue;
     const code = codeOf(f.title || f.hook || 'post');
     const problems = postProblems(f, code);

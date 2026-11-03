@@ -22,6 +22,7 @@ import { keywordSave, prospectSave, seoPage } from './growth-seo';
 import { goalUpdate, settingsUpdate } from './growth-goals';
 import { assetDelete, assetDone, assetRights, assetsPage, assetUpload } from './growth-assets';
 import { brandPage, brandUpdate } from './growth-brand';
+import { momentContent, momentsPage } from './growth-moments';
 import { partnerSave, postApprove, postExport, postSave, recordDelete } from './growth-records';
 import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
 import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
@@ -135,6 +136,9 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (seg[0] === 'growth' && seg[1] === 'assets' && seg[2] && seg[3] === 'done' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => assetDone(seg[2], email));
     if (seg[0] === 'growth' && seg[1] === 'assets' && seg[2] && seg[3] === 'rights' && seg.length === 4 && method === 'PUT') return await allowed('growth.write', () => assetRights(seg[2], req, email));
     if (seg[0] === 'growth' && seg[1] === 'assets' && seg[2] && seg.length === 3 && method === 'DELETE') return await allowed('growth.write', () => assetDelete(seg[2], email));
+    // Moments feed: anyone in growth sees it; contributors turn a moment into a social task.
+    if (route === 'GET /growth/moments') return await allowed('growth', () => momentsPage());
+    if (seg[0] === 'growth' && seg[1] === 'moments' && seg[2] && seg[3] === 'content' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => momentContent(seg[2], email));
     if (route === 'GET /growth/brand') return await allowed('growth', () => brandPage());
     if (route === 'PUT /growth/brand') return await allowed('growth.write', () => brandUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'approve' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
