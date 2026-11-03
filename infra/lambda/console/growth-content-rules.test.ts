@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { cleanHashtags, packageProblems, postText, readPackage, variantProblems, type Variant } from './growth-content-rules';
+import { cleanHashtags, packageProblems, postText, readPackage, textLength, variantProblems, type Variant } from './growth-content-rules';
 
 const v = (o: Partial<Variant> = {}): Variant => ({ caption: 'Phone full? Back up every photo at full quality.', hashtags: ['#photobackup'], cta: 'Try Lens free', title: '', altText: 'A phone showing Backup complete', ...o });
 const link = 'https://lens.instagrowapp.com/?utm_source=x&utm_medium=social&utm_campaign=t-1a2b';
@@ -26,6 +26,13 @@ test('platform limits and required pieces', () => {
   assert.match(variantProblems('instagram', 'post', v({ hashtags: Array.from({ length: 9 }, (_, i) => `#t${i}`) }), link, false).join(), /use at most 8/);
   assert.match(variantProblems('pinterest', 'pin', v({ title: 'Pin', altText: '' }), link, false).join(), /alt text/);
   assert.deepEqual(variantProblems('reddit', 'post', v({ title: 'How do you back up 4K video?', hashtags: [], altText: '' }), link, false), []);
+});
+
+test('X counts every link as 23 characters', () => {
+  assert.equal(textLength(`see ${link}`, 'x'), 4 + 23);
+  assert.equal(textLength(`see ${link}`, 'linkedin'), 4 + link.length);
+  // 200 + cta + 23-char link + hashtag fits 280 although the full link alone is 85 characters.
+  assert.deepEqual(variantProblems('x', 'post', v({ caption: 'a'.repeat(200) }), link, false), []);
 });
 
 test('forbidden and untrue claims block approval', () => {

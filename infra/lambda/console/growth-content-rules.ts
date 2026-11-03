@@ -47,13 +47,19 @@ export function postText(v: Variant, link: string, platform: Platform): string {
   return [v.caption.trim(), v.cta.trim(), linkLine, tags].filter(Boolean).join('\n\n');
 }
 
+/** Length as the platform counts it: X shortens every link to 23 characters (t.co). */
+export function textLength(text: string, platform: Platform): number {
+  const t = platform === 'x' ? text.replace(/https?:\/\/\S+/g, 'x'.repeat(23)) : text;
+  return [...t].length;
+}
+
 /** Problems that stop approval. Empty = this platform's version can be approved. */
 export function variantProblems(platform: Platform, format: Format, v: Variant, link: string, realPhoto: boolean): string[] {
   const l = LIMITS[platform];
   const p: string[] = [];
   if (!l.formats.includes(format)) p.push(`${platform} doesn't take a ${format}`);
   if (!v.caption.trim()) p.push(`${platform}: write a caption`);
-  const len = [...postText(v, link, platform)].length;
+  const len = textLength(postText(v, link, platform), platform);
   if (len > l.caption) p.push(`${platform}: ${len} characters, the limit is ${l.caption}`);
   if (l.title && !v.title.trim()) p.push(`${platform}: add a title`);
   if (l.title && [...v.title].length > l.title) p.push(`${platform}: title is ${[...v.title].length} characters, the limit is ${l.title}`);
