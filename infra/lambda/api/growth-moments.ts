@@ -182,9 +182,18 @@ export function seasonMoments(today: string, to: string): Raw[] {
 const EVENTISH = /\bvs?\b|v\/s|match|final|concert|tour|festival|wedding|eclipse|meteor|fireworks|parade|marathon|premiere|launch event/i;
 const EVENT_NEWS = /\bvs?\b|v\/s|\bmatch\b|\bfinal\b|concert|tour\b/i;
 
-/** Google Trends "trending now" (official RSS): searches that are themselves a moment. */
+/** "200K+", "1M+", "5,000+" → searches. */
+export const trafficCount = (t: string) => {
+  const m = t.replace(/,/g, '').match(/([\d.]+)\s*([KM]?)/i);
+  return m ? Math.round(Number(m[1]) * (m[2].toUpperCase() === 'M' ? 1e6 : m[2].toUpperCase() === 'K' ? 1e3 : 1)) : 0;
+};
+/** Below this a trend is a niche search (a player's name, a local league), not a moment. */
+export const TREND_MIN = 50_000;
+
+/** Google Trends "trending now" (official RSS): big searches that are themselves a moment. */
 export function trendMoments(items: { title: string; traffic: string; news: string[] }[], country: string, today: string): Raw[] {
   return items
+    .filter((t) => trafficCount(t.traffic) >= TREND_MIN)
     .filter((t) => EVENTISH.test(t.title) || EVENT_NEWS.test(t.news.join(' ')))
     .slice(0, 5)
     .map((t) => ({ title: t.title, kind: 'trend' as const, day: today, countries: [country], source: `Google Trends (${t.traffic || 'trending'})`, url: `https://trends.google.com/trending?geo=${country}` }));

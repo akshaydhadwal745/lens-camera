@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { concertMoments, cricketMoments, finish, footballMoments, holidayMoments, parseIcs, SENSITIVE, seasonMoments, trendMoments } from './growth-moments';
+import { concertMoments, cricketMoments, finish, footballMoments, holidayMoments, parseIcs, SENSITIVE, seasonMoments, trafficCount, trendMoments } from './growth-moments';
 
 const ics = (events: [string, string, string][]) =>
   ['BEGIN:VCALENDAR', ...events.flatMap(([d, s, desc]) => ['BEGIN:VEVENT', `DTSTART;VALUE=DATE:${d}`, `SUMMARY:${s}`, `DESCRIPTION:${desc}`, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
@@ -71,6 +71,11 @@ test('trends: only searches that are events', () => {
     '2026-11-03',
   );
   assert.deepEqual(t.map((x) => x.title), ['india vs new zealand', 'new zealand cricket team']);
+  // Niche searches (a player, a local league) are not moments.
+  assert.deepEqual(trendMoments([{ title: 'lumbini lions vs pokhara avengers', traffic: '200+', news: [] }, { title: 'andrey rublev', traffic: '5000+', news: ['Rublev vs Tien'] }], 'US', '2026-11-03'), []);
+  assert.equal(trafficCount('200K+'), 200_000);
+  assert.equal(trafficCount('1M+'), 1_000_000);
+  assert.equal(trafficCount('5,000+'), 5000);
 });
 
 test('keyed sources map to moments (cricket, football, concerts)', () => {
