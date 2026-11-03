@@ -561,6 +561,8 @@ function PostEditor({
             )}
           </Loaded>
 
+          {post?.id && <Images ws={ws} post={post} />}
+
           <div className="gw-field">
             <span>Platforms</span>
             <div className="chips">
@@ -1014,6 +1016,10 @@ export type Asset = {
   id: string;
   name: string;
   kind: string;
+  postId?: string; // renders: the post they were drawn for
+  label?: string;
+  w?: number;
+  h?: number;
   origin: string;
   mime: string;
   bytes: number;
@@ -1795,5 +1801,96 @@ function Moments({ ws }: { ws: Workspace }) {
         </div>
       )}
     </Loaded>
+  );
+}
+
+// ---------- images drawn from a post (render engine, growth-media.ts) ----------
+
+function Images({ ws, post }: { ws: Workspace; post: Post }) {
+  const [n, setN] = useState(0);
+  const lib = useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), [n]);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState("");
+  const start = async () => {
+    setError("");
+    setRunning(true);
+    const began = Date.now();
+    try {
+      await api("POST", `/growth/posts/${post.id}/render`, {});
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const j = await get<{
+          render: unknown;
+          renderDone: {
+            postId: string;
+            at: number;
+            error: string | null;
+          } | null;
+        }>("/growth/jobs");
+        const done = j.renderDone;
+        if (!j.render && done?.postId === post.id && done.at >= began - 1000) {
+          if (done.error) setError(done.error);
+          break;
+        }
+        if (Date.now() - began > 6 * 60_000) {
+          setError("Still drawing after 6 minutes. Check again in a while.");
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setRunning(false);
+    setN((x) => x + 1);
+  };
+  return (
+    <div className="gw-field">
+      <span className="gw-row">
+        <span>Images</span>
+        {can(ws, "growth.contribute") && (
+          <button className="btn small" disabled={running} onClick={start}>
+            {running ? "Drawing…" : "Make images"}
+          </button>
+        )}
+      </span>
+      <span className="muted small">
+        Drawn from the saved post (hook and slides) with the brand kit, at each
+        platform’s size. Save your edits first; making them again replaces the
+        old ones.
+      </span>
+      {error && <p className="notice error">{error}</p>}
+      <Loaded state={lib}>
+        {({ assets }) => {
+          const mine = assets
+            .filter((a) => a.kind === "render" && a.postId === post.id)
+            .sort((a, b) =>
+              (a.label ?? "").localeCompare(b.label ?? "", undefined, {
+                numeric: true,
+              }),
+            );
+          return mine.length ? (
+            <div className="gw-assets">
+              {mine.map((a) => (
+                <a
+                  key={a.id}
+                  className="gw-card"
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                >
+                  <Thumb a={a} />
+                  <span className="small">
+                    {a.label} · {a.w}×{a.h}
+                  </span>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <span className="muted small">No images yet.</span>
+          );
+        }}
+      </Loaded>
+    </div>
   );
 }

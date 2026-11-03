@@ -501,10 +501,10 @@ async function releaseLock(at: number, error?: string) {
 
 // ---------- what the agent is doing now (every growth page shows it; buttons wait for it) ----------
 //   GROWTH / RUNNING          the analyst lock above: weekly analysis, a draft (ref = task) or a monthly review (ref = month)
-//   GROWTH / JOB#<name>       jobs outside the lock: seoAudit, competitors { startedAt, by, finishedAt?, error? }
+//   GROWTH / JOB#<name>       jobs outside the lock: seoAudit, competitors, render (+ postId) { startedAt, by, finishedAt?, error? }
 
 const JOB_STALE = 15 * 60_000;
-export type JobName = 'seoAudit' | 'competitors';
+export type JobName = 'seoAudit' | 'competitors' | 'render';
 
 export async function markJob(name: JobName, by: string) {
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `JOB#${name}`, startedAt: Date.now(), by } }));
@@ -521,14 +521,17 @@ export function jobsFrom(run: Record<string, any> | undefined, rows: Partial<Rec
   const who = (by: string) => by.replace(/^(draft|monthly):/, '');
   const analyst = run?.at && now - run.at < STALE ? { kind: String(run.by).startsWith('draft:') ? 'draft' : String(run.by).startsWith('monthly:') ? 'monthly' : 'report', by: who(String(run.by)), at: run.at as number, ref: (run.ref as string | undefined) ?? null } : null;
   const job = (r?: Record<string, any>) => (r?.startedAt && !(r.finishedAt >= r.startedAt) && now - r.startedAt < JOB_STALE ? { at: r.startedAt as number, by: String(r.by ?? '') } : null);
-  return { analyst, seoAudit: job(rows.seoAudit), competitors: job(rows.competitors), lastError: run?.lastError ? { message: String(run.lastError), at: run.lastErrorAt as number } : null };
+  const r = rows.render;
+  const render = job(r) ? { ...job(r)!, postId: String(r!.postId ?? '') } : null;
+  const renderDone = r?.finishedAt >= r?.startedAt ? { postId: String(r!.postId ?? ''), at: r!.finishedAt as number, error: (r!.error as string | undefined) ?? null } : null;
+  return { analyst, seoAudit: job(rows.seoAudit), competitors: job(rows.competitors), render, renderDone, lastError: run?.lastError ? { message: String(run.lastError), at: run.lastErrorAt as number } : null };
 }
 
 /** GET /growth/jobs */
 export async function jobsPage(): Promise<Res> {
   const get = (sk: string) => ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk } })).then((r) => r.Item);
-  const [run, seoAudit, competitors] = await Promise.all([get('RUNNING'), get('JOB#seoAudit'), get('JOB#competitors')]);
-  return json(200, jobsFrom(run, { seoAudit, competitors }));
+  const [run, seoAudit, competitors, render] = await Promise.all([get('RUNNING'), get('JOB#seoAudit'), get('JOB#competitors'), get('JOB#render')]);
+  return json(200, jobsFrom(run, { seoAudit, competitors, render }));
 }
 
 // ---------- recommendations ledger ----------

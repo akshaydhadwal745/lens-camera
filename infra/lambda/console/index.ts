@@ -23,6 +23,7 @@ import { goalUpdate, settingsUpdate } from './growth-goals';
 import { assetDelete, assetDone, assetRights, assetsPage, assetUpload } from './growth-assets';
 import { brandPage, brandUpdate } from './growth-brand';
 import { momentContent, momentsPage } from './growth-moments';
+import { renderStart } from './growth-media';
 import { partnerSave, postApprove, postExport, postSave, recordDelete } from './growth-records';
 import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
 import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
@@ -144,6 +145,7 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'approve' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
       return await allowed('growth.write', () => postApprove(seg[2], email, method === 'DELETE'));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'export' && seg.length === 4 && method === 'GET') return await allowed('growth', () => postExport(seg[2]));
+    if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'render' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => renderStart(seg[2], email));
     if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'PUT')
       return await allowed('growth.contribute', () => (seg[1] === 'partners' ? partnerSave(seg[2], req, email) : postSave(seg[2], req, email)));
     if (seg[0] === 'growth' && (seg[1] === 'partners' || seg[1] === 'posts') && seg[2] && seg.length === 3 && method === 'DELETE')
