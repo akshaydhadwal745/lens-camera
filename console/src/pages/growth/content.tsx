@@ -72,6 +72,12 @@ const PLATFORM_LABEL: Record<string, string> = {
 const IMAGE_FORMATS = ["post", "carousel", "story", "pin"];
 const isVideo = (f: string) => f === "reel" || f === "short";
 
+/** Same count as the server (growth-content-rules.ts textLength): X shortens every link to 23 characters. */
+function textLength(text: string, platform: string) {
+  const t = platform === "x" ? text.replace(/https?:\/\/\S+/g, "x".repeat(23)) : text;
+  return [...t].length;
+}
+
 /** Same text the server exports (growth-content-rules.ts postText): Instagram captions carry no link. */
 function postText(v: PostVariant, link: string, platform: string) {
   return [
@@ -386,7 +392,7 @@ function PostEditor({
   const link =
     (platform && post?.links?.[platform]) ||
     "https://lens.instagrowapp.com/… (link appears after saving)";
-  const length = cur ? [...postText(cur, link, platform)].length : 0;
+  const length = cur ? textLength(postText(cur, link, platform), platform) : 0;
 
   return (
     <>
