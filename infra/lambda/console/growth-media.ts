@@ -33,6 +33,7 @@ const SITE = 'lens.instagrowapp.com';
 /** `for`: the platforms this image is posted to. */
 /** `layout`/`screen`: how growth-design.ts draws it; `query`: words to find a scene photo for it. */
 export type Frame = { label: string; w: number; h: number; style: 'cover' | 'slide' | 'cta'; headline: string; body: string; for: Platform[]; index?: number; total?: number; layout: Layout; screen: Screen; query?: string };
+export type RenderablePost = PostLike;
 type PostLike = { id: string; format: string; hook: string; slides: Slide[]; script: Scene[]; variants: Partial<Record<Platform, unknown>>; assets?: AssetRef[] };
 
 // ---------- frames (pure) ----------
@@ -250,7 +251,7 @@ async function bytesOf(a: Asset): Promise<Buffer | undefined> {
   }
 }
 
-const LOOK_MODE: Mode = { system: PHOTO_CHECK_SYSTEM, schema: PHOTO_CHECK_SCHEMA, toolNames: [], mode: 'report', readsFiles: true };
+export const LOOK_MODE: Mode = { system: PHOTO_CHECK_SYSTEM, schema: PHOTO_CHECK_SCHEMA, toolNames: [], mode: 'report', readsFiles: true };
 const SCORE_MODE: Mode = { system: SCORE_SYSTEM, schema: SCORE_SCHEMA, toolNames: [], mode: 'report', readsFiles: true };
 const LOOK_MS = 3 * 60_000; // the AI designer needs the rest of the Lambda's 15 minutes
 const SHEETS_DIR = '/tmp/claude-home';
@@ -266,7 +267,7 @@ export function postBrief(post: PostLike & { title: string }): string {
 }
 
 /** One contact sheet as a JPEG file Claude can open. */
-async function writeSheet(page: Page, images: string[], name: string) {
+export async function writeSheet(page: Page, images: string[], name: string) {
   await page.setViewport({ width: 1600, height: 400 * Math.ceil(images.length / 4), deviceScaleFactor: 1 });
   await page.setContent(sheetHtml(images), { waitUntil: 'load' });
   mkdirSync(SHEETS_DIR, { recursive: true });
@@ -311,7 +312,7 @@ async function lookAtPhotos(photos: { photo: Photo; topic: string }[], brief: st
 }
 
 /** Claude judges the finished images together, as someone seeing the post would. Undefined if it can't. */
-async function scoreImages(page: Page, images: { label: string; png: Buffer }[], brief: string): Promise<{ images: ImageScore[]; hook: number; hookWhy: string } | undefined> {
+export async function scoreImages(page: Page, images: { label: string; png: Buffer }[], brief: string): Promise<{ images: ImageScore[]; hook: number; hookWhy: string } | undefined> {
   const token = await claudeToken();
   if (!token || !images.length) return undefined;
   try {
@@ -330,7 +331,7 @@ async function scoreImages(page: Page, images: { label: string; png: Buffer }[],
  *  topic that Claude says fit this post, and a pool for phone screens (this post's fitting photos first, general
  *  ones only to fill up; licences that need no credit, so tiny tiles never owe one). `dropped`: found photos an
  *  earlier render attached for their credit lines (nobody's choice, and they'd become every scene of this render). */
-async function gatherPhotos(post: PostLike & { title: string }, list: Frame[], browser: Browser) {
+export async function gatherPhotos(post: PostLike & { title: string }, list: Frame[], browser: Browser) {
   const served = new Map<string, { mime: string; body: Buffer }>();
   const kit: KitPhoto[] = [];
   const url = async (a: Asset) => {

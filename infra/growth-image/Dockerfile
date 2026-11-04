@@ -15,7 +15,13 @@ RUN npx esbuild lambda/console/growth-run.ts --bundle --platform=node --target=n
  && node -e "const p=require('./package.json');const d={};for(const k of ['puppeteer-core','@sparticuz/chromium'])d[k]=p.dependencies[k];require('fs').writeFileSync('/out/package.json',JSON.stringify({private:true,dependencies:d}))" \
  && cd /out && npm install --omit=dev --ignore-scripts --no-audit --no-fund
 
+# ffmpeg for reels (growth-video.ts): the same static build as infra/transcoder/Dockerfile.
+FROM public.ecr.aws/amazonlinux/amazonlinux:2023 AS ffmpeg
+RUN dnf install -y tar xz && curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ff.tar.xz \
+ && tar -xJf /tmp/ff.tar.xz -C /tmp && mkdir /out && mv /tmp/ffmpeg-*-static/ffmpeg /out/
+
 FROM public.ecr.aws/lambda/nodejs:22
+COPY --from=ffmpeg /out/ffmpeg /usr/local/bin/ffmpeg
 RUN npm install -g --no-audit --no-fund @anthropic-ai/claude-code@2.1.312 && claude --version
 COPY --from=build /out/index.js /out/mcp.js ${LAMBDA_TASK_ROOT}/
 COPY --from=build /out/node_modules ${LAMBDA_TASK_ROOT}/node_modules
