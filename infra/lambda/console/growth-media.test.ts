@@ -9,7 +9,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { drawable, esc, frameHtml, frames, hasDevanagari, headlineSize, renderAssetId, whereToPost, zipName, zipStore } from './growth-media';
+import { designHtml } from './growth-design';
+import { drawable, esc, frames, hasDevanagari, parseVisual, renderAssetId, screenFor, topicQuery, whereToPost, zipName, zipStore } from './growth-media';
 
 const post = (o: Record<string, unknown> = {}) => ({ id: 'abcdef0123', format: 'post', hook: 'Phone full?', slides: [], script: [], variants: { instagram: {} }, ...o }) as Parameters<typeof frames>[0];
 
@@ -43,17 +44,8 @@ test('carousel: cover, numbered slides, call to action last', () => {
   assert.equal(f[2].headline, 'Try Lens free');
 });
 
-test('the HTML is self-contained and escaped', () => {
-  const [fr] = frames(post({ hook: 'Back up <b>"all"</b> & more' }), 'x');
-  const html = frameHtml(fr, DEFAULT_BRAND, { font: 'AAAA', mark: '<svg></svg>' });
-  assert.match(html, /Back up &lt;b&gt;&quot;all&quot;&lt;\/b&gt; &amp; more/);
-  assert.doesNotMatch(html, /https?:\/\//);
-  assert.match(html, /width:1080px;height:1350px/);
-  assert.match(html, new RegExp(DEFAULT_BRAND.colors.accent));
+test('escaping', () => {
   assert.equal(esc('<a href="x">'), '&lt;a href=&quot;x&quot;&gt;');
-  // A photo of our own goes in the cover; the call to action shows the button.
-  assert.match(frameHtml(fr, DEFAULT_BRAND, { photo: 'data:image/png;base64,AA' }), /class="photo"/);
-  assert.match(frameHtml({ ...fr, style: 'cta' }, DEFAULT_BRAND), /class="action">Try Lens free</);
 });
 
 test('image text keeps what the font can draw', () => {
@@ -62,15 +54,6 @@ test('image text keeps what the font can draw', () => {
   assert.equal(drawable('Swipe → नमस्ते 😀'), 'Swipe -> नमस्ते');
   assert.equal(drawable('फ़ोन भर गया? ज़रूरी फ़ोटो बचाएँ।'), 'फ़ोन भर गया? ज़रूरी फ़ोटो बचाएँ।');
   assert.equal(drawable('日本 Привет'), '');
-  const [fr] = frames(post({ hook: 'Backup 🔥 done', format: 'carousel', slides: [{ headline: 'Backup 🔥 done', body: '', visual: '' }, { headline: 'b', body: '', visual: '' }] }), 'x');
-  const html = frameHtml(fr, DEFAULT_BRAND);
-  assert.match(html, /<h1>Backup done<\/h1>/);
-  assert.doesNotMatch(html, /→/);
-});
-
-test('headline size shrinks with length and stays readable on wide frames', () => {
-  assert.ok(headlineSize('Phone full?', 1080, 1350) > headlineSize('A much longer headline that keeps going on and on for a while', 1080, 1350));
-  assert.ok(headlineSize('Our first growth report said 147 installs. 0% came back.', 1200, 627) >= 48);
 });
 
 test('render ids are stable per post and image', () => {
@@ -79,17 +62,9 @@ test('render ids are stable per post and image', () => {
   assert.match(renderAssetId('abcdef0123', 'Cover'), /^[a-f0-9]{12}$/);
 });
 
-test('Hindi frames: Devanagari font, lang, no letter-spacing, taller lines', () => {
-  const [fr] = frames(post({ hook: 'फ़ोन भर गया?' }), 'x');
-  assert.ok(hasDevanagari(fr.headline));
-  const html = frameHtml(fr, DEFAULT_BRAND, { font: 'AAAA', deva: 'BBBB' });
-  assert.match(html, /<html lang="hi">/);
-  assert.match(html, /font-family:'Noto Sans Devanagari';src:url\(data:font\/woff2;base64,BBBB\)/);
-  assert.match(html, /h1\{[^}]*letter-spacing:0;/);
-  assert.match(html, /<h1>फ़ोन भर गया\?<\/h1>/);
-  const en = frameHtml(frames(post(), 'x')[0], DEFAULT_BRAND, { font: 'AAAA' });
-  assert.match(en, /<html lang="en">/);
-  assert.doesNotMatch(en, /Noto Sans Devanagari';src/);
+test('Hindi text gets the Devanagari font (English is the default)', () => {
+  assert.ok(hasDevanagari('फ़ोन भर गया?'));
+  assert.ok(!hasDevanagari('Phone full?'));
 });
 
 test('each image says which platforms it is for', () => {
@@ -119,4 +94,49 @@ test('the zip opens in standard tools with every file intact', () => {
   const out = execFileSync('python3', ['-I', '-c', 'import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);assert z.testzip() is None;print("|".join(i.filename+":"+str(i.file_size) for i in z.infolist()));print(z.read("where-to-post.txt").decode())', file], { encoding: 'utf8' });
   assert.equal(out.split('\n')[0], '01 Slide 1 1080x1350.png:9|where-to-post.txt:20');
   assert.match(out, /नमस्ते/);
+});
+
+test('each image gets a design: hero cover, varied middle slides, call to action last', () => {
+  const slides = [
+    { headline: 'Phone full? Keep every photo.', body: '', visual: 'app screen: the library' },
+    { headline: 'From full to free.', body: 'One tap.', visual: 'before and after: storage full vs freed' },
+    { headline: 'Shoot all night.', body: '', visual: 'photo: concert stage lights' },
+    { headline: 'Every original, untouched', body: 'Full quality backup', visual: '' },
+    { headline: '', body: '', visual: '' },
+  ];
+  const f = frames(post({ format: 'carousel', slides, variants: { instagram: {}, linkedin: {} } }), 'Try Lens free');
+  assert.deepEqual(f.map((x) => `${x.label}: ${x.layout}/${x.screen}`), [
+    'Slide 1: hero/library',
+    'Slide 2: compare/free-space',
+    'Slide 3: moment/viewer',
+    'Slide 4: phone/backup',
+    'Slide 5: cta/library',
+    'LinkedIn image: hero/library',
+  ]);
+  assert.equal(f[2].query, 'concert stage lights');
+  // No notes: the topic picks the screen and the scene.
+  const plain = frames(post({ hook: 'Wedding photos from every guest', format: 'short', variants: { instagram: {}, youtube: {} } }), 'x');
+  assert.deepEqual(plain.map((x) => `${x.layout}/${x.screen}/${x.query}`), ['hero/qr-album/wedding table decoration', 'moment/qr-album/wedding table decoration']);
+});
+
+test('screens, scenes and visual notes', () => {
+  assert.equal(screenFor('Storage full again?'), 'storage-full');
+  assert.equal(screenFor('Free up 20 GB safely'), 'free-space');
+  assert.equal(screenFor('Shoot in Night mode'), 'camera');
+  assert.equal(screenFor('Guests scan one QR code'), 'qr-album');
+  assert.equal(screenFor('Hello'), 'library');
+  assert.equal(topicQuery('Diwali lights'), 'fireworks night sky');
+  assert.equal(topicQuery('nothing here'), 'sunset sea');
+  assert.deepEqual(parseVisual('photo: misty mountain road. Phone shows it backed up'), { layout: 'moment', query: 'misty mountain road', screen: 'backup' });
+  assert.deepEqual(parseVisual('app: Free up space screen'), { layout: 'phone', screen: 'free-space' });
+  assert.deepEqual(parseVisual('just words'), {});
+});
+
+test('every layout draws at every size without throwing', () => {
+  const sizes = [[1080, 1350], [1080, 1920], [1000, 1500], [1200, 627], [1280, 720]];
+  for (const layout of ['hero', 'compare', 'moment', 'phone', 'cta'] as const)
+    for (const [w, h] of sizes) {
+      const html = designHtml({ w, h, layout, screen: 'library', headline: 'Phone full? Keep every photo.', body: 'Body', index: 1, total: 4, cta: 'Try Lens free', site: 'lens.instagrowapp.com', pool: ['https://img.lens/a'], icon: 'data:image/png;base64,AA', fonts: {}, brand: DEFAULT_BRAND });
+      assert.match(html, new RegExp(`html,body\\{width:${w}px;height:${h}px`));
+    }
 });

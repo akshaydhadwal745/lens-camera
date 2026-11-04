@@ -1,9 +1,11 @@
 // Render engine for content packages (docs/growth/content-engine.md, phase 3): a post becomes on-brand
 // images at each platform's size — carousel slides, story and reel covers, pins, LinkedIn/X images and
-// YouTube thumbnails — drawn as HTML from the brand kit and screenshotted in the GrowthAnalyst's headless
-// Chromium (₹0, no AI image service). Each image is saved as a Library asset (kind "render", made by us,
-// rights cleared) and listed on the post as `renders`. Rendering again overwrites the same files.
-// Text uses Geist for Latin and Noto Sans Devanagari for Hindi (both bundled in ./brand, OFL fonts).
+// YouTube thumbnails — designed in growth-design.ts (the real app on a phone, before/after, photo moments,
+// proof cards) and screenshotted in the GrowthAnalyst's headless Chromium (₹0, no AI image service).
+// Photos come from the post's own assets, else are found live (growth-photos.ts, rights-checked).
+// Each image is saved as a Library asset (kind "render", made by us, rights cleared) and listed on the post
+// as `renders`. Rendering again overwrites the same files. Fonts: Geist, IBM Plex Mono, Noto Sans
+// Devanagari (all OFL, bundled in ./brand).
 // Each render also leaves one zip of all the post's images plus where-to-post.txt in x/ (kept 30 days).
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -16,16 +18,20 @@ import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Res, s3 } from '../api/lib';
 import type { Asset, AssetRef } from './growth-assets';
-import { brand as loadBrand, type Brand } from './growth-brand';
+import { brand as loadBrand } from './growth-brand';
 import { PLATFORMS, type Platform, type Slide, type Scene } from './growth-content-rules';
+import { designHtml, type Layout, type Screen } from './growth-design';
+import { findPhotos, photoPool, type Photo } from './growth-photos';
 import { launchBrowser } from './growth-render';
+import { licenseKey } from './growth-rights';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const BRAND_DIR = process.env.GROWTH_BRAND_DIR ?? join(__dirname, 'brand');
 const SITE = 'lens.instagrowapp.com';
 
 /** `for`: the platforms this image is posted to. */
-export type Frame = { label: string; w: number; h: number; style: 'cover' | 'slide' | 'cta'; headline: string; body: string; for: Platform[]; index?: number; total?: number };
+/** `layout`/`screen`: how growth-design.ts draws it; `query`: words to find a scene photo for it. */
+export type Frame = { label: string; w: number; h: number; style: 'cover' | 'slide' | 'cta'; headline: string; body: string; for: Platform[]; index?: number; total?: number; layout: Layout; screen: Screen; query?: string };
 type PostLike = { id: string; format: string; hook: string; slides: Slide[]; script: Scene[]; variants: Partial<Record<Platform, unknown>>; assets?: AssetRef[] };
 
 // ---------- frames (pure) ----------
@@ -46,13 +52,15 @@ export function frames(p: PostLike, cta: string): Frame[] {
   const rest = (...ks: Platform[]) => all.filter((k) => !ks.includes(k));
   const hook = p.hook.trim() || p.slides[0]?.headline || p.script[0]?.onScreen || '';
   const lead = p.slides[0];
-  const f = (label: string, size: readonly [number, number], style: Frame['style'], to: Platform[], headline: string, body = ''): Frame => ({ label, w: size[0], h: size[1], style, headline, body, for: to });
+  const f = (label: string, size: readonly [number, number], style: Frame['style'], to: Platform[], headline: string, body = ''): Frame => ({ label, w: size[0], h: size[1], style, headline, body, for: to, layout: 'hero', screen: 'library' });
   const out: Frame[] = [];
+  const visuals: string[] = [];
   if (p.format === 'carousel') {
     const slides = p.slides.length ? p.slides : [{ headline: hook, body: '', visual: '' }];
     slides.forEach((s, i) => {
       const style = i === 0 ? 'cover' : i === slides.length - 1 && slides.length > 2 ? 'cta' : 'slide';
       out.push({ ...f(`Slide ${i + 1}`, SIZES.feed, style, rest('linkedin'), s.headline || (i === 0 ? hook : '') || (style === 'cta' ? cta : ''), s.body), index: i + 1, total: slides.length });
+      visuals.push(s.visual ?? '');
     });
     if (has('linkedin')) out.push(f('LinkedIn image', SIZES.wide, 'cover', only('linkedin'), hook, lead?.body ?? ''));
   } else if (p.format === 'reel' || p.format === 'short' || p.format === 'story') {
@@ -68,7 +76,73 @@ export function frames(p: PostLike, cta: string): Frame[] {
     if (has('linkedin') || has('x')) out.push(f('Wide image', SIZES.wide, 'cover', only('linkedin', 'x'), hook, lead?.body ?? ''));
     if (has('pinterest')) out.push(f('Pin', SIZES.pin, 'cover', only('pinterest'), hook, lead?.body ?? ''));
   }
-  return out.filter((x) => x.headline.trim() || x.body.trim());
+  return design(out.filter((x) => x.headline.trim() || x.body.trim()), visuals, [p.hook, ...p.slides.map((s) => `${s.headline} ${s.body} ${s.visual}`), ...p.script.map((s) => `${s.onScreen} ${s.visual}`)].join(' '), p.slides[0]?.visual || p.script[0]?.visual || '');
+}
+
+// ---------- which design each image gets (pure) ----------
+
+const SCREEN_WORDS: [RegExp, Screen][] = [
+  [/storage[ -]?full|out of (space|storage)|phone (is )?full/i, 'storage-full'],
+  [/free[ -]?(up )?space|free up|delete|clean ?up|space back/i, 'free-space'],
+  [/wedding|guest|qr|event|album|party|shaadi|reception/i, 'qr-album'],
+  [/night|camera|shoot|shutter|portrait mode|pro mode|low light/i, 'camera'],
+  [/back(ed|ing)? ?up|safe|cloud|quality|original|upload/i, 'backup'],
+  [/viewer|full[- ]screen|open (a|the) photo/i, 'viewer'],
+  [/library|roll|gallery|all (your )?photos/i, 'library'],
+];
+
+/** The Lens screen a piece of text is about (first match wins; the library if nothing fits). */
+export function screenFor(text: string, fallback: Screen = 'library'): Screen {
+  return SCREEN_WORDS.find(([re]) => re.test(text))?.[1] ?? fallback;
+}
+
+/** Scene photos to look for, by topic. Scenery, not people: those clear the rights check on their own. */
+const TOPICS: [RegExp, string][] = [
+  [/wedding|marriage|shaadi|reception|bride|groom/i, 'wedding table decoration'],
+  [/concert|festival|gig|music|stage/i, 'concert stage lights'],
+  [/diwali|firework|new year|celebration/i, 'fireworks night sky'],
+  [/night|city|street/i, 'city night lights'],
+  [/beach|sea|island|summer/i, 'beach sunset'],
+  [/mountain|trek|hike|snow/i, 'mountain landscape'],
+  [/travel|trip|holiday|vacation|road/i, 'mountain road travel'],
+  [/food|cafe|restaurant|market/i, 'street food market'],
+];
+export const topicQuery = (text: string) => TOPICS.find(([re]) => re.test(text))?.[1] ?? 'sunset sea';
+
+/** A slide's "visual" note from the agent: "photo: <scene>", "app: <screen>" or "before/after". */
+export function parseVisual(v: string): { layout?: Layout; screen?: Screen; query?: string } {
+  const photo = /photo\s*:\s*([^.;\n]{3,80})/i.exec(v);
+  if (photo) return { layout: 'moment', query: photo[1].trim(), screen: screenFor(v, 'viewer') };
+  if (/before.{0,8}after|side by side|compare/i.test(v)) return { layout: 'compare', screen: 'free-space' };
+  const app = /app(?: screen)?\s*:\s*([^.;\n]+)/i.exec(v);
+  if (app) return { layout: 'phone', screen: screenFor(app[1]) };
+  return {};
+}
+
+function design(list: Frame[], visuals: string[], all: string, firstVisual: string): Frame[] {
+  const topic = topicQuery(all);
+  const cover = parseVisual(firstVisual);
+  const coverScreen = cover.screen && cover.layout !== 'moment' ? cover.screen : screenFor(all);
+  // Middle slides without a note take turns, so a carousel never repeats one look.
+  const turns: Layout[] = [/storage|space|full/i.test(all) ? 'compare' : 'phone', 'moment', 'phone'];
+  let turn = 0;
+  let lastScreen: Screen = coverScreen;
+  let compared = false;
+  return list.map((fr, i) => {
+    if (fr.style === 'cta') return { ...fr, layout: 'cta', screen: 'library' };
+    if (fr.style === 'cover') {
+      const thumb = fr.w / fr.h > 1.5 && fr.label.startsWith('YouTube');
+      return { ...fr, layout: thumb ? 'moment' : 'hero', screen: thumb && coverScreen === 'library' ? 'viewer' : coverScreen, query: cover.query ?? topic };
+    }
+    const v = parseVisual(visuals[i] ?? '');
+    let layout = v.layout ?? turns[turn++ % turns.length];
+    let screen = v.screen ?? screenFor(`${fr.headline} ${fr.body}`, lastScreen === 'backup' ? 'library' : 'backup');
+    if (layout === 'compare' && !v.layout && compared) layout = 'phone';
+    if (layout === 'compare') compared = true;
+    if (layout === 'moment' && screen === 'library') screen = 'viewer';
+    lastScreen = screen;
+    return { ...fr, layout, screen, query: v.query ?? topic };
+  });
 }
 
 /** Only what the bundled fonts can draw (Geist Latin + Noto Sans Devanagari): Lambda's Chromium has no
@@ -85,62 +159,6 @@ export function drawable(text: string): string {
 export const hasDevanagari = (s: string) => /[\u0900-\u097F\uA8E0-\uA8FF]/.test(s);
 
 export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-/** Headline size: big for short lines, smaller for long ones, scaled to the frame. */
-export function headlineSize(text: string, w: number, h: number): number {
-  const n = [...text].length;
-  const base = Math.min(Math.sqrt(w * h) * 0.9, w * 1.2);
-  const k = n <= 24 ? 0.11 : n <= 48 ? 0.088 : n <= 90 ? 0.07 : 0.056;
-  return Math.round(base * k);
-}
-
-/** One frame as a self-contained HTML page (fonts and images inline, nothing loaded from the network). */
-export function frameHtml(fr: Frame, brand: Brand, opts: { font?: string; deva?: string; mark?: string; photo?: string; background?: string } = {}): string {
-  const c = brand.colors;
-  const hindi = hasDevanagari(fr.headline + fr.body);
-  const wide = fr.w / fr.h > 1.3;
-  const pad = Math.round(Math.min(fr.w, fr.h) * 0.075);
-  const hs = headlineSize(fr.headline, fr.w, fr.h);
-  const bs = Math.round(hs * 0.42);
-  const small = Math.round(Math.min(fr.w, fr.h) * 0.026);
-  const photo = opts.photo && fr.style === 'cover';
-  const counter = fr.total && fr.total > 1 ? `<div class="count">${fr.index}/${fr.total}</div>` : '';
-  const arrow = `<svg viewBox="0 0 24 24" width="${small}" height="${small}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
-  const next = fr.style !== 'cta' && fr.total && fr.index! < fr.total ? `<div class="next">Swipe ${arrow}</div>` : '';
-  const action = fr.style === 'cta' ? `<div class="action">${esc(drawable(brand.ctas[0] ?? 'Try Lens free'))}</div><div class="url">${SITE}</div>` : '';
-  const showUrl = fr.style !== 'cta';
-  return `<!doctype html><html lang="${hindi ? 'hi' : 'en'}"><head><meta charset="utf-8"><style>
-${opts.font ? `@font-face{font-family:Geist;src:url(data:font/woff2;base64,${opts.font}) format('woff2');font-weight:300 800}` : ''}
-${opts.deva ? `@font-face{font-family:'Noto Sans Devanagari';src:url(data:font/woff2;base64,${opts.deva}) format('woff2');font-weight:100 900;unicode-range:U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+20B9,U+25CC,U+A8E0-A8FF}` : ''}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{width:${fr.w}px;height:${fr.h}px;overflow:hidden}
-body{font-family:Geist,'Noto Sans Devanagari',system-ui,sans-serif;color:${c.text};background:radial-gradient(120% 90% at 15% 0%,${c.surface} 0%,${c.background} 62%);position:relative;padding:${pad}px;display:flex;flex-direction:column;gap:${Math.round(pad * 0.5)}px}
-${opts.background ? `.bg{position:absolute;inset:0;background:url(${opts.background}) center/cover;opacity:.28}` : ''}
-.glow{position:absolute;border-radius:50%;filter:blur(${Math.round(pad * 1.2)}px);pointer-events:none}
-.g1{width:${Math.round(fr.w * 0.7)}px;height:${Math.round(fr.w * 0.7)}px;right:-${Math.round(fr.w * 0.25)}px;bottom:-${Math.round(fr.w * 0.2)}px;background:${c.primary};opacity:.32}
-.g2{width:${Math.round(fr.w * 0.45)}px;height:${Math.round(fr.w * 0.45)}px;left:-${Math.round(fr.w * 0.15)}px;top:${Math.round(fr.h * 0.12)}px;background:${c.accent};opacity:.10}
-.wm{position:absolute;right:-${Math.round(Math.min(fr.w, fr.h) * 0.12)}px;bottom:-${Math.round(Math.min(fr.w, fr.h) * 0.1)}px;width:${Math.round(Math.min(fr.w, fr.h) * 0.62)}px;opacity:.07;transform:rotate(-12deg)}
-.wm svg{width:100%;height:auto}
-.top{display:flex;align-items:center;justify-content:space-between;position:relative}
-.brand{display:flex;align-items:center;gap:${Math.round(small * 0.6)}px;font-weight:700;font-size:${small * 1.25}px;letter-spacing:-.01em}
-.brand svg{width:${small * 2}px;height:${small * 2}px}
-.count,.next{font-size:${small}px;color:${c.muted};font-weight:500;display:flex;align-items:center;gap:${Math.round(small * 0.3)}px}
-.main{flex:1;display:flex;flex-direction:${photo && wide ? 'row' : 'column'};justify-content:${fr.style === 'slide' ? 'flex-start' : 'center'};gap:${pad}px;position:relative;${fr.style === 'slide' ? `padding-top:${pad}px` : ''}}
-.text{display:flex;flex-direction:column;gap:${Math.round(pad * 0.45)}px;${photo && wide ? 'flex:1;justify-content:center' : ''}}
-.bar{width:${Math.round(hs * 1.2)}px;height:${Math.max(6, Math.round(hs * 0.1))}px;border-radius:99px;background:${c.accent}}
-h1{font-size:${hs}px;line-height:${hindi ? 1.3 : 1.04};font-weight:750;letter-spacing:${hindi ? 0 : '-.03em'};text-wrap:balance}
-p{font-size:${bs}px;line-height:${hindi ? 1.55 : 1.32};color:${c.muted};font-weight:450;text-wrap:pretty}
-.photo{${wide ? `width:42%;` : `flex:1;min-height:0;`}border-radius:${pad * 0.5}px;background:url(${opts.photo ?? ''}) center/cover;box-shadow:0 ${pad * 0.3}px ${pad}px rgba(0,0,0,.45)}
-.action{align-self:flex-start;white-space:nowrap;background:${c.primary};color:#fff;font-weight:650;font-size:${Math.round(bs * 0.95)}px;padding:${Math.round(bs * 0.55)}px ${Math.round(bs * 1.2)}px;border-radius:99px;box-shadow:0 ${Math.round(pad * 0.2)}px ${pad}px ${c.primary}66}
-.url{font-size:${Math.round(bs * 0.8)}px;color:${c.muted};font-weight:500}
-.foot{display:flex;justify-content:space-between;align-items:center;font-size:${small}px;color:${c.muted};position:relative}
-</style></head><body>
-${opts.background ? '<div class="bg"></div>' : ''}<div class="glow g1"></div><div class="glow g2"></div>${fr.style === 'cover' && !photo && opts.mark ? `<div class="wm">${opts.mark}</div>` : ''}
-<div class="top"><div class="brand">${opts.mark ?? ''}<span>Lens</span></div>${counter}</div>
-<div class="main"><div class="text"><div class="bar"></div><h1>${esc(drawable(fr.headline))}</h1>${fr.body ? `<p>${esc(drawable(fr.body))}</p>` : ''}${action}</div>${photo ? '<div class="photo"></div>' : ''}</div>
-<div class="foot"><span>${showUrl ? SITE : ''}</span>${next}</div>
-</body></html>`;
-}
 
 const PLATFORM_NAMES: Record<Platform, string> = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X', reddit: 'Reddit' };
 
@@ -210,24 +228,56 @@ export const renderAssetId = (postId: string, label: string) => createHash('sha2
 
 // ---------- the render job (GrowthAnalyst) ----------
 
-async function dataUrl(a: Asset): Promise<string | undefined> {
-  if (!a.mime.startsWith('image/') || a.status !== 'ready') return undefined;
-  const r = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: a.key }));
-  const bytes = await r.Body!.transformToByteArray();
-  if (bytes.length > 12 * 1024 * 1024) return undefined;
-  return `data:${a.mime};base64,${Buffer.from(bytes).toString('base64')}`;
+const IMG = 'https://img.lens/'; // served from memory while drawing (request interception), never fetched
+const GENERIC = ['sunset sea', 'city night lights', 'mountain lake', 'autumn forest', 'street food market', 'snowy mountains', 'desert dunes', 'flower field'];
+const noCredit = (a: Asset) => ['own', 'public-domain', 'pexels', 'pixabay'].includes(licenseKey(a.rights.license));
+const shuffle = <T extends { id: string }>(list: T[], seed: string) =>
+  [...list].sort((a, b) => createHash('md5').update(seed + a.id).digest('hex').localeCompare(createHash('md5').update(seed + b.id).digest('hex')));
+
+async function bytesOf(a: Asset): Promise<Buffer | undefined> {
+  try {
+    const r = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: a.key }));
+    return Buffer.from(await r.Body!.transformToByteArray());
+  } catch {
+    return undefined;
+  }
 }
 
-/** Cleared images the post uses: our own "media" photo goes in the frame, a "background" behind it. */
-async function postImages(refs: AssetRef[]): Promise<{ photo?: string; background?: string }> {
-  const out: { photo?: string; background?: string } = {};
-  for (const r of refs) {
+/** The photos a post's images use: its own cleared photos first, scenes found for each frame's topic, and a
+ *  pool for phone screens (licences that need no credit, so tiny tiles never owe one). */
+async function gatherPhotos(post: PostLike, list: Frame[]) {
+  const served = new Map<string, { mime: string; body: Buffer }>();
+  const url = async (a: Asset) => {
+    if (!served.has(a.id)) {
+      const body = await bytesOf(a);
+      if (!body) return undefined;
+      served.set(a.id, { mime: a.mime, body });
+    }
+    return IMG + a.id;
+  };
+  let own: Asset | undefined;
+  for (const r of post.assets ?? []) {
     const a = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `ASSET#${r.id}` } }))).Item as Asset | undefined;
-    if (!a || a.kind === 'render' || a.rights.status !== 'cleared') continue;
-    if (r.role === 'media' && !out.photo && a.rights.license === 'own') out.photo = await dataUrl(a);
-    if (r.role === 'background' && !out.background) out.background = await dataUrl(a);
+    if (a && a.kind !== 'render' && a.mime.startsWith('image/') && a.status === 'ready' && a.rights.status === 'cleared' && (r.role === 'background' || (r.role === 'media' && a.rights.license === 'own'))) {
+      own = a;
+      break;
+    }
   }
-  return out;
+  const scenes = new Map<string, string>();
+  const credited: AssetRef[] = [];
+  for (const q of [...new Set(list.map((f) => f.query).filter((x): x is string => !!x))]) {
+    const [found] = own ? [own as Photo] : await findPhotos(q, 1, list.some((f) => f.query === q && f.w > f.h) ? 'landscape' : 'portrait');
+    const u = found && (await url(found));
+    if (u) scenes.set(q, u);
+    if (found && !noCredit(found) && !credited.some((c) => c.id === found.id)) credited.push({ id: found.id, role: 'background' });
+  }
+  let pool = (await photoPool()).filter(noCredit);
+  for (const q of GENERIC) {
+    if (pool.length >= 15) break;
+    if ((await findPhotos(q, 3, 'portrait')).length) pool = (await photoPool()).filter(noCredit);
+  }
+  const poolUrls = (await Promise.all(shuffle(pool, post.id).slice(0, 15).map(url))).filter((u): u is string => !!u);
+  return { served, scenes, pool: poolUrls, credited };
 }
 
 export async function renderPost(postId: string, by: string): Promise<{ rendered: number }> {
@@ -235,23 +285,35 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as (PostLike & { title: string }) | undefined;
   if (!post) throw new Error(`Post ${postId} is gone`);
   const brand = await loadBrand();
-  const list = frames({ ...post, slides: post.slides ?? [], script: post.script ?? [], variants: post.variants ?? {} }, brand.ctas[0] ?? 'Try Lens free');
+  const cta = brand.ctas[0] ?? 'Try Lens free';
+  const list = frames({ ...post, slides: post.slides ?? [], script: post.script ?? [], variants: post.variants ?? {} }, cta);
   if (!list.length) throw new Error('Nothing to draw: give the post a hook or slides first');
-  const font = readFileSync(join(BRAND_DIR, 'geist-latin.woff2')).toString('base64');
-  const deva = list.some((fr) => hasDevanagari(fr.headline + fr.body)) ? readFileSync(join(BRAND_DIR, 'noto-devanagari.woff2')).toString('base64') : undefined;
-  const mark = readFileSync(join(BRAND_DIR, 'lens-mark.svg'), 'utf8').replace(/<\?xml[^>]*>/, '');
-  const images = await postImages(post.assets ?? []);
+  const font = (name: string) => readFileSync(join(BRAND_DIR, name)).toString('base64');
+  const fonts = {
+    geist: font('geist-latin.woff2'),
+    deva: list.some((fr) => hasDevanagari(fr.headline + fr.body)) ? font('noto-devanagari.woff2') : undefined,
+    plex500: font('plex-mono-500.ttf'),
+    plex600: font('plex-mono-600.ttf'),
+  };
+  const icon = `data:image/png;base64,${font('lens-icon.png')}`;
+  const { served, scenes, pool, credited } = await gatherPhotos({ ...post, id: postId }, list);
   const browser = await launchBrowser();
   const renders: { assetId: string; label: string; w: number; h: number }[] = [];
   const files: { name: string; data: Buffer }[] = [];
   try {
     const page = await browser.newPage();
-    // Nothing leaves the page: fonts and images are inline.
+    // Nothing leaves the page: fonts are inline and photos are answered from memory.
     await page.setRequestInterception(true);
-    page.on('request', (r: { url(): string; continue(): Promise<void>; abort(): Promise<void> }) => void (/^(data|about):/.test(r.url()) ? r.continue() : r.abort()));
+    page.on('request', (r: { url(): string; continue(): Promise<void>; abort(): Promise<void>; respond(x: { status: number; contentType: string; body: Buffer }): Promise<void> }) => {
+      const u = r.url();
+      if (/^(data|about):/.test(u)) return void r.continue();
+      const hit = u.startsWith(IMG) ? served.get(u.slice(IMG.length)) : undefined;
+      void (hit ? r.respond({ status: 200, contentType: hit.mime, body: hit.body }) : r.abort());
+    });
     for (const fr of list) {
       await page.setViewport({ width: fr.w, height: fr.h, deviceScaleFactor: 1 });
-      await page.setContent(frameHtml(fr, brand, { font, deva, mark, ...images }), { waitUntil: 'load' });
+      const html = designHtml({ w: fr.w, h: fr.h, layout: fr.layout, screen: fr.screen, headline: drawable(fr.headline), body: drawable(fr.body), index: fr.index, total: fr.total, cta: drawable(cta), site: SITE, photo: fr.query ? scenes.get(fr.query) : undefined, pool, icon, fonts, brand });
+      await page.setContent(html, { waitUntil: 'load' });
       await page.evaluate('document.fonts.ready');
       const png = Buffer.from(await page.screenshot({ type: 'png' }));
       const id = renderAssetId(postId, fr.label);
@@ -267,7 +329,7 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
         bytes: png.length,
         lensPhoto: false,
         checkedPersonal: true,
-        rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: 'Made by Lens from the brand template', checkedAt: Date.now(), checkedBy: 'template' },
+        rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: credited.length ? 'Made by Lens; uses found photos, credited in the post' : 'Made by Lens from the brand template', checkedAt: Date.now(), checkedBy: 'template' },
         status: 'ready',
         createdAt: Date.now(),
         createdBy: by,
@@ -285,7 +347,9 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   }
   files.push({ name: 'where-to-post.txt', data: Buffer.from(whereToPost(post.title, list), 'utf8') });
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: zipKey(postId), Body: zipStore(files), ContentType: 'application/zip' }));
-  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId) } }));
+  // Found photos that need a credit join the post as backgrounds, so Export adds their credit lines.
+  const assets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
+  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z, assets = :a', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId), ':a': assets } }));
   return { rendered: renders.length };
 }
 
