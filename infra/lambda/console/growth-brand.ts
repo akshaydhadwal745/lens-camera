@@ -18,6 +18,8 @@ export type Brand = {
   pillars: string[];
   cadencePerWeek: number;
   languages: string[];
+  /** Platforms content is made for now, in order (owner 2026-11-04: Instagram, Facebook, X first; YouTube later). */
+  focus: Platform[];
   publishing: Record<Platform, boolean>;
   updatedAt?: number;
   updatedBy?: string;
@@ -35,6 +37,7 @@ export const DEFAULT_BRAND: Brand = {
   pillars: [...PILLARS],
   cadencePerWeek: 3,
   languages: ['en'],
+  focus: ['instagram', 'facebook', 'x'],
   publishing: Object.fromEntries(PLATFORMS.map((p) => [p, false])) as Record<Platform, boolean>,
 };
 
@@ -59,6 +62,7 @@ export function readBrand(b: any, cur: Brand): Brand {
     hashtags: list(b?.hashtags, cur.hashtags, 30, 60).map((t) => `#${t.replace(/^#+/, '').replace(/[^\p{L}\p{M}\p{N}_]/gu, '')}`).filter((t) => t.length > 1),
     pillars: list(b?.pillars, cur.pillars, 12, 40),
     cadencePerWeek: Number.isInteger(b?.cadencePerWeek) && b.cadencePerWeek >= 0 && b.cadencePerWeek <= 14 ? b.cadencePerWeek : cur.cadencePerWeek,
+    focus: Array.isArray(b?.focus) ? (() => { const f = PLATFORMS.filter((p) => b.focus.includes(p)); return f.length ? f : cur.focus; })() : cur.focus,
     languages: Array.isArray(b?.languages) ? b.languages.filter((l: unknown) => l === 'en' || l === 'hi').slice(0, 2) : cur.languages,
     publishing: Object.fromEntries(PLATFORMS.map((p) => [p, LIMITS[p].direct && typeof b?.publishing?.[p] === 'boolean' ? b.publishing[p] : cur.publishing[p] && LIMITS[p].direct])) as Record<Platform, boolean>,
   };

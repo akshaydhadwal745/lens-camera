@@ -44,6 +44,7 @@ const SIZES = {
   pin: [1000, 1500],
   wide: [1200, 627],
   thumb: [1280, 720],
+  x: [1600, 900], // X shows 16:9 images uncropped in the feed
 } as const;
 
 /** Which images a post needs: by format, plus the extra sizes its platforms take. */
@@ -61,13 +62,15 @@ export function frames(p: PostLike, cta: string): Frame[] {
     const slides = p.slides.length ? p.slides : [{ headline: hook, body: '', visual: '' }];
     slides.forEach((s, i) => {
       const style = i === 0 ? 'cover' : i === slides.length - 1 && slides.length > 2 ? 'cta' : 'slide';
-      out.push({ ...f(`Slide ${i + 1}`, SIZES.feed, style, rest('linkedin'), s.headline || (i === 0 ? hook : '') || (style === 'cta' ? cta : ''), s.body), index: i + 1, total: slides.length });
+      out.push({ ...f(`Slide ${i + 1}`, SIZES.feed, style, rest('linkedin', 'x'), s.headline || (i === 0 ? hook : '') || (style === 'cta' ? cta : ''), s.body), index: i + 1, total: slides.length });
       visuals.push(s.visual ?? '');
     });
     if (has('linkedin')) out.push(f('LinkedIn image', SIZES.wide, 'cover', only('linkedin'), hook, lead?.body ?? ''));
+    if (has('x')) out.push(f('X image', SIZES.x, 'cover', only('x'), hook, lead?.body ?? ''));
   } else if (p.format === 'reel' || p.format === 'short' || p.format === 'story') {
     const thumb = has('youtube') && p.format !== 'story';
-    out.push(f(p.format === 'story' ? 'Story' : 'Cover', SIZES.story, 'cover', thumb ? rest('youtube') : all, hook, p.format === 'story' ? (lead?.body ?? '') : ''));
+    out.push(f(p.format === 'story' ? 'Story' : 'Cover', SIZES.story, 'cover', thumb ? rest('youtube', 'x') : rest('x'), hook, p.format === 'story' ? (lead?.body ?? '') : ''));
+    if (has('x')) out.push(f('X image', SIZES.x, 'cover', only('x'), hook));
     if (thumb) out.push(f('YouTube thumbnail', SIZES.thumb, 'cover', only('youtube'), hook));
   } else if (p.format === 'pin') {
     out.push(f('Pin', SIZES.pin, 'cover', all, hook, lead?.body ?? ''));
@@ -75,7 +78,8 @@ export function frames(p: PostLike, cta: string): Frame[] {
     out.push(f('Header image', SIZES.wide, 'cover', all, hook, lead?.body ?? ''));
   } else {
     out.push(f('Post image', SIZES.feed, 'cover', rest('linkedin', 'x', 'pinterest'), hook, lead?.body ?? ''));
-    if (has('linkedin') || has('x')) out.push(f('Wide image', SIZES.wide, 'cover', only('linkedin', 'x'), hook, lead?.body ?? ''));
+    if (has('x')) out.push(f('X image', SIZES.x, 'cover', only('x'), hook, lead?.body ?? ''));
+    if (has('linkedin')) out.push(f('Wide image', SIZES.wide, 'cover', only('linkedin'), hook, lead?.body ?? ''));
     if (has('pinterest')) out.push(f('Pin', SIZES.pin, 'cover', only('pinterest'), hook, lead?.body ?? ''));
   }
   return design(out.filter((x) => x.headline.trim() || x.body.trim()), visuals, [p.hook, ...p.slides.map((s) => `${s.headline} ${s.body} ${s.visual}`), ...p.script.map((s) => `${s.onScreen} ${s.visual}`)].join(' '), p.slides[0]?.visual || p.script[0]?.visual || '');

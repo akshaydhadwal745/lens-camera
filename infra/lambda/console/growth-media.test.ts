@@ -69,7 +69,7 @@ test('Hindi text gets the Devanagari font (English is the default)', () => {
 
 test('each image says which platforms it is for', () => {
   const to = (p: Parameters<typeof frames>[0]) => frames(p, 'x').map((f) => `${f.label}: ${f.for.join(',')}`);
-  assert.deepEqual(to(post({ variants: { instagram: {}, facebook: {}, linkedin: {}, x: {}, pinterest: {} } })), ['Post image: instagram,facebook', 'Wide image: linkedin,x', 'Pin: pinterest']);
+  assert.deepEqual(to(post({ variants: { instagram: {}, facebook: {}, linkedin: {}, x: {}, pinterest: {} } })), ['Post image: instagram,facebook', 'X image: x', 'Wide image: linkedin', 'Pin: pinterest']);
   assert.deepEqual(to(post({ format: 'short', variants: { instagram: {}, youtube: {} } })), ['Cover: instagram', 'YouTube thumbnail: youtube']);
   assert.deepEqual(to(post({ format: 'story', variants: { instagram: {}, youtube: {} } })), ['Story: instagram,youtube']);
   const slides = [{ headline: 'a', body: '', visual: '' }, { headline: 'b', body: '', visual: '' }];
@@ -139,4 +139,13 @@ test('every layout draws at every size without throwing', () => {
       const html = designHtml({ w, h, layout, screen: 'library', headline: 'Phone full? Keep every photo.', body: 'Body', index: 1, total: 4, cta: 'Try Lens free', site: 'lens.instagrowapp.com', pool: ['https://img.lens/a'], icon: 'data:image/png;base64,AA', fonts: {}, brand: DEFAULT_BRAND });
       assert.match(html, new RegExp(`html,body\\{width:${w}px;height:${h}px`));
     }
+});
+
+test('focus platforms (Instagram, Facebook, X): X gets its own 16:9 image on every format', () => {
+  const sizes = (p: Parameters<typeof frames>[0]) => frames(p, 'x').map((f) => `${f.label} ${f.w}x${f.h}: ${f.for.join(',')}`);
+  const focus = { instagram: {}, facebook: {}, x: {} };
+  const slides = [{ headline: 'Phone full?', body: '', visual: '' }, { headline: 'Back up first', body: '', visual: '' }, { headline: '', body: '', visual: '' }];
+  assert.deepEqual(sizes(post({ variants: focus })), ['Post image 1080x1350: instagram,facebook', 'X image 1600x900: x']);
+  assert.deepEqual(sizes(post({ format: 'carousel', slides, variants: focus })), ['Slide 1 1080x1350: instagram,facebook', 'Slide 2 1080x1350: instagram,facebook', 'Slide 3 1080x1350: instagram,facebook', 'X image 1600x900: x']);
+  assert.deepEqual(sizes(post({ format: 'reel', variants: focus })), ['Cover 1080x1920: instagram,facebook', 'X image 1600x900: x']);
 });

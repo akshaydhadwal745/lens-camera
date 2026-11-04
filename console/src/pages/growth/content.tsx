@@ -37,6 +37,7 @@ export type Brand = {
   pillars: string[];
   cadencePerWeek: number;
   languages: string[];
+  focus: string[];
   publishing: Record<string, boolean>;
 };
 type BrandPage = {
@@ -1625,6 +1626,33 @@ function BrandForm({ ws, initial }: { ws: Workspace; initial: Brand }) {
               <option value="en,hi">English + Hindi</option>
             </select>
           </label>
+        </div>
+        <div className="gw-field">
+          <span>Focus platforms</span>
+          <span className="muted small">
+            The agent makes posts only for these (and images in their sizes).
+            Start where traction comes fastest; add more later.
+          </span>
+          <div className="gw-row" style={{ flexWrap: "wrap", gap: 12 }}>
+            {Object.keys(PLATFORM_LABEL).map((k) => (
+              <label key={k} className="gw-row" style={{ gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={(b.focus ?? []).includes(k)}
+                  disabled={!editable}
+                  onChange={(e) =>
+                    setB({
+                      ...b,
+                      focus: e.target.checked
+                        ? [...(b.focus ?? []), k]
+                        : (b.focus ?? []).filter((x) => x !== k),
+                    })
+                  }
+                />
+                {PLATFORM_LABEL[k]}
+              </label>
+            ))}
+          </div>
         </div>
         <p className="muted small">
           Direct publishing is off for every platform until the accounts are
