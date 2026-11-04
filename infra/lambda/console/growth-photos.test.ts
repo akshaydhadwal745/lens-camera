@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { NOT_A_PHOTO, PEOPLE_OR_BRANDS, pexelsResults, pixabayResults, relevant, photoAssetId, photoRights, wikimediaResults } from './growth-photos';
+import { NOT_A_PHOTO, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, relevant, photoAssetId, photoRights, sheetHtml, sheetPrompt, sheetVerdicts, wikimediaResults, type Photo } from './growth-photos';
 
 const wm = (title: string, license: string, extra: Record<string, unknown> = {}) => ({
   index: 1,
@@ -62,4 +62,26 @@ test('Pixabay: page link, large image, tags as words, licence clears scenery', (
   assert.equal(photoRights(r[0]).status, 'cleared');
   assert.equal(photoRights({ ...r[0], tags: 'woman, portrait' }).status, 'review');
   assert.deepEqual(pixabayResults({}), []);
+});
+
+test('Pixabay: search-stuffing tags are ignored, real people tags still count', () => {
+  const hit = (tags: string) => pixabayResults({ hits: [{ pageURL: 'https://pixabay.com/photos/1/', largeImageURL: 'https://pixabay.com/get/1.jpg', imageWidth: 3000, imageHeight: 4000, user: 'a', tags }] })[0];
+  const candle = hit('candle, black background, samsung wallpaper, iphone wallpaper, mobile wallpaper, flame');
+  assert.equal(candle.tags, 'candle, flame');
+  assert.equal(photoRights(candle).status, 'cleared');
+  assert.equal(photoRights(hit('wedding, bride, candle')).status, 'review');
+});
+
+test('photo check: found photos need a yes, our own do not; unanswered numbers stay unknown', () => {
+  const p = (x: Partial<Photo>) => x as Photo;
+  assert.equal(photoPassed(p({ origin: 'discovered' })), false);
+  assert.equal(photoPassed(p({ origin: 'discovered', looked: { ok: false, why: 'people', at: 1 } })), false);
+  assert.equal(photoPassed(p({ origin: 'discovered', looked: { ok: true, why: 'fine', at: 1 } })), true);
+  assert.equal(photoPassed(p({ origin: 'upload' as Photo['origin'] })), true);
+  const v = sheetVerdicts({ photos: [{ n: 1, ok: true, why: 'clean' }, { n: 3, ok: false, why: 'faces' }, { n: 9, ok: true, why: 'out of range' }] }, 3);
+  assert.deepEqual([...v.keys()], [0, 2]);
+  assert.equal(v.get(2)?.ok, false);
+  assert.equal(sheetVerdicts(undefined, 3).size, 0);
+  assert.match(sheetPrompt('/tmp/s.jpg', ['candles', 'lake']), /\/tmp\/s\.jpg[\s\S]*1: topic "candles"\n2: topic "lake"/);
+  assert.equal((sheetHtml(['data:image/png;base64,AA', 'data:image/png;base64,BB']).match(/<img /g) ?? []).length, 2);
 });

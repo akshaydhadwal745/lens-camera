@@ -8,7 +8,7 @@
 // Devanagari (all OFL, bundled in ./brand).
 // Each render also leaves one zip of all the post's images plus where-to-post.txt in x/ (kept 30 days).
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
 
@@ -23,7 +23,7 @@ import { PLATFORMS, type Platform, type Slide, type Scene } from './growth-conte
 import { runClaude, type Mode } from './growth';
 import { aiPageHtml, DESIGN_SCHEMA, DESIGN_SYSTEM, designPrompt, designsByLabel, PAGE_CHECK, wordProblems, type AiDesign, type KitPhoto } from './growth-ai-design';
 import { designHtml, type Layout, type Screen } from './growth-design';
-import { findPhotos, photoPool, type Photo } from './growth-photos';
+import { findPhotos, PHOTO_CHECK_SCHEMA, PHOTO_CHECK_SYSTEM, photoPassed, photoPool, saveLook, SHEET_SIZE, sheetHtml, sheetPrompt, sheetVerdicts, type Photo } from './growth-photos';
 import { launchBrowser } from './growth-render';
 import { licenseKey } from './growth-rights';
 
@@ -249,9 +249,46 @@ async function bytesOf(a: Asset): Promise<Buffer | undefined> {
   }
 }
 
-/** The photos a post's images use: its own cleared photos first, scenes found for each frame's topic, and a
- *  pool for phone screens (licences that need no credit, so tiny tiles never owe one). */
-async function gatherPhotos(post: PostLike, list: Frame[]) {
+const LOOK_MODE: Mode = { system: PHOTO_CHECK_SYSTEM, schema: PHOTO_CHECK_SCHEMA, toolNames: [], mode: 'report', readsFiles: true };
+const LOOK_MS = 3 * 60_000; // the AI designer needs the rest of the Lambda's 15 minutes
+type Browser = Awaited<ReturnType<typeof launchBrowser>>;
+
+/** Claude looks at found photos it hasn't seen (contact sheets, verdict saved on the asset, so once per photo).
+ *  If it can't (limit reached, no token) they stay unseen and aren't used: no photo beats a wrong photo. */
+async function lookAtPhotos(photos: { photo: Photo; topic: string }[], browser: Browser) {
+  const todo = [...new Map(photos.filter((x) => !photoPassed(x.photo) && !x.photo.looked).map((x) => [x.photo.id, x])).values()];
+  if (!todo.length || process.env.GROWTH_AI_DESIGN === 'off') return;
+  const token = await getParam('/lens/growth/claude-token').catch(() => undefined);
+  if (!token) return;
+  const dir = '/tmp/claude-home';
+  mkdirSync(dir, { recursive: true });
+  const started = Date.now();
+  const page = await browser.newPage();
+  try {
+    for (let i = 0; i < todo.length && Date.now() - started < LOOK_MS; i += SHEET_SIZE) {
+      const part = todo.slice(i, i + SHEET_SIZE);
+      const urls = await Promise.all(part.map(async (x) => `data:${x.photo.mime};base64,${((await bytesOf(x.photo)) ?? Buffer.alloc(0)).toString('base64')}`));
+      await page.setViewport({ width: 1600, height: 400 * Math.ceil(part.length / 4), deviceScaleFactor: 1 });
+      await page.setContent(sheetHtml(urls), { waitUntil: 'load' });
+      const file = join(dir, `sheet-${i}.jpg`);
+      writeFileSync(file, Buffer.from(await page.screenshot({ type: 'jpeg', quality: 80 })));
+      const { report } = await runClaude<{ photos: { n: number; ok: boolean; why: string }[] }>(sheetPrompt(file, part.map((x) => x.topic)), token, { enabled: [] }, Date.now() + LOOK_MS, LOOK_MODE);
+      const verdicts = sheetVerdicts(report, part.length);
+      await Promise.all(part.map((x, k) => (verdicts.has(k) ? saveLook(x.photo, verdicts.get(k)!) : undefined)));
+      console.log(JSON.stringify({ photoLook: part.map((x, k) => ({ name: x.photo.name.slice(0, 40), ...verdicts.get(k) })) }));
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ photoLookFailed: (e as Error).message.slice(0, 300) }));
+  } finally {
+    await page.close();
+  }
+}
+
+/** The photos a post's images use: a photo a person chose for the post first, else scenes found for each frame's
+ *  topic, and a pool for phone screens (licences that need no credit, so tiny tiles never owe one). Found photos
+ *  only after Claude has seen them. `dropped`: found photos an earlier render attached for their credit lines
+ *  (they aren't anyone's choice, and would otherwise become every scene of this render). */
+async function gatherPhotos(post: PostLike, list: Frame[], browser: Browser) {
   const served = new Map<string, { mime: string; body: Buffer }>();
   const kit: KitPhoto[] = [];
   const url = async (a: Asset) => {
@@ -265,28 +302,36 @@ async function gatherPhotos(post: PostLike, list: Frame[]) {
     return IMG + a.id;
   };
   let own: Asset | undefined;
+  const dropped: string[] = [];
   for (const r of post.assets ?? []) {
     const a = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `ASSET#${r.id}` } }))).Item as Asset | undefined;
-    if (a && a.kind !== 'render' && a.mime.startsWith('image/') && a.status === 'ready' && a.rights.status === 'cleared' && (r.role === 'background' || (r.role === 'media' && a.rights.license === 'own'))) {
-      own = a;
-      break;
-    }
+    if (a?.origin === 'discovered') dropped.push(r.id);
+    else if (!own && a && a.kind !== 'render' && a.mime.startsWith('image/') && a.status === 'ready' && a.rights.status === 'cleared' && (r.role === 'background' || (r.role === 'media' && a.rights.license === 'own'))) own = a;
   }
+  const queries = [...new Set(list.map((f) => f.query).filter((x): x is string => !!x))];
+  const options = new Map<string, Photo[]>();
+  if (!own) for (const q of queries) options.set(q, await findPhotos(q, 10, list.some((f) => f.query === q && f.w > f.h) ? 'landscape' : 'portrait'));
+  let pool = (await photoPool()).filter(noCredit);
+  if (pool.filter(photoPassed).length < 15) {
+    for (const q of GENERIC) await findPhotos(q, 3, 'portrait');
+    pool = (await photoPool()).filter(noCredit);
+  }
+  // Stock before older Commons finds, so the phone screens get the better photos.
+  const unseen = shuffle(pool.filter((p) => !photoPassed(p) && !p.looked), post.id).sort((a, b) => Number(/pixabay|pexels/i.test(b.rights.license)) - Number(/pixabay|pexels/i.test(a.rights.license)));
+  await lookAtPhotos(
+    [...[...options].flatMap(([q, ps]) => ps.map((photo) => ({ photo, topic: q }))), ...(pool.filter(photoPassed).length < 15 ? unseen.slice(0, 2 * SHEET_SIZE) : []).map((photo) => ({ photo, topic: photo.query ?? 'a beautiful scene' }))],
+    browser,
+  );
   const scenes = new Map<string, string>();
   const credited: AssetRef[] = [];
-  for (const q of [...new Set(list.map((f) => f.query).filter((x): x is string => !!x))]) {
-    const [found] = own ? [own as Photo] : await findPhotos(q, 1, list.some((f) => f.query === q && f.w > f.h) ? 'landscape' : 'portrait');
+  for (const q of queries) {
+    const found = (own as Photo | undefined) ?? options.get(q)?.find(photoPassed);
     const u = found && (await url(found));
     if (u) scenes.set(q, u);
     if (found && !noCredit(found) && !credited.some((c) => c.id === found.id)) credited.push({ id: found.id, role: 'background' });
   }
-  let pool = (await photoPool()).filter(noCredit);
-  for (const q of GENERIC) {
-    if (pool.length >= 15) break;
-    if ((await findPhotos(q, 3, 'portrait')).length) pool = (await photoPool()).filter(noCredit);
-  }
-  const poolUrls = (await Promise.all(shuffle(pool, post.id).slice(0, 15).map(url))).filter((u): u is string => !!u);
-  return { served, scenes, pool: poolUrls, credited, kit };
+  const poolUrls = (await Promise.all(shuffle(pool.filter(photoPassed), post.id).slice(0, 15).map(url))).filter((u): u is string => !!u);
+  return { served, scenes, pool: poolUrls, credited, dropped, kit };
 }
 
 const DESIGN_MODE: Mode = { system: DESIGN_SYSTEM, schema: DESIGN_SCHEMA, toolNames: [], mode: 'report' };
@@ -322,13 +367,18 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
     plex600: font('plex-mono-600.ttf'),
   };
   const icon = `data:image/png;base64,${font('lens-icon.png')}`;
-  const { served, scenes, pool, credited, kit } = await gatherPhotos({ ...post, id: postId }, list);
   const offer = '10 GB free forever. No card needed.';
   const allowed = [post.hook, ...list.map((f) => `${f.headline} ${f.body}`), cta, offer, SITE, 'Lens'].join(' ');
   const browser = await launchBrowser();
   const renders: { assetId: string; label: string; w: number; h: number; designedBy: 'ai' | 'template' }[] = [];
   const files: { name: string; data: Buffer }[] = [];
+  let credited: AssetRef[] = [];
+  let dropped: string[] = [];
   try {
+    const gathered = await gatherPhotos({ ...post, id: postId }, list, browser);
+    const { served, scenes, pool, kit } = gathered;
+    credited = gathered.credited;
+    dropped = gathered.dropped;
     const page = await browser.newPage();
     // Nothing leaves the page: fonts are inline and photos are answered from memory.
     await page.setRequestInterception(true);
@@ -409,7 +459,8 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   files.push({ name: 'where-to-post.txt', data: Buffer.from(whereToPost(post.title, list), 'utf8') });
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: zipKey(postId), Body: zipStore(files), ContentType: 'application/zip' }));
   // Found photos that need a credit join the post as backgrounds, so Export adds their credit lines.
-  const assets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
+  const kept = (post.assets ?? []).filter((a) => !dropped.includes(a.id));
+  const assets = [...kept, ...credited.filter((c) => !kept.some((a) => a.id === c.id))].slice(0, 20);
   await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z, assets = :a', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId), ':a': assets } }));
   return { rendered: renders.length };
 }

@@ -1,7 +1,7 @@
 // Content studio (docs/growth/content-engine.md): the board of content packages, the package editor
 // (format, slides or script, one version per platform), the calendar and the brand kit. The agent drafts
 // packages from social tasks; a person edits, a manager approves; nothing is published unapproved.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, get, post } from "../../api";
 import { Card, Loaded, useLoad } from "../../ui";
@@ -1837,27 +1837,23 @@ function Moments({ ws }: { ws: Workspace }) {
 
 // ---------- images drawn from a post (render engine, growth-media.ts) ----------
 
+type RenderJobs = {
+  render: { postId: string; startedAt: number } | null;
+  renderDone: { postId: string; at: number; error: string | null } | null;
+};
+
 function Images({ ws, post }: { ws: Workspace; post: Post }) {
   const [n, setN] = useState(0);
   const lib = useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), [n]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
-  const start = async () => {
-    setError("");
+  // Waits for the render job, which runs on the server and survives closing or refreshing this page.
+  const waitFor = async (began: number) => {
     setRunning(true);
-    const began = Date.now();
     try {
-      await api("POST", `/growth/posts/${post.id}/render`, {});
       for (;;) {
         await new Promise((r) => setTimeout(r, 4000));
-        const j = await get<{
-          render: unknown;
-          renderDone: {
-            postId: string;
-            at: number;
-            error: string | null;
-          } | null;
-        }>("/growth/jobs");
+        const j = await get<RenderJobs>("/growth/jobs");
         const done = j.renderDone;
         if (!j.render && done?.postId === post.id && done.at >= began - 1000) {
           if (done.error) setError(done.error);
@@ -1874,6 +1870,33 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
     setRunning(false);
     setN((x) => x + 1);
   };
+  const start = async () => {
+    setError("");
+    const began = Date.now();
+    setRunning(true);
+    try {
+      await api("POST", `/growth/posts/${post.id}/render`, {});
+    } catch (e) {
+      setError((e as Error).message);
+      setRunning(false);
+      return;
+    }
+    await waitFor(began);
+  };
+  useEffect(() => {
+    // Opened (or refreshed) while this post's images are being made: pick the job up again.
+    let on = true;
+    void get<RenderJobs>("/growth/jobs").then(
+      (j) => {
+        if (on && j.render?.postId === post.id) void waitFor(j.render.startedAt);
+      },
+      () => undefined,
+    );
+    return () => {
+      on = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
   const [zipping, setZipping] = useState(false);
   const downloadAll = async () => {
     setError("");
@@ -1900,8 +1923,9 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
       </span>
       <span className="muted small">
         Designed by AI for this post (the real app on a phone, photos found
-        online, brand colours), checked by code; any image that fails the checks
-        uses a template. Takes a few minutes. Save your edits first; making them
+        online and looked at by AI first, brand colours), checked by code; any
+        image that fails the checks uses a template. Takes a few minutes and
+        keeps going if you leave this page. Save your edits first; making them
         again replaces the old ones.
       </span>
       {error && <p className="notice error">{error}</p>}

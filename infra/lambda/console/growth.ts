@@ -245,7 +245,8 @@ const toolLog = (): ToolEntry[] =>
 type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; ga4Token?: string; competitorHosts?: string[]; enabled: string[]; commit?: string };
 
 /** What a run asks of Claude: its instructions, output schema and tool list (the weekly report by default). */
-export type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft' };
+/** `readsFiles`: Claude may open local files (the Read tool), used to look at images. */
+export type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft'; readsFiles?: boolean };
 const REPORT_MODE: Mode = { system: ANALYST_SYSTEM, schema: REPORT_SCHEMA, toolNames: TOOL_NAMES, mode: 'report' };
 
 export function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup, deadline: number, mode: Mode = REPORT_MODE): Promise<{ report: T; model?: string }> {
@@ -282,12 +283,12 @@ export function runClaude<T = AiReport>(prompt: string, token: string, tools: To
   const args = [
     '-p',
     '--tools',
-    '',
+    mode.readsFiles ? 'Read' : '',
     '--strict-mcp-config',
     '--mcp-config',
     mcp,
     '--allowedTools',
-    mode.toolNames.map((t) => `mcp__growth__${t}`).join(','),
+    [...mode.toolNames.map((t) => `mcp__growth__${t}`), ...(mode.readsFiles ? ['Read'] : [])].join(','),
     '--no-session-persistence',
     '--output-format',
     'json',
