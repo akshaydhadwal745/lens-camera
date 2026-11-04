@@ -135,6 +135,12 @@ export type Partner = {
 };
 export type Post = {
   id: string;
+  score?: {
+    total: number;
+    hook: number;
+    hookWhy: string;
+    redone: number;
+  } | null; // the AI creative director's score after images were made
   channel: string;
   date: string;
   title: string;

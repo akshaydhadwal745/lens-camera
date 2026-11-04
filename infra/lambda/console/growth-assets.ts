@@ -8,7 +8,7 @@ import { BatchGetCommand, DeleteCommand, GetCommand, PutCommand, QueryCommand } 
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import { randomBytes } from 'node:crypto';
 
-import { ddb, env, HttpError, json, Req, Res, s3 } from '../api/lib';
+import { ddb, env, HttpError, json, Req, Res, s3, signedCdnUrl } from '../api/lib';
 import { creditLine, effectiveStatus, licenseVerdict, type Rights, type RightsStatus } from './growth-rights';
 import { log } from './log';
 
@@ -99,8 +99,9 @@ export const hasLensPhoto = (refs: AssetRef[], assets: Map<string, Asset>) => re
 export const credits = (refs: AssetRef[], assets: Map<string, Asset>) =>
   [...new Set(refs.map((r) => assets.get(r.id)).filter((a): a is Asset => !!a && licensed(a)).map((a) => creditLine(a.rights.author, a.rights.license, a.rights.source)).filter(Boolean))];
 
-async function viewUrl(key: string) {
-  return presign(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn: 300 });
+/** A 5-minute link on the Console's own CloudFront (a/, e/ and x/ are served there, signed; see console-stack.ts). */
+export async function viewUrl(key: string) {
+  return signedCdnUrl(`${process.env.CONSOLE_ORIGIN}/${key.split('/').map(encodeURIComponent).join('/')}`, 300);
 }
 
 async function allAssets(): Promise<Asset[]> {

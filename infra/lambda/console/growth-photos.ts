@@ -1,10 +1,13 @@
 // Photos from the internet for content images (docs/growth/content-engine.md, phase 3): searched live,
 // rights-checked by code (growth-rights.ts) and saved to the Library like any other asset.
-//   Sources: Pixabay and Pexels (free keys in SSM /lens/growth/photos {"pixabayKey","pexelsKey"}) and
-//   Wikimedia Commons (no key). Pixabay's API asks us to download images rather than hotlink, which is what
-//   we do. Unsplash is left out on purpose: its API rules want their hosted image shown, not an edited copy.
-//   Only photos the rights check clears are used automatically. Photos whose title or tags suggest people
-//   or brands go to the Library as "review" for a manager (free licences have no model/trademark release).
+//   Source: Pixabay only (owner 2026-11-04; key in SSM /lens/growth/photos {"pixabayKey"}). Its API asks us to
+//   download images rather than hotlink, which is what we do. Pexels joins if a pexelsKey is ever added. Commons
+//   was dropped after it put a press photo of a religious ceremony into a wedding post; older finds stay in the
+//   Library but aren't used automatically.
+//   Only photos the rights check clears are used automatically. Photos whose tags suggest people or brands go
+//   to the Library as "review" for a manager (free licences have no model/trademark release).
+//   Words can't see a photo, so Claude also looks at the photos (growth-media.ts lookAtPhotos): `looked` on the
+//   asset says if it's good enough for any ad (once per photo); whether it fits THIS post is asked per post.
 //   GROWTH / ASSET#<id>     the photo (kind image, origin discovered, query, sourceUrl, w, h); file a/<id>.<ext>
 //   e/<id>.json             what the source said about the photo and its licence, when we took it
 //   GROWTH / PHOTOQ#<hash>  { query, ids, at, ttl, v, sources }: a search is reused for 30 days; `sources`
@@ -12,7 +15,7 @@
 import { createHash } from 'node:crypto';
 
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { BatchGetCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchGetCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam, s3 } from '../api/lib';
 import type { Asset } from './growth-assets';
@@ -23,7 +26,7 @@ const UA = 'LensGrowth/1.0 (https://lens.instagrowapp.com; content images)';
 const DAY = 86_400_000;
 
 export type Found = {
-  source: 'Wikimedia Commons' | 'Pexels' | 'Pixabay';
+  source: 'Pexels' | 'Pixabay';
   sourceUrl: string; // the photo's own page
   imageUrl: string; // the file we download (about 1600 px wide)
   w: number;
@@ -34,48 +37,11 @@ export type Found = {
   title: string;
   tags: string;
 };
-export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?: number };
+export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?: number; looked?: { ok: boolean; why: string; at: number } };
 
 /** Words in a title or tags that mean people or brands are probably in the picture. */
 export const PEOPLE_OR_BRANDS =
   /\b(portrait|selfie|faces?|man|men|woman|women|girls?|boys?|child|children|kids?|baby|people|persons?|bride|groom|couple|family|friends|singer|artist|band|actor|actress|player|celebrity|model|crowd|audience|fans|logo|brand|trademark|billboard|advert\w*|iphone|samsung|apple|google|pixel)\b/i;
-
-/** Paintings, prints, maps and scans are public domain too, but they aren't photos. */
-export const NOT_A_PHOTO = /\b(paintings?|painted|painter|oil on|canvas|drawings?|engraving|etching|lithograph|woodcut|illustrations?|postcards?|posters?|maps?|museum|artworks?|watercolou?r|aquarelle|sketch|scans?|book of|manuscript|fresco|mural|stamps?|coins?|diagram|svg|logo)\b|\b1[5-8]\d\d\b|\b19[0-4]\d\b/i;
-
-/** Enough of the search words appear in the title or tags (Commons search also matches categories loosely). */
-export function relevant(f: Pick<Found, 'title' | 'tags'>, query: string): boolean {
-  const hay = `${f.title} ${f.tags}`.toLowerCase();
-  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-  const hits = words.filter((w) => hay.includes(w.replace(/s$/, ''))).length;
-  return hits >= Math.min(2, words.length);
-}
-
-const text = (html: unknown) => String(html ?? '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/\s+/g, ' ').trim();
-
-/** Wikimedia Commons search (generator=search, prop=imageinfo with extmetadata) → photos. */
-export function wikimediaResults(json: any): Found[] {
-  const pages = Object.values(json?.query?.pages ?? {}) as any[];
-  return pages
-    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
-    .map((p) => {
-      const i = p.imageinfo?.[0] ?? {};
-      const m = i.extmetadata ?? {};
-      return {
-        source: 'Wikimedia Commons' as const,
-        sourceUrl: String(i.descriptionurl ?? ''),
-        imageUrl: String(i.thumburl ?? i.url ?? ''),
-        w: Number(i.thumbwidth ?? i.width) || 0,
-        h: Number(i.thumbheight ?? i.height) || 0,
-        license: text(m.LicenseShortName?.value),
-        licenseUrl: text(m.LicenseUrl?.value),
-        author: text(m.Artist?.value).slice(0, 120),
-        title: String(p.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, ''),
-        tags: `${text(m.ImageDescription?.value).slice(0, 400)} ${text(m.Categories?.value).replace(/\|/g, ' ')}`,
-      };
-    })
-    .filter((f) => f.sourceUrl && f.imageUrl && f.w >= 1000 && !NOT_A_PHOTO.test(`${f.title} ${f.tags}`));
-}
 
 /** Pexels search → photos (Pexels License: free, commercial use and edits allowed, no credit required). */
 export function pexelsResults(json: any): Found[] {
@@ -98,6 +64,14 @@ export function pexelsResults(json: any): Found[] {
     .filter((f) => f.sourceUrl && f.imageUrl);
 }
 
+/** Pixabay uploaders stuff tags for search ("iphone wallpaper", "samsung wallpaper"): they say nothing about the photo. */
+const cleanTags = (tags: unknown) =>
+  String(tags ?? '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t && !/wallpaper|background|screensaver|lock screen/i.test(t))
+    .join(', ');
+
 /** Pixabay search → photos (Pixabay Content License: free, commercial use and edits allowed, no credit). */
 export function pixabayResults(json: any): Found[] {
   return ((json?.hits ?? []) as any[])
@@ -112,8 +86,8 @@ export function pixabayResults(json: any): Found[] {
         license: 'Pixabay Content License',
         licenseUrl: 'https://pixabay.com/service/license-summary/',
         author: String(p.user ?? '').slice(0, 120),
-        title: String(p.tags ?? '').slice(0, 200),
-        tags: String(p.tags ?? ''),
+        title: cleanTags(p.tags).slice(0, 200),
+        tags: cleanTags(p.tags),
       };
     })
     .filter((f) => f.sourceUrl && f.imageUrl && f.w >= 800);
@@ -149,7 +123,7 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
 }
 
 /** Bump when sources change, so cached searches made without them are done again. */
-const SEARCH_VERSION = 2;
+const SEARCH_VERSION = 4;
 
 async function searchSources(query: string, orientation: 'portrait' | 'landscape'): Promise<{ found: Found[]; sources: Record<string, string> }> {
   const out: Found[] = [];
@@ -170,17 +144,9 @@ async function searchSources(query: string, orientation: 'portrait' | 'landscape
   } catch (e) {
     sources.keys = `failed: ${(e as Error).message.slice(0, 120)}`;
   }
-  if (keys.pixabayKey) await run('pixabay', async () => pixabayResults(await getJson(`https://pixabay.com/api/?${new URLSearchParams({ key: keys.pixabayKey!, q: query.slice(0, 100), image_type: 'photo', orientation: orientation === 'portrait' ? 'vertical' : 'horizontal', safesearch: 'true', per_page: '20', order: 'popular' })}`)));
+  if (keys.pixabayKey) await run('pixabay', async () => pixabayResults(await getJson(`https://pixabay.com/api/?${new URLSearchParams({ key: keys.pixabayKey!, q: query.slice(0, 100), image_type: 'photo', orientation: orientation === 'portrait' ? 'vertical' : 'horizontal', safesearch: 'true', per_page: '40', order: 'popular' })}`)));
   else sources.pixabay = 'no key';
   if (keys.pexelsKey) await run('pexels', async () => pexelsResults(await getJson(`https://api.pexels.com/v1/search?${new URLSearchParams({ query, orientation, per_page: '15', size: 'large' })}`, { Authorization: keys.pexelsKey! })));
-  const wm = (extra: string) =>
-    `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', format: 'json', generator: 'search', gsrnamespace: '6', gsrsearch: `${query} filetype:bitmap${extra}`, gsrlimit: '20', prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiurlwidth: '1600' })}`;
-  // Quality images first (photos reviewed by the Commons community), then any; on topic only.
-  await run('wikimedia', async () => {
-    const got: Found[] = [];
-    for (const extra of [' incategory:Quality_images', '']) got.push(...wikimediaResults(await getJson(wm(extra))).filter((f) => relevant(f, query)));
-    return got;
-  });
   console.log(JSON.stringify({ photoSearch: query, sources }));
   const seen = new Set<string>();
   return { found: out.filter((f) => !seen.has(f.sourceUrl) && seen.add(f.sourceUrl)), sources };
@@ -223,7 +189,9 @@ async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
   return photo;
 }
 
-const usable = (p: Photo | undefined): p is Photo => !!p && p.status === 'ready' && effectiveStatus(p.rights) === 'cleared';
+/** Found photos only from the stock sites we chose; a person can still pick any cleared one for a post. */
+export const fromStock = (p: Photo) => p.origin !== 'discovered' || /pixabay|pexels/i.test(p.rights.license);
+const usable = (p: Photo | undefined): p is Photo => !!p && p.status === 'ready' && effectiveStatus(p.rights) === 'cleared' && p.looked?.ok !== false && fromStock(p);
 
 /** Up to `n` cleared photos for a search, found live (or reused from the last 30 days). Never throws. */
 export async function findPhotos(query: string, n = 3, orientation: 'portrait' | 'landscape' = 'portrait'): Promise<Photo[]> {
@@ -281,3 +249,122 @@ export async function photoData(p: Photo): Promise<string | undefined> {
     return undefined;
   }
 }
+
+// ---------- Claude looks at the photos ----------
+
+/** Found photos are only used once Claude has seen them and said yes; our own photos need no look. */
+export const photoPassed = (p: Photo) => p.origin !== 'discovered' || p.looked?.ok === true;
+
+export const SHEET_SIZE = 12;
+
+export const PHOTO_CHECK_SYSTEM = `You are the photo editor of a premium consumer app's marketing team. You get one contact sheet of numbered photos and the post they are for. Open the sheet with the Read tool first and judge what you actually see, not any caption. Answer two separate things for every number.
+
+ok: may this photo appear in any of our ads? false if ANY of these is true:
+- A person: any face, group, crowd or recognisable body (we have no model release). A hand alone is fine only if the photo is beautiful.
+- A religious or political ceremony, a place of worship, a protest, a war or disaster, a news or press photo.
+- A logo, brand, product, or readable sign or text.
+- Not a real photo: painting, print, map, satellite image, diagram, screenshot, rendering.
+- Not good enough: dull, amateur, snapshot-like, messy, blurry, dark without a point, dead or ugly subject.
+A senior art director must be happy to put it in an Apple-level ad. When in doubt, false: there are always more photos.
+
+fit: 0 to 10, how much would someone seeing this next to this post instantly connect it with what the post is about? Judge against the post itself, not only the search words: for a post about wedding photos, a candle in a dark room is 2 even if the search said "candles", a beautifully set wedding table is 9. 7 or more means it clearly belongs.`;
+
+export const PHOTO_CHECK_SCHEMA = {
+  type: 'object',
+  properties: {
+    photos: {
+      type: 'array',
+      items: { type: 'object', properties: { n: { type: 'integer' }, ok: { type: 'boolean' }, fit: { type: 'integer', description: '0 to 10' }, why: { type: 'string', description: 'A few words' } }, required: ['n', 'ok', 'fit', 'why'], additionalProperties: false },
+    },
+  },
+  required: ['photos'],
+  additionalProperties: false,
+};
+
+/** A photo must score this for the post to use it as a scene. */
+export const FITS = 7;
+
+/** A numbered grid of up to SHEET_SIZE photos, shown whole (nothing cropped out of sight). */
+export function sheetHtml(urls: string[]): string {
+  const tiles = urls
+    .map((u, i) => `<div style="position:relative;width:400px;height:400px;background:#222"><img src="${u}" style="width:100%;height:100%;object-fit:contain"><b style="position:absolute;left:0;top:0;background:#ff0;color:#000;font:700 34px sans-serif;padding:2px 12px">${i + 1}</b></div>`)
+    .join('');
+  return `<!doctype html><body style="margin:0;background:#000"><div style="display:flex;flex-wrap:wrap;gap:0;width:1600px">${tiles}</div></body>`;
+}
+
+export const sheetPrompt = (file: string, post: string, topics: string[]) => `Open the contact sheet ${file} and judge every number.\n\nThe post these are for:\n${post}\n\n${topics.map((t, i) => `${i + 1}: searched for "${t}"`).join('\n')}`;
+
+/** Claude's answer → a verdict per photo; a number it didn't answer stays unknown (asked again next time). */
+export function sheetVerdicts(report: { photos?: { n: number; ok: boolean; fit?: number; why: string }[] } | undefined, count: number): Map<number, { ok: boolean; fit: number; why: string }> {
+  const out = new Map<number, { ok: boolean; fit: number; why: string }>();
+  for (const v of report?.photos ?? []) if (Number.isInteger(v.n) && v.n >= 1 && v.n <= count) out.set(v.n - 1, { ok: v.ok === true, fit: Math.max(0, Math.min(10, Number(v.fit) || 0)), why: String(v.why ?? '').slice(0, 120) });
+  return out;
+}
+
+export async function saveLook(p: Photo, v: { ok: boolean; why: string }, now = Date.now()) {
+  p.looked = { ok: v.ok, why: v.why, at: now };
+  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `ASSET#${p.id}` }, UpdateExpression: 'SET looked = :l', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':l': p.looked } }));
+}
+
+// ---------- scoring the finished post ----------
+
+/** Below this an image gets one redesign using the critique. */
+export const REDO_BELOW = 75;
+
+export const SCORE_SYSTEM = `You are the toughest creative director at a top consumer-app studio. You judge a finished social post for Lens, a camera and photo-backup app, before it goes out on Instagram, Facebook and X. Open every contact sheet with the Read tool and judge what you actually see. Be honest: most work scores 55 to 80, and 90+ is rare.
+
+For each image score 0 to 100:
+- relates: does everything in the picture clearly belong to what this post and this slide say? Unrelated photo or a phone showing unrelated photos: under 40. Any real person, ceremony, religious or press scene, or a photo that tells a different story: 0.
+- clear: can a stranger scrolling on a phone get the point in 2 seconds? Is the text readable at this small size?
+- design: does it look made by a senior designer: one focal point, confident layout, nothing awkward, cropped badly or overlapping?
+score = your overall judgement for the image; it can't be more than 15 above relates.
+why = the main problem in a few plain words, or what works if nothing is wrong. fix = one concrete instruction for the designer, empty if none.
+
+Also score hook 0 to 100: would the first line stop someone scrolling, and does the post give them a reason to save, share or try Lens?`;
+
+export const SCORE_SCHEMA = {
+  type: 'object',
+  properties: {
+    images: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { n: { type: 'integer' }, score: { type: 'integer' }, relates: { type: 'integer' }, clear: { type: 'integer' }, design: { type: 'integer' }, why: { type: 'string' }, fix: { type: 'string' } },
+        required: ['n', 'score', 'relates', 'clear', 'design', 'why', 'fix'],
+        additionalProperties: false,
+      },
+    },
+    hook: { type: 'integer' },
+    hookWhy: { type: 'string' },
+  },
+  required: ['images', 'hook', 'hookWhy'],
+  additionalProperties: false,
+};
+
+export type ImageScore = { label: string; score: number; relates: number; clear: number; design: number; why: string; fix: string };
+export type PostScore = { total: number; hook: number; hookWhy: string; images: ImageScore[]; redone: number; at: number };
+
+const pct = (v: unknown) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+
+/** Claude's answer → scores per label, in frame order; numbers it skipped are simply unscored. */
+export function readScores(report: { images?: { n: number; score: number; relates: number; clear: number; design: number; why: string; fix: string }[] } | undefined, labels: string[]): ImageScore[] {
+  const out: ImageScore[] = [];
+  labels.forEach((label, i) => {
+    const v = report?.images?.find((x) => x.n === i + 1);
+    if (!v) return;
+    const relates = pct(v.relates);
+    // Enforced here too: a picture that doesn't belong can't score well however pretty it is.
+    out.push({ label, score: Math.min(pct(v.score), relates + 15), relates, clear: pct(v.clear), design: pct(v.design), why: String(v.why ?? '').slice(0, 200), fix: String(v.fix ?? '').slice(0, 300) });
+  });
+  return out;
+}
+
+/** The post's score: mostly its images, the weakest one counts double (one bad slide spoils a carousel), plus the hook. */
+export function postTotal(images: ImageScore[], hook: number): number {
+  if (!images.length) return 0;
+  const scores = images.map((x) => x.score);
+  const weighted = (scores.reduce((a, b) => a + b, 0) + Math.min(...scores)) / (scores.length + 1);
+  return Math.round(weighted * 0.8 + pct(hook) * 0.2);
+}
+
+export const scorePrompt = (files: string[], post: string, labels: string[]) => `Open and judge: ${files.join(', ')}. Numbers run across the sheets.\n\nThe post:\n${post}\n\n${labels.join('\n')}`;

@@ -71,7 +71,7 @@ export function designPrompt(post: { title: string; format: string }, list: Fram
     const role = f.style === 'cta' ? 'call to action (last slide)' : f.total ? `slide ${f.index} of ${f.total}${f.style === 'cover' ? ' (cover)' : ''}` : 'single image';
     const words = f.style === 'cta' ? `CTA: "${cta}" | offer: "${offer}" | site: "${site}"` : `headline: "${f.headline}"${f.body ? ` | body: "${f.body}"` : ''}`;
     const fix = problems?.get(f.label);
-    return `- label "${f.label}" · canvas ${W}×${H} · ${role} · for ${f.for.join(', ') || 'any platform'} · suggested screen: ${f.screen}${f.query ? ` · scene: ${f.query}` : ''}\n  ${words}${fix ? `\n  YOUR LAST DESIGN FAILED THESE CHECKS, fix them: ${fix.join('; ')}` : ''}`;
+    return `- label "${f.label}" · canvas ${W}×${H} · ${role} · for ${f.for.join(', ') || 'any platform'} · suggested screen: ${f.screen}${f.query ? ` · scene: ${f.query}` : ''}\n  ${words}${fix ? `\n  YOUR LAST DESIGN HAD THESE PROBLEMS, fix them: ${fix.join('; ')}` : ''}`;
   });
   const ph = photos.map((p) => `- ${p.ref}: ${p.about.slice(0, 90)} (${p.w}×${p.h}${p.w > p.h ? ', landscape' : ', portrait'})`);
   return `Design ${problems ? 'again only the images below of' : 'every image of'} this post.
@@ -80,7 +80,7 @@ Post: "${post.title}" (${post.format}). Brand colours: primary ${brand.colors.pr
 Images:
 ${imgs.join('\n')}
 
-Photos you may use (licences already checked; scenery and things, not Lens photos):
+Photos you may use (licences already checked; scenery and things, not Lens photos). Use a photo only where it clearly belongs with that image's message; otherwise use the phone, colour and type. Never use one just to fill space:
 ${ph.join('\n') || '- none: design with the phone, colour and type only'}`;
 }
 
