@@ -1843,6 +1843,20 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
     setRunning(false);
     setN((x) => x + 1);
   };
+  const [zipping, setZipping] = useState(false);
+  const downloadAll = async () => {
+    setError("");
+    setZipping(true);
+    try {
+      const { url } = await get<{ url: string }>(
+        `/growth/posts/${post.id}/images`,
+      );
+      window.location.assign(url);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setZipping(false);
+  };
   return (
     <div className="gw-field">
       <span className="gw-row">
@@ -1869,23 +1883,37 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
               }),
             );
           return mine.length ? (
-            <div className="gw-assets">
-              {mine.map((a) => (
-                <a
-                  key={a.id}
-                  className="gw-card"
-                  href={a.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  download
+            <>
+              <div className="gw-row">
+                <button
+                  className="btn small"
+                  disabled={zipping || running}
+                  onClick={downloadAll}
                 >
-                  <Thumb a={a} />
-                  <span className="small">
-                    {a.label} · {a.w}×{a.h}
-                  </span>
-                </a>
-              ))}
-            </div>
+                  {zipping ? "Getting zip…" : `Download all (${mine.length})`}
+                </button>
+                <span className="muted small">
+                  One zip with every image and a note saying which goes where.
+                </span>
+              </div>
+              <div className="gw-assets">
+                {mine.map((a) => (
+                  <a
+                    key={a.id}
+                    className="gw-card"
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                  >
+                    <Thumb a={a} />
+                    <span className="small">
+                      {a.label} · {a.w}×{a.h}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </>
           ) : (
             <span className="muted small">No images yet.</span>
           );

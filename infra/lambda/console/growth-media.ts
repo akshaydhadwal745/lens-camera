@@ -3,25 +3,29 @@
 // YouTube thumbnails — drawn as HTML from the brand kit and screenshotted in the GrowthAnalyst's headless
 // Chromium (₹0, no AI image service). Each image is saved as a Library asset (kind "render", made by us,
 // rights cleared) and listed on the post as `renders`. Rendering again overwrites the same files.
-// English text uses Geist (bundled in ./brand); Devanagari needs a font added there first.
+// Text uses Geist for Latin and Noto Sans Devanagari for Hindi (both bundled in ./brand, OFL fonts).
+// Each render also leaves one zip of all the post's images plus where-to-post.txt in x/ (kept 30 days).
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { crc32 } from 'node:zlib';
 
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Res, s3 } from '../api/lib';
 import type { Asset, AssetRef } from './growth-assets';
 import { brand as loadBrand, type Brand } from './growth-brand';
-import type { Platform, Slide, Scene } from './growth-content-rules';
+import { PLATFORMS, type Platform, type Slide, type Scene } from './growth-content-rules';
 import { launchBrowser } from './growth-render';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const BRAND_DIR = process.env.GROWTH_BRAND_DIR ?? join(__dirname, 'brand');
 const SITE = 'lens.instagrowapp.com';
 
-export type Frame = { label: string; w: number; h: number; style: 'cover' | 'slide' | 'cta'; headline: string; body: string; index?: number; total?: number };
+/** `for`: the platforms this image is posted to. */
+export type Frame = { label: string; w: number; h: number; style: 'cover' | 'slide' | 'cta'; headline: string; body: string; for: Platform[]; index?: number; total?: number };
 type PostLike = { id: string; format: string; hook: string; slides: Slide[]; script: Scene[]; variants: Partial<Record<Platform, unknown>>; assets?: AssetRef[] };
 
 // ---------- frames (pure) ----------
@@ -37,42 +41,48 @@ const SIZES = {
 /** Which images a post needs: by format, plus the extra sizes its platforms take. */
 export function frames(p: PostLike, cta: string): Frame[] {
   const has = (k: Platform) => !!p.variants[k];
+  const all = PLATFORMS.filter(has);
+  const only = (...ks: Platform[]) => all.filter((k) => ks.includes(k));
+  const rest = (...ks: Platform[]) => all.filter((k) => !ks.includes(k));
   const hook = p.hook.trim() || p.slides[0]?.headline || p.script[0]?.onScreen || '';
   const lead = p.slides[0];
-  const f = (label: string, size: readonly [number, number], style: Frame['style'], headline: string, body = ''): Frame => ({ label, w: size[0], h: size[1], style, headline, body });
+  const f = (label: string, size: readonly [number, number], style: Frame['style'], to: Platform[], headline: string, body = ''): Frame => ({ label, w: size[0], h: size[1], style, headline, body, for: to });
   const out: Frame[] = [];
   if (p.format === 'carousel') {
     const slides = p.slides.length ? p.slides : [{ headline: hook, body: '', visual: '' }];
     slides.forEach((s, i) => {
       const style = i === 0 ? 'cover' : i === slides.length - 1 && slides.length > 2 ? 'cta' : 'slide';
-      out.push({ ...f(`Slide ${i + 1}`, SIZES.feed, style, s.headline || (i === 0 ? hook : '') || (style === 'cta' ? cta : ''), s.body), index: i + 1, total: slides.length });
+      out.push({ ...f(`Slide ${i + 1}`, SIZES.feed, style, rest('linkedin'), s.headline || (i === 0 ? hook : '') || (style === 'cta' ? cta : ''), s.body), index: i + 1, total: slides.length });
     });
-    if (has('linkedin')) out.push(f('LinkedIn image', SIZES.wide, 'cover', hook, lead?.body ?? ''));
+    if (has('linkedin')) out.push(f('LinkedIn image', SIZES.wide, 'cover', only('linkedin'), hook, lead?.body ?? ''));
   } else if (p.format === 'reel' || p.format === 'short' || p.format === 'story') {
-    out.push(f(p.format === 'story' ? 'Story' : 'Cover', SIZES.story, 'cover', hook, p.format === 'story' ? (lead?.body ?? '') : ''));
-    if (has('youtube')) out.push(f('YouTube thumbnail', SIZES.thumb, 'cover', hook));
+    const thumb = has('youtube') && p.format !== 'story';
+    out.push(f(p.format === 'story' ? 'Story' : 'Cover', SIZES.story, 'cover', thumb ? rest('youtube') : all, hook, p.format === 'story' ? (lead?.body ?? '') : ''));
+    if (thumb) out.push(f('YouTube thumbnail', SIZES.thumb, 'cover', only('youtube'), hook));
   } else if (p.format === 'pin') {
-    out.push(f('Pin', SIZES.pin, 'cover', hook, lead?.body ?? ''));
+    out.push(f('Pin', SIZES.pin, 'cover', all, hook, lead?.body ?? ''));
   } else if (p.format === 'thread' || p.format === 'article') {
-    out.push(f('Header image', SIZES.wide, 'cover', hook, lead?.body ?? ''));
+    out.push(f('Header image', SIZES.wide, 'cover', all, hook, lead?.body ?? ''));
   } else {
-    out.push(f('Post image', SIZES.feed, 'cover', hook, lead?.body ?? ''));
-    if (has('linkedin') || has('x')) out.push(f('Wide image', SIZES.wide, 'cover', hook, lead?.body ?? ''));
-    if (has('pinterest')) out.push(f('Pin', SIZES.pin, 'cover', hook, lead?.body ?? ''));
+    out.push(f('Post image', SIZES.feed, 'cover', rest('linkedin', 'x', 'pinterest'), hook, lead?.body ?? ''));
+    if (has('linkedin') || has('x')) out.push(f('Wide image', SIZES.wide, 'cover', only('linkedin', 'x'), hook, lead?.body ?? ''));
+    if (has('pinterest')) out.push(f('Pin', SIZES.pin, 'cover', only('pinterest'), hook, lead?.body ?? ''));
   }
   return out.filter((x) => x.headline.trim() || x.body.trim());
 }
 
-/** Only what the bundled Geist (Latin) can draw: Lambda's Chromium has no fallback fonts, so anything else
- *  would show as a box. Captions keep emoji and ₹; the images say "Rs" and drop emoji. */
+/** Only what the bundled fonts can draw (Geist Latin + Noto Sans Devanagari): Lambda's Chromium has no
+ *  fallback fonts, so anything else would show as a box. Captions keep emoji; the images drop them. */
 export function drawable(text: string): string {
   return text
-    .replace(/₹\s?/g, 'Rs ')
     .replace(/→/g, '->')
-    .replace(/[^\u0000-\u00FF\u0131\u0152\u0153\u02BB\u02BC\u02C6\u02DA\u02DC\u2000-\u206F\u20AC\u2122\u2191\u2193\u2212\u2215]/gu, '')
+    .replace(/[^\u0000-\u00FF\u0131\u0152\u0153\u02BB\u02BC\u02C6\u02DA\u02DC\u0900-\u097F\u1CD0-\u1CF9\u2000-\u206F\u20A8\u20AC\u20B9\u2122\u2191\u2193\u2212\u2215\uA8E0-\uA8FF]/gu, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
+
+/** Devanagari needs room for its vowel signs and no letter-spacing (spacing breaks its joined letters). */
+export const hasDevanagari = (s: string) => /[\u0900-\u097F\uA8E0-\uA8FF]/.test(s);
 
 export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -85,8 +95,9 @@ export function headlineSize(text: string, w: number, h: number): number {
 }
 
 /** One frame as a self-contained HTML page (fonts and images inline, nothing loaded from the network). */
-export function frameHtml(fr: Frame, brand: Brand, opts: { font?: string; mark?: string; photo?: string; background?: string } = {}): string {
+export function frameHtml(fr: Frame, brand: Brand, opts: { font?: string; deva?: string; mark?: string; photo?: string; background?: string } = {}): string {
   const c = brand.colors;
+  const hindi = hasDevanagari(fr.headline + fr.body);
   const wide = fr.w / fr.h > 1.3;
   const pad = Math.round(Math.min(fr.w, fr.h) * 0.075);
   const hs = headlineSize(fr.headline, fr.w, fr.h);
@@ -98,11 +109,12 @@ export function frameHtml(fr: Frame, brand: Brand, opts: { font?: string; mark?:
   const next = fr.style !== 'cta' && fr.total && fr.index! < fr.total ? `<div class="next">Swipe ${arrow}</div>` : '';
   const action = fr.style === 'cta' ? `<div class="action">${esc(drawable(brand.ctas[0] ?? 'Try Lens free'))}</div><div class="url">${SITE}</div>` : '';
   const showUrl = fr.style !== 'cta';
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="${hindi ? 'hi' : 'en'}"><head><meta charset="utf-8"><style>
 ${opts.font ? `@font-face{font-family:Geist;src:url(data:font/woff2;base64,${opts.font}) format('woff2');font-weight:300 800}` : ''}
+${opts.deva ? `@font-face{font-family:'Noto Sans Devanagari';src:url(data:font/woff2;base64,${opts.deva}) format('woff2');font-weight:100 900;unicode-range:U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+20B9,U+25CC,U+A8E0-A8FF}` : ''}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:${fr.w}px;height:${fr.h}px;overflow:hidden}
-body{font-family:Geist,system-ui,sans-serif;color:${c.text};background:radial-gradient(120% 90% at 15% 0%,${c.surface} 0%,${c.background} 62%);position:relative;padding:${pad}px;display:flex;flex-direction:column;gap:${Math.round(pad * 0.5)}px}
+body{font-family:Geist,'Noto Sans Devanagari',system-ui,sans-serif;color:${c.text};background:radial-gradient(120% 90% at 15% 0%,${c.surface} 0%,${c.background} 62%);position:relative;padding:${pad}px;display:flex;flex-direction:column;gap:${Math.round(pad * 0.5)}px}
 ${opts.background ? `.bg{position:absolute;inset:0;background:url(${opts.background}) center/cover;opacity:.28}` : ''}
 .glow{position:absolute;border-radius:50%;filter:blur(${Math.round(pad * 1.2)}px);pointer-events:none}
 .g1{width:${Math.round(fr.w * 0.7)}px;height:${Math.round(fr.w * 0.7)}px;right:-${Math.round(fr.w * 0.25)}px;bottom:-${Math.round(fr.w * 0.2)}px;background:${c.primary};opacity:.32}
@@ -116,8 +128,8 @@ ${opts.background ? `.bg{position:absolute;inset:0;background:url(${opts.backgro
 .main{flex:1;display:flex;flex-direction:${photo && wide ? 'row' : 'column'};justify-content:${fr.style === 'slide' ? 'flex-start' : 'center'};gap:${pad}px;position:relative;${fr.style === 'slide' ? `padding-top:${pad}px` : ''}}
 .text{display:flex;flex-direction:column;gap:${Math.round(pad * 0.45)}px;${photo && wide ? 'flex:1;justify-content:center' : ''}}
 .bar{width:${Math.round(hs * 1.2)}px;height:${Math.max(6, Math.round(hs * 0.1))}px;border-radius:99px;background:${c.accent}}
-h1{font-size:${hs}px;line-height:1.04;font-weight:750;letter-spacing:-.03em;text-wrap:balance}
-p{font-size:${bs}px;line-height:1.32;color:${c.muted};font-weight:450;text-wrap:pretty}
+h1{font-size:${hs}px;line-height:${hindi ? 1.3 : 1.04};font-weight:750;letter-spacing:${hindi ? 0 : '-.03em'};text-wrap:balance}
+p{font-size:${bs}px;line-height:${hindi ? 1.55 : 1.32};color:${c.muted};font-weight:450;text-wrap:pretty}
 .photo{${wide ? `width:42%;` : `flex:1;min-height:0;`}border-radius:${pad * 0.5}px;background:url(${opts.photo ?? ''}) center/cover;box-shadow:0 ${pad * 0.3}px ${pad}px rgba(0,0,0,.45)}
 .action{align-self:flex-start;white-space:nowrap;background:${c.primary};color:#fff;font-weight:650;font-size:${Math.round(bs * 0.95)}px;padding:${Math.round(bs * 0.55)}px ${Math.round(bs * 1.2)}px;border-radius:99px;box-shadow:0 ${Math.round(pad * 0.2)}px ${pad}px ${c.primary}66}
 .url{font-size:${Math.round(bs * 0.8)}px;color:${c.muted};font-weight:500}
@@ -129,6 +141,69 @@ ${opts.background ? '<div class="bg"></div>' : ''}<div class="glow g1"></div><di
 <div class="foot"><span>${showUrl ? SITE : ''}</span>${next}</div>
 </body></html>`;
 }
+
+const PLATFORM_NAMES: Record<Platform, string> = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X', reddit: 'Reddit' };
+
+/** File names inside the zip: numbered in post order, safe on every OS. */
+export const zipName = (i: number, fr: Pick<Frame, 'label' | 'w' | 'h'>) =>
+  `${String(i + 1).padStart(2, '0')} ${fr.label.replace(/[^\w .-]+/g, '')} ${fr.w}x${fr.h}.png`;
+
+/** The note in the zip: which image goes where. */
+export function whereToPost(title: string, list: Frame[]): string {
+  const lines = list.map((fr, i) => `${zipName(i, fr)}\r\n    ${fr.for.length ? fr.for.map((k) => PLATFORM_NAMES[k]).join(', ') : 'Spare (no platform in this post uses this size)'}`);
+  return [`${title || 'Post'}: images made by Lens from the brand template.`, '', 'Which image goes where:', '', ...lines, '', 'Captions, hashtags and links: Console → Content → this post → Export.', ''].join('\r\n');
+}
+
+/** A zip with no compression (PNGs are compressed already), UTF-8 names. Enough for a few images. */
+export function zipStore(files: { name: string; data: Buffer }[], at = new Date()): Buffer {
+  const time = (at.getUTCHours() << 11) | (at.getUTCMinutes() << 5) | (at.getUTCSeconds() >> 1);
+  const date = ((at.getUTCFullYear() - 1980) << 9) | ((at.getUTCMonth() + 1) << 5) | at.getUTCDate();
+  const local: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = Buffer.from(f.name, 'utf8');
+    const crc = crc32(f.data) >>> 0;
+    const head = Buffer.alloc(30);
+    head.writeUInt32LE(0x04034b50, 0);
+    head.writeUInt16LE(20, 4);
+    head.writeUInt16LE(0x0800, 6); // UTF-8 names
+    head.writeUInt16LE(0, 8); // stored
+    head.writeUInt16LE(time, 10);
+    head.writeUInt16LE(date, 12);
+    head.writeUInt32LE(crc, 14);
+    head.writeUInt32LE(f.data.length, 18);
+    head.writeUInt32LE(f.data.length, 22);
+    head.writeUInt16LE(name.length, 26);
+    head.writeUInt16LE(0, 28);
+    local.push(head, name, f.data);
+    const dir = Buffer.alloc(46);
+    dir.writeUInt32LE(0x02014b50, 0);
+    dir.writeUInt16LE(20, 4);
+    dir.writeUInt16LE(20, 6);
+    dir.writeUInt16LE(0x0800, 8);
+    dir.writeUInt16LE(0, 10);
+    dir.writeUInt16LE(time, 12);
+    dir.writeUInt16LE(date, 14);
+    dir.writeUInt32LE(crc, 16);
+    dir.writeUInt32LE(f.data.length, 20);
+    dir.writeUInt32LE(f.data.length, 24);
+    dir.writeUInt16LE(name.length, 28);
+    dir.writeUInt32LE(offset, 42);
+    central.push(dir, name);
+    offset += 30 + name.length + f.data.length;
+  }
+  const size = central.reduce((n, b) => n + b.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(size, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...local, ...central, end]);
+}
+
+export const zipKey = (postId: string) => `x/images-${postId}.zip`;
 
 /** Stable per post and frame, so rendering again replaces the same Library file. */
 export const renderAssetId = (postId: string, label: string) => createHash('sha256').update(`render|${postId}|${label}`).digest('hex').slice(0, 12);
@@ -163,10 +238,12 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   const list = frames({ ...post, slides: post.slides ?? [], script: post.script ?? [], variants: post.variants ?? {} }, brand.ctas[0] ?? 'Try Lens free');
   if (!list.length) throw new Error('Nothing to draw: give the post a hook or slides first');
   const font = readFileSync(join(BRAND_DIR, 'geist-latin.woff2')).toString('base64');
+  const deva = list.some((fr) => hasDevanagari(fr.headline + fr.body)) ? readFileSync(join(BRAND_DIR, 'noto-devanagari.woff2')).toString('base64') : undefined;
   const mark = readFileSync(join(BRAND_DIR, 'lens-mark.svg'), 'utf8').replace(/<\?xml[^>]*>/, '');
   const images = await postImages(post.assets ?? []);
   const browser = await launchBrowser();
   const renders: { assetId: string; label: string; w: number; h: number }[] = [];
+  const files: { name: string; data: Buffer }[] = [];
   try {
     const page = await browser.newPage();
     // Nothing leaves the page: fonts and images are inline.
@@ -174,7 +251,7 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
     page.on('request', (r: { url(): string; continue(): Promise<void>; abort(): Promise<void> }) => void (/^(data|about):/.test(r.url()) ? r.continue() : r.abort()));
     for (const fr of list) {
       await page.setViewport({ width: fr.w, height: fr.h, deviceScaleFactor: 1 });
-      await page.setContent(frameHtml(fr, brand, { font, mark, ...images }), { waitUntil: 'load' });
+      await page.setContent(frameHtml(fr, brand, { font, deva, mark, ...images }), { waitUntil: 'load' });
       await page.evaluate('document.fonts.ready');
       const png = Buffer.from(await page.screenshot({ type: 'png' }));
       const id = renderAssetId(postId, fr.label);
@@ -201,11 +278,14 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
       };
       await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
       renders.push({ assetId: id, label: fr.label, w: fr.w, h: fr.h });
+      files.push({ name: zipName(files.length, fr), data: png });
     }
   } finally {
     await browser.close();
   }
-  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now() } }));
+  files.push({ name: 'where-to-post.txt', data: Buffer.from(whereToPost(post.title, list), 'utf8') });
+  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: zipKey(postId), Body: zipStore(files), ContentType: 'application/zip' }));
+  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId) } }));
   return { rendered: renders.length };
 }
 
@@ -224,4 +304,22 @@ export async function renderStart(postId: string, by: string): Promise<Res> {
   const { InvokeCommand, LambdaClient } = await import('@aws-sdk/client-lambda');
   await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ render: { postId }, by })) }));
   return json(202, { started: true });
+}
+
+/** GET /growth/posts/<id>/images: a 5-minute link to the zip of the post's images (made with each render). */
+export async function renderZip(postId: string): Promise<Res> {
+  if (!/^[a-f0-9]{10}$/.test(postId)) throw new HttpError(400, 'Bad post id');
+  const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item;
+  if (!post) throw new HttpError(404, 'No such post');
+  const key = zipKey(postId);
+  const gone = () => new HttpError(404, 'No zip yet (or it’s over 30 days old): press Make images first.');
+  if (post.rendersZip !== key) throw gone();
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+  } catch {
+    throw gone();
+  }
+  const file = `${String(post.title || 'post').replace(/[^\w -]+/g, '').trim().slice(0, 60) || 'post'} images.zip`;
+  const url = await presign(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${file}"` }), { expiresIn: 300 });
+  return json(200, { url, file });
 }
