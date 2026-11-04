@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { NOT_A_PHOTO, PEOPLE_OR_BRANDS, pexelsResults, relevant, photoAssetId, photoRights, wikimediaResults } from './growth-photos';
+import { NOT_A_PHOTO, PEOPLE_OR_BRANDS, pexelsResults, pixabayResults, relevant, photoAssetId, photoRights, wikimediaResults } from './growth-photos';
 
 const wm = (title: string, license: string, extra: Record<string, unknown> = {}) => ({
   index: 1,
@@ -50,4 +50,16 @@ test('only photos, and only on topic', () => {
   assert.ok(relevant({ title: 'Price Building illuminated at night', tags: 'City lights Quebec' }, 'city night lights'));
   assert.ok(!relevant({ title: 'Trip buses in Sri Lanka', tags: 'Buses Lights' }, 'wedding decoration lights'));
   assert.ok(relevant({ title: 'Moraine Lake', tags: 'Mountains Lakes' }, 'mountain lake'));
+});
+
+test('Pixabay: page link, large image, tags as words, licence clears scenery', () => {
+  const r = pixabayResults({ hits: [
+    { pageURL: 'https://pixabay.com/photos/lake-1/', largeImageURL: 'https://pixabay.com/get/1_1280.jpg', imageWidth: 6000, imageHeight: 4000, tags: 'lake, mountains, sunrise', user: 'Kanenori' },
+    { pageURL: 'https://pixabay.com/photos/small-2/', largeImageURL: 'https://pixabay.com/get/2.jpg', imageWidth: 500, imageHeight: 400, tags: 'small', user: 'x' },
+  ] });
+  assert.equal(r.length, 1);
+  assert.deepEqual([r[0].w, r[0].h, r[0].title, r[0].author], [1280, 853, 'lake, mountains, sunrise', 'Kanenori']);
+  assert.equal(photoRights(r[0]).status, 'cleared');
+  assert.equal(photoRights({ ...r[0], tags: 'woman, portrait' }).status, 'review');
+  assert.deepEqual(pixabayResults({}), []);
 });

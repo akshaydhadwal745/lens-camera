@@ -1,7 +1,8 @@
 // Photos from the internet for content images (docs/growth/content-engine.md, phase 3): searched live,
 // rights-checked by code (growth-rights.ts) and saved to the Library like any other asset.
-//   Sources: Wikimedia Commons (no key) and Pexels (free key in SSM /lens/growth/photos {"pexelsKey"}).
-//   Unsplash is left out on purpose: its API rules want their hosted image shown, not an edited copy.
+//   Sources: Pixabay and Pexels (free keys in SSM /lens/growth/photos {"pixabayKey","pexelsKey"}) and
+//   Wikimedia Commons (no key). Pixabay's API asks us to download images rather than hotlink, which is what
+//   we do. Unsplash is left out on purpose: its API rules want their hosted image shown, not an edited copy.
 //   Only photos the rights check clears are used automatically. Photos whose title or tags suggest people
 //   or brands go to the Library as "review" for a manager (free licences have no model/trademark release).
 //   GROWTH / ASSET#<id>     the photo (kind image, origin discovered, query, sourceUrl, w, h); file a/<id>.<ext>
@@ -21,7 +22,7 @@ const UA = 'LensGrowth/1.0 (https://lens.instagrowapp.com; content images)';
 const DAY = 86_400_000;
 
 export type Found = {
-  source: 'Wikimedia Commons' | 'Pexels';
+  source: 'Wikimedia Commons' | 'Pexels' | 'Pixabay';
   sourceUrl: string; // the photo's own page
   imageUrl: string; // the file we download (about 1600 px wide)
   w: number;
@@ -96,6 +97,27 @@ export function pexelsResults(json: any): Found[] {
     .filter((f) => f.sourceUrl && f.imageUrl);
 }
 
+/** Pixabay search → photos (Pixabay Content License: free, commercial use and edits allowed, no credit). */
+export function pixabayResults(json: any): Found[] {
+  return ((json?.hits ?? []) as any[])
+    .map((p) => {
+      const scale = Math.min(1, 1280 / Math.max(Number(p.imageWidth) || 1, Number(p.imageHeight) || 1));
+      return {
+        source: 'Pixabay' as const,
+        sourceUrl: String(p.pageURL ?? ''),
+        imageUrl: String(p.largeImageURL ?? ''),
+        w: Math.round((Number(p.imageWidth) || 0) * scale),
+        h: Math.round((Number(p.imageHeight) || 0) * scale),
+        license: 'Pixabay Content License',
+        licenseUrl: 'https://pixabay.com/service/license-summary/',
+        author: String(p.user ?? '').slice(0, 120),
+        title: String(p.tags ?? '').slice(0, 200),
+        tags: String(p.tags ?? ''),
+      };
+    })
+    .filter((f) => f.sourceUrl && f.imageUrl && f.w >= 800);
+}
+
 /** The rights record: the licence decides (growth-rights.ts); people/brands are judged from the words. */
 export function photoRights(f: Found, now = Date.now()): Rights {
   const people = PEOPLE_OR_BRANDS.test(`${f.title} ${f.tags}`);
@@ -127,12 +149,16 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
 
 async function searchSources(query: string, orientation: 'portrait' | 'landscape'): Promise<Found[]> {
   const out: Found[] = [];
-  const key = await getParam('/lens/growth/photos')
-    .then((v) => (v ? (JSON.parse(v).pexelsKey as string | undefined) : undefined))
-    .catch(() => undefined);
-  if (key) {
+  const keys = await getParam('/lens/growth/photos')
+    .then((v) => (v ? (JSON.parse(v) as { pixabayKey?: string; pexelsKey?: string }) : {}))
+    .catch(() => ({}) as { pixabayKey?: string; pexelsKey?: string });
+  if (keys.pixabayKey) {
+    const u = `https://pixabay.com/api/?${new URLSearchParams({ key: keys.pixabayKey, q: query.slice(0, 100), image_type: 'photo', orientation: orientation === 'portrait' ? 'vertical' : 'horizontal', safesearch: 'true', per_page: '20', order: 'popular' })}`;
+    out.push(...pixabayResults(await getJson(u).catch(() => ({}))));
+  }
+  if (keys.pexelsKey) {
     const u = `https://api.pexels.com/v1/search?${new URLSearchParams({ query, orientation, per_page: '15', size: 'large' })}`;
-    out.push(...pexelsResults(await getJson(u, { Authorization: key }).catch(() => ({}))));
+    out.push(...pexelsResults(await getJson(u, { Authorization: keys.pexelsKey }).catch(() => ({}))));
   }
   const wm = (extra: string) =>
     `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', format: 'json', generator: 'search', gsrnamespace: '6', gsrsearch: `${query} filetype:bitmap${extra}`, gsrlimit: '20', prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiurlwidth: '1600' })}`;
