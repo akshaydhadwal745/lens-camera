@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import {
   CfnOutput,
   Duration,
+  Size,
   Fn,
   RemovalPolicy,
   Stack,
@@ -164,7 +165,8 @@ export class ConsoleStack extends Stack {
         platform: ecrAssets.Platform.LINUX_AMD64,
       }),
       architecture: lambda.Architecture.X86_64,
-      memorySize: 2048,
+      memorySize: 3008, // reels: Chromium and ffmpeg together; more memory also means more CPU
+      ephemeralStorageSize: Size.gibibytes(4), // reels: footage frames in /tmp
       timeout: Duration.minutes(15),
       // A failed run emails the owners and clears its lock; an automatic retry would run Claude and email twice.
       retryAttempts: 0,

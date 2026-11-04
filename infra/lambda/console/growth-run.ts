@@ -3,6 +3,7 @@
 import { finishJob, runDraft, runGrowthReport, runMonthly } from "./growth";
 import { watchCompetitors } from "./growth-competitors";
 import { renderPost } from "./growth-media";
+import { renderReel } from "./growth-video";
 import { runSeoAudit } from "./growth-seo";
 import { indexCoverage } from "../api/search-console";
 
@@ -17,6 +18,7 @@ export async function handler(event: {
   monthly?: boolean;
   month?: string;
   render?: { postId: string };
+  reel?: { postId: string };
 }) {
   if (event.monthly)
     return runMonthly({
@@ -29,6 +31,10 @@ export async function handler(event: {
   if (event.render && typeof event.render.postId === "string") {
     const { postId } = event.render;
     return job("render", () => renderPost(postId, event.by ?? "console"));
+  }
+  if (event.reel && typeof event.reel.postId === "string") {
+    const { postId } = event.reel;
+    return job("reel", () => renderReel(postId, event.by ?? "console"));
   }
   if (event.seoAudit)
     return job("seoAudit", async () => {
@@ -50,7 +56,7 @@ export async function handler(event: {
 
 /** Runs a job outside the analyst lock and records when it finished (the Console waits for it). */
 async function job<T>(
-  name: "seoAudit" | "competitors" | "render",
+  name: "seoAudit" | "competitors" | "render" | "reel",
   run: () => Promise<T>,
 ): Promise<T> {
   try {

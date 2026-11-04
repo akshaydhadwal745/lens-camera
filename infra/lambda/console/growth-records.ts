@@ -128,6 +128,13 @@ export async function postSave(id: string, req: Req, by: string): Promise<Res> {
   if (status === 'published' && old?.status !== 'published' && (!wasApproved || changed)) throw new HttpError(400, 'Approve this post before marking it published');
   const item = {
     ...f,
+    // Written by the render jobs, not the editor: a save must not lose them.
+    renders: old?.renders,
+    renderedAt: old?.renderedAt,
+    rendersZip: old?.rendersZip,
+    score: old?.score,
+    reel: old?.reel,
+    reelScore: old?.reelScore,
     status,
     code,
     link: postLink(f.channel, code, f.page && f.page.startsWith('/') ? f.page : '/'),
