@@ -959,6 +959,8 @@ capi DELETE "/growth/posts/$PM" >/dev/null; capi DELETE "/growth/assets/$AL" >/d
 R=$(capi GET /growth/moments); [[ $(echo "$R" | j '.moments.constructor.name') == Array && $(echo "$R" | j '.sources.constructor.name') == Object ]] && ok "moments: the feed lists moments and its sources" || fail "moments: the feed lists moments and its sources"
 [[ $(capi POST /growth/moments/nope/content | j .error) == "Bad moment id" ]] && ok "moments: a bad id is refused" || fail "moments: a bad id is refused"
 [[ $(capi POST /growth/moments/0000000000/content | j .error) == "This moment is no longer in the feed" ]] && ok "moments: an unknown moment makes no task" || fail "moments: an unknown moment makes no task"
+[[ $(capi GET /growth/posts/nope/images | j .error) == "Bad post id" ]] && ok "images: a bad post id is refused" || fail "images: a bad post id is refused"
+[[ $(capi GET /growth/posts/0000000000/images | j .error) == "No such post" ]] && ok "images: no zip for an unknown post" || fail "images: no zip for an unknown post"
 ddbdel "{\"pk\":{\"S\":\"CADMIN#$CADM\"},\"sk\":{\"S\":\"BACKUP\"}}"
 call DELETE /account "$TH" -d '{"confirm":"DELETE"}' >/dev/null
 echo "ALL PASSED"
