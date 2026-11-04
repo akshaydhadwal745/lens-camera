@@ -16,10 +16,12 @@ import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-import { ddb, env, HttpError, json, Res, s3 } from '../api/lib';
+import { ddb, env, getParam, HttpError, json, Res, s3 } from '../api/lib';
 import type { Asset, AssetRef } from './growth-assets';
 import { brand as loadBrand } from './growth-brand';
 import { PLATFORMS, type Platform, type Slide, type Scene } from './growth-content-rules';
+import { runClaude, type Mode } from './growth';
+import { aiPageHtml, DESIGN_SCHEMA, DESIGN_SYSTEM, designPrompt, designsByLabel, PAGE_CHECK, wordProblems, type AiDesign, type KitPhoto } from './growth-ai-design';
 import { designHtml, type Layout, type Screen } from './growth-design';
 import { findPhotos, photoPool, type Photo } from './growth-photos';
 import { launchBrowser } from './growth-render';
@@ -247,11 +249,14 @@ async function bytesOf(a: Asset): Promise<Buffer | undefined> {
  *  pool for phone screens (licences that need no credit, so tiny tiles never owe one). */
 async function gatherPhotos(post: PostLike, list: Frame[]) {
   const served = new Map<string, { mime: string; body: Buffer }>();
+  const kit: KitPhoto[] = [];
   const url = async (a: Asset) => {
     if (!served.has(a.id)) {
       const body = await bytesOf(a);
       if (!body) return undefined;
       served.set(a.id, { mime: a.mime, body });
+      const p = a as Photo;
+      kit.push({ ref: `p${kit.length + 1}`, url: IMG + a.id, about: `${p.query ? `${p.query}: ` : ''}${a.name}`, w: p.w ?? 1600, h: p.h ?? 1067 });
     }
     return IMG + a.id;
   };
@@ -277,7 +282,24 @@ async function gatherPhotos(post: PostLike, list: Frame[]) {
     if ((await findPhotos(q, 3, 'portrait')).length) pool = (await photoPool()).filter(noCredit);
   }
   const poolUrls = (await Promise.all(shuffle(pool, post.id).slice(0, 15).map(url))).filter((u): u is string => !!u);
-  return { served, scenes, pool: poolUrls, credited };
+  return { served, scenes, pool: poolUrls, credited, kit };
+}
+
+const DESIGN_MODE: Mode = { system: DESIGN_SYSTEM, schema: DESIGN_SCHEMA, toolNames: [], mode: 'report' };
+
+/** Claude as the designer (same token as the analyst); undefined when it isn't set up or is switched off. */
+async function aiDesigner(post: PostLike & { title: string }, list: Frame[], kit: KitPhoto[], brand: Awaited<ReturnType<typeof loadBrand>>, cta: string, offer: string) {
+  if (process.env.GROWTH_AI_DESIGN === 'off') return undefined;
+  const token = await getParam('/lens/growth/claude-token').catch(() => undefined);
+  if (!token) return undefined;
+  const started = Date.now();
+  return async (problems: Map<string, string[]> | undefined) => {
+    const todo = problems ? list.filter((f) => problems.has(f.label)) : list;
+    const budget = problems ? 4 * 60_000 : 7 * 60_000;
+    if (Date.now() - started > 9 * 60_000) return new Map<string, AiDesign>();
+    const { report } = await runClaude<{ designs: AiDesign[] }>(designPrompt(post, todo, kit, brand, cta, offer, SITE, problems), token, { enabled: [] }, Date.now() + budget, DESIGN_MODE);
+    return designsByLabel(report, todo.map((f) => f.label));
+  };
 }
 
 export async function renderPost(postId: string, by: string): Promise<{ rendered: number }> {
@@ -296,9 +318,11 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
     plex600: font('plex-mono-600.ttf'),
   };
   const icon = `data:image/png;base64,${font('lens-icon.png')}`;
-  const { served, scenes, pool, credited } = await gatherPhotos({ ...post, id: postId }, list);
+  const { served, scenes, pool, credited, kit } = await gatherPhotos({ ...post, id: postId }, list);
+  const offer = '10 GB free forever. No card needed.';
+  const allowed = [post.hook, ...list.map((f) => `${f.headline} ${f.body}`), cta, offer, SITE, 'Lens'].join(' ');
   const browser = await launchBrowser();
-  const renders: { assetId: string; label: string; w: number; h: number }[] = [];
+  const renders: { assetId: string; label: string; w: number; h: number; designedBy: 'ai' | 'template' }[] = [];
   const files: { name: string; data: Buffer }[] = [];
   try {
     const page = await browser.newPage();
@@ -310,16 +334,46 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
       const hit = u.startsWith(IMG) ? served.get(u.slice(IMG.length)) : undefined;
       void (hit ? r.respond({ status: 200, contentType: hit.mime, body: hit.body }) : r.abort());
     });
-    for (const fr of list) {
+    const shoot = async (fr: Frame, html: string, check: boolean) => {
       await page.setViewport({ width: fr.w, height: fr.h, deviceScaleFactor: 1 });
-      const html = designHtml({ w: fr.w, h: fr.h, layout: fr.layout, screen: fr.screen, headline: drawable(fr.headline), body: drawable(fr.body), index: fr.index, total: fr.total, cta: drawable(cta), site: SITE, photo: fr.query ? scenes.get(fr.query) : undefined, pool, icon, fonts, brand });
       await page.setContent(html, { waitUntil: 'load' });
       await page.evaluate('document.fonts.ready');
-      const png = Buffer.from(await page.screenshot({ type: 'png' }));
+      const seen = check ? ((await page.evaluate(PAGE_CHECK)) as { problems: string[]; text: string }) : { problems: [], text: '' };
+      const problems = check ? [...seen.problems, ...wordProblems(seen.text, allowed)] : [];
+      return { png: Buffer.from(await page.screenshot({ type: 'png' })), problems };
+    };
+    // 1) Claude designs every image; one fix round for the ones that fail the checks.
+    const done = new Map<string, { png: Buffer; by: 'ai' | 'template'; idea?: string; problems?: string[] }>();
+    const failed = new Map<string, string[]>();
+    const ai = await aiDesigner(post, list, kit, brand, cta, offer);
+    const ctx = { photos: kit, pool, icon, brand, fonts };
+    const tryDesigns = async (designs: Map<string, AiDesign>) => {
+      for (const fr of list) {
+        const d = designs.get(fr.label);
+        if (!d || done.has(fr.label)) continue;
+        const r = await shoot(fr, aiPageHtml(fr, d.html, ctx), true).catch((e) => ({ png: undefined, problems: [`could not draw: ${(e as Error).message.slice(0, 80)}`] }));
+        if (r.png && !r.problems.length) {
+          done.set(fr.label, { png: r.png, by: 'ai', idea: d.idea.slice(0, 200) });
+          failed.delete(fr.label);
+        } else failed.set(fr.label, r.problems);
+      }
+    };
+    if (ai) {
+      await tryDesigns(await ai(undefined).catch(() => new Map()));
+      if (failed.size) await tryDesigns(await ai(new Map(failed)).catch(() => new Map()));
+    }
+    // 2) The template for anything the AI didn't get right (or when Claude isn't available).
+    for (const fr of list) {
+      if (done.has(fr.label)) continue;
+      const html = designHtml({ w: fr.w, h: fr.h, layout: fr.layout, screen: fr.screen, headline: drawable(fr.headline), body: drawable(fr.body), index: fr.index, total: fr.total, cta: drawable(cta), site: SITE, photo: fr.query ? scenes.get(fr.query) : undefined, pool, icon, fonts, brand });
+      done.set(fr.label, { png: (await shoot(fr, html, false)).png, by: 'template', problems: failed.get(fr.label) });
+    }
+    for (const fr of list) {
+      const { png, by: designedBy, idea, problems } = done.get(fr.label)!;
       const id = renderAssetId(postId, fr.label);
       const key = `a/${id}.png`;
       await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: png, ContentType: 'image/png' }));
-      const asset: Asset & { postId: string; label: string; w: number; h: number } = {
+      const asset: Asset & { postId: string; label: string; w: number; h: number; designedBy: 'ai' | 'template'; idea?: string; problems?: string[] } = {
         id,
         name: `${post.title || 'Post'} · ${fr.label}`.slice(0, 160),
         kind: 'render',
@@ -337,9 +391,12 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
         label: fr.label,
         w: fr.w,
         h: fr.h,
+        designedBy,
+        ...(idea ? { idea } : {}),
+        ...(problems?.length ? { problems } : {}),
       };
       await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
-      renders.push({ assetId: id, label: fr.label, w: fr.w, h: fr.h });
+      renders.push({ assetId: id, label: fr.label, w: fr.w, h: fr.h, designedBy });
       files.push({ name: zipName(files.length, fr), data: png });
     }
   } finally {
@@ -355,7 +412,7 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
 
 // ---------- the Console side ----------
 
-const RENDER_MINUTES = 5;
+const RENDER_MINUTES = 14; // the AI designer takes a few minutes; the Lambda stops at 15
 
 /** POST /growth/posts/<id>/render: one render at a time; the Console polls GET /growth/jobs. */
 export async function renderStart(postId: string, by: string): Promise<Res> {
