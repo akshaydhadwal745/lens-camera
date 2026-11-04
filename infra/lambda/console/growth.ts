@@ -825,7 +825,7 @@ async function runContentDraft(t: Task, by: string, started: number) {
   const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), competitorHosts: await competitorHosts().catch(() => []), enabled: [], commit };
   const prompt = [
     draftTask(t),
-    `BRAND KIT\nVoice: ${kit.voice}\nDo: ${kit.dos.join(' | ')}\nDon't: ${kit.donts.join(' | ')}\nCalls to action: ${kit.ctas.join(' | ')}\nHashtags to draw from: ${kit.hashtags.join(' ')}\nPillars: ${kit.pillars.join(', ')}\nLanguages: ${kit.languages.join(', ')}`,
+    `BRAND KIT\nVoice: ${kit.voice}\nDo: ${kit.dos.join(' | ')}\nDon't: ${kit.donts.join(' | ')}\nCalls to action: ${kit.ctas.join(' | ')}\nHashtags to draw from: ${kit.hashtags.join(' ')}\nPillars: ${kit.pillars.join(', ')}\nLanguages: ${kit.languages.join(', ')}\nFOCUS PLATFORMS (make versions only for these): ${kit.focus.join(', ')}`,
   ].join('\n\n');
   const { report: d } = await runClaude<ContentDraft>(prompt, token, tools, started + 12 * 60_000, CONTENT_MODE);
   await saveToolActivity(`draft:${t.id}`, `D-${t.id}`, Date.now());
@@ -833,6 +833,8 @@ async function runContentDraft(t: Task, by: string, started: number) {
   if (!packages.length) throw new Error(`No content. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
   const saved: { id: string; name: string; format: string; problems: string[] }[] = [];
   for (const x of packages) {
+    // Only the focus platforms (brand kit), whatever the agent wrote.
+    x.variants = Object.fromEntries(Object.entries(x.variants ?? {}).filter(([k]) => (kit.focus as string[]).includes(k))) as typeof x.variants;
     const f = postFields({ ...x, title: x.name, body: x.why, status: 'in_review', owner: t.owner === 'agent' ? '' : t.owner, taskId: t.id, realPhoto: false, date: packageDay(started, x.dayOffset, ((t.spec as { moment?: { day?: string } } | undefined)?.moment)?.day), page: /^\/[\w\-/]*$/.test(x.page) ? x.page : '/' });
     if (!Object.keys(f.variants).length) continue;
     const code = codeOf(f.title || f.hook || 'post');
