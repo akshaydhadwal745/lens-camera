@@ -1017,6 +1017,9 @@ export type Asset = {
   name: string;
   kind: string;
   postId?: string; // renders: the post they were drawn for
+  designedBy?: "ai" | "template"; // renders: who designed it
+  idea?: string;
+  problems?: string[];
   label?: string;
   w?: number;
   h?: number;
@@ -1832,8 +1835,8 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
           if (done.error) setError(done.error);
           break;
         }
-        if (Date.now() - began > 6 * 60_000) {
-          setError("Still drawing after 6 minutes. Check again in a while.");
+        if (Date.now() - began > 15 * 60_000) {
+          setError("Still drawing after 15 minutes. Check again in a while.");
           break;
         }
       }
@@ -1868,9 +1871,10 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
         )}
       </span>
       <span className="muted small">
-        Drawn from the saved post (hook and slides) with the brand kit, at each
-        platform’s size. Save your edits first; making them again replaces the
-        old ones.
+        Designed by AI for this post (the real app on a phone, photos found
+        online, brand colours), checked by code; any image that fails the checks
+        uses a template. Takes a few minutes. Save your edits first; making them
+        again replaces the old ones.
       </span>
       {error && <p className="notice error">{error}</p>}
       <Loaded state={lib}>
@@ -1909,6 +1913,11 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
                     <Thumb a={a} />
                     <span className="small">
                       {a.label} · {a.w}×{a.h}
+                      {a.designedBy === "ai"
+                        ? " · AI design"
+                        : a.designedBy === "template"
+                          ? " · Template"
+                          : ""}
                     </span>
                   </a>
                 ))}

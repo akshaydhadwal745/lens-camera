@@ -50,10 +50,10 @@ const pick = <T>(list: T[], i: number): T | undefined => (list.length ? list[((i
 
 // ---------- the phone and its screens (drawn at 390×844, scaled) ----------
 
-const TICK = (size: number, color = '#000') =>
+export const TICK = (size: number, color = '#000') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
 const statusBar = () => `<div class="sb"><span>9:41</span><span>5G<i></i></span></div>`;
-const bg = (src: string | undefined, pos = 'center') => (src ? `background:url(${src}) ${pos}/cover` : 'background:linear-gradient(135deg,#1C1C1E,#3A3A3C)');
+export const bg = (src: string | undefined, pos = 'center') => (src ? `background:url(${src}) ${pos}/cover` : 'background:linear-gradient(135deg,#1C1C1E,#3A3A3C)');
 
 function tile(src: string | undefined, n: number) {
   return `<div class="tile" style="${bg(src)}"><span class="mono">#${n}</span></div>`;
@@ -214,7 +214,7 @@ export function screenHtml(s: Screen, d: Pick<Design, 'pool' | 'photo'>, seed = 
   }
 }
 
-const phone = (screen: string, x: number, y: number, scale: number, rotate = 0) =>
+export const phone = (screen: string, x: number, y: number, scale: number, rotate = 0) =>
   `<div class="phone" style="left:${Math.round(x)}px;top:${Math.round(y)}px;transform:scale(${scale.toFixed(3)}) rotate(${rotate}deg)"><div class="screen"><div class="island"></div>${screen}<div class="glare"></div></div></div>`;
 
 // ---------- the page ----------
@@ -226,7 +226,7 @@ const BACKDROPS = [
   'radial-gradient(70% 60% at 80% 85%,#ffd9e2 0%,transparent 60%),radial-gradient(60% 50% at 0% 0%,#e3e6ff 0%,transparent 60%),linear-gradient(160deg,#fbf7f8,#f1f1f8)',
 ];
 
-function css(d: Design) {
+export function css(d: Pick<Design, 'w' | 'h' | 'fonts'>) {
   const f = d.fonts;
   const face = (fam: string, data: string | undefined, fmt: 'woff2' | 'ttf', w: string, extra = '') =>
     data ? `@font-face{font-family:'${fam}';src:url(data:font/${fmt};base64,${data}) format('${fmt === 'ttf' ? 'truetype' : fmt}');font-weight:${w}${extra}}` : '';

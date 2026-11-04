@@ -245,10 +245,10 @@ const toolLog = (): ToolEntry[] =>
 type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; ga4Token?: string; competitorHosts?: string[]; enabled: string[]; commit?: string };
 
 /** What a run asks of Claude: its instructions, output schema and tool list (the weekly report by default). */
-type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft' };
+export type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft' };
 const REPORT_MODE: Mode = { system: ANALYST_SYSTEM, schema: REPORT_SCHEMA, toolNames: TOOL_NAMES, mode: 'report' };
 
-function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup, deadline: number, mode: Mode = REPORT_MODE): Promise<{ report: T; model?: string }> {
+export function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup, deadline: number, mode: Mode = REPORT_MODE): Promise<{ report: T; model?: string }> {
   const home = '/tmp/claude-home';
   mkdirSync(home, { recursive: true });
   const mcp = join(home, 'mcp.json');
