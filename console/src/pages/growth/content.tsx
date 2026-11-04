@@ -282,6 +282,11 @@ function PostCard({ p, onOpen }: { p: Post; onOpen: () => void }) {
       {(p.problems?.length ?? 0) > 0 && (
         <Chip tone="warn">{p.problems!.length} to fix before approval</Chip>
       )}
+      {p.score && (
+        <Chip tone={p.score.total >= 80 ? "good" : p.score.total >= 60 ? "warn" : "bad"}>
+          Score {p.score.total}/100
+        </Chip>
+      )}
       {p.createdBy === "agent" && p.status === "in_review" && (
         <span className="muted small">Drafted by the agent</span>
       )}
@@ -1019,6 +1024,8 @@ export type Asset = {
   kind: string;
   postId?: string; // renders: the post they were drawn for
   designedBy?: "ai" | "template"; // renders: who designed it
+  score?: number; // renders: what the AI creative director gave it, 0–100
+  scoreWhy?: string;
   idea?: string;
   problems?: string[];
   label?: string;
@@ -1837,6 +1844,8 @@ function Moments({ ws }: { ws: Workspace }) {
 
 // ---------- images drawn from a post (render engine, growth-media.ts) ----------
 
+const scoreTone = (n: number) => (n >= 80 ? "good" : n >= 60 ? "warn" : "bad");
+
 type RenderJobs = {
   render: { postId: string; startedAt: number } | null;
   renderDone: { postId: string; at: number; error: string | null } | null;
@@ -1952,6 +1961,25 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
                   One zip with every image and a note saying which goes where.
                 </span>
               </div>
+              {post.score ? (
+                <p className="small">
+                  <Chip tone={scoreTone(post.score.total)}>
+                    Post score {post.score.total}/100
+                  </Chip>{" "}
+                  <span className="muted">
+                    Scored by AI after the images were made (does each image
+                    fit the post, is it clear on a phone, is the design good)
+                    {post.score.redone
+                      ? `; ${post.score.redone} redone after the first score`
+                      : ""}
+                    . Hook {post.score.hook}/100: {post.score.hookWhy}
+                  </span>
+                </p>
+              ) : (
+                <p className="muted small">
+                  Not scored: the AI wasn&apos;t available when these were made.
+                </p>
+              )}
               <div className="gw-assets">
                 {mine.map((a) => (
                   <a
@@ -1971,6 +1999,12 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
                           ? " · Template"
                           : ""}
                     </span>
+                    {a.score !== undefined && (
+                      <span className="small">
+                        <Chip tone={scoreTone(a.score)}>{a.score}/100</Chip>{" "}
+                        <span className="muted">{a.scoreWhy}</span>
+                      </span>
+                    )}
                   </a>
                 ))}
               </div>

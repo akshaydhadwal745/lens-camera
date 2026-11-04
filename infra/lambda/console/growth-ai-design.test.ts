@@ -64,7 +64,7 @@ test('prompt: every image with canvas, words and screen; fix round lists the pro
   assert.match(p, /- p1: city night lights: Quebec at night \(1600×1067, landscape\)/);
   const fix = designPrompt({ title: 'Phone full', format: 'carousel' }, [list[1]], photos, DEFAULT_BRAND, 'x', 'y', 'z', new Map([['Slide 2', ['text "From" overlaps the phone']]]));
   assert.match(fix, /Design again only the images below/);
-  assert.match(fix, /FAILED THESE CHECKS, fix them: text "From" overlaps the phone/);
+  assert.match(fix, /HAD THESE PROBLEMS, fix them: text "From" overlaps the phone/);
   assert.doesNotMatch(fix, /Slide 1/);
 });
 

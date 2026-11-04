@@ -292,6 +292,11 @@ function getPrivateKey(): Promise<string> {
   return privateKey;
 }
 
+/** A CloudFront signed link to any URL behind a key group, valid for `seconds`. */
+export async function signedCdnUrl(url: string, seconds: number): Promise<string> {
+  return signCloudFront({ url, keyPairId: env.keyPairId, privateKey: await getPrivateKey(), dateLessThan: new Date(Date.now() + seconds * 1000).toISOString() });
+}
+
 /** Key for signing short-lived values (e.g. OAuth state), derived from the CloudFront key. */
 export async function derivedKey(purpose: string): Promise<Buffer> {
   return createHash('sha256').update(`${await getPrivateKey()}:${purpose}`).digest();

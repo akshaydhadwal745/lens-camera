@@ -13,17 +13,16 @@ import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
 
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam, HttpError, json, Res, s3 } from '../api/lib';
-import type { Asset, AssetRef } from './growth-assets';
+import { viewUrl, type Asset, type AssetRef } from './growth-assets';
 import { brand as loadBrand } from './growth-brand';
 import { PLATFORMS, type Platform, type Slide, type Scene } from './growth-content-rules';
 import { runClaude, type Mode } from './growth';
 import { aiPageHtml, DESIGN_SCHEMA, DESIGN_SYSTEM, designPrompt, designsByLabel, PAGE_CHECK, wordProblems, type AiDesign, type KitPhoto } from './growth-ai-design';
 import { designHtml, type Layout, type Screen } from './growth-design';
-import { findPhotos, PHOTO_CHECK_SCHEMA, PHOTO_CHECK_SYSTEM, photoPassed, photoPool, saveLook, SHEET_SIZE, sheetHtml, sheetPrompt, sheetVerdicts, type Photo } from './growth-photos';
+import { findPhotos, FITS, PHOTO_CHECK_SCHEMA, PHOTO_CHECK_SYSTEM, photoPassed, photoPool, postTotal, readScores, REDO_BELOW, saveLook, SCORE_SCHEMA, SCORE_SYSTEM, scorePrompt, SHEET_SIZE, sheetHtml, sheetPrompt, sheetVerdicts, type ImageScore, type Photo, type PostScore } from './growth-photos';
 import { launchBrowser } from './growth-render';
 import { licenseKey } from './growth-rights';
 
@@ -228,6 +227,8 @@ export function zipStore(files: { name: string; data: Buffer }[], at = new Date(
 }
 
 export const zipKey = (postId: string) => `x/images-${postId}.zip`;
+/** The name the zip downloads as (stored on the file, since CloudFront links can't set it per request). */
+export const zipFile = (title: string) => `${String(title || 'post').replace(/[^\w -]+/g, '').trim().slice(0, 60) || 'post'} images.zip`;
 
 /** Stable per post and frame, so rendering again replaces the same Library file. */
 export const renderAssetId = (postId: string, label: string) => createHash('sha256').update(`render|${postId}|${label}`).digest('hex').slice(0, 12);
@@ -250,31 +251,55 @@ async function bytesOf(a: Asset): Promise<Buffer | undefined> {
 }
 
 const LOOK_MODE: Mode = { system: PHOTO_CHECK_SYSTEM, schema: PHOTO_CHECK_SCHEMA, toolNames: [], mode: 'report', readsFiles: true };
+const SCORE_MODE: Mode = { system: SCORE_SYSTEM, schema: SCORE_SCHEMA, toolNames: [], mode: 'report', readsFiles: true };
 const LOOK_MS = 3 * 60_000; // the AI designer needs the rest of the Lambda's 15 minutes
+const SHEETS_DIR = '/tmp/claude-home';
 type Browser = Awaited<ReturnType<typeof launchBrowser>>;
+type Page = Awaited<ReturnType<Browser['newPage']>>;
 
-/** Claude looks at found photos it hasn't seen (contact sheets, verdict saved on the asset, so once per photo).
- *  If it can't (limit reached, no token) they stay unseen and aren't used: no photo beats a wrong photo. */
-async function lookAtPhotos(photos: { photo: Photo; topic: string }[], browser: Browser) {
-  const todo = [...new Map(photos.filter((x) => !photoPassed(x.photo) && !x.photo.looked).map((x) => [x.photo.id, x])).values()];
-  if (!todo.length || process.env.GROWTH_AI_DESIGN === 'off') return;
-  const token = await getParam('/lens/growth/claude-token').catch(() => undefined);
-  if (!token) return;
-  const dir = '/tmp/claude-home';
-  mkdirSync(dir, { recursive: true });
+const claudeToken = async () => (process.env.GROWTH_AI_DESIGN === 'off' ? undefined : await getParam('/lens/growth/claude-token').catch(() => undefined));
+
+/** What Claude is told the post is about, when it judges photos and finished images. */
+export function postBrief(post: PostLike & { title: string }): string {
+  const slides = (post.slides ?? []).map((x) => `${x.headline} ${x.body}`.trim()).filter(Boolean).slice(0, 10);
+  return [`Title: ${post.title}`, `Format: ${post.format}`, `Hook: ${post.hook}`, ...(slides.length ? [`Slides: ${slides.join(' / ')}`] : [])].join('\n').slice(0, 2000);
+}
+
+/** One contact sheet as a JPEG file Claude can open. */
+async function writeSheet(page: Page, images: string[], name: string) {
+  await page.setViewport({ width: 1600, height: 400 * Math.ceil(images.length / 4), deviceScaleFactor: 1 });
+  await page.setContent(sheetHtml(images), { waitUntil: 'load' });
+  mkdirSync(SHEETS_DIR, { recursive: true });
+  const file = join(SHEETS_DIR, `${name}.jpg`);
+  writeFileSync(file, Buffer.from(await page.screenshot({ type: 'jpeg', quality: 80 })));
+  return file;
+}
+
+/** Claude looks at photos with this post in mind. "Good enough for any ad" is saved on the asset (so a rejected
+ *  photo never comes back); fit is about this post and returned by photo id. If it can't look (limit reached, no
+ *  token) nothing fits and unseen photos aren't used: no photo beats a wrong photo. */
+async function lookAtPhotos(photos: { photo: Photo; topic: string }[], brief: string, browser: Browser): Promise<Map<string, number>> {
+  const fits = new Map<string, number>();
+  const todo = [...new Map(photos.filter((x) => x.photo.origin === 'discovered' && x.photo.looked?.ok !== false).map((x) => [x.photo.id, x])).values()];
+  const token = await claudeToken();
+  if (!todo.length || !token) return fits;
   const started = Date.now();
   const page = await browser.newPage();
   try {
     for (let i = 0; i < todo.length && Date.now() - started < LOOK_MS; i += SHEET_SIZE) {
       const part = todo.slice(i, i + SHEET_SIZE);
       const urls = await Promise.all(part.map(async (x) => `data:${x.photo.mime};base64,${((await bytesOf(x.photo)) ?? Buffer.alloc(0)).toString('base64')}`));
-      await page.setViewport({ width: 1600, height: 400 * Math.ceil(part.length / 4), deviceScaleFactor: 1 });
-      await page.setContent(sheetHtml(urls), { waitUntil: 'load' });
-      const file = join(dir, `sheet-${i}.jpg`);
-      writeFileSync(file, Buffer.from(await page.screenshot({ type: 'jpeg', quality: 80 })));
-      const { report } = await runClaude<{ photos: { n: number; ok: boolean; why: string }[] }>(sheetPrompt(file, part.map((x) => x.topic)), token, { enabled: [] }, Date.now() + LOOK_MS, LOOK_MODE);
+      const file = await writeSheet(page, urls, `photos-${i}`);
+      const { report } = await runClaude<{ photos: { n: number; ok: boolean; fit: number; why: string }[] }>(sheetPrompt(file, brief, part.map((x) => x.topic)), token, { enabled: [] }, Date.now() + LOOK_MS, LOOK_MODE);
       const verdicts = sheetVerdicts(report, part.length);
-      await Promise.all(part.map((x, k) => (verdicts.has(k) ? saveLook(x.photo, verdicts.get(k)!) : undefined)));
+      await Promise.all(
+        part.map(async (x, k) => {
+          const v = verdicts.get(k);
+          if (!v) return;
+          fits.set(x.photo.id, v.ok ? v.fit : 0);
+          if (x.photo.looked?.ok !== v.ok) await saveLook(x.photo, v);
+        }),
+      );
       console.log(JSON.stringify({ photoLook: part.map((x, k) => ({ name: x.photo.name.slice(0, 40), ...verdicts.get(k) })) }));
     }
   } catch (e) {
@@ -282,13 +307,30 @@ async function lookAtPhotos(photos: { photo: Photo; topic: string }[], browser: 
   } finally {
     await page.close();
   }
+  return fits;
 }
 
-/** The photos a post's images use: a photo a person chose for the post first, else scenes found for each frame's
- *  topic, and a pool for phone screens (licences that need no credit, so tiny tiles never owe one). Found photos
- *  only after Claude has seen them. `dropped`: found photos an earlier render attached for their credit lines
- *  (they aren't anyone's choice, and would otherwise become every scene of this render). */
-async function gatherPhotos(post: PostLike, list: Frame[], browser: Browser) {
+/** Claude judges the finished images together, as someone seeing the post would. Undefined if it can't. */
+async function scoreImages(page: Page, images: { label: string; png: Buffer }[], brief: string): Promise<{ images: ImageScore[]; hook: number; hookWhy: string } | undefined> {
+  const token = await claudeToken();
+  if (!token || !images.length) return undefined;
+  try {
+    const files: string[] = [];
+    for (let i = 0; i < images.length; i += SHEET_SIZE) files.push(await writeSheet(page, images.slice(i, i + SHEET_SIZE).map((x) => `data:image/png;base64,${x.png.toString('base64')}`), `score-${i}`));
+    const labels = images.map((x, i) => `${i + 1}: ${x.label}`);
+    const { report } = await runClaude<{ images: { n: number; score: number; relates: number; clear: number; design: number; why: string; fix: string }[]; hook: number; hookWhy: string }>(scorePrompt(files, brief, labels), token, { enabled: [] }, Date.now() + 2 * 60_000, SCORE_MODE);
+    return { images: readScores(report, images.map((x) => x.label)), hook: Number(report.hook) || 0, hookWhy: String(report.hookWhy ?? '').slice(0, 200) };
+  } catch (e) {
+    console.error(JSON.stringify({ scoreFailed: (e as Error).message.slice(0, 300) }));
+    return undefined;
+  }
+}
+
+/** The photos a post's images use: a photo a person chose for the post first, else Pixabay scenes for each frame's
+ *  topic that Claude says fit this post, and a pool for phone screens (this post's fitting photos first, general
+ *  ones only to fill up; licences that need no credit, so tiny tiles never owe one). `dropped`: found photos an
+ *  earlier render attached for their credit lines (nobody's choice, and they'd become every scene of this render). */
+async function gatherPhotos(post: PostLike & { title: string }, list: Frame[], browser: Browser) {
   const served = new Map<string, { mime: string; body: Buffer }>();
   const kit: KitPhoto[] = [];
   const url = async (a: Asset) => {
@@ -316,21 +358,25 @@ async function gatherPhotos(post: PostLike, list: Frame[], browser: Browser) {
     for (const q of GENERIC) await findPhotos(q, 3, 'portrait');
     pool = (await photoPool()).filter(noCredit);
   }
-  // Stock before older Commons finds, so the phone screens get the better photos.
-  const unseen = shuffle(pool.filter((p) => !photoPassed(p) && !p.looked), post.id).sort((a, b) => Number(/pixabay|pexels/i.test(b.rights.license)) - Number(/pixabay|pexels/i.test(a.rights.license)));
-  await lookAtPhotos(
+  const unseen = shuffle(pool.filter((p) => !p.looked), post.id);
+  const fits = await lookAtPhotos(
     [...[...options].flatMap(([q, ps]) => ps.map((photo) => ({ photo, topic: q }))), ...(pool.filter(photoPassed).length < 15 ? unseen.slice(0, 2 * SHEET_SIZE) : []).map((photo) => ({ photo, topic: photo.query ?? 'a beautiful scene' }))],
+    postBrief(post),
     browser,
   );
+  const fitting = [...new Map([...options.values()].flat().filter((p) => photoPassed(p) && (fits.get(p.id) ?? 0) >= FITS).map((p) => [p.id, p])).values()].sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0));
   const scenes = new Map<string, string>();
   const credited: AssetRef[] = [];
   for (const q of queries) {
-    const found = (own as Photo | undefined) ?? options.get(q)?.find(photoPassed);
+    const found = (own as Photo | undefined) ?? options.get(q)?.filter((p) => fitting.includes(p)).sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0))[0] ?? fitting[0];
     const u = found && (await url(found));
     if (u) scenes.set(q, u);
     if (found && !noCredit(found) && !credited.some((c) => c.id === found.id)) credited.push({ id: found.id, role: 'background' });
   }
-  const poolUrls = (await Promise.all(shuffle(pool.filter(photoPassed), post.id).slice(0, 15).map(url))).filter((u): u is string => !!u);
+  // Phone screens: an album about a wedding shows wedding photos; general photos only if too few fit.
+  const general = shuffle(pool.filter((p) => photoPassed(p) && !fitting.includes(p)), post.id);
+  const poolPhotos = fitting.filter(noCredit).length >= 6 ? fitting.filter(noCredit) : [...fitting.filter(noCredit), ...general];
+  const poolUrls = (await Promise.all(poolPhotos.slice(0, 15).map(url))).filter((u): u is string => !!u);
   return { served, scenes, pool: poolUrls, credited, dropped, kit };
 }
 
@@ -351,7 +397,13 @@ async function aiDesigner(post: PostLike & { title: string }, list: Frame[], kit
   };
 }
 
+const scored = (score: PostScore | null, label: string) => {
+  const s = score?.images.find((x) => x.label === label);
+  return s ? { score: s.score, scoreWhy: s.why } : {};
+};
+
 export async function renderPost(postId: string, by: string): Promise<{ rendered: number }> {
+  const jobStart = Date.now();
   if (!BUCKET) throw new Error('Content storage isn’t set up');
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as (PostLike & { title: string }) | undefined;
   if (!post) throw new Error(`Post ${postId} is gone`);
@@ -374,8 +426,9 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   const files: { name: string; data: Buffer }[] = [];
   let credited: AssetRef[] = [];
   let dropped: string[] = [];
+  let score: PostScore | null = null;
   try {
-    const gathered = await gatherPhotos({ ...post, id: postId }, list, browser);
+    const gathered = await gatherPhotos({ ...post, id: postId, title: post.title }, list, browser);
     const { served, scenes, pool, kit } = gathered;
     credited = gathered.credited;
     dropped = gathered.dropped;
@@ -422,12 +475,44 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
       const html = designHtml({ w: fr.w, h: fr.h, layout: fr.layout, screen: fr.screen, headline: drawable(fr.headline), body: drawable(fr.body), index: fr.index, total: fr.total, cta: drawable(cta), site: SITE, photo: fr.query ? scenes.get(fr.query) : undefined, pool, icon, fonts, brand });
       done.set(fr.label, { png: (await shoot(fr, html, false)).png, by: 'template', problems: failed.get(fr.label) });
     }
+    // 3) Claude scores the finished post; AI images under the bar get one redesign from the critique, which
+    //    only replaces the first design if it passes the checks and scores higher.
+    const framed = () => list.map((fr) => ({ label: fr.label, png: done.get(fr.label)!.png }));
+    const brief = postBrief(post);
+    const first = await scoreImages(page, framed(), brief);
+    if (first) {
+      score = { total: postTotal(first.images, first.hook), hook: first.hook, hookWhy: first.hookWhy, images: first.images, redone: 0, at: Date.now() };
+      const weak = first.images.filter((x) => x.score < REDO_BELOW && done.get(x.label)?.by === 'ai');
+      if (ai && weak.length && Date.now() - jobStart < 7 * 60_000) {
+        const redo = await ai(new Map(weak.map((x) => [x.label, [`creative director scored it ${x.score}/100: ${x.why}${x.fix ? `. ${x.fix}` : ''}`]]))).catch(() => new Map<string, AiDesign>());
+        const tried: { label: string; png: Buffer; idea: string }[] = [];
+        for (const fr of list) {
+          const d = redo.get(fr.label);
+          if (!d) continue;
+          const r = await shoot(fr, aiPageHtml(fr, d.html, ctx), true).catch(() => undefined);
+          if (r && !r.problems.length) tried.push({ label: fr.label, png: r.png, idea: d.idea.slice(0, 200) });
+        }
+        const again = tried.length && Date.now() - jobStart < 12 * 60_000 ? await scoreImages(page, tried, brief) : undefined;
+        const images = new Map(first.images.map((x) => [x.label, x]));
+        let redone = 0;
+        for (const t of tried) {
+          const after = again?.images.find((x) => x.label === t.label);
+          if (after && after.score > (images.get(t.label)?.score ?? 0)) {
+            done.set(t.label, { png: t.png, by: 'ai', idea: t.idea });
+            images.set(t.label, after);
+            redone++;
+          }
+        }
+        const final = list.map((fr) => images.get(fr.label)).filter((x): x is ImageScore => !!x);
+        score = { ...score, images: final, total: postTotal(final, first.hook), redone };
+      }
+    }
     for (const fr of list) {
       const { png, by: designedBy, idea, problems } = done.get(fr.label)!;
       const id = renderAssetId(postId, fr.label);
       const key = `a/${id}.png`;
       await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: png, ContentType: 'image/png' }));
-      const asset: Asset & { postId: string; label: string; w: number; h: number; designedBy: 'ai' | 'template'; idea?: string; problems?: string[] } = {
+      const asset: Asset & { postId: string; label: string; w: number; h: number; designedBy: 'ai' | 'template'; idea?: string; problems?: string[]; score?: number; scoreWhy?: string } = {
         id,
         name: `${post.title || 'Post'} · ${fr.label}`.slice(0, 160),
         kind: 'render',
@@ -448,6 +533,7 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
         designedBy,
         ...(idea ? { idea } : {}),
         ...(problems?.length ? { problems } : {}),
+        ...scored(score, fr.label),
       };
       await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
       renders.push({ assetId: id, label: fr.label, w: fr.w, h: fr.h, designedBy });
@@ -457,11 +543,12 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
     await browser.close();
   }
   files.push({ name: 'where-to-post.txt', data: Buffer.from(whereToPost(post.title, list), 'utf8') });
-  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: zipKey(postId), Body: zipStore(files), ContentType: 'application/zip' }));
+  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: zipKey(postId), Body: zipStore(files), ContentType: 'application/zip', ContentDisposition: `attachment; filename="${zipFile(post.title)}"` }));
   // Found photos that need a credit join the post as backgrounds, so Export adds their credit lines.
   const kept = (post.assets ?? []).filter((a) => !dropped.includes(a.id));
   const assets = [...kept, ...credited.filter((c) => !kept.some((a) => a.id === c.id))].slice(0, 20);
-  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z, assets = :a', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId), ':a': assets } }));
+  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z, assets = :a, score = :s', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId), ':a': assets, ':s': score } }));
+  console.log(JSON.stringify({ postScore: score }));
   return { rendered: renders.length };
 }
 
@@ -495,7 +582,5 @@ export async function renderZip(postId: string): Promise<Res> {
   } catch {
     throw gone();
   }
-  const file = `${String(post.title || 'post').replace(/[^\w -]+/g, '').trim().slice(0, 60) || 'post'} images.zip`;
-  const url = await presign(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${file}"` }), { expiresIn: 300 });
-  return json(200, { url, file });
+  return json(200, { url: await viewUrl(key), file: zipFile(String(post.title ?? '')) });
 }

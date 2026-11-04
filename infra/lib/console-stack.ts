@@ -73,7 +73,7 @@ export class ConsoleStack extends Stack {
     const table = dynamodb.Table.fromTableAttributes(this, 'Table', { tableName: props.tableName, globalIndexes: ['gsi1'] });
 
     // Content engine files (docs/growth/content-engine.md): a/ assets (uploads, renders, licensed media),
-    // e/ licence evidence, x/ export zips (30 days). Private; the Console shows them through 5-minute links.
+    // e/ licence evidence, x/ export zips (30 days). Private; the Console shows them through 5-minute signed CloudFront links.
     const content = new s3.Bucket(this, 'GrowthContent', {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -86,7 +86,13 @@ export class ConsoleStack extends Stack {
         { abortIncompleteMultipartUploadAfter: Duration.days(1) },
       ],
     });
-    const contentHost = `https://${content.bucketRegionalDomainName}`;
+    const contentHost = `https://${content.bucketRegionalDomainName}`; // uploads only (browser PUT to u/)
+    // Viewing goes through the Console's own CloudFront with signed links (same private key as Lens media).
+    const fileKey = new cloudfront.PublicKey(this, 'FileSigningKey', {
+      encodedKey: fs.readFileSync(path.join(__dirname, '../keys/cloudfront-public.pem'), 'utf8'),
+      comment: 'Lens Console signed file links',
+    });
+    const fileKeys = new cloudfront.KeyGroup(this, 'FileSigningKeys', { items: [fileKey] });
 
     const fn = new nodejs.NodejsFunction(this, 'ConsoleApi', {
       entry: path.join(__dirname, '../lambda/console/index.ts'),
@@ -109,6 +115,7 @@ export class ConsoleStack extends Stack {
         CONSOLE_PARAMS,
         // Affiliate payout details are sealed with a key derived from this (affiliates.ts).
         CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
+        CF_KEY_PAIR_ID: fileKey.publicKeyId,
         WEB_ORIGIN: (this.node.tryGetContext('webOrigin') as string | undefined) ?? '',
         CODE_SENDER: `no-reply@${(this.node.tryGetContext('codeDomain') as string | undefined) ?? ''}`,
         PLAY_URL: (this.node.tryGetContext('playUrl') as string | undefined) ?? '',
@@ -224,7 +231,7 @@ function handler(event) {
       securityHeadersBehavior: {
         contentSecurityPolicy: {
           contentSecurityPolicy:
-            `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: ${contentHost}; media-src ${contentHost}; font-src 'self'; connect-src 'self' ${contentHost}; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+            `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self' ${contentHost}; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
           override: true,
         },
         strictTransportSecurity: { accessControlMaxAge: Duration.days(730), includeSubdomains: true, override: true },
@@ -256,6 +263,27 @@ function handler(event) {
       ),
     });
 
+    // Files share the Console's address, so nothing in them may run there: a sandbox CSP on every response.
+    const fileHeaders = new cloudfront.ResponseHeadersPolicy(this, 'ConsoleFileHeaders', {
+      comment: 'Lens Console content files',
+      securityHeadersBehavior: {
+        contentSecurityPolicy: { contentSecurityPolicy: "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox", override: true },
+        strictTransportSecurity: { accessControlMaxAge: Duration.days(730), includeSubdomains: true, override: true },
+        contentTypeOptions: { override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true },
+      },
+      customHeadersBehavior: { customHeaders: [{ header: 'x-robots-tag', value: 'noindex, nofollow', override: true }] },
+    });
+    const contentOrigin = origins.S3BucketOrigin.withOriginAccessControl(content);
+    // Not cached: making images again replaces a file at the same address.
+    const fileBehavior = {
+      origin: contentOrigin,
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      trustedKeyGroups: [fileKeys],
+      responseHeadersPolicy: fileHeaders,
+    };
+
     const distribution = new cloudfront.Distribution(this, 'ConsoleCdn', {
       comment: 'Lens Console',
       domainNames: [props.domain],
@@ -270,6 +298,9 @@ function handler(event) {
         functionAssociations: [{ function: spa, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
       additionalBehaviors: {
+        '/a/*': fileBehavior,
+        '/e/*': fileBehavior,
+        '/x/*': fileBehavior,
         '/api/*': {
           origin: new origins.HttpOrigin(Fn.select(2, Fn.split('/', url.url)), {
             protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
