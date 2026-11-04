@@ -7,7 +7,8 @@
 //   or brands go to the Library as "review" for a manager (free licences have no model/trademark release).
 //   GROWTH / ASSET#<id>     the photo (kind image, origin discovered, query, sourceUrl, w, h); file a/<id>.<ext>
 //   e/<id>.json             what the source said about the photo and its licence, when we took it
-//   GROWTH / PHOTOQ#<hash>  { query, ids, at, ttl }: a search is reused for 30 days
+//   GROWTH / PHOTOQ#<hash>  { query, ids, at, ttl, v, sources }: a search is reused for 30 days; `sources`
+//                           says what each source answered ("ok 20", "failed: pixabay.com 403", "no key")
 import { createHash } from 'node:crypto';
 
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -147,25 +148,42 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
   return r.json();
 }
 
-async function searchSources(query: string, orientation: 'portrait' | 'landscape'): Promise<Found[]> {
+/** Bump when sources change, so cached searches made without them are done again. */
+const SEARCH_VERSION = 2;
+
+async function searchSources(query: string, orientation: 'portrait' | 'landscape'): Promise<{ found: Found[]; sources: Record<string, string> }> {
   const out: Found[] = [];
-  const keys = await getParam('/lens/growth/photos')
-    .then((v) => (v ? (JSON.parse(v) as { pixabayKey?: string; pexelsKey?: string }) : {}))
-    .catch(() => ({}) as { pixabayKey?: string; pexelsKey?: string });
-  if (keys.pixabayKey) {
-    const u = `https://pixabay.com/api/?${new URLSearchParams({ key: keys.pixabayKey, q: query.slice(0, 100), image_type: 'photo', orientation: orientation === 'portrait' ? 'vertical' : 'horizontal', safesearch: 'true', per_page: '20', order: 'popular' })}`;
-    out.push(...pixabayResults(await getJson(u).catch(() => ({}))));
+  const sources: Record<string, string> = {};
+  const run = async (name: string, f: () => Promise<Found[]>) => {
+    try {
+      const got = await f();
+      out.push(...got);
+      sources[name] = `ok ${got.length}`;
+    } catch (e) {
+      sources[name] = `failed: ${(e as Error).message.slice(0, 120)}`;
+    }
+  };
+  let keys: { pixabayKey?: string; pexelsKey?: string } = {};
+  try {
+    const v = await getParam('/lens/growth/photos');
+    keys = v ? JSON.parse(v) : {};
+  } catch (e) {
+    sources.keys = `failed: ${(e as Error).message.slice(0, 120)}`;
   }
-  if (keys.pexelsKey) {
-    const u = `https://api.pexels.com/v1/search?${new URLSearchParams({ query, orientation, per_page: '15', size: 'large' })}`;
-    out.push(...pexelsResults(await getJson(u, { Authorization: keys.pexelsKey }).catch(() => ({}))));
-  }
+  if (keys.pixabayKey) await run('pixabay', async () => pixabayResults(await getJson(`https://pixabay.com/api/?${new URLSearchParams({ key: keys.pixabayKey!, q: query.slice(0, 100), image_type: 'photo', orientation: orientation === 'portrait' ? 'vertical' : 'horizontal', safesearch: 'true', per_page: '20', order: 'popular' })}`)));
+  else sources.pixabay = 'no key';
+  if (keys.pexelsKey) await run('pexels', async () => pexelsResults(await getJson(`https://api.pexels.com/v1/search?${new URLSearchParams({ query, orientation, per_page: '15', size: 'large' })}`, { Authorization: keys.pexelsKey! })));
   const wm = (extra: string) =>
     `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', format: 'json', generator: 'search', gsrnamespace: '6', gsrsearch: `${query} filetype:bitmap${extra}`, gsrlimit: '20', prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiurlwidth: '1600' })}`;
   // Quality images first (photos reviewed by the Commons community), then any; on topic only.
-  for (const extra of [' incategory:Quality_images', '']) out.push(...wikimediaResults(await getJson(wm(extra)).catch(() => ({}))).filter((f) => relevant(f, query)));
+  await run('wikimedia', async () => {
+    const got: Found[] = [];
+    for (const extra of [' incategory:Quality_images', '']) got.push(...wikimediaResults(await getJson(wm(extra))).filter((f) => relevant(f, query)));
+    return got;
+  });
+  console.log(JSON.stringify({ photoSearch: query, sources }));
   const seen = new Set<string>();
-  return out.filter((f) => !seen.has(f.sourceUrl) && seen.add(f.sourceUrl));
+  return { found: out.filter((f) => !seen.has(f.sourceUrl) && seen.add(f.sourceUrl)), sources };
 }
 
 async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
@@ -214,7 +232,7 @@ export async function findPhotos(query: string, n = 3, orientation: 'portrait' |
   try {
     const sk = `PHOTOQ#${queryKey(q)}`;
     const cached = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk } }))).Item;
-    if (cached && Date.now() - cached.at < 30 * DAY) {
+    if (cached && cached.v === SEARCH_VERSION && Date.now() - cached.at < 30 * DAY) {
       const ids = (cached.ids as string[]).slice(0, 20);
       if (ids.length) {
         const got = await ddb.send(new BatchGetCommand({ RequestItems: { [env.table]: { Keys: ids.map((id) => ({ pk: 'GROWTH', sk: `ASSET#${id}` })) } } }));
@@ -223,7 +241,7 @@ export async function findPhotos(query: string, n = 3, orientation: 'portrait' |
         if (ok.length) return ok.slice(0, n);
       }
     }
-    const found = await searchSources(q, orientation);
+    const { found, sources } = await searchSources(q, orientation);
     const saved: Photo[] = [];
     // Cleared ones are saved and used; a couple of people/brand photos are saved for a manager to look at.
     let toReview = 2;
@@ -235,7 +253,7 @@ export async function findPhotos(query: string, n = 3, orientation: 'portrait' |
       if (p) saved.push(p);
       if (saved.filter(usable).length >= Math.max(n, 6)) break;
     }
-    await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk, query: q, ids: saved.map((p) => p.id), at: Date.now(), ttl: Math.floor((Date.now() + 31 * DAY) / 1000) } }));
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk, query: q, ids: saved.map((p) => p.id), at: Date.now(), ttl: Math.floor((Date.now() + 31 * DAY) / 1000), v: SEARCH_VERSION, sources } }));
     return saved.filter(usable).slice(0, n);
   } catch {
     return [];
