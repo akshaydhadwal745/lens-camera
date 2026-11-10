@@ -135,6 +135,8 @@ export type Partner = {
 };
 export type Post = {
   id: string;
+  /** "Make content" on a moment: what the content chain still has to make (growth-chain.ts). */
+  make?: { images?: string; reel?: string } | null;
   reelScore?: {
     total: number;
     images: { label: string; score: number; why: string }[];

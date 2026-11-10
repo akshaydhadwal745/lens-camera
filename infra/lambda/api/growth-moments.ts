@@ -40,9 +40,9 @@ export const SENSITIVE =
   /election|polling|\bvote|referendum|death|died|memorial|remembrance|mourning|martyr|tragedy|attack|disaster|earthquake|flood|cyclone|tsunami|\bwar\b|genocide|holocaust|assassinat|funeral|crash|shooting|riot|bandh|good friday|yom kippur|ashura|muharram|veterans|armistice|partition|9\/11|september 11/i;
 
 const PHOTO_MOMENT =
-  /diwali|deepavali|holi\b|christmas|new year|eid|wedding|halloween|thanksgiving|navratri|durga|ganesh|lohri|pongal|onam|raksha|bandhan|karva|karwa|valentine|mother'?s day|father'?s day|graduation|pride|carnival|fireworks|eclipse|bonfire|guy fawkes|independence day|4th of july|fourth of july|canada day|australia day|hanukkah|chhath?|bhai d[ou]o?j|govardhan|guru nanak|gurpurab|dussehra|baisakhi|vaisakhi|easter|st\.? patrick|lunar new year|chinese new year|world cup|final/i;
-const NIGHT = /diwali|deepavali|new year|bonfire|guy fawkes|fireworks|independence day|4th of july|fourth of july|canada day|eclipse|meteor|hanukkah|christmas|dev deepawali|lights/i;
-const GATHERING = /wedding|christmas|eid|thanksgiving|holi\b|navratri|durga|ganesh|raksha|bandhan|onam|pongal|easter|lohri|bhai d[ou]o?j|chhath?|govardhan|guru nanak|gurpurab|karva|karwa|hanukkah|graduation|mother'?s day|father'?s day/i;
+  /diwali|deepavali|holi\b|christmas|new year|eid|wedding|halloween|thanksgiving|navratri|durga|ganesh|lohri|pongal|onam|raksha|bandhan|karva|karwa|valentine|mother'?s day|father'?s day|graduation|pride|carnival|fireworks|eclipse|bonfire|guy fawkes|independence day|4th of july|fourth of july|canada day|australia day|hanukkah|chhath?|bhai d[ou]o?j|govardhan|guru nanak|gurpurab|dussehra|baisakhi|vaisakhi|easter|st\.? patrick|lunar new year|chinese new year|world cup|final|friendship|photography day|teachers'? day|children'?s day|cherry blossom|christmas markets|festival and concert|part(y|ies)|super bowl|oktoberfest|garba|concert/i;
+const NIGHT = /part(y|ies)|concert|garba|oktoberfest|diwali|deepavali|new year|bonfire|guy fawkes|fireworks|independence day|4th of july|fourth of july|canada day|eclipse|meteor|hanukkah|christmas|dev deepawali|lights/i;
+const GATHERING = /part(y|ies)|super bowl|oktoberfest|garba|concert|wedding|christmas|eid|thanksgiving|holi\b|navratri|durga|ganesh|raksha|bandhan|onam|pongal|easter|lohri|bhai d[ou]o?j|chhath?|govardhan|guru nanak|gurpurab|karva|karwa|hanukkah|graduation|mother'?s day|father'?s day|friendship|teachers'? day|children'?s day|christmas markets/i;
 
 const BASE: Record<MomentKind, number> = { festival: 55, holiday: 35, season: 50, match: 45, concert: 50, trend: 35 };
 
@@ -109,7 +109,12 @@ export function finish(m: Raw): Moment {
 // ---------- keyless sources ----------
 
 /** Google's public holiday calendars (official, no key). */
-export const HOLIDAY_CALENDARS: Record<string, string> = { IN: 'en.indian', US: 'en.usa', GB: 'en.uk', AU: 'en.australian', CA: 'en.canadian' };
+// Worldwide audience (English first): the big markets plus where English-speaking phone buyers are.
+export const HOLIDAY_CALENDARS: Record<string, string> = {
+  IN: 'en.indian', US: 'en.usa', GB: 'en.uk', AU: 'en.australian', CA: 'en.canadian',
+  AE: 'en.ae', SG: 'en.singapore', MY: 'en.malaysia', PH: 'en.philippines', ZA: 'en.sa', NZ: 'en.new_zealand', IE: 'en.irish',
+  DE: 'en.german', FR: 'en.french', BR: 'en.brazilian', JP: 'en.japanese',
+};
 
 /** VEVENTs of an iCal feed: all-day date, summary, and whether it is a public holiday. */
 export function parseIcs(ics: string): { day: string; title: string; publicHoliday: boolean }[] {
@@ -163,7 +168,55 @@ export const SEASONS: { title: string; from: string; to: string; countries: stri
   { title: 'Graduation season', from: '05-01', to: '06-30', countries: ['US', 'GB', 'CA', 'AU'] },
   { title: 'Back to school', from: '08-15', to: '09-10', countries: ['US', 'GB', 'CA'] },
   { title: 'Year-end holidays and New Year trips', from: '12-18', to: '01-05', countries: ['WW'] },
+  { title: 'Diwali holidays and trips', from: '10-15', to: '11-10', countries: ['IN'] },
+  { title: 'Christmas markets and lights', from: '11-25', to: '12-24', countries: ['GB', 'DE', 'FR', 'US', 'CA', 'IE'] },
+  { title: 'Cherry blossom season', from: '03-20', to: '04-15', countries: ['JP'] },
+  { title: 'Festival and concert season', from: '06-01', to: '08-31', countries: ['GB', 'US', 'DE', 'FR', 'IE'] },
+  { title: 'Christmas party season', from: '12-01', to: '12-23', countries: ['WW'] },
+  { title: 'Navratri garba nights', from: '09-20', to: '10-12', countries: ['IN'] },
+  { title: 'Concert and festival season (India)', from: '11-15', to: '02-28', countries: ['IN'] },
 ];
+
+/** Oktoberfest starts on the Saturday 15 days before it ends (the first Sunday of October, or 3 October if later). */
+function oktoberfest(year: number): string {
+  const firstSun = Number(nthWeekday(year, 10, 0, 1).slice(8));
+  const end = Date.UTC(year, 9, Math.max(firstSun, 3));
+  return new Date(end - 15 * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** The nth weekday (0 = Sunday) of a month, as yyyy-mm-dd. */
+function nthWeekday(year: number, month: number, weekday: number, n: number): string {
+  const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const day = 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Days people take and share photos on that calendars don't list as holidays (fixed or computed dates). */
+export const PHOTO_DAYS: { title: string; date: (y: number) => string; countries: string[] }[] = [
+  { title: "Valentine's Day", date: (y) => `${y}-02-14`, countries: ['WW'] },
+  { title: "Mother's Day", date: (y) => nthWeekday(y, 5, 0, 2), countries: ['US', 'CA', 'AU', 'IN'] },
+  { title: "Father's Day", date: (y) => nthWeekday(y, 6, 0, 3), countries: ['US', 'GB', 'CA', 'IN'] },
+  { title: 'International Day of Friendship', date: (y) => `${y}-07-30`, countries: ['WW'] },
+  { title: 'Friendship Day (India)', date: (y) => nthWeekday(y, 8, 0, 1), countries: ['IN'] },
+  { title: 'World Photography Day', date: (y) => `${y}-08-19`, countries: ['WW'] },
+  { title: "Teachers' Day (India)", date: (y) => `${y}-09-05`, countries: ['IN'] },
+  { title: 'Halloween', date: (y) => `${y}-10-31`, countries: ['US', 'GB', 'CA', 'AU', 'IE'] },
+  { title: "Children's Day (India)", date: (y) => `${y}-11-14`, countries: ['IN'] },
+  { title: "New Year's Eve parties", date: (y) => `${y}-12-31`, countries: ['WW'] },
+  { title: 'Super Bowl Sunday parties', date: (y) => nthWeekday(y, 2, 0, 2), countries: ['US'] },
+  { title: 'Oktoberfest begins', date: (y) => oktoberfest(y), countries: ['DE', 'WW'] },
+];
+
+/** Photo days in the window. */
+export function photoDayMoments(today: string, to: string): Raw[] {
+  const y = Number(today.slice(0, 4));
+  return PHOTO_DAYS.flatMap((d) =>
+    [y, y + 1]
+      .map((year) => d.date(year))
+      .filter((day) => day >= today && day <= to)
+      .map((day) => ({ title: d.title, kind: 'festival' as const, day, countries: d.countries, source: 'Photo days list', url: 'https://github.com/akshaydhadwal745/lens-camera/blob/main/infra/lambda/api/growth-moments.ts' })),
+  );
+}
 
 /** Seasons that start in the window or are on now (one row per season and year). */
 export function seasonMoments(today: string, to: string): Raw[] {
@@ -273,7 +326,8 @@ export async function pullMoments(trending: (geo: string) => Promise<{ title: st
     return holidayMoments(feeds, today, to);
   });
   await run('seasons', async () => seasonMoments(today, to));
-  await run('trends', async () => (await Promise.all(['IN', 'US'].map(async (g) => trendMoments(await trending(g).catch(() => []), g, today)))).flat());
+  await run('photo days', async () => photoDayMoments(today, to));
+  await run('trends', async () => (await Promise.all(['IN', 'US', 'GB', 'AU', 'CA', 'AE', 'SG'].map(async (g) => trendMoments(await trending(g).catch(() => []), g, today)))).flat());
 
   const keys = (await getParam('/lens/growth/moments')
     .then((r) => (r ? (JSON.parse(r) as Record<string, string>) : {}))

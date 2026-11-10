@@ -209,6 +209,12 @@ export class ConsoleStack extends Stack {
       schedule: events.Schedule.cron({ weekDay: 'MON', hour: '2', minute: '30' }),
       targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ growth: true, ai: true, by: 'schedule' }), retryAttempts: 0 })],
     });
+    // The content chain: "Make content" on a moment drafts, then makes images, then the reel, one step per tick
+    // (growth-chain.ts). An idle tick is a couple of DynamoDB reads (about $0.20 a month).
+    new events.Rule(this, 'GrowthContentChain', {
+      schedule: events.Schedule.rate(Duration.minutes(10)),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ contentChain: true }), retryAttempts: 0 })],
+    });
     // The month-in-review: the 1st of each month, 03:30 UTC (09:00 IST).
     new events.Rule(this, 'MonthlyGrowthReview', {
       schedule: events.Schedule.cron({ day: '1', hour: '3', minute: '30' }),

@@ -2,6 +2,7 @@
 // weekly from EventBridge, or on demand from the Console (POST /growth/run).
 import { finishJob, runDraft, runGrowthReport, runMonthly } from "./growth";
 import { watchCompetitors } from "./growth-competitors";
+import { contentChain } from "./growth-chain";
 import { renderPost } from "./growth-media";
 import { renderReel, type ReelStep } from "./growth-reel-job";
 import { runSeoAudit } from "./growth-seo";
@@ -19,6 +20,7 @@ export async function handler(event: {
   month?: string;
   render?: { postId: string };
   reel?: { postId: string; step?: ReelStep; jobAt?: number };
+  contentChain?: boolean;
 }) {
   if (event.monthly)
     return runMonthly({
@@ -27,6 +29,8 @@ export async function handler(event: {
       lockAt: typeof event.lockAt === "number" ? event.lockAt : undefined,
     });
   if (event.competitors) return job("competitors", () => watchCompetitors());
+  // One step of the content chain (growth-chain.ts): draft, images or reel for "Make content" moments.
+  if (event.contentChain) return contentChain();
   // Content images: no Claude, so outside the analyst lock (one render at a time, see renderStart).
   if (event.render && typeof event.render.postId === "string") {
     const { postId } = event.render;

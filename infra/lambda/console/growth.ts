@@ -891,7 +891,9 @@ async function runContentDraft(t: Task, by: string, started: number) {
     const problems = postProblems(f, code);
     const id = randomUUID().replace(/-/g, '').slice(0, 10);
     const links = Object.fromEntries(Object.keys(f.variants).map((k) => [k, platformLink(k, code, f.page)]));
-    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...f, code, link: platformLink(f.channel, code, f.page), links, problems, published: {}, createdAt: Date.now(), createdBy: 'agent', updatedAt: Date.now(), updatedBy: 'agent', pk: 'GROWTH', sk: `POST#${id}`, id } }));
+    // "Make content" on a moment makes everything: images for every package, a reel for reels (growth-chain.ts).
+    const make = (t.spec as { makeAll?: boolean } | undefined)?.makeAll ? { make: { images: 'todo', reel: ['reel', 'short'].includes(f.format) ? 'todo' : 'none' } } : {};
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...f, ...make, code, link: platformLink(f.channel, code, f.page), links, problems, published: {}, createdAt: Date.now(), createdBy: 'agent', updatedAt: Date.now(), updatedBy: 'agent', pk: 'GROWTH', sk: `POST#${id}`, id } }));
     saved.push({ id, name: f.title, format: f.format, problems });
   }
   if (!saved.length) throw new Error(`No usable packages (no platform versions). Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
@@ -969,7 +971,7 @@ async function syncPullRequests() {
 
 /** Starts a draft now if nothing else is running (Console). The Console can't read the GitHub key
  * (least privilege): the draft run checks it and reports a missing setup on the task. */
-async function startDraft(taskId: string, email: string): Promise<'started' | 'busy' | 'not-set-up'> {
+export async function startDraft(taskId: string, email: string): Promise<'started' | 'busy' | 'not-set-up'> {
   if (!process.env.GROWTH_FUNCTION) return 'not-set-up';
   const lockAt = await takeLock(`draft:${email}`, true, Date.now(), taskId);
   if (lockAt === undefined) return 'busy';

@@ -274,6 +274,17 @@ function PostCard({ p, onOpen }: { p: Post; onOpen: () => void }) {
         </span>
       </span>
       <span className="gw-task-title">{p.title || p.hook || "Untitled"}</span>
+      {p.make &&
+        (p.make.images === "todo" ||
+          p.make.images === "running" ||
+          p.make.reel === "todo" ||
+          p.make.reel === "started") && (
+          <Chip tone="acc">
+            {p.make.images === "todo" || p.make.images === "running"
+              ? "Making images…"
+              : "Making the reel…"}
+          </Chip>
+        )}
       <span className="muted small">
         {platforms.length
           ? platforms.map((k) => PLATFORM_LABEL[k] ?? k).join(" · ")
@@ -1767,11 +1778,13 @@ function Moments({ ws }: { ws: Workspace }) {
       {({ moments, sources, checkedAt }) => (
         <div className="gw-stack">
           <p className="muted small">
-            Festivals, holidays, seasons, big matches, concerts and trending
-            searches in the next 30 days, best fit for Lens first on each day.
-            “Make content” creates a task the agent drafts posts from (before,
-            on and after the day). Elections, disasters and days of mourning are
-            never listed.
+            Festivals, holidays, photo days, seasons, big matches, concerts and
+            trending searches in the next 30 days from 16 countries, fetched
+            every day, best fit for Lens first on each day. “Make content” makes
+            the full set by itself: a reel and a carousel for Instagram and
+            Facebook and a post for X, with images, music and sound. It all
+            waits In review for approval; nothing is published. Elections,
+            disasters and days of mourning are never listed.
           </p>
           {error && <p className="notice error">{error}</p>}
           {moments.length ? (
@@ -1825,7 +1838,7 @@ function Moments({ ws }: { ws: Workspace }) {
                           disabled={!!busy}
                           onClick={() => make(m)}
                         >
-                          {busy === m.id ? "Creating…" : "Make content"}
+                          {busy === m.id ? "Starting…" : "Make content"}
                         </button>
                       )
                     )}
