@@ -46,3 +46,9 @@ test('moments: mourning and solemn days never; Japan’s Labor Thanksgiving is n
   const s = (title: string) => score({ title, kind: 'holiday', day: '2026-11-23', countries: ['JP'], source: 's', url: 'u' });
   assert.ok(s('Labor Thanksgiving Day') < s('Thanksgiving Day'));
 });
+
+test('chain: a post whose reel was made by hand gets no second reel', () => {
+  const p = { id: 'a', status: 'in_review', format: 'reel', make: { images: 'done', reel: 'todo' }, reel: { at: 1 } };
+  assert.equal(nextStep([], [p], { analyst: true, render: true, reel: true }), undefined);
+  assert.equal(nextStep([], [{ ...p, reel: undefined }], { analyst: true, render: true, reel: true })?.kind, 'reel');
+});
