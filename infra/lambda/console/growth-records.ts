@@ -135,6 +135,8 @@ export async function postSave(id: string, req: Req, by: string): Promise<Res> {
     score: old?.score,
     reel: old?.reel,
     reelScore: old?.reelScore,
+    reelScript: old?.reelScript,
+    make: old?.make,
     status,
     code,
     link: postLink(f.channel, code, f.page && f.page.startsWith('/') ? f.page : '/'),

@@ -5,6 +5,7 @@ import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Res } from '../api/lib';
 import type { Moment } from '../api/growth-moments';
+import { startDraft } from './growth'; // a cycle (growth.ts uses packageDay), fine: both only call at run time
 import { createTask, getTask } from './growth-tasks';
 
 const DAY = 86_400_000;
@@ -52,6 +53,7 @@ export function momentBrief(m: Moment, today: string): { title: string; descript
     m.ends
       ? 'Timing: one package early in the season and one for its busiest weeks.'
       : "Timing: one package a few days before (get ready: free up space, set up the album), one for the day itself and, if it fits, one the day after (back up and share the photos). Set each package's day relative to the moment.",
+    'Packages (the full set; images and the reel are made automatically after you): exactly three, for the focus platforms. 1) A reel (format reel): a 20–25 second script, 5–7 scenes, for Instagram and Facebook, dayOffset −3. 2) A carousel (format carousel), 5–7 slides, for Instagram and Facebook, dayOffset 0. 3) One sharp X post (format post, x version only) with a short punchy text, dayOffset 0 (or −1 for an evening event).',
     `Rules for event content:\n- ${MOMENT_RULES.join('\n- ')}`,
   ].join('\n\n');
   const lead = Date.parse(`${m.day}T00:00:00Z`) - 3 * DAY;
@@ -78,11 +80,13 @@ export async function momentContent(id: string, by: string): Promise<Res> {
   const b = momentBrief(m, today);
   const moment: Moment = { id: m.id, title: m.title, kind: m.kind, day: m.day, ...(m.ends ? { ends: m.ends } : {}), ...(m.time ? { time: m.time } : {}), countries: m.countries, source: m.source, url: m.url, score: m.score, angle: m.angle, formats: m.formats, hashtags: m.hashtags };
   const task = await createTask(
-    { title: b.title, description: b.description, workstream: 'social', type: 'social', status: 'ready', due: b.due, impact: 2, confidence: 2, effortHours: 1, expectedImpact: 'Timely posts people share around the moment' },
+    { title: b.title, description: b.description, workstream: 'social', type: 'social', status: 'ready', due: b.due, impact: 2, confidence: 2, effortHours: 1, owner: 'agent', reviewer: by, expectedImpact: 'Timely posts people share around the moment' },
     by,
     { kind: 'person', by },
-    { moment },
+    { moment, makeAll: true },
   );
   await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `MOMENT#${id}` }, UpdateExpression: 'SET taskId = :t', ExpressionAttributeValues: { ':t': task.id } }));
-  return json(200, { taskId: task.id, existing: false });
+  // Draft right away when the agent is free; otherwise the content chain starts it (growth-chain.ts, every 10 min).
+  const started = await startDraft(task.id, by).catch(() => 'busy' as const);
+  return json(200, { taskId: task.id, existing: false, drafting: started === 'started' });
 }
