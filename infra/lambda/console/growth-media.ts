@@ -331,7 +331,12 @@ export async function scoreImages(page: Page, images: { label: string; png: Buff
  *  topic that Claude says fit this post, and a pool for phone screens (this post's fitting photos first, general
  *  ones only to fill up; licences that need no credit, so tiny tiles never owe one). `dropped`: found photos an
  *  earlier render attached for their credit lines (nobody's choice, and they'd become every scene of this render). */
-export async function gatherPhotos(post: PostLike & { title: string }, list: Frame[], browser: Browser) {
+/**
+ * Photos for a post: searched per query, looked at by Claude, kept only when they fit (FITS). A query where nothing
+ * from Pixabay fits is searched again on the wider, credited sources. `only`: a reel passes its scenes' searches and
+ * gets no general photos at all, so an album never fills with unrelated scenery.
+ */
+export async function gatherPhotos(post: PostLike & { title: string }, list: Frame[], browser: Browser, only?: { queries: string[] }) {
   const served = new Map<string, { mime: string; body: Buffer }>();
   const kit: KitPhoto[] = [];
   const url = async (a: Asset) => {
@@ -351,20 +356,31 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
     if (a?.origin === 'discovered') dropped.push(r.id);
     else if (!own && a && a.kind !== 'render' && a.mime.startsWith('image/') && a.status === 'ready' && a.rights.status === 'cleared' && (r.role === 'background' || (r.role === 'media' && a.rights.license === 'own'))) own = a;
   }
-  const queries = [...new Set(list.map((f) => f.query).filter((x): x is string => !!x))];
+  const queries = only ? [...new Set(only.queries.filter(Boolean))] : [...new Set(list.map((f) => f.query).filter((x): x is string => !!x))];
+  const landscape = (q: string) => !only && list.some((f) => f.query === q && f.w > f.h);
   const options = new Map<string, Photo[]>();
-  if (!own) for (const q of queries) options.set(q, await findPhotos(q, 10, list.some((f) => f.query === q && f.w > f.h) ? 'landscape' : 'portrait'));
-  let pool = (await photoPool()).filter(noCredit);
-  if (pool.filter(photoPassed).length < 15) {
+  if (!own) for (const q of queries) options.set(q, await findPhotos(q, 10, landscape(q) ? 'landscape' : 'portrait'));
+  let pool = only ? [] : (await photoPool()).filter(noCredit);
+  if (!only && pool.filter(photoPassed).length < 15) {
     for (const q of GENERIC) await findPhotos(q, 3, 'portrait');
     pool = (await photoPool()).filter(noCredit);
   }
   const unseen = shuffle(pool.filter((p) => !p.looked), post.id);
+  const brief = postBrief(post);
   const fits = await lookAtPhotos(
     [...[...options].flatMap(([q, ps]) => ps.map((photo) => ({ photo, topic: q }))), ...(pool.filter(photoPassed).length < 15 ? unseen.slice(0, 2 * SHEET_SIZE) : []).map((photo) => ({ photo, topic: photo.query ?? 'a beautiful scene' }))],
-    postBrief(post),
+    brief,
     browser,
   );
+  const fitsQ = (q: string) => (options.get(q) ?? []).some((p) => photoPassed(p) && (fits.get(p.id) ?? 0) >= FITS);
+  // Nothing from Pixabay fits: the same search on Wikimedia Commons and Openverse (credited), looked at the same way.
+  const wider = own ? [] : queries.filter((q) => !fitsQ(q));
+  if (wider.length) {
+    for (const q of wider) options.set(q, [...(options.get(q) ?? []), ...(await findPhotos(q, 10, landscape(q) ? 'landscape' : 'portrait', true))]);
+    const more = await lookAtPhotos(wider.flatMap((q) => (options.get(q) ?? []).filter((p) => !fits.has(p.id)).map((photo) => ({ photo, topic: q }))), brief, browser);
+    for (const [id, f] of more) fits.set(id, f);
+    console.log(JSON.stringify({ widerSearch: wider.map((q) => ({ q, fits: fitsQ(q) })) }));
+  }
   const fitting = [...new Map([...options.values()].flat().filter((p) => photoPassed(p) && (fits.get(p.id) ?? 0) >= FITS).map((p) => [p.id, p])).values()].sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0));
   const scenes = new Map<string, string>();
   const credited: AssetRef[] = [];
@@ -374,9 +390,12 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
     if (u) scenes.set(q, u);
     if (found && !noCredit(found) && !credited.some((c) => c.id === found.id)) credited.push({ id: found.id, role: 'background' });
   }
-  // Phone screens: an album about a wedding shows wedding photos; general photos only if too few fit.
+  // Phone screens: an album about a wedding shows wedding photos; general photos only if too few fit (never in a reel,
+  // where credited photos may fill tiles too: the reel's credits go in the post).
   const general = shuffle(pool.filter((p) => photoPassed(p) && !fitting.includes(p)), post.id);
-  const poolPhotos = fitting.filter(noCredit).length >= 6 ? fitting.filter(noCredit) : [...fitting.filter(noCredit), ...general];
+  const tiles = only ? fitting : fitting.filter(noCredit);
+  const poolPhotos = only || tiles.length >= 6 ? tiles : [...tiles, ...general];
+  for (const p of only ? poolPhotos.slice(0, 15) : []) if (!noCredit(p) && !credited.some((c) => c.id === p.id)) credited.push({ id: p.id, role: 'background' });
   const poolUrls = (await Promise.all(poolPhotos.slice(0, 15).map(url))).filter((u): u is string => !!u);
   return { served, scenes, pool: poolUrls, credited, dropped, kit };
 }

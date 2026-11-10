@@ -19,14 +19,14 @@ import { BatchGetCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } 
 
 import { ddb, env, getParam, s3 } from '../api/lib';
 import type { Asset } from './growth-assets';
-import { effectiveStatus, licenseVerdict, type Rights } from './growth-rights';
+import { effectiveStatus, licenseKey, licenseVerdict, type Rights } from './growth-rights';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const UA = 'LensGrowth/1.0 (https://lens.instagrowapp.com; content images)';
 const DAY = 86_400_000;
 
 export type Found = {
-  source: 'Pexels' | 'Pixabay';
+  source: 'Pexels' | 'Pixabay' | 'Wikimedia Commons' | 'Openverse';
   sourceUrl: string; // the photo's own page
   imageUrl: string; // the file we download (about 1600 px wide)
   w: number;
@@ -42,6 +42,67 @@ export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?
 /** Words in a title or tags that mean people or brands are probably in the picture. */
 export const PEOPLE_OR_BRANDS =
   /\b(portrait|selfie|faces?|man|men|woman|women|girls?|boys?|child|children|kids?|baby|people|persons?|bride|groom|couple|family|friends|singer|artist|band|actor|actress|player|celebrity|model|crowd|audience|fans|logo|brand|trademark|billboard|advert\w*|iphone|samsung|apple|google|pixel)\b/i;
+
+/** Paintings, prints, maps and scans are public domain too, but they aren't photos. */
+export const NOT_A_PHOTO = /\b(paintings?|painted|painter|oil on|canvas|drawings?|engraving|etching|lithograph|woodcut|illustrations?|postcards?|posters?|maps?|museum|artworks?|watercolou?r|aquarelle|sketch|scans?|book of|manuscript|fresco|mural|stamps?|coins?|diagram|svg|logo)\b|\b1[5-8]\d\d\b|\b19[0-4]\d\b/i;
+
+/** Enough of the search words appear in the title or tags (Commons and Openverse match loosely). */
+export function relevant(f: Pick<Found, 'title' | 'tags'>, query: string): boolean {
+  const hay = `${f.title} ${f.tags}`.toLowerCase();
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+  const hits = words.filter((w) => hay.includes(w.replace(/s$/, ''))).length;
+  return hits >= Math.min(2, words.length);
+}
+
+const plain = (html: unknown) => String(html ?? '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/\s+/g, ' ').trim();
+
+/** Wikimedia Commons search (generator=search, prop=imageinfo with extmetadata) → photos. Credit needed for CC BY. */
+export function wikimediaResults(json: any): Found[] {
+  const pages = Object.values(json?.query?.pages ?? {}) as any[];
+  return pages
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .map((p) => {
+      const i = p.imageinfo?.[0] ?? {};
+      const m = i.extmetadata ?? {};
+      return {
+        source: 'Wikimedia Commons' as const,
+        sourceUrl: String(i.descriptionurl ?? ''),
+        imageUrl: String(i.thumburl ?? i.url ?? ''),
+        w: Number(i.thumbwidth ?? i.width) || 0,
+        h: Number(i.thumbheight ?? i.height) || 0,
+        license: plain(m.LicenseShortName?.value),
+        licenseUrl: plain(m.LicenseUrl?.value),
+        author: plain(m.Artist?.value).slice(0, 120),
+        title: String(p.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, ''),
+        tags: `${plain(m.ImageDescription?.value).slice(0, 400)} ${plain(m.Categories?.value).replace(/\|/g, ' ')}`,
+      };
+    })
+    .filter((f) => f.sourceUrl && f.imageUrl && f.w >= 1000 && !NOT_A_PHOTO.test(`${f.title} ${f.tags}`));
+}
+
+/** Openverse (Flickr and other CC collections) → photos; only CC0, public domain and CC BY are asked for. */
+export function openverseResults(json: any): Found[] {
+  const name = (r: any) => {
+    const l = String(r.license ?? '').toLowerCase();
+    if (l === 'cc0') return 'CC0';
+    if (l === 'pdm') return 'Public domain';
+    return `CC ${l.toUpperCase()} ${String(r.license_version ?? '').trim()}`.trim();
+  };
+  return ((json?.results ?? []) as any[])
+    .map((r) => ({
+      source: 'Openverse' as const,
+      sourceUrl: String(r.foreign_landing_url ?? ''),
+      imageUrl: String(r.url ?? ''),
+      w: Number(r.width) || 0,
+      h: Number(r.height) || 0,
+      license: name(r),
+      licenseUrl: String(r.license_url ?? ''),
+      author: String(r.creator ?? '').slice(0, 120),
+      title: String(r.title ?? ''),
+      tags: ((r.tags ?? []) as any[]).map((t) => t?.name).filter(Boolean).join(', '),
+    }))
+    .filter((f) => /^https:/.test(f.sourceUrl) && /^https:/.test(f.imageUrl) && f.w >= 1000 && !NOT_A_PHOTO.test(`${f.title} ${f.tags}`));
+}
 
 /** Pexels search → photos (Pexels License: free, commercial use and edits allowed, no credit required). */
 export function pexelsResults(json: any): Found[] {
@@ -140,7 +201,7 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
 }
 
 /** Bump when sources change, so cached searches made without them are done again. */
-const SEARCH_VERSION = 4;
+const SEARCH_VERSION = 5;
 
 /** The Pixabay key from SSM (never in code). */
 export async function pixabayKey(): Promise<string | undefined> {
@@ -148,7 +209,13 @@ export async function pixabayKey(): Promise<string | undefined> {
   return v ? (JSON.parse(v) as { pixabayKey?: string }).pixabayKey : undefined;
 }
 
-async function searchSources(query: string, orientation: 'portrait' | 'landscape'): Promise<{ found: Found[]; sources: Record<string, string> }> {
+/**
+ * Pixabay first (no credit needed). `wide`: also Wikimedia Commons and Openverse, for when nothing from Pixabay fits
+ * the post (owner 2026-11-10: search other sites and credit the creator). Only licences that allow commercial use
+ * with edits come back; CC BY photos get a credit line in the post. Never Pinterest/Google/Instagram: those are
+ * other people's photos with no licence to reuse.
+ */
+async function searchSources(query: string, orientation: 'portrait' | 'landscape', wide = false): Promise<{ found: Found[]; sources: Record<string, string> }> {
   const out: Found[] = [];
   const sources: Record<string, string> = {};
   const run = async (name: string, f: () => Promise<Found[]>) => {
@@ -169,6 +236,15 @@ async function searchSources(query: string, orientation: 'portrait' | 'landscape
   }
   if (keys.pixabayKey) await run('pixabay', async () => pixabayResults(await getJson(`https://pixabay.com/api/?${new URLSearchParams({ key: keys.pixabayKey!, q: query.slice(0, 100), image_type: 'photo', orientation: orientation === 'portrait' ? 'vertical' : 'horizontal', safesearch: 'true', per_page: '40', order: 'popular' })}`)));
   else sources.pixabay = 'no key';
+  if (wide) {
+    await run('commons', async () => {
+      const got: Found[] = [];
+      for (const extra of [' incategory:Quality_images', ''])
+        got.push(...wikimediaResults(await getJson(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', format: 'json', generator: 'search', gsrnamespace: '6', gsrsearch: `${query} filetype:bitmap${extra}`, gsrlimit: '20', prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiurlwidth: '1600' })}`)).filter((f) => relevant(f, query)));
+      return got;
+    });
+    await run('openverse', async () => openverseResults(await getJson(`https://api.openverse.org/v1/images/?${new URLSearchParams({ q: query.slice(0, 100), license: 'cc0,pdm,by', category: 'photograph', size: 'large', mature: 'false', page_size: '20' })}`)).filter((f) => relevant(f, query)));
+  }
   if (keys.pexelsKey) await run('pexels', async () => pexelsResults(await getJson(`https://api.pexels.com/v1/search?${new URLSearchParams({ query, orientation, per_page: '15', size: 'large' })}`, { Authorization: keys.pexelsKey! })));
   console.log(JSON.stringify({ photoSearch: query, sources }));
   const seen = new Set<string>();
@@ -213,15 +289,15 @@ async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
 }
 
 /** Found photos only from the stock sites we chose; a person can still pick any cleared one for a post. */
-export const fromStock = (p: Photo) => p.origin !== 'discovered' || /pixabay|pexels/i.test(p.rights.license);
+export const fromStock = (p: Photo) => p.origin !== 'discovered' || ['pixabay', 'pexels', 'public-domain', 'cc-by'].includes(licenseKey(p.rights.license));
 const usable = (p: Photo | undefined): p is Photo => !!p && p.status === 'ready' && effectiveStatus(p.rights) === 'cleared' && p.looked?.ok !== false && fromStock(p);
 
 /** Up to `n` cleared photos for a search, found live (or reused from the last 30 days). Never throws. */
-export async function findPhotos(query: string, n = 3, orientation: 'portrait' | 'landscape' = 'portrait'): Promise<Photo[]> {
+export async function findPhotos(query: string, n = 3, orientation: 'portrait' | 'landscape' = 'portrait', wide = false): Promise<Photo[]> {
   const q = query.trim().slice(0, 80);
   if (!q || !BUCKET) return [];
   try {
-    const sk = `PHOTOQ#${queryKey(q)}`;
+    const sk = `PHOTOQ#${queryKey(q)}${wide ? ':wide' : ''}`;
     const cached = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk } }))).Item;
     if (cached && cached.v === SEARCH_VERSION && Date.now() - cached.at < 30 * DAY) {
       const ids = (cached.ids as string[]).slice(0, 20);
@@ -232,7 +308,7 @@ export async function findPhotos(query: string, n = 3, orientation: 'portrait' |
         if (ok.length) return ok.slice(0, n);
       }
     }
-    const { found, sources } = await searchSources(q, orientation);
+    const { found, sources } = await searchSources(q, orientation, wide);
     const saved: Photo[] = [];
     // Cleared ones are saved and used; a couple of people/brand photos are saved for a manager to look at.
     let toReview = 2;
