@@ -14,11 +14,14 @@ import { expandKit, sanitizeDesign, wordProblems as designWordProblems, type Kit
 import { SCREENS, type Screen } from './growth-design';
 import { FORBIDDEN_CLAIMS } from './growth-report';
 import { MAX_SECONDS } from './growth-reel';
+import { readCues, SOUNDS, type Cue } from './growth-sound';
 
 export type Media = 'footage' | 'photo' | 'phone' | 'none';
 export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; screen: Screen };
-export type WrittenReel = { angle: string; audience: string; hook: string; scenes: WrittenScene[] };
-export type SceneDesign = { n: number; idea: string; entry: Entry; html: string };
+export const MOODS = ['upbeat', 'chill', 'emotional', 'energetic', 'warm'] as const;
+export type Mood = (typeof MOODS)[number];
+export type WrittenReel = { angle: string; audience: string; hook: string; mood?: Mood; scenes: WrittenScene[] };
+export type SceneDesign = { n: number; idea: string; entry: Entry; html: string; sounds?: Cue[] };
 export const ENTRIES = ['cut', 'whip', 'slide', 'fade', 'circle', 'wipe'] as const;
 export type Entry = (typeof ENTRIES)[number];
 
@@ -43,13 +46,15 @@ For each scene choose what it shows:
 - phone: the real Lens app on a phone proving the point; choose screen. Screens: library = the photo roll; backup = backup progress; free-space = space freed after backup; storage-full = a full phone (the problem); viewer = one photo open in Lens with a green Safe pill; qr-album = an event album with a QR code guests scan; camera = the Lens camera with Night mode.
 - none: type, colour and shapes only (good for a punchy line).
 Use the phone in at least one scene. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
-Scene lengths: 2 to 5 seconds (enough to read the words twice), total 15 to ${MAX_SECONDS} seconds, 4 to 8 scenes.`;
+Scene lengths: 2 to 5 seconds (enough to read the words twice), total 15 to ${MAX_SECONDS} seconds, 4 to 8 scenes.
+mood: the music under it: upbeat (bright pop), chill (lo-fi, relaxed), emotional (piano, heartfelt), energetic (driving electronic), warm (acoustic, friendly).`;
 
 export const REEL_WRITER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['angle', 'audience', 'hook', 'scenes'],
+  required: ['angle', 'audience', 'hook', 'mood', 'scenes'],
   properties: {
+    mood: { type: 'string', enum: MOODS },
     angle: { type: 'string', description: 'the pain point and the twist, one sentence' },
     audience: { type: 'string' },
     hook: { type: 'string' },
@@ -117,7 +122,7 @@ export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: st
   const total = scenes.reduce((a, s) => a + s.seconds, 0);
   const k = total > MAX_SECONDS ? MAX_SECONDS / total : 1;
   for (const s of scenes) s.seconds = Math.max(2, Math.floor(s.seconds * k * 10) / 10);
-  return { reel: { angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
+  return { reel: { mood: (MOODS as readonly string[]).includes(String(r?.mood)) ? (r!.mood as Mood) : 'upbeat', angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
 }
 
 // ---------- 2. the designer ----------
@@ -149,7 +154,9 @@ Craft rules (checked in code; scenes that fail are redesigned or replaced):
 
 entry: how the scene comes in over the previous one: cut, whip (fast vertical push with blur), slide, fade, circle (circular reveal), wipe. Use "cut" or "whip" for energy; don't use the same entry three times in a row.
 
-For each scene return n, idea (one line), entry, and html (markup inside the scene's canvas; it may start with one <style> block).`;
+Sound: for each scene list sounds: the effects that land on your motion, at the second (scene time) where the motion hits. Kinds: whoosh (something sweeps or whips across), whoosh-up (a rise or reveal), swipe (a quick slide), pop (something lands or springs in: a phone, a card, a bubble), tick (a check or small confirmation), click (a tap or a button), shutter (a photo is taken), impact (a big word slams in or the final call to action), riser (tension building into the next scene, put it 1.2 s before the scene ends), chime (success: everything is in the album). 1 to 4 per scene, never two within 0.15 s; the scene's own entry whoosh is added for you. Less is more: sound only the moves that matter.
+
+For each scene return n, idea (one line), entry, sounds, and html (markup inside the scene's canvas; it may start with one <style> block).`;
 
 export const REEL_DESIGN_SCHEMA = {
   type: 'object',
@@ -158,7 +165,7 @@ export const REEL_DESIGN_SCHEMA = {
   properties: {
     scenes: {
       type: 'array',
-      items: { type: 'object', additionalProperties: false, required: ['n', 'idea', 'entry', 'html'], properties: { n: { type: 'integer' }, idea: { type: 'string' }, entry: { type: 'string', enum: ENTRIES }, html: { type: 'string' } } },
+      items: { type: 'object', additionalProperties: false, required: ['n', 'idea', 'entry', 'sounds', 'html'], properties: { n: { type: 'integer' }, idea: { type: 'string' }, entry: { type: 'string', enum: ENTRIES }, sounds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'kind'], properties: { t: { type: 'number' }, kind: { type: 'string', enum: SOUNDS } } } }, html: { type: 'string' } } },
     },
   },
 } as const;
@@ -184,12 +191,12 @@ ${ph.join('\n') || '- none'}`;
 }
 
 /** Claude's scene designs by scene number (unknown numbers and oversized HTML dropped). */
-export function designsByScene(r: { scenes?: Partial<SceneDesign>[] } | undefined, count: number): Map<number, SceneDesign> {
+export function designsByScene(r: { scenes?: Partial<SceneDesign>[] } | undefined, count: number, seconds: (n: number) => number = () => 30): Map<number, SceneDesign> {
   const out = new Map<number, SceneDesign>();
   for (const d of r?.scenes ?? []) {
     const n = Number(d.n);
     if (!Number.isInteger(n) || n < 1 || n > count || typeof d.html !== 'string' || d.html.length > 80_000) continue;
-    out.set(n, { n, idea: String(d.idea ?? '').slice(0, 200), entry: (ENTRIES as readonly string[]).includes(String(d.entry)) ? (d.entry as Entry) : 'cut', html: d.html });
+    out.set(n, { n, idea: String(d.idea ?? '').slice(0, 200), entry: (ENTRIES as readonly string[]).includes(String(d.entry)) ? (d.entry as Entry) : 'cut', html: d.html, sounds: readCues(d.sounds, seconds(n)) });
   }
   return out;
 }

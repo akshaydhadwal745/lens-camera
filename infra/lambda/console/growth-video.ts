@@ -8,8 +8,8 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam, HttpError, json, Res, s3 } from '../api/lib';
 import { runClaude, type Mode } from './growth';
@@ -19,6 +19,7 @@ import { frames, gatherPhotos, LOOK_MODE, postBrief, renderAssetId, scoreImages,
 import { FITS, pixabayKey, postTotal, sheetPrompt, sheetVerdicts, videoResults, type PostScore, type StockVideo } from './growth-photos';
 import { defaultPlan, DIRECTOR_SCHEMA, DIRECTOR_SYSTEM, directorPrompt, FPS, readPlan, reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { launchBrowser } from './growth-render';
+import { mixReel, RATE, templateCues, wav, type Cue } from './growth-sound';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const BRAND_DIR = process.env.GROWTH_BRAND_DIR ?? join(__dirname, 'brand');
@@ -63,7 +64,17 @@ export async function rankFootage(query: string, brief: string, browser: Awaited
     const thumbs = await Promise.all(found.map(async (v) => `data:image/jpeg;base64,${Buffer.from(await (await fetch(v.thumb, { signal: AbortSignal.timeout(20_000) })).arrayBuffer()).toString('base64')}`));
     const page = await browser.newPage();
     const file = await writeSheet(page, thumbs, `clips-${query.replace(/\W+/g, '-').slice(0, 30)}`).finally(() => page.close());
-    const { report } = await runClaude<{ photos: { n: number; ok: boolean; fit: number; why: string }[] }>(sheetPrompt(file, brief, found.map(() => query)), tok, { enabled: [] }, Date.now() + 2.5 * 60_000, LOOK_MODE);
+    const { report } = await runClaude<{ photos: { n: number; ok: boolean; fit: number; why: string }[] }>(
+      sheetPrompt(
+        file,
+        brief,
+        found.map(() => query),
+      ),
+      tok,
+      { enabled: [] },
+      Date.now() + 2.5 * 60_000,
+      LOOK_MODE,
+    );
     const verdicts = sheetVerdicts(report, found.length);
     console.log(JSON.stringify({ footageLook: query, clips: found.map((v, i) => ({ id: v.id, ...verdicts.get(i) })) }));
     return found
@@ -84,11 +95,34 @@ export async function clipFrames(v: StockVideo, sceneIndex: number, seconds: num
     const r = await fetch(v.url, { signal: AbortSignal.timeout(90_000) });
     if (!r.ok) throw new Error(`clip ${v.id}: ${r.status}`);
     writeFileSync(file, Buffer.from(await r.arrayBuffer()));
-    await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: `e/v${v.id}.json`, ContentType: 'application/json', Body: JSON.stringify({ takenAt: new Date().toISOString(), ...v, license: 'Pixabay Content License', licenseUrl: 'https://pixabay.com/service/license-summary/' }, null, 2) }));
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: `e/v${v.id}.json`,
+        ContentType: 'application/json',
+        Body: JSON.stringify({ takenAt: new Date().toISOString(), ...v, license: 'Pixabay Content License', licenseUrl: 'https://pixabay.com/service/license-summary/' }, null, 2),
+      }),
+    );
   }
   const dir = join(WORK, 'f', String(sceneIndex));
   mkdirSync(dir, { recursive: true });
-  await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-stream_loop', '-1', '-i', file, '-t', String(seconds + 0.7), '-vf', "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920:flags=lanczos,fps=30", '-q:v', '3', join(dir, '%04d.jpg')]);
+  await run('ffmpeg', [
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-y',
+    '-stream_loop',
+    '-1',
+    '-i',
+    file,
+    '-t',
+    String(seconds + 0.7),
+    '-vf',
+    "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920:flags=lanczos,fps=30",
+    '-q:v',
+    '3',
+    join(dir, '%04d.jpg'),
+  ]);
   return readdirSync(dir).length;
 }
 
@@ -114,7 +148,15 @@ export function reelProgress(jobAt: number) {
     last = now;
     lastStage = stage;
     void ddb
-      .send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'JOB#reel' }, UpdateExpression: 'SET stage = :s, step = :n, steps = :t, stageAt = :a', ConditionExpression: 'startedAt = :j', ExpressionAttributeValues: { ':s': stage, ':n': step, ':t': steps, ':a': now, ':j': jobAt } }))
+      .send(
+        new UpdateCommand({
+          TableName: env.table,
+          Key: { pk: 'GROWTH', sk: 'JOB#reel' },
+          UpdateExpression: 'SET stage = :s, step = :n, steps = :t, stageAt = :a',
+          ConditionExpression: 'startedAt = :j',
+          ExpressionAttributeValues: { ':s': stage, ':n': step, ':t': steps, ':a': now, ':j': jobAt },
+        }),
+      )
       .catch(() => undefined);
   };
 }
@@ -177,10 +219,12 @@ export async function renderTemplateReel(postId: string, by: string, jobAt: numb
         let m: SceneMedia = {};
         if (clip) {
           used.add(clip.id);
-          m = { frames: await clipFrames(clip, i, sc.seconds).catch((e) => {
-            console.error(JSON.stringify({ clipFailed: clip.id, message: (e as Error).message.slice(0, 300) }));
-            return undefined;
-          }) };
+          m = {
+            frames: await clipFrames(clip, i, sc.seconds).catch((e) => {
+              console.error(JSON.stringify({ clipFailed: clip.id, message: (e as Error).message.slice(0, 300) }));
+              return undefined;
+            }),
+          };
         }
         const still = m.frames ? undefined : stillFor(sc.query);
         if (still) m = { still };
@@ -207,25 +251,36 @@ export async function renderTemplateReel(postId: string, by: string, jobAt: numb
 
 /** Draw every frame, encode, let Claude score it, save the reel asset and the post. Shared by both reel kinds. */
 export async function drawReel(d: {
-browser: Awaited<ReturnType<typeof launchBrowser>>;
-plan: ReelScene[];
-media: SceneMedia[];
-pool: string[];
-postId: string;
-post: RenderablePost & { title: string; assets?: { id: string; role: string }[] };
-by: string;
-brief: string;
-credited: { id: string; role: string }[];
-began: number;
-progress: (stage: ReelStage, step?: number, steps?: number) => void;
-brand: { primary: string; accent: string };
-cta: string;
-extra?: Record<string, unknown>;
+  browser: Awaited<ReturnType<typeof launchBrowser>>;
+  plan: ReelScene[];
+  media: SceneMedia[];
+  pool: string[];
+  postId: string;
+  post: RenderablePost & { title: string; assets?: { id: string; role: string }[] };
+  by: string;
+  brief: string;
+  credited: { id: string; role: string }[];
+  began: number;
+  progress: (stage: ReelStage, step?: number, steps?: number) => void;
+  brand: { primary: string; accent: string };
+  cta: string;
+  extra?: Record<string, unknown>;
+  cues?: Cue[]; // on the reel's timeline; template scenes get theirs from planCues
+  mood?: string; // the writer's music mood
 }): Promise<{ seconds: number; ms: number; score: PostScore | null }> {
-const { browser, plan, media, pool, postId, post, by, brief, credited, began, progress, brand, cta } = d;
-// Every frame, one by one (nothing leaves the page).
+  const { browser, plan, media, pool, postId, post, by, brief, credited, began, progress, brand, cta } = d;
+  // Every frame, one by one (nothing leaves the page).
   const font = (n: string) => readFileSync(join(BRAND_DIR, n)).toString('base64');
-  const html = reelHtml({ brand, scenes: plan, media, pool, icon: `data:image/png;base64,${font('lens-icon.png')}`, fonts: { geist: font('geist-latin.woff2'), plex500: font('plex-mono-500.ttf'), plex600: font('plex-mono-600.ttf') }, cta, site: SITE });
+  const html = reelHtml({
+    brand,
+    scenes: plan,
+    media,
+    pool,
+    icon: `data:image/png;base64,${font('lens-icon.png')}`,
+    fonts: { geist: font('geist-latin.woff2'), plex500: font('plex-mono-500.ttf'), plex600: font('plex-mono-600.ttf') },
+    cta,
+    site: SITE,
+  });
   writeFileSync(join(WORK, 'reel.html'), html);
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
@@ -238,7 +293,33 @@ const { browser, plan, media, pool, postId, post, by, brief, credited, began, pr
   const out = join(WORK, 'reel.mp4');
   await run(
     'ffmpeg',
-    ['-nostdin', '-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-shortest', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out],
+    [
+      '-nostdin',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'image2pipe',
+      '-framerate',
+      String(FPS),
+      '-c:v',
+      'mjpeg',
+      '-i',
+      '-',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'fast',
+      '-crf',
+      '18',
+      '-profile:v',
+      'high',
+      '-pix_fmt',
+      'yuv420p',
+      '-r',
+      String(FPS),
+      join(WORK, 'video.mp4'),
+    ],
     async (stdin) => {
       for (let i = 0; i < total; i++) {
         progress('frames', i, total);
@@ -269,6 +350,40 @@ const { browser, plan, media, pool, postId, post, by, brief, credited, began, pr
 
   // 6) Save.
   progress('saving');
+  // Sound: the effects on their frames, music under them (ducked), loudness for Reels (about −14 LUFS).
+  const cues = d.cues ?? planCues(plan);
+  const music = d.mood ? await musicFor(d.mood, postId, seconds) : undefined;
+  writeFileSync(join(WORK, 'mix.wav'), wav(mixReel(seconds, cues, music?.pcm)));
+  await run('ffmpeg', [
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    join(WORK, 'video.mp4'),
+    '-i',
+    join(WORK, 'mix.wav'),
+    '-map',
+    '0:v',
+    '-map',
+    '1:a',
+    '-c:v',
+    'copy',
+    '-af',
+    `loudnorm=I=${music ? -14 : -19}:TP=-1.5:LRA=11`, // effects alone at Reels level sound harsh
+
+    '-ar',
+    '48000',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '192k',
+    '-shortest',
+    '-movflags',
+    '+faststart',
+    out,
+  ]);
+  console.log(JSON.stringify({ reelSound: { cues: cues.length, kinds: [...new Set(cues.map((c) => c.kind))], music: music?.name ?? null } }));
   const body = readFileSync(out);
   const id = renderAssetId(postId, 'Reel');
   const key = `a/${id}.mp4`;
@@ -283,7 +398,22 @@ const { browser, plan, media, pool, postId, post, by, brief, credited, began, pr
     bytes: body.length,
     lensPhoto: false,
     checkedPersonal: true,
-    rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: credited.length ? 'Made by Lens; footage from Pixabay, photos from Pixabay and free-licence sites, credited in the post; looked at by AI first. Look at it when you approve the post.' : 'Made by Lens; footage and photos from Pixabay (Pixabay Content License, no credit needed), looked at by AI first. Look at it when you approve the post.', checkedAt: Date.now(), checkedBy: 'template' },
+    rights: {
+      status: 'cleared',
+      license: 'own',
+      licenseUrl: '',
+      source: '',
+      author: '',
+      credit: '',
+      commercialOk: true,
+      editsOk: true,
+      peopleOrBrands: false,
+      reason: credited.length
+        ? 'Made by Lens; footage from Pixabay, photos from Pixabay and free-licence sites, credited in the post; looked at by AI first. Look at it when you approve the post.'
+        : 'Made by Lens; footage and photos from Pixabay (Pixabay Content License, no credit needed), looked at by AI first. Look at it when you approve the post.',
+      checkedAt: Date.now(),
+      checkedBy: 'template',
+    },
     status: 'ready',
     createdAt: Date.now(),
     createdBy: by,
@@ -297,10 +427,66 @@ const { browser, plan, media, pool, postId, post, by, brief, credited, began, pr
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
   // Credited photos (CC BY from Commons/Openverse) join the post's assets, so Export adds their credit lines.
   const reelAssets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
-  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: `SET reel = :r, reelScore = :s, assets = :a${d.extra ? ', reelScript = :w' : ' REMOVE reelScript'}`, ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score, ':a': reelAssets, ...(d.extra ? { ':w': d.extra } : {}) } }));
+  await ddb.send(
+    new UpdateCommand({
+      TableName: env.table,
+      Key: { pk: 'GROWTH', sk: `POST#${postId}` },
+      UpdateExpression: `SET reel = :r, reelScore = :s, assets = :a${d.extra ? ', reelScript = :w' : ' REMOVE reelScript'}`,
+      ConditionExpression: 'attribute_exists(pk)',
+      ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score, ':a': reelAssets, ...(d.extra ? { ':w': d.extra } : {}) },
+    }),
+  );
   const ms = Date.now() - began;
   console.log(JSON.stringify({ reelDone: postId, ms, seconds, bytes: body.length, total: score?.total ?? null }));
   return { seconds, ms, score };
+}
+
+/** Effects for template scenes and scene entries, on the reel's timeline (designed scenes add their own cues). */
+export function planCues(plan: ReelScene[], designed: (Cue[] | undefined)[] = []): Cue[] {
+  const out: Cue[] = [];
+  let at = 0;
+  plan.forEach((sc, i) => {
+    const own = designed[i];
+    if (own) {
+      const entry = sc.ai?.entry ?? 'cut';
+      if (i > 0 && !['cut', 'fade'].includes(entry) && !own.some((c) => c.t < 0.2)) out.push({ t: at, kind: entry === 'whip' ? 'whoosh' : 'swipe' });
+      for (const c of own) out.push({ ...c, t: at + c.t });
+    } else for (const c of templateCues(sc.type, sc.seconds, i === 0)) out.push({ ...c, t: at + c.t });
+    at += sc.seconds;
+  });
+  return out.sort((a, b) => a.t - b.t);
+}
+
+/**
+ * A licensed track for the mood from the Library (audio assets with a mood, rights cleared; the owner's Pixabay
+ * picks), decoded to stereo float32. The same post gets the same track. None in the Library → effects only.
+ */
+async function musicFor(mood: string, postId: string, seconds: number): Promise<{ name: string; pcm: Float32Array } | undefined> {
+  try {
+    const items: (Asset & { mood?: string })[] = [];
+    let start: Record<string, unknown> | undefined;
+    do {
+      const r = await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': 'ASSET#' }, ExclusiveStartKey: start }));
+      items.push(...((r.Items ?? []) as (Asset & { mood?: string })[]));
+      start = r.LastEvaluatedKey;
+    } while (start);
+    const tracks = items.filter((a) => a.mime.startsWith('audio/') && a.status === 'ready' && a.rights?.status === 'cleared');
+    const fit = tracks.filter((a) => (a.mood ?? a.name).toLowerCase().includes(mood));
+    const pool = fit.length ? fit : tracks;
+    if (!pool.length) return undefined;
+    const pick = pool.sort((a, b) => a.id.localeCompare(b.id))[parseInt(postId.slice(0, 6), 16) % pool.length];
+    const r = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: pick.key }));
+    const src = join(WORK, 'music.in');
+    writeFileSync(src, Buffer.from(await r.Body!.transformToByteArray()));
+    // The track's opening, long enough for the reel plus its fade, at one loudness.
+    await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', src, '-ss', '0', '-t', String(seconds + 2), '-ac', '2', '-ar', String(RATE), '-af', 'loudnorm=I=-16', '-f', 'f32le', join(WORK, 'music.f32')]);
+    const raw = readFileSync(join(WORK, 'music.f32'));
+    const n = Math.floor(raw.length / 4);
+    return { name: pick.name, pcm: new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + n * 4)) };
+  } catch (e) {
+    console.error(JSON.stringify({ musicFailed: (e as Error).message.slice(0, 200) }));
+    return undefined;
+  }
 }
 
 const REEL_MINUTES = 50; // a written + designed reel runs in several Lambda calls
