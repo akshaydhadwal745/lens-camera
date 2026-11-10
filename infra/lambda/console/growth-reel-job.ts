@@ -23,7 +23,8 @@ import type { StockVideo } from './growth-photos';
 import { reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { designsByScene, readWrittenReel, REEL_DESIGN_SCHEMA, REEL_DESIGN_SYSTEM, REEL_WRITER_SCHEMA, REEL_WRITER_SYSTEM, reelDesignPrompt, reelSceneCheck, reelSceneHtml, sceneWordProblems, writerPrompt, type SceneDesign, type WrittenReel } from './growth-reel-ai';
 import { launchBrowser } from './growth-render';
-import { clipFrames, drawReel, rankFootage, reelProgress, renderTemplateReel, SITE, token, WORK } from './growth-video';
+import { clipFrames, drawReel, planCues, rankFootage, reelProgress, renderTemplateReel, SITE, token, WORK } from './growth-video';
+import type { Cue } from './growth-sound';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const REPO = 'akshaydhadwal745/lens-camera';
@@ -197,13 +198,14 @@ async function fetchPhotos(st: State) {
 const kitOf = (st: State): KitPhoto[] => st.photos.map((p) => ({ ref: p.ref, url: `p/${p.id}.jpg`, about: p.about, w: p.w, h: p.h }));
 
 /** The page's scenes: designed ones expanded with their media, template ones for the rest. */
-function scenesOf(st: State, icon: string, clipFramesOf: Record<number, number>): { plan: ReelScene[]; media: SceneMedia[] } {
+function scenesOf(st: State, icon: string, clipFramesOf: Record<number, number>): { plan: ReelScene[]; media: SceneMedia[]; designed: (Cue[] | undefined)[] } {
   const topic = st.written.scenes.find((s) => s.query)?.query ?? '';
   const n = st.written.scenes.length;
   const qr = qrPattern(7);
   const pool = st.pool.map((id) => `p/${id}.jpg`);
   const plan: ReelScene[] = [];
   const media: SceneMedia[] = [];
+  const designed: (Cue[] | undefined)[] = [];
   for (const s of st.written.scenes) {
     const i = s.n - 1;
     const d = st.designs[s.n];
@@ -214,14 +216,16 @@ function scenesOf(st: State, icon: string, clipFramesOf: Record<number, number>)
       const html = reelSceneHtml(d.html, { photos: kitOf(st), pool, icon, clip: frames ? { dir: `f/${i}`, frames } : undefined, still, qr, brandDark: BRAND_DARK });
       plan.push({ ...t, ai: { html, entry: d.entry } });
       media.push({});
+      designed.push(d.sounds ?? []);
     } else {
       // A template footage scene: its clip, else its photo, else the app on a phone.
       if (t.type === 'footage' && !frames && !still) plan.push({ ...t, type: 'phone' });
       else plan.push(t);
       media.push(frames ? { frames } : still ? { still } : {});
+      designed.push(undefined);
     }
   }
-  return { plan, media };
+  return { plan, media, designed };
 }
 
 const font = (name: string) => readFileSync(join(process.env.GROWTH_BRAND_DIR ?? join(__dirname, 'brand'), name)).toString('base64');
@@ -243,7 +247,7 @@ async function designStep(postId: string, jobAt: number): Promise<{ continued: b
     if (!tok) return new Map<number, SceneDesign>();
     try {
       const { report } = await runClaude<{ scenes: Partial<SceneDesign>[] }>(reelDesignPrompt(st.written, kitOf(st), footage, colours, SITE, fix), tok, { enabled: [] }, Date.now() + 7 * 60_000, DESIGN_MODE);
-      return designsByScene(report, st.written.scenes.length);
+      return designsByScene(report, st.written.scenes.length, (n) => st.written.scenes[n - 1]?.seconds ?? 5);
     } catch (e) {
       console.error(JSON.stringify({ reelDesignFailed: (e as Error).message.slice(0, 300) }));
       return new Map<number, SceneDesign>();
@@ -328,7 +332,7 @@ async function renderStep(postId: string, jobAt: number): Promise<{ continued: b
     if (got) framesOf[s.n] = got;
   }
   const icon = `data:image/png;base64,${font('lens-icon.png')}`;
-  const { plan, media } = scenesOf(st, icon, framesOf);
+  const { plan, media, designed } = scenesOf(st, icon, framesOf);
   const browser = await launchBrowser();
   let result;
   try {
@@ -347,7 +351,9 @@ async function renderStep(postId: string, jobAt: number): Promise<{ continued: b
       progress,
       brand: { primary: brand.colors.primary, accent: brand.colors.accent },
       cta: brand.ctas[0] ?? 'Try Lens free',
-      extra: { angle: written.angle, audience: written.audience, hook: written.hook, scenes: written.scenes.map((s) => ({ words: s.words, seconds: s.seconds, shows: s.media, idea: st.designs[s.n]?.idea ?? '', by: st.failed.includes(s.n) ? 'template' : 'ai' })), round: st.round, at: Date.now() },
+      cues: planCues(plan, designed),
+      mood: written.mood,
+      extra: { mood: written.mood ?? null, angle: written.angle, audience: written.audience, hook: written.hook, scenes: written.scenes.map((s) => ({ words: s.words, seconds: s.seconds, shows: s.media, idea: st.designs[s.n]?.idea ?? '', by: st.failed.includes(s.n) ? 'template' : 'ai' })), round: st.round, at: Date.now() },
     });
   } finally {
     await browser.close();

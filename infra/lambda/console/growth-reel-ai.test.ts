@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { mixReel, RATE, readCues, SOUNDS, synth, wav } from './growth-sound';
 import { designsByScene, readWrittenReel, reelDesignPrompt, reelSceneHtml, reelWordProblems, sceneWordProblems, type WrittenReel } from './growth-reel-ai';
 
 const FACTS = 'Full-quality backup. 10 GB free forever. Lens Plus 50 GB for ₹59 a month. Event albums: a QR code guests open.';
@@ -73,4 +74,19 @@ test('design prompt: footage, last scene and fix notes are spelled out', () => {
   assert.match(p, /Scene 2 .*LAST: call to action/s);
   assert.match(p, /words off screen/);
   assert.match(reelDesignPrompt(reel, [], new Set([1]), { primary: '#2563EB', accent: '#FACC15' }, 'x'), /footage: yes/);
+});
+
+test('sound: effects are made in code, cues are checked, the mix is stereo at 48 kHz', () => {
+  for (const k of SOUNDS) {
+    const s = synth(k);
+    assert.ok(s.length > 0 && s.length < RATE * 1.5, k);
+    assert.ok(s.reduce((a, v) => Math.max(a, Math.abs(v)), 0) <= 1.0001, k);
+  }
+  assert.deepEqual(readCues([{ t: 0.5, kind: 'pop' }, { t: 0.55, kind: 'tick' }, { t: 9, kind: 'pop' }, { t: 1, kind: 'boom' }], 3), [{ t: 0.5, kind: 'pop' }]);
+  const m = mixReel(2, [{ t: 0.1, kind: 'impact' }]);
+  assert.equal(m.length, 2 * RATE * 2);
+  assert.ok(m.reduce((a, v) => Math.max(a, Math.abs(v)), 0) <= 1);
+  const w = wav(m);
+  assert.equal(w.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(w.readUInt32LE(24), 48000);
 });
