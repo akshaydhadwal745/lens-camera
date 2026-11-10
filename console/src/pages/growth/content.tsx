@@ -567,6 +567,7 @@ function PostEditor({
             )}
           </Loaded>
 
+          {post?.id && isVideo(post.format ?? "") && <Reel ws={ws} post={post} />}
           {post?.id && <Images ws={ws} post={post} />}
 
           <div className="gw-field">
@@ -1846,6 +1847,132 @@ function Moments({ ws }: { ws: Workspace }) {
 
 const scoreTone = (n: number) => (n >= 80 ? "good" : n >= 60 ? "warn" : "bad");
 
+type ReelJobs = {
+  reel: { postId: string; at: number } | null;
+  reelDone: { postId: string; at: number; error: string | null } | null;
+};
+
+/** The post's reel: the job runs on the server and keeps going if this page closes. */
+function Reel({ ws, post }: { ws: Workspace; post: Post }) {
+  const [n, setN] = useState(0);
+  const lib = useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), [n]);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState("");
+  const waitFor = async (began: number) => {
+    setRunning(true);
+    try {
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const j = await get<ReelJobs>("/growth/jobs");
+        const done = j.reelDone;
+        if (!j.reel && done?.postId === post.id && done.at >= began - 1000) {
+          if (done.error) setError(done.error);
+          break;
+        }
+        if (Date.now() - began > 16 * 60_000) {
+          setError(
+            "Still making the reel after 16 minutes. Check again in a while.",
+          );
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setRunning(false);
+    setN((x) => x + 1);
+  };
+  const start = async () => {
+    setError("");
+    const began = Date.now();
+    setRunning(true);
+    try {
+      await api("POST", `/growth/posts/${post.id}/reel`, {});
+    } catch (e) {
+      setError((e as Error).message);
+      setRunning(false);
+      return;
+    }
+    await waitFor(began);
+  };
+  useEffect(() => {
+    let on = true;
+    void get<ReelJobs>("/growth/jobs").then(
+      (j) => {
+        if (on && j.reel?.postId === post.id) void waitFor(j.reel.at);
+      },
+      () => undefined,
+    );
+    return () => {
+      on = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+  return (
+    <div className="gw-field">
+      <span className="gw-row">
+        <span>Reel</span>
+        {can(ws, "growth.contribute") && (
+          <button className="btn small" disabled={running} onClick={start}>
+            {running ? "Making reel…" : "Make reel"}
+          </button>
+        )}
+      </span>
+      <span className="muted small">
+        A vertical video (1080×1920, MP4) for Instagram, Facebook and X, made
+        from this post&apos;s script with real footage and motion. No music yet:
+        add sound when you post. Takes about 5–10 minutes and keeps going if you
+        leave this page. Save your edits first; making it again replaces the old
+        one.
+      </span>
+      {error && <p className="notice error">{error}</p>}
+      <Loaded state={lib}>
+        {({ assets }) => {
+          const reel = assets.find(
+            (a) =>
+              a.kind === "render" &&
+              a.postId === post.id &&
+              a.mime.startsWith("video/"),
+          );
+          if (!reel?.url)
+            return <span className="muted small">No reel yet.</span>;
+          return (
+            <div className="gw-stack">
+              <video
+                src={reel.url}
+                controls
+                playsInline
+                preload="metadata"
+                style={{ maxHeight: 520, maxWidth: "100%", borderRadius: 12 }}
+              />
+              <div className="gw-row">
+                <a className="btn small" href={reel.url} download>
+                  Download reel
+                </a>
+                {post.reelScore ? (
+                  <Chip tone={scoreTone(post.reelScore.total)}>
+                    Reel score {post.reelScore.total}/100
+                  </Chip>
+                ) : (
+                  <span className="muted small">
+                    Not scored: the AI wasn&apos;t available.
+                  </span>
+                )}
+              </div>
+              {post.reelScore?.images.map((x) => (
+                <span key={x.label} className="small">
+                  <Chip tone={scoreTone(x.score)}>{x.score}</Chip> {x.label}:{" "}
+                  <span className="muted">{x.why}</span>
+                </span>
+              ))}
+            </div>
+          );
+        }}
+      </Loaded>
+    </div>
+  );
+}
+
 type RenderJobs = {
   render: { postId: string; startedAt: number } | null;
   renderDone: { postId: string; at: number; error: string | null } | null;
@@ -1941,7 +2068,12 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
       <Loaded state={lib}>
         {({ assets }) => {
           const mine = assets
-            .filter((a) => a.kind === "render" && a.postId === post.id)
+            .filter(
+              (a) =>
+                a.kind === "render" &&
+                a.postId === post.id &&
+                !a.mime.startsWith("video/"),
+            )
             .sort((a, b) =>
               (a.label ?? "").localeCompare(b.label ?? "", undefined, {
                 numeric: true,

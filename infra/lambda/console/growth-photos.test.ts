@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { fromStock, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, photoAssetId, photoRights, postTotal, readScores, sheetHtml, sheetPrompt, sheetVerdicts, type Found, type ImageScore, type Photo } from './growth-photos';
+import { videoResults, fromStock, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, photoAssetId, photoRights, postTotal, readScores, sheetHtml, sheetPrompt, sheetVerdicts, type Found, type ImageScore, type Photo } from './growth-photos';
 
 test('Pexels: licence, photographer, size capped at the downloaded width', () => {
   const r = pexelsResults({ photos: [{ url: 'https://www.pexels.com/photo/1/', width: 4000, height: 6000, photographer: 'Ana', alt: 'Snowy mountain peak', src: { large2x: 'https://images.pexels.com/1.jpg' } }] });
@@ -86,4 +86,13 @@ test('score: a photo that does not belong caps the image; the weakest image pull
   assert.equal(postTotal([img(90), img(90)], 90), 90);
   assert.ok(postTotal([img(90), img(90), img(90), img(25)], 90) < 70);
   assert.equal(postTotal([], 90), 0);
+});
+
+test('Pixabay videos: real footage at 1080p or more, no AI, people or brands, nothing huge', () => {
+  const v = (id: number, tags: string, large: Record<string, unknown> = {}, duration = 15) => ({ id, pageURL: `https://pixabay.com/videos/${id}/`, duration, user: 'a', tags, videos: { large: { url: `https://cdn/${id}.mp4`, width: 1920, height: 1080, size: 9_000_000, thumbnail: `https://cdn/${id}.jpg`, ...large }, medium: { url: `https://cdn/${id}m.mp4`, width: 1280, height: 720, size: 2_000_000, thumbnail: 'https://cdn/m.jpg' } } });
+  const r = videoResults({ hits: [v(1, 'candles, table'), v(2, 'ai generated, table'), v(3, 'bride, candles'), v(4, 'roses', { url: '' }), v(5, 'roses', { size: 90_000_000 }), v(6, 'roses', {}, 2), v(7, 'candle, iphone wallpaper'), v(8, 'door, green screen'), v(9, 'heart, animated, loop')] });
+  assert.deepEqual(r.map((x) => x.id), ['1', '7']);
+  assert.equal(r[0].url, 'https://cdn/1.mp4');
+  assert.equal(r[0].thumb, 'https://cdn/1.jpg');
+  assert.deepEqual(videoResults({}), []);
 });

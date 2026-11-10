@@ -93,6 +93,23 @@ export function pixabayResults(json: any): Found[] {
     .filter((f) => f.sourceUrl && f.imageUrl && f.w >= 800);
 }
 
+export type StockVideo = { id: string; pageUrl: string; url: string; thumb: string; w: number; h: number; duration: number; author: string; tags: string };
+/** Made by AI, or not footage of anything: green screens, animations, effects, motion backgrounds. */
+const NOT_FOR_REELS = /\bai[- ]generated\b|\bai\b|green ?screen|chroma|\banimat|\bvfx\b|\bcgi\b|\b3d\b|motion graphic|\bloop\b|\babstract\b|\bintro\b|\boverlay\b/i;
+
+/** Pixabay's video search → usable clips: real footage only, no people or brands by tags, at least 1080p and not huge
+ *  (Claude still looks at a frame of each). Landscape is fine: it's cropped to vertical. */
+export function videoResults(json: any): StockVideo[] {
+  return ((json?.hits ?? []) as any[])
+    .map((h) => {
+      const size = [h.videos?.large, h.videos?.medium].find((v) => v?.url && Math.min(Number(v.width), Number(v.height)) >= 1080 && Number(v.size) <= 60_000_000);
+      const tags = cleanTags(h.tags);
+      return { id: String(h.id ?? ''), pageUrl: String(h.pageURL ?? ''), url: String(size?.url ?? ''), thumb: String(size?.thumbnail ?? ''), w: Number(size?.width) || 0, h: Number(size?.height) || 0, duration: Number(h.duration) || 0, author: String(h.user ?? '').slice(0, 120), tags, rawTags: String(h.tags ?? '') };
+    })
+    .filter((v) => v.id && v.url && v.thumb && v.duration >= 3 && !NOT_FOR_REELS.test(`${v.rawTags}`) && !PEOPLE_OR_BRANDS.test(v.tags))
+    .map(({ rawTags: _r, ...v }) => v);
+}
+
 /** The rights record: the licence decides (growth-rights.ts); people/brands are judged from the words. */
 export function photoRights(f: Found, now = Date.now()): Rights {
   const people = PEOPLE_OR_BRANDS.test(`${f.title} ${f.tags}`);
@@ -124,6 +141,12 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
 
 /** Bump when sources change, so cached searches made without them are done again. */
 const SEARCH_VERSION = 4;
+
+/** The Pixabay key from SSM (never in code). */
+export async function pixabayKey(): Promise<string | undefined> {
+  const v = await getParam('/lens/growth/photos');
+  return v ? (JSON.parse(v) as { pixabayKey?: string }).pixabayKey : undefined;
+}
 
 async function searchSources(query: string, orientation: 'portrait' | 'landscape'): Promise<{ found: Found[]; sources: Record<string, string> }> {
   const out: Found[] = [];
