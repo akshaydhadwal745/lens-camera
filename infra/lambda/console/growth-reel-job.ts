@@ -280,7 +280,7 @@ async function designStep(postId: string, jobAt: number): Promise<{ continued: b
         const found: string[] = [];
         for (const k of [Math.min(1.2, s.seconds * 0.45), s.seconds * 0.7, s.seconds * 0.95]) {
           await page.evaluate(`seek(${start + k})`);
-          const r = (await page.evaluate(reelSceneCheck(s.n - 1, s.n === st.written.scenes.length))) as { problems: string[]; text: string };
+          const r = (await page.evaluate(reelSceneCheck(s.n - 1, s.n === st.written.scenes.length, k >= s.seconds * 0.7))) as { problems: string[]; text: string };
           found.push(...r.problems);
           if (k >= s.seconds * 0.7) found.push(...sceneWordProblems(r.text, s.words, st.allowed));
         }
