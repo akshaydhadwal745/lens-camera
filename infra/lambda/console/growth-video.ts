@@ -22,8 +22,8 @@ import { launchBrowser } from './growth-render';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const BRAND_DIR = process.env.GROWTH_BRAND_DIR ?? join(__dirname, 'brand');
-const WORK = '/tmp/reel';
-const SITE = 'lens.instagrowapp.com';
+export const WORK = '/tmp/reel';
+export const SITE = 'lens.instagrowapp.com';
 const LIMIT_MS = 13.5 * 60_000; // the Lambda stops at 15
 const DIRECTOR_MODE: Mode = { system: DIRECTOR_SYSTEM, schema: DIRECTOR_SCHEMA, toolNames: [], mode: 'report' };
 const NEEDS_CLIP = ['footage', 'qr-card', 'scan'];
@@ -43,7 +43,7 @@ function run(cmd: string, args: string[], input?: (stdin: NodeJS.WritableStream)
   });
 }
 
-const token = async () => (process.env.GROWTH_AI_DESIGN === 'off' ? undefined : await getParam('/lens/growth/claude-token').catch(() => undefined));
+export const token = async () => (process.env.GROWTH_AI_DESIGN === 'off' ? undefined : await getParam('/lens/growth/claude-token').catch(() => undefined));
 
 async function searchVideos(query: string): Promise<StockVideo[]> {
   const key = await pixabayKey();
@@ -78,7 +78,7 @@ export async function rankFootage(query: string, brief: string, browser: Awaited
 }
 
 /** One scene's footage as numbered frames at the reel's size and speed; a short clip loops. */
-async function clipFrames(v: StockVideo, sceneIndex: number, seconds: number): Promise<number> {
+export async function clipFrames(v: StockVideo, sceneIndex: number, seconds: number): Promise<number> {
   const file = join(WORK, `v${v.id}.mp4`);
   if (!existsSync(file)) {
     const r = await fetch(v.url, { signal: AbortSignal.timeout(90_000) });
@@ -102,8 +102,9 @@ async function compareStills(src: string, i: number): Promise<{ hero: string; he
 }
 
 /** Where a reel is (on JOB#reel, read by GET /growth/jobs): a stage, and n of total where it counts. */
-export type ReelStage = 'photos' | 'directing' | 'footage' | 'frames' | 'scoring' | 'saving';
-function reelProgress(began: number) {
+export type ReelStage = 'writing' | 'photos' | 'directing' | 'footage' | 'designing' | 'checking' | 'frames' | 'scoring' | 'saving' | 'improving';
+/** Writes only while JOB#reel is still this run's (a newer Make reel replaces the row with a new startedAt). */
+export function reelProgress(jobAt: number) {
   let last = 0;
   let lastStage = '';
   return (stage: ReelStage, step = 0, steps = 0) => {
@@ -113,12 +114,13 @@ function reelProgress(began: number) {
     last = now;
     lastStage = stage;
     void ddb
-      .send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'JOB#reel' }, UpdateExpression: 'SET stage = :s, step = :n, steps = :t, stageAt = :a', ConditionExpression: 'startedAt <= :b', ExpressionAttributeValues: { ':s': stage, ':n': step, ':t': steps, ':a': now, ':b': began } }))
+      .send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'JOB#reel' }, UpdateExpression: 'SET stage = :s, step = :n, steps = :t, stageAt = :a', ConditionExpression: 'startedAt = :j', ExpressionAttributeValues: { ':s': stage, ':n': step, ':t': steps, ':a': now, ':j': jobAt } }))
       .catch(() => undefined);
   };
 }
 
-export async function renderReel(postId: string, by: string): Promise<{ seconds: number; ms: number }> {
+/** The template reel (Claude only picks scene types): used when Claude can't write the reel. */
+export async function renderTemplateReel(postId: string, by: string, jobAt: number): Promise<{ seconds: number; ms: number }> {
   const began = Date.now();
   if (!BUCKET) throw new Error('Content storage isn’t set up');
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as (RenderablePost & { title: string }) | undefined;
@@ -131,7 +133,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
   const topic = list.find((f) => f.query)?.query ?? topicQuery(`${post.title} ${post.hook}`);
   rmSync(WORK, { recursive: true, force: true });
   mkdirSync(join(WORK, 'p'), { recursive: true });
-  const progress = reelProgress(began);
+  const progress = reelProgress(jobAt);
   progress('directing');
   const browser = await launchBrowser();
   try {
@@ -196,91 +198,112 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
     }
     console.log(JSON.stringify({ reelPlan: plan.map((s, i) => ({ type: s.type, seconds: s.seconds, query: s.query, frames: media[i].frames })) }));
 
-    // 4) Every frame, one by one (nothing leaves the page).
-    const font = (n: string) => readFileSync(join(BRAND_DIR, n)).toString('base64');
-    const html = reelHtml({ scenes: plan, media, pool: pool.map(local), icon: `data:image/png;base64,${font('lens-icon.png')}`, fonts: { geist: font('geist-latin.woff2'), plex500: font('plex-mono-500.ttf'), plex600: font('plex-mono-600.ttf') }, cta, site: SITE });
-    writeFileSync(join(WORK, 'reel.html'), html);
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
-    await page.setRequestInterception(true);
-    page.on('request', (r: { url(): string; continue(): Promise<void>; abort(): Promise<void> }) => void (/^(file|data|about):/.test(r.url()) ? r.continue() : r.abort()));
-    await page.goto(`file://${WORK}/reel.html`, { waitUntil: 'load' });
-    await page.evaluate('document.fonts.ready');
-    const seconds = Math.round(plan.reduce((a, s) => a + s.seconds, 0) * 10) / 10;
-    const total = Math.round(seconds * FPS);
-    const out = join(WORK, 'reel.mp4');
-    await run(
-      'ffmpeg',
-      ['-nostdin', '-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-shortest', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out],
-      async (stdin) => {
-        for (let i = 0; i < total; i++) {
-          progress('frames', i, total);
-          if (Date.now() - began > LIMIT_MS) throw new Error('The reel took too long to draw. Try a shorter script.');
-          await page.evaluate(`seek(${i / FPS})`);
-          const jpg = Buffer.from(await page.screenshot({ type: 'jpeg', quality: 95 }));
-          if (!stdin.write(jpg)) await new Promise((r) => stdin.once('drain', r));
-        }
-        stdin.end();
-      },
-    );
-
-    // 5) Claude scores what came out: one frame late in each scene, once its motion has landed.
-    progress('scoring');
-    const shots: { label: string; png: Buffer }[] = [];
-    let at = 0;
-    for (let i = 0; i < plan.length; i++) {
-      await page.evaluate(`seek(${at + plan[i].seconds * 0.85})`);
-      shots.push({ label: `Scene ${i + 1}: ${plan[i].text}`.slice(0, 120), png: Buffer.from(await page.screenshot({ type: 'png' })) });
-      at += plan[i].seconds;
-    }
-    let score: PostScore | null = null;
-    if (Date.now() - began < 13 * 60_000) {
-      const sheetPage = await browser.newPage();
-      const s = await scoreImages(sheetPage, shots, brief).finally(() => sheetPage.close());
-      if (s) score = { total: postTotal(s.images, s.hook), hook: s.hook, hookWhy: s.hookWhy, images: s.images, redone: 0, at: Date.now() };
-    }
-
-    // 6) Save.
-    progress('saving');
-    const body = readFileSync(out);
-    const id = renderAssetId(postId, 'Reel');
-    const key = `a/${id}.mp4`;
-    await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: 'video/mp4' }));
-    const asset: Asset & { postId: string; label: string; w: number; h: number; seconds: number; score?: number; scoreWhy?: string } = {
-      id,
-      name: `${post.title || 'Post'} · Reel`.slice(0, 160),
-      kind: 'render',
-      origin: 'template',
-      key,
-      mime: 'video/mp4',
-      bytes: body.length,
-      lensPhoto: false,
-      checkedPersonal: true,
-      rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: credited.length ? 'Made by Lens; footage from Pixabay, photos from Pixabay and free-licence sites, credited in the post; looked at by AI first. Look at it when you approve the post.' : 'Made by Lens; footage and photos from Pixabay (Pixabay Content License, no credit needed), looked at by AI first. Look at it when you approve the post.', checkedAt: Date.now(), checkedBy: 'template' },
-      status: 'ready',
-      createdAt: Date.now(),
-      createdBy: by,
-      postId,
-      label: 'Reel',
-      w: 1080,
-      h: 1920,
-      seconds,
-      ...(score ? { score: score.total, scoreWhy: score.hookWhy } : {}),
-    };
-    await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
-    // Credited photos (CC BY from Commons/Openverse) join the post's assets, so Export adds their credit lines.
-    const reelAssets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
-    await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET reel = :r, reelScore = :s, assets = :a', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score, ':a': reelAssets } }));
-    const ms = Date.now() - began;
-    console.log(JSON.stringify({ reelDone: postId, ms, seconds, bytes: body.length, total: score?.total ?? null }));
-    return { seconds, ms };
+    return await drawReel({ browser, plan, media, pool: pool.map(local), postId, post, by, brief, credited, began, progress, brand: { primary: brand.colors.primary, accent: brand.colors.accent }, cta });
   } finally {
     await browser.close();
     rmSync(WORK, { recursive: true, force: true });
   }
 }
 
-const REEL_MINUTES = 14;
+/** Draw every frame, encode, let Claude score it, save the reel asset and the post. Shared by both reel kinds. */
+export async function drawReel(d: {
+browser: Awaited<ReturnType<typeof launchBrowser>>;
+plan: ReelScene[];
+media: SceneMedia[];
+pool: string[];
+postId: string;
+post: RenderablePost & { title: string; assets?: { id: string; role: string }[] };
+by: string;
+brief: string;
+credited: { id: string; role: string }[];
+began: number;
+progress: (stage: ReelStage, step?: number, steps?: number) => void;
+brand: { primary: string; accent: string };
+cta: string;
+extra?: Record<string, unknown>;
+}): Promise<{ seconds: number; ms: number; score: PostScore | null }> {
+const { browser, plan, media, pool, postId, post, by, brief, credited, began, progress, brand, cta } = d;
+// Every frame, one by one (nothing leaves the page).
+  const font = (n: string) => readFileSync(join(BRAND_DIR, n)).toString('base64');
+  const html = reelHtml({ brand, scenes: plan, media, pool, icon: `data:image/png;base64,${font('lens-icon.png')}`, fonts: { geist: font('geist-latin.woff2'), plex500: font('plex-mono-500.ttf'), plex600: font('plex-mono-600.ttf') }, cta, site: SITE });
+  writeFileSync(join(WORK, 'reel.html'), html);
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
+  await page.setRequestInterception(true);
+  page.on('request', (r: { url(): string; continue(): Promise<void>; abort(): Promise<void> }) => void (/^(file|data|about):/.test(r.url()) ? r.continue() : r.abort()));
+  await page.goto(`file://${WORK}/reel.html`, { waitUntil: 'load' });
+  await page.evaluate('document.fonts.ready');
+  const seconds = Math.round(plan.reduce((a, s) => a + s.seconds, 0) * 10) / 10;
+  const total = Math.round(seconds * FPS);
+  const out = join(WORK, 'reel.mp4');
+  await run(
+    'ffmpeg',
+    ['-nostdin', '-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-shortest', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out],
+    async (stdin) => {
+      for (let i = 0; i < total; i++) {
+        progress('frames', i, total);
+        if (Date.now() - began > LIMIT_MS) throw new Error('The reel took too long to draw. Try a shorter script.');
+        await page.evaluate(`seek(${i / FPS})`);
+        const jpg = Buffer.from(await page.screenshot({ type: 'jpeg', quality: 95 }));
+        if (!stdin.write(jpg)) await new Promise((r) => stdin.once('drain', r));
+      }
+      stdin.end();
+    },
+  );
+
+  // 5) Claude scores what came out: one frame late in each scene, once its motion has landed.
+  progress('scoring');
+  const shots: { label: string; png: Buffer }[] = [];
+  let at = 0;
+  for (let i = 0; i < plan.length; i++) {
+    await page.evaluate(`seek(${at + plan[i].seconds * 0.85})`);
+    shots.push({ label: `Scene ${i + 1}: ${plan[i].text}`.slice(0, 120), png: Buffer.from(await page.screenshot({ type: 'png' })) });
+    at += plan[i].seconds;
+  }
+  let score: PostScore | null = null;
+  if (Date.now() - began < 13.5 * 60_000) {
+    const sheetPage = await browser.newPage();
+    const s = await scoreImages(sheetPage, shots, brief).finally(() => sheetPage.close());
+    if (s) score = { total: postTotal(s.images, s.hook), hook: s.hook, hookWhy: s.hookWhy, images: s.images, redone: 0, at: Date.now() };
+  }
+
+  // 6) Save.
+  progress('saving');
+  const body = readFileSync(out);
+  const id = renderAssetId(postId, 'Reel');
+  const key = `a/${id}.mp4`;
+  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: 'video/mp4' }));
+  const asset: Asset & { postId: string; label: string; w: number; h: number; seconds: number; score?: number; scoreWhy?: string } = {
+    id,
+    name: `${post.title || 'Post'} · Reel`.slice(0, 160),
+    kind: 'render',
+    origin: 'template',
+    key,
+    mime: 'video/mp4',
+    bytes: body.length,
+    lensPhoto: false,
+    checkedPersonal: true,
+    rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: credited.length ? 'Made by Lens; footage from Pixabay, photos from Pixabay and free-licence sites, credited in the post; looked at by AI first. Look at it when you approve the post.' : 'Made by Lens; footage and photos from Pixabay (Pixabay Content License, no credit needed), looked at by AI first. Look at it when you approve the post.', checkedAt: Date.now(), checkedBy: 'template' },
+    status: 'ready',
+    createdAt: Date.now(),
+    createdBy: by,
+    postId,
+    label: 'Reel',
+    w: 1080,
+    h: 1920,
+    seconds,
+    ...(score ? { score: score.total, scoreWhy: score.hookWhy } : {}),
+  };
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
+  // Credited photos (CC BY from Commons/Openverse) join the post's assets, so Export adds their credit lines.
+  const reelAssets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
+  await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: `SET reel = :r, reelScore = :s, assets = :a${d.extra ? ', reelScript = :w' : ' REMOVE reelScript'}`, ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score, ':a': reelAssets, ...(d.extra ? { ':w': d.extra } : {}) } }));
+  const ms = Date.now() - began;
+  console.log(JSON.stringify({ reelDone: postId, ms, seconds, bytes: body.length, total: score?.total ?? null }));
+  return { seconds, ms, score };
+}
+
+const REEL_MINUTES = 50; // a written + designed reel runs in several Lambda calls
 
 /** POST /growth/posts/<id>/reel: one at a time; the Console polls GET /growth/jobs. */
 export async function reelStart(postId: string, by: string): Promise<Res> {

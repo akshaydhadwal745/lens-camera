@@ -236,7 +236,7 @@ export const renderAssetId = (postId: string, label: string) => createHash('sha2
 
 // ---------- the render job (GrowthAnalyst) ----------
 
-const IMG = 'https://img.lens/'; // served from memory while drawing (request interception), never fetched
+export const IMG = 'https://img.lens/'; // served from memory while drawing (request interception), never fetched
 const GENERIC = ['sunset sea', 'city night lights', 'mountain lake', 'autumn forest', 'street food market', 'snowy mountains', 'desert dunes', 'flower field'];
 const noCredit = (a: Asset) => ['own', 'public-domain', 'pexels', 'pixabay'].includes(licenseKey(a.rights.license));
 const shuffle = <T extends { id: string }>(list: T[], seed: string) =>
