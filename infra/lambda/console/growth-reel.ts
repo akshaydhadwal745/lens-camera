@@ -210,29 +210,28 @@ function scene(sc: ReelScene, i: number, d: ReelPageData): { html: string; run: 
       };
     case 'fill': {
       const slots = Array.from({ length: 15 }, (_, n) => `<div class="slot" id="${id(`sl${n}`)}"></div>`).join('');
-      const fly = Array.from({ length: 13 }, (_, n) => `<div class="fly" id="${id(`f${n}`)}" style="${bg(pick(n))}"></div>`).join('');
+      const fly = Array.from({ length: 15 }, (_, n) => `<div class="fly" id="${id(`f${n}`)}" style="${bg(pick(n))}"></div>`).join('');
       return {
         entry: 'circle',
         html: `<div class="layer" style="background:${BRIGHT[1]}"></div>${kinetic(sc.text, id('t'), `top:220px;font-size:${Math.min(size, 104)}px`, true)}<div class="wrap" id="${id('ph')}">${phone(`<div class="ui">${statusBar}<div style="padding:18px 16px 0"><div class="mono" style="font-size:12px;color:#FACC15">EVENT ALBUM</div><div style="font-size:30px;font-weight:700;margin:4px 0 14px">Our big day</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">${slots}</div></div></div>`, 0, 0, 1)}</div>${fly}`,
-        run: `const s=lt*4/dur;words($('t'),lt,.2);place($('ph'),540,mix(1350,1190,expo(p(s,.1,.8))),1.26,0);const X=[-300,1300,-300,1300,540,-300,1300,540,-300,1300,-300,1300,540],Y=[700,1000,1400,600,2200,1700,1500,2300,500,1900,1100,800,2200];for(let n=0;n<13;n++){const a=.75+n*.24;const x=cubic(p(s,a,a+.5));const e=$('f'+n),sl=$('sl'+n);const r=sl.getBoundingClientRect();const tg=r.width/300;const sx=r.left+r.width/2-150,sy=r.top+r.height/2-150;const on=x>=1;e.style.visibility=x>0&&!on?'inherit':'hidden';e.style.transform='translate('+mix(X[n],sx,x)+'px,'+mix(Y[n],sy,x)+'px) rotate('+mix(n%2?18:-16,0,x)+'deg) scale('+mix(1.3,tg,x)+')';sl.style.background=on?e.style.background:'#1c1c1e';sl.style.transform='scale('+(on?1+Math.sin(p(s,a+.5,a+.72)*3.14)*.1:1)+')';}`,
+        run: `const s=lt*4/dur;words($('t'),lt,.2);place($('ph'),540,mix(1350,1190,expo(p(s,.1,.8))),1.26,0);const X=[-300,1300,-300,1300,540,-300,1300,540,-300,1300,-300,1300,540,-300,1300],Y=[700,1000,1400,600,2200,1700,1500,2300,500,1900,1100,800,2200,1300,1800];for(let n=0;n<15;n++){const a=.6+n*.15;const x=cubic(p(s,a,a+.5));const e=$('f'+n),sl=$('sl'+n);const r=sl.getBoundingClientRect();const tg=r.width/300;const sx=r.left+r.width/2-150,sy=r.top+r.height/2-150;const on=x>=1;e.style.visibility=x>0&&!on?'inherit':'hidden';e.style.transform='translate('+mix(X[n],sx,x)+'px,'+mix(Y[n],sy,x)+'px) rotate('+mix(n%2?18:-16,0,x)+'deg) scale('+mix(1.3,tg,x)+')';sl.style.background=on?e.style.background:'#1c1c1e';sl.style.transform='scale('+(on?1+Math.sin(p(s,a+.5,a+.72)*3.14)*.1:1)+')';}`,
       };
     }
     case 'compare':
-      // A card with the photo zoomed into its detail: the chat copy (blocky, washed out) on the left, the original on
-      // the right; the divider sweeps in and stays in the middle so both are on screen with big labels.
+      // The same crop of the photo twice, one above the other: the chat copy (blocky, washed out) and the original.
+      // Same framing on both, so the only difference anyone sees is quality.
       return {
         entry: 'slide',
         html: `<div class="layer" style="background:${BRAND_DARK}"></div>${kinetic(sc.text, id('t'), `top:240px;font-size:${Math.min(size, 100)}px`)}
-<div id="${id('card')}" style="position:absolute;left:72px;top:600px;width:936px;height:880px;border-radius:44px;overflow:hidden;box-shadow:0 60px 100px -30px rgba(0,0,0,.7)"><div class="layer" id="${id('z')}" style="transform-origin:50% 45%"><img src="${esc(m.heroChat ?? '')}" class="layer" style="width:100%;height:100%;object-fit:cover;filter:saturate(.75) contrast(.92)"><div class="layer" id="${id('c')}" style="background:url(${esc(m.hero ?? '')}) center/cover"></div></div>
-<div id="${id('b')}" style="position:absolute;top:0;bottom:0;width:8px;margin-left:-4px;background:#fff;box-shadow:0 0 30px rgba(0,0,0,.5)"><svg style="position:absolute;left:-40px;top:396px;background:#fff;border-radius:50%" width="88" height="88" viewBox="0 0 82 82" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M32 29L20 41l12 12M50 29l12 12-12 12"/></svg></div>
-<div class="pill big" id="${id('l1')}" style="left:28px;bottom:28px">CHAT COPY</div><div class="pill big" id="${id('l2')}" style="right:28px;bottom:28px;background:#30D158;color:#000">ORIGINAL</div></div>`,
-        run: `const s=lt*3/dur;words($('t'),lt,.2);const e=expo(p(s,.1,.7));$('card').style.transform='translateY('+mix(140,0,e)+'px) scale('+mix(.94,1,e)+')';$('card').style.opacity=e;$('z').style.transform='scale('+mix(1.55,1.75,p(s,0,3))+')';const xp=mix(1,.5,cubic(p(s,.7,1.7)));$('c').style.clipPath='inset(0 0 0 '+xp*100+'%)';$('b').style.left=xp*936+'px';$('b').style.opacity=p(s,.6,.8);$('l1').style.opacity=expo(p(s,1.2,1.6));$('l2').style.opacity=expo(p(s,1.5,1.9));`,
+<div class="cmp" id="${id('p1')}" style="top:580px"><img src="${esc(m.heroChat ?? '')}" id="${id('z1')}" style="filter:saturate(.75) contrast(.92)"><div class="pill big" style="left:24px;bottom:24px">CHAT COPY</div></div>
+<div class="cmp" id="${id('p2')}" style="top:1040px"><img src="${esc(m.hero ?? '')}" id="${id('z2')}"><div class="pill big" style="left:24px;bottom:24px;background:#30D158;color:#000">ORIGINAL</div></div>`,
+        run: `const s=lt*3/dur;words($('t'),lt,.2);const z='scale('+mix(1.15,1.25,p(s,0,3))+')';$('z1').style.transform=z;$('z2').style.transform=z;const a=expo(p(s,.15,.7)),b=expo(p(s,.8,1.35));$('p1').style.transform='translateX('+mix(-1100,0,a)+'px)';$('p2').style.transform='translateX('+mix(1100,0,b)+'px)';`,
       };
     case 'end':
       // Icon and line at the top, the app on a phone in the middle (fully in frame), the button over its lower edge.
       return {
         entry: 'wipe',
-        html: `<div class="layer" style="background:radial-gradient(70% 45% at 80% 15%,#3b82f6 0%,transparent 70%),radial-gradient(70% 45% at 10% 90%,#7c3aed 0%,transparent 70%),#0b1020"></div><img id="${id('i')}" src="${d.icon}" style="position:absolute;left:465px;top:210px;width:150px;height:150px;border-radius:36px;box-shadow:0 30px 70px rgba(0,0,0,.5)">${kinetic(sc.text, id('t'), `top:400px;left:72px;width:936px;text-align:center;font-size:${Math.min(size, 84)}px`)}<div class="wrap" id="${id('ph')}">${phone(screenHtml(sc.screen === 'qr-album' ? 'qr-album' : 'library', { pool }, 3), 0, 0, 1)}</div><div id="${id('c')}" style="position:absolute;left:290px;top:1290px;width:500px;height:112px;border-radius:56px;background:#fff;color:#0d0f14;display:grid;place-items:center;font:800 46px Geist;letter-spacing:-.02em;box-shadow:0 30px 60px -10px rgba(0,0,0,.6)">${esc(d.cta)}</div><div id="${id('w')}" style="position:absolute;left:0;right:0;top:1430px;text-align:center;font:500 38px Geist;color:#cbd5e1">${esc(d.site)}</div>`,
+        html: `<div class="layer" style="background:radial-gradient(70% 45% at 80% 15%,#3b82f6 0%,transparent 70%),radial-gradient(70% 45% at 10% 90%,#7c3aed 0%,transparent 70%),#0b1020"></div><img id="${id('i')}" src="${d.icon}" style="position:absolute;left:465px;top:210px;width:150px;height:150px;border-radius:36px;box-shadow:0 30px 70px rgba(0,0,0,.5)">${kinetic(sc.text, id('t'), `top:400px;left:72px;width:936px;text-align:center;font-size:${Math.min(size, 84)}px`)}<div class="wrap" id="${id('ph')}">${phone(screenHtml(sc.screen === 'qr-album' || EVENT.test(d.scenes.map((x) => x.text).join(' ')) ? 'qr-album' : 'library', { pool }, 3), 0, 0, 1)}</div><div id="${id('c')}" style="position:absolute;left:290px;top:1290px;width:500px;height:112px;border-radius:56px;background:#fff;color:#0d0f14;display:grid;place-items:center;font:800 46px Geist;letter-spacing:-.02em;box-shadow:0 30px 60px -10px rgba(0,0,0,.6)">${esc(d.cta)}</div><div id="${id('w')}" style="position:absolute;left:0;right:0;top:1430px;text-align:center;font:500 38px Geist;color:#cbd5e1">${esc(d.site)}</div>`,
         run: `const s=lt*3/dur;const a=spring(p(s,.2,1));$('i').style.transform='scale('+a+') rotate('+mix(-22,0,a)+'deg)';words($('t'),lt,.5,.05);place($('ph'),540,mix(2400,1060,expo(p(s,.7,1.5)))-Math.sin(lt*.9)*6,.8,0);$('c').style.transform='scale('+spring(p(s,1.2,1.9))+')';$('w').style.opacity=expo(p(s,1.5,1.9));`,
       };
   }
@@ -269,6 +268,8 @@ html,body{background:#000}
 .fly{position:absolute;left:0;top:0;width:300px;height:300px;border-radius:26px;border:8px solid #fff;box-shadow:0 30px 60px -10px rgba(0,0,0,.45);visibility:hidden}
 .mono{font-family:Plex;font-weight:600;letter-spacing:.08em}
 .pill{position:absolute;padding:12px 22px;border-radius:40px;font:600 30px Plex;letter-spacing:.06em;background:rgba(0,0,0,.6);color:#fff}
+.cmp{position:absolute;left:72px;width:936px;height:420px;border-radius:36px;overflow:hidden;box-shadow:0 40px 80px -24px rgba(0,0,0,.7)}
+.cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:50% 50%}
 .pill.big{padding:16px 28px;font-size:36px;background:rgba(0,0,0,.72)}
 </style>
 ${html}
