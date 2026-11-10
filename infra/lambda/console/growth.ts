@@ -249,7 +249,49 @@ type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; 
 export type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft'; readsFiles?: boolean };
 const REPORT_MODE: Mode = { system: ANALYST_SYSTEM, schema: REPORT_SCHEMA, toolNames: TOOL_NAMES, mode: 'report' };
 
-export function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup, deadline: number, mode: Mode = REPORT_MODE): Promise<{ report: T; model?: string }> {
+/** A call that failed because the account is out of usage (or the token was refused): worth trying the other one. */
+export const LIMITED = /hit your .*limit|usage limit|rate[_ ]?limit|\b429\b|overloaded|invalid (api key|token|bearer)|authenticat|oauth token|\b401\b/i;
+const limitedTokens = new Set<string>(); // tokens that hit their limit during this Lambda call
+
+/**
+ * The backup Claude token (owner 2026-11-10: when one account hits its limit, use the other): SSM
+ * /lens/growth/claude-token-backup if set, else the newest earlier version of /lens/growth/claude-token (the previous
+ * account's token stays there as version history). Never logged.
+ */
+export async function backupClaudeToken(main: string): Promise<string | undefined> {
+  const named = await getParam('/lens/growth/claude-token-backup').catch(() => undefined);
+  if (named && named !== main) return named;
+  const p = await new SSMClient({}).send(new GetParameterCommand({ Name: '/lens/growth/claude-token' })).catch(() => undefined);
+  for (let v = (p?.Parameter?.Version ?? 1) - 1; v >= 1; v--) {
+    const t = await getParam(`/lens/growth/claude-token:${v}`).catch(() => undefined);
+    if (t && t !== main) return t;
+  }
+  return undefined;
+}
+
+/** runClaude with the backup account: a token that hits its limit is set aside and the call is made once more. */
+export async function runClaude<T = AiReport>(prompt: string, token: string, tools: ToolSetup, deadline: number, mode: Mode = REPORT_MODE): Promise<{ report: T; model?: string }> {
+  let use = token;
+  if (limitedTokens.has(use)) use = (await backupClaudeToken(token)) ?? use;
+  try {
+    return await runClaudeOnce<T>(prompt, use, tools, deadline, mode);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (!LIMITED.test(msg)) throw e;
+    limitedTokens.add(use);
+    const other = use === token ? await backupClaudeToken(token) : token;
+    if (!other || limitedTokens.has(other) || Date.now() > deadline - 30_000) throw e;
+    console.log(JSON.stringify({ claudeTokenSwitch: use === token ? 'main→backup' : 'backup→main', reason: msg.slice(0, 120) }));
+    try {
+      return await runClaudeOnce<T>(prompt, other, tools, deadline, mode);
+    } catch (e2) {
+      if (LIMITED.test((e2 as Error).message)) limitedTokens.add(other);
+      throw e2;
+    }
+  }
+}
+
+function runClaudeOnce<T = AiReport>(prompt: string, token: string, tools: ToolSetup, deadline: number, mode: Mode = REPORT_MODE): Promise<{ report: T; model?: string }> {
   const home = '/tmp/claude-home';
   mkdirSync(home, { recursive: true });
   const mcp = join(home, 'mcp.json');

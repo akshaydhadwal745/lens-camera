@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { calendarItems, checkMeta, what } from './growth-content';
-import { jobsFrom } from './growth';
+import { jobsFrom, LIMITED } from './growth';
 import { unsubscribeToken } from '../api/growth-integrations';
 
 test('meta changes: path, lengths and "same as now" are checked; whitespace is cleaned', () => {
@@ -72,4 +72,12 @@ test('meta task title names what changes', () => {
   assert.equal(what([c('', 'd')]), 'description');
   assert.equal(what([c('t', '')]), 'title');
   assert.equal(what([c('t', ''), c('', 'd')]), 'title and description');
+});
+
+test('claude: a usage limit or refused token switches to the backup account; other failures do not', () => {
+  assert.ok(LIMITED.test("claude exited 1: You've hit your 5-hour limit · resets 9:20am (UTC) "));
+  assert.ok(LIMITED.test('claude exited 1: Invalid API key · Please run /login'));
+  assert.ok(LIMITED.test('API Error: 429 rate_limit_error'));
+  assert.ok(!LIMITED.test('claude exited null (time limit): no structured output'));
+  assert.ok(!LIMITED.test('claude exited 1: no structured output'));
 });
