@@ -22,7 +22,7 @@ import { PLATFORMS, type Platform, type Slide, type Scene } from './growth-conte
 import { runClaude, type Mode } from './growth';
 import { aiPageHtml, DESIGN_SCHEMA, DESIGN_SYSTEM, designPrompt, designsByLabel, PAGE_CHECK, wordProblems, type AiDesign, type KitPhoto } from './growth-ai-design';
 import { designHtml, type Layout, type Screen } from './growth-design';
-import { findPhotos, FITS, PHOTO_CHECK_SCHEMA, PHOTO_CHECK_SYSTEM, photoPassed, photoPool, postTotal, readScores, REDO_BELOW, saveLook, SCORE_SCHEMA, SCORE_SYSTEM, scorePrompt, SHEET_SIZE, sheetHtml, sheetPrompt, sheetVerdicts, type ImageScore, type Photo, type PostScore } from './growth-photos';
+import { findPhotos, FITS, trackUsed, PHOTO_CHECK_SCHEMA, PHOTO_CHECK_SYSTEM, photoPassed, photoPool, postTotal, readScores, REDO_BELOW, saveLook, SCORE_SCHEMA, SCORE_SYSTEM, scorePrompt, SHEET_SIZE, sheetHtml, sheetPrompt, sheetVerdicts, type ImageScore, type Photo, type PostScore } from './growth-photos';
 import { launchBrowser } from './growth-render';
 import { licenseKey } from './growth-rights';
 
@@ -570,6 +570,7 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   const kept = (post.assets ?? []).filter((a) => !dropped.includes(a.id));
   const assets = [...kept, ...credited.filter((c) => !kept.some((a) => a.id === c.id))].slice(0, 20);
   await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET renders = :r, renderedAt = :t, rendersZip = :z, assets = :a, score = :s', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': renders, ':t': Date.now(), ':z': zipKey(postId), ':a': assets, ':s': score } }));
+  await trackUsed(credited.map((c) => c.id));
   console.log(JSON.stringify({ postScore: score }));
   return { rendered: renders.length };
 }

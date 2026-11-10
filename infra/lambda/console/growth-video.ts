@@ -16,7 +16,7 @@ import { runClaude, type Mode } from './growth';
 import type { Asset } from './growth-assets';
 import { brand as loadBrand } from './growth-brand';
 import { frames, gatherPhotos, LOOK_MODE, postBrief, renderAssetId, scoreImages, topicQuery, writeSheet, type RenderablePost } from './growth-media';
-import { FITS, pixabayKey, postTotal, sheetPrompt, sheetVerdicts, videoResults, type PostScore, type StockVideo } from './growth-photos';
+import { FITS, pixabayKey, trackUsed, postTotal, sheetPrompt, sheetVerdicts, videoResults, type PostScore, type StockVideo } from './growth-photos';
 import { defaultPlan, DIRECTOR_SCHEMA, DIRECTOR_SYSTEM, directorPrompt, FPS, readPlan, reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { launchBrowser } from './growth-render';
 import { bestStart, findMusic, loudness } from './growth-music';
@@ -445,6 +445,7 @@ export async function drawReel(d: {
     }),
   );
   const ms = Date.now() - began;
+  await trackUsed(credited.map((c) => c.id));
   console.log(JSON.stringify({ reelDone: postId, ms, seconds, bytes: body.length, total: score?.total ?? null }));
   return { seconds, ms, score };
 }
