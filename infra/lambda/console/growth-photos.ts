@@ -26,7 +26,7 @@ const UA = 'LensGrowth/1.0 (https://lens.instagrowapp.com; content images)';
 const DAY = 86_400_000;
 
 export type Found = {
-  source: 'Pexels' | 'Pixabay' | 'Wikimedia Commons' | 'Openverse';
+  source: 'Pexels' | 'Pixabay' | 'Wikimedia Commons' | 'Openverse' | 'Unsplash';
   sourceUrl: string; // the photo's own page
   imageUrl: string; // the file we download (about 1600 px wide)
   w: number;
@@ -36,6 +36,8 @@ export type Found = {
   author: string;
   title: string;
   tags: string;
+  /** Unsplash: the API's download-tracking link (no key in it), called when we save the photo. */
+  track?: string;
 };
 export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?: number; looked?: { ok: boolean; why: string; at: number } };
 
@@ -53,7 +55,7 @@ export const PEOPLE_OR_BRANDS = new RegExp(`${PEOPLE.source}|${BRANDS.source}`, 
  * uses b-roll, as the moment's mood: a crowd from behind, hands, a stage seen from the audience. Never as a Lens
  * user, never holding our app, never a close-up of a child. The photo editor (Claude) enforces that by looking.
  */
-const PEOPLE_OK = new Set(['pexels', 'pixabay']);
+const PEOPLE_OK = new Set(['pexels', 'pixabay', 'unsplash']);
 
 /** Paintings, prints, maps and scans are public domain too, but they aren't photos. */
 export const NOT_A_PHOTO = /\b(paintings?|painted|painter|oil on|canvas|drawings?|engraving|etching|lithograph|woodcut|illustrations?|postcards?|posters?|maps?|museum|artworks?|watercolou?r|aquarelle|sketch|scans?|book of|manuscript|fresco|mural|stamps?|coins?|diagram|svg|logo)\b|\b1[5-8]\d\d\b|\b19[0-4]\d\b/i;
@@ -113,6 +115,36 @@ export function openverseResults(json: any): Found[] {
       title: String(r.title ?? ''),
       tags: ((r.tags ?? []) as any[]).map((t) => t?.name).filter(Boolean).join(', '),
     }))
+    .filter((f) => /^https:/.test(f.sourceUrl) && /^https:/.test(f.imageUrl) && f.w >= 1000 && !NOT_A_PHOTO.test(`${f.title} ${f.tags}`));
+}
+
+/**
+ * Unsplash search → photos (Unsplash License: free, commercial use and edits allowed). The API guidelines ask for
+ * the photographer's credit ("Photo: X on Unsplash", kept on the post's assets) and a call to the photo's
+ * download_location whenever we use it (savePhoto). Demo keys allow 50 searches an hour; searches are cached 30 days.
+ */
+export function unsplashResults(json: any): Found[] {
+  const utm = 'utm_source=lens_growth&utm_medium=referral';
+  return ((json?.results ?? []) as any[])
+    .map((p) => {
+      const ow = Number(p.width) || 0;
+      const w = Math.min(ow, 1880);
+      const raw = String(p.urls?.raw ?? '');
+      const words = [p.alt_description, p.description, ...((p.tags ?? []) as { title?: string }[]).map((t) => t?.title)].filter(Boolean).join(', ');
+      return {
+        source: 'Unsplash' as const,
+        sourceUrl: p.links?.html ? `${p.links.html}?${utm}` : '',
+        imageUrl: raw ? `${raw}${raw.includes('?') ? '&' : '?'}${new URLSearchParams({ w: String(w), q: '85', fm: 'jpg', fit: 'max' })}` : '',
+        w,
+        h: Math.round((w / (ow || 1)) * (Number(p.height) || 0)),
+        license: 'Unsplash License',
+        licenseUrl: 'https://unsplash.com/license',
+        author: String(p.user?.name ?? '').slice(0, 120),
+        title: String(p.alt_description ?? p.description ?? '').slice(0, 200),
+        tags: words.slice(0, 400),
+        track: /^https:\/\/api\.unsplash\.com\//.test(String(p.links?.download_location ?? '')) ? String(p.links.download_location) : undefined,
+      };
+    })
     .filter((f) => /^https:/.test(f.sourceUrl) && /^https:/.test(f.imageUrl) && f.w >= 1000 && !NOT_A_PHOTO.test(`${f.title} ${f.tags}`));
 }
 
@@ -218,7 +250,7 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
 }
 
 /** Bump when sources change, so cached searches made without them are done again. */
-const SEARCH_VERSION = 6;
+const SEARCH_VERSION = 7;
 
 /** The Pixabay key from SSM (never in code). */
 export async function pixabayKey(): Promise<string | undefined> {
@@ -244,7 +276,7 @@ async function searchSources(query: string, orientation: 'portrait' | 'landscape
       sources[name] = `failed: ${(e as Error).message.slice(0, 120)}`;
     }
   };
-  let keys: { pixabayKey?: string; pexelsKey?: string } = {};
+  let keys: { pixabayKey?: string; pexelsKey?: string; unsplashKey?: string } = {};
   try {
     const v = await getParam('/lens/growth/photos');
     keys = v ? JSON.parse(v) : {};
@@ -262,10 +294,22 @@ async function searchSources(query: string, orientation: 'portrait' | 'landscape
     });
     await run('openverse', async () => openverseResults(await getJson(`https://api.openverse.org/v1/images/?${new URLSearchParams({ q: query.slice(0, 100), license: 'cc0,pdm,by', category: 'photograph', size: 'large', mature: 'false', page_size: '20' })}`)).filter((f) => relevant(f, query)));
   }
+  if (keys.unsplashKey) await run('unsplash', async () => unsplashResults(await getJson(`https://api.unsplash.com/search/photos?${new URLSearchParams({ query: query.slice(0, 100), orientation: orientation === 'portrait' ? 'portrait' : 'landscape', per_page: '20', content_filter: 'high' })}`, { Authorization: `Client-ID ${keys.unsplashKey}`, 'Accept-Version': 'v1' })));
   if (keys.pexelsKey) await run('pexels', async () => pexelsResults(await getJson(`https://api.pexels.com/v1/search?${new URLSearchParams({ query, orientation, per_page: '15', size: 'large' })}`, { Authorization: keys.pexelsKey! })));
   console.log(JSON.stringify({ photoSearch: query, sources }));
   const seen = new Set<string>();
   return { found: out.filter((f) => !seen.has(f.sourceUrl) && seen.add(f.sourceUrl)), sources };
+}
+
+/** Unsplash's API guideline: tell them each time a photo is used (downloaded). Never fails the save. */
+async function trackUnsplash(url: string) {
+  try {
+    const v = await getParam('/lens/growth/photos');
+    const key = v ? (JSON.parse(v) as { unsplashKey?: string }).unsplashKey : undefined;
+    if (key) await fetch(url, { headers: { Authorization: `Client-ID ${key}`, 'Accept-Version': 'v1', 'user-agent': UA }, signal: AbortSignal.timeout(10_000) });
+  } catch {
+    /* tracking is best effort */
+  }
 }
 
 async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
@@ -278,6 +322,7 @@ async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
   if (!r.ok || !ext) return undefined;
   const bytes = Buffer.from(await r.arrayBuffer());
   if (bytes.length > 8 * 1024 * 1024) return undefined;
+  if (f.track) await trackUnsplash(f.track);
   const now = Date.now();
   const evidenceKey = `e/${id}.json`;
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: evidenceKey, ContentType: 'application/json', Body: JSON.stringify({ takenAt: new Date(now).toISOString(), query, ...f }, null, 2) }));
@@ -306,7 +351,7 @@ async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
 }
 
 /** Found photos only from the stock sites we chose; a person can still pick any cleared one for a post. */
-export const fromStock = (p: Photo) => p.origin !== 'discovered' || ['pixabay', 'pexels', 'public-domain', 'cc-by'].includes(licenseKey(p.rights.license));
+export const fromStock = (p: Photo) => p.origin !== 'discovered' || ['pixabay', 'pexels', 'unsplash', 'public-domain', 'cc-by'].includes(licenseKey(p.rights.license));
 const usable = (p: Photo | undefined): p is Photo => !!p && p.status === 'ready' && effectiveStatus(p.rights) === 'cleared' && p.looked?.ok !== false && fromStock(p);
 
 /** Up to `n` cleared photos for a search, found live (or reused from the last 30 days). Never throws. */
