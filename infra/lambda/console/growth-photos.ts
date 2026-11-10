@@ -39,7 +39,7 @@ export type Found = {
   /** Unsplash: the API's download-tracking link (no key in it), called when we save the photo. */
   track?: string;
 };
-export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?: number; looked?: { ok: boolean; why: string; at: number } };
+export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?: number; looked?: { ok: boolean; why: string; at: number }; unsplashTrack?: string };
 
 /** Words in a title or tags that mean people are probably in the picture. */
 export const PEOPLE =
@@ -301,7 +301,7 @@ async function searchSources(query: string, orientation: 'portrait' | 'landscape
   return { found: out.filter((f) => !seen.has(f.sourceUrl) && seen.add(f.sourceUrl)), sources };
 }
 
-/** Unsplash's API guideline: tell them each time a photo is used (downloaded). Never fails the save. */
+/** Unsplash's API guideline: tell them each time a photo is used. Never throws. */
 async function trackUnsplash(url: string) {
   try {
     const v = await getParam('/lens/growth/photos');
@@ -309,6 +309,21 @@ async function trackUnsplash(url: string) {
     if (key) await fetch(url, { headers: { Authorization: `Client-ID ${key}`, 'Accept-Version': 'v1', 'user-agent': UA }, signal: AbortSignal.timeout(10_000) });
   } catch {
     /* tracking is best effort */
+  }
+}
+
+/**
+ * Report the Unsplash photos a post actually uses (its credited assets), once per post render. Candidates we
+ * only looked at are never reported: each report counts toward the key's hourly limit (50 on a demo key).
+ */
+export async function trackUsed(ids: string[]): Promise<void> {
+  const uniq = [...new Set(ids)].slice(0, 25);
+  if (!uniq.length) return;
+  try {
+    const got = await ddb.send(new BatchGetCommand({ RequestItems: { [env.table]: { Keys: uniq.map((id) => ({ pk: 'GROWTH', sk: `ASSET#${id}` })) } } }));
+    for (const p of (got.Responses?.[env.table] ?? []) as Photo[]) if (p.unsplashTrack) await trackUnsplash(p.unsplashTrack);
+  } catch {
+    /* best effort */
   }
 }
 
@@ -322,7 +337,6 @@ async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
   if (!r.ok || !ext) return undefined;
   const bytes = Buffer.from(await r.arrayBuffer());
   if (bytes.length > 8 * 1024 * 1024) return undefined;
-  if (f.track) await trackUnsplash(f.track);
   const now = Date.now();
   const evidenceKey = `e/${id}.json`;
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: evidenceKey, ContentType: 'application/json', Body: JSON.stringify({ takenAt: new Date(now).toISOString(), query, ...f }, null, 2) }));
@@ -345,6 +359,7 @@ async function savePhoto(f: Found, query: string): Promise<Photo | undefined> {
     sourceUrl: f.sourceUrl,
     w: f.w,
     h: f.h,
+    ...(f.track ? { unsplashTrack: f.track } : {}),
   };
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...photo } }));
   return photo;
