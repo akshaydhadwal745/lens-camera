@@ -102,10 +102,12 @@ export function screenFor(text: string, fallback: Screen = 'library'): Screen {
   return SCREEN_WORDS.find(([re]) => re.test(text))?.[1] ?? fallback;
 }
 
-/** Scene photos to look for, by topic. Scenery, not people: those clear the rights check on their own. */
+/** Scene photos to look for, by topic: the moment itself (people as b-roll are fine on Pexels / Pixabay). */
 const TOPICS: [RegExp, string][] = [
+  [/children'?s day|school|annual day|kids|sports day/i, 'school stage performance'],
+  [/party|parties|birthday/i, 'party friends night'],
   [/wedding|marriage|shaadi|reception|bride|groom/i, 'wedding table decoration'],
-  [/concert|festival|gig|music|stage/i, 'concert stage lights'],
+  [/concert|festival|gig|music|stage/i, 'concert crowd lights'],
   [/diwali|firework|new year|celebration/i, 'fireworks night sky'],
   [/night|city|street/i, 'city night lights'],
   [/beach|sea|island|summer/i, 'beach sunset'],
