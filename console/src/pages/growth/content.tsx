@@ -15,6 +15,7 @@ import {
   type PostVariant,
   type Workspace,
 } from "./shared";
+import { elapsed, reelStage, type ReelJob } from "./jobs";
 
 type Limit = {
   caption: number;
@@ -283,7 +284,11 @@ function PostCard({ p, onOpen }: { p: Post; onOpen: () => void }) {
         <Chip tone="warn">{p.problems!.length} to fix before approval</Chip>
       )}
       {p.score && (
-        <Chip tone={p.score.total >= 80 ? "good" : p.score.total >= 60 ? "warn" : "bad"}>
+        <Chip
+          tone={
+            p.score.total >= 80 ? "good" : p.score.total >= 60 ? "warn" : "bad"
+          }
+        >
           Score {p.score.total}/100
         </Chip>
       )}
@@ -567,7 +572,9 @@ function PostEditor({
             )}
           </Loaded>
 
-          {post?.id && isVideo(post.format ?? "") && <Reel ws={ws} post={post} />}
+          {post?.id && isVideo(post.format ?? "") && (
+            <Reel ws={ws} post={post} />
+          )}
           {post?.id && <Images ws={ws} post={post} />}
 
           <div className="gw-field">
@@ -1848,7 +1855,7 @@ function Moments({ ws }: { ws: Workspace }) {
 const scoreTone = (n: number) => (n >= 80 ? "good" : n >= 60 ? "warn" : "bad");
 
 type ReelJobs = {
-  reel: { postId: string; at: number } | null;
+  reel: ReelJob | null;
   reelDone: { postId: string; at: number; error: string | null } | null;
 };
 
@@ -1858,12 +1865,24 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
   const lib = useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), [n]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  // Where the builder is: "Drawing frames 45% · 3:10", and the bar under it.
+  const [stage, setStage] = useState<{ label: string; pct: number } | null>(
+    null,
+  );
   const waitFor = async (began: number) => {
     setRunning(true);
+    setStage({ label: "Starting · 0:00", pct: 0 });
     try {
       for (;;) {
         await new Promise((r) => setTimeout(r, 5000));
         const j = await get<ReelJobs>("/growth/jobs");
+        if (j.reel?.postId === post.id) {
+          const s = reelStage(j.reel);
+          setStage({
+            label: `${s.label} · ${elapsed(Date.now() - j.reel.at)}`,
+            pct: s.pct,
+          });
+        }
         const done = j.reelDone;
         if (!j.reel && done?.postId === post.id && done.at >= began - 1000) {
           if (done.error) setError(done.error);
@@ -1880,6 +1899,7 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
       setError((e as Error).message);
     }
     setRunning(false);
+    setStage(null);
     setN((x) => x + 1);
   };
   const start = async () => {
@@ -1925,6 +1945,21 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
         leave this page. Save your edits first; making it again replaces the old
         one.
       </span>
+      {running && stage && (
+        <div role="status" aria-live="polite">
+          <span className="small">{stage.label}</span>
+          <div
+            className="gw-bar"
+            role="progressbar"
+            aria-label="Reel progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={stage.pct}
+          >
+            <i className="acc" style={{ width: `${stage.pct}%` }} />
+          </div>
+        </div>
+      )}
       {error && <p className="notice error">{error}</p>}
       <Loaded state={lib}>
         {({ assets }) => {
@@ -2024,7 +2059,8 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
     let on = true;
     void get<RenderJobs>("/growth/jobs").then(
       (j) => {
-        if (on && j.render?.postId === post.id) void waitFor(j.render.startedAt);
+        if (on && j.render?.postId === post.id)
+          void waitFor(j.render.startedAt);
       },
       () => undefined,
     );
@@ -2099,8 +2135,8 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
                     Post score {post.score.total}/100
                   </Chip>{" "}
                   <span className="muted">
-                    Scored by AI after the images were made (does each image
-                    fit the post, is it clear on a phone, is the design good)
+                    Scored by AI after the images were made (does each image fit
+                    the post, is it clear on a phone, is the design good)
                     {post.score.redone
                       ? `; ${post.score.redone} redone after the first score`
                       : ""}

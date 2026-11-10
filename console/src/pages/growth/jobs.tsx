@@ -14,11 +14,50 @@ import { get } from "../../api";
 import { when } from "../../ui";
 
 type Job = { at: number; by: string };
+/** A reel being made, and the stage its builder reached (GET /growth/jobs). */
+export type ReelJob = Job & {
+  postId: string;
+  stage:
+    "photos" | "directing" | "footage" | "frames" | "scoring" | "saving" | null;
+  step: number;
+  steps: number;
+};
+
+// Rough share of the run each stage takes, so the bar moves at an even pace.
+const STAGES = {
+  photos: [0, 5, "Finding photos"],
+  directing: [5, 12, "Planning the scenes"],
+  footage: [12, 30, "Finding footage"],
+  frames: [30, 90, "Drawing frames"],
+  scoring: [90, 97, "Checking the result"],
+  saving: [97, 100, "Saving"],
+} as const;
+
+/** "Drawing frames 45%", "Finding footage 3/6", and how far along the whole reel is (0–100). */
+export function reelStage(r: ReelJob): { label: string; pct: number } {
+  if (!r.stage) return { label: "Starting", pct: 0 };
+  const [from, to, name] = STAGES[r.stage];
+  const part = r.steps > 0 ? Math.min(1, r.step / r.steps) : 0;
+  const count =
+    r.steps > 0
+      ? r.stage === "frames"
+        ? ` ${Math.round(part * 100)}%`
+        : ` ${Math.min(r.step + 1, r.steps)}/${r.steps}`
+      : "";
+  return { label: name + count, pct: Math.round(from + (to - from) * part) };
+}
+
+/** 1:42 */
+export const elapsed = (ms: number) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
 export type Jobs = {
   analyst:
     (Job & { kind: "report" | "draft" | "monthly"; ref: string | null }) | null;
   seoAudit: Job | null;
   competitors: Job | null;
+  reel: ReelJob | null;
   lastError: { message: string; at: number } | null;
   /** When this status was fetched (so the page needn't read the clock while drawing). */
   checkedAt?: number;
@@ -27,6 +66,7 @@ const NONE: Jobs = {
   analyst: null,
   seoAudit: null,
   competitors: null,
+  reel: null,
   lastError: null,
 };
 
@@ -44,7 +84,13 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       () => {},
     );
   }, []);
-  const busy = !!(jobs.analyst || jobs.seoAudit || jobs.competitors);
+  // A reel only speeds up the polling: its own section reloads it (a page reload could drop unsaved edits).
+  const busy = !!(
+    jobs.analyst ||
+    jobs.seoAudit ||
+    jobs.competitors ||
+    jobs.reel
+  );
   // Every 10 s while something runs, every minute otherwise (a scheduled run shows up too).
   useEffect(() => {
     refresh();
@@ -121,6 +167,10 @@ export function AgentBar({
   if (jobs.competitors)
     lines.push(
       `Checking competitors · started ${when(jobs.competitors.at)} · about 2 minutes`,
+    );
+  if (jobs.reel)
+    lines.push(
+      `Making a reel · ${reelStage(jobs.reel).label} · ${elapsed((jobs.checkedAt ?? jobs.reel.at) - jobs.reel.at)} so far · usually 5–10 minutes`,
     );
   // No job running, but the last one failed in the past hour: say so (otherwise people just wait).
   const err = jobs.lastError;
