@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { videoResults, fromStock, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, photoAssetId, photoRights, postTotal, readScores, sheetHtml, sheetPrompt, sheetVerdicts, type Found, type ImageScore, type Photo } from './growth-photos';
+import { videoResults, fromStock, openverseResults, relevant, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, photoAssetId, photoRights, postTotal, readScores, sheetHtml, sheetPrompt, sheetVerdicts, type Found, type ImageScore, type Photo } from './growth-photos';
 
 test('Pexels: licence, photographer, size capped at the downloaded width', () => {
   const r = pexelsResults({ photos: [{ url: 'https://www.pexels.com/photo/1/', width: 4000, height: 6000, photographer: 'Ana', alt: 'Snowy mountain peak', src: { large2x: 'https://images.pexels.com/1.jpg' } }] });
@@ -63,12 +63,27 @@ test('photo check: found photos need a yes, our own do not; unanswered numbers s
   assert.equal((sheetHtml(['data:image/png;base64,AA', 'data:image/png;base64,BB']).match(/<img /g) ?? []).length, 2);
 });
 
-test('photos: only Pixabay or Pexels finds are used automatically; our own always', () => {
+test('photos: stock and free licences that allow commercial edits are used automatically; share-alike and NC are not', () => {
   const p = (origin: string, license: string) => ({ origin, rights: { license } }) as unknown as Photo;
   assert.equal(fromStock(p('discovered', 'Pixabay Content License')), true);
-  assert.equal(fromStock(p('discovered', 'CC BY 2.0')), false);
-  assert.equal(fromStock(p('discovered', 'CC0')), false);
+  assert.equal(fromStock(p('discovered', 'CC BY 2.0')), true);
+  assert.equal(fromStock(p('discovered', 'CC0')), true);
+  assert.equal(fromStock(p('discovered', 'CC BY-SA 4.0')), false);
+  assert.equal(fromStock(p('discovered', 'CC BY-NC 2.0')), false);
   assert.equal(fromStock(p('upload', 'own')), true);
+});
+
+test('openverse: licences named, credit kept, small images and non-photos dropped', () => {
+  const r = (o: Record<string, unknown>) => ({ foreign_landing_url: 'https://www.flickr.com/photos/a/1', url: 'https://live.staticflickr.com/1.jpg', width: 2000, height: 1300, license: 'by', license_version: '2.0', license_url: 'https://creativecommons.org/licenses/by/2.0/', creator: 'Ann', title: 'Wedding table', tags: [{ name: 'wedding' }, { name: 'table' }], ...o });
+  const got = openverseResults({ results: [r({}), r({ license: 'cc0', license_version: '1.0' }), r({ width: 600 }), r({ title: 'Oil painting of a table' })] });
+  assert.equal(got.length, 2);
+  assert.equal(got[0].license, 'CC BY 2.0');
+  assert.equal(got[0].author, 'Ann');
+  assert.equal(got[0].tags, 'wedding, table');
+  assert.equal(got[1].license, 'CC0');
+  assert.equal(photoRights(got[0]).status, 'cleared');
+  assert.equal(relevant(got[0], 'wedding table setting'), true);
+  assert.equal(relevant(got[0], 'mountain lake'), false);
 });
 
 test('score: a photo that does not belong caps the image; the weakest image pulls the post down', () => {

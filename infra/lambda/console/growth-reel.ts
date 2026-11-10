@@ -5,7 +5,7 @@
 // This file is pure: the plan, and the page that draws any moment of the reel when told to seek(t). The job in
 // growth-video.ts steps through it frame by frame in headless Chromium and encodes with ffmpeg.
 // Text stays inside the area Reels, Facebook and X leave free of their own buttons (x 72–952, y 240–1500).
-import { css, esc, phone, qrPattern, screenHtml, SCREENS, TICK, type Screen } from './growth-design';
+import { bg, css, esc, phone, qrPattern, screenHtml, SCREENS, TICK, type Screen } from './growth-design';
 
 export const FPS = 30;
 export const MAX_SECONDS = 30;
@@ -155,10 +155,16 @@ const BRIGHT = [
   'radial-gradient(70% 55% at 20% 80%,#d4f5e2 0%,transparent 60%),radial-gradient(60% 50% at 90% 10%,#dbe8ff 0%,transparent 60%),linear-gradient(170deg,#f6faf8,#eef3f8)',
 ];
 
+/** Dark brand glow for a scene whose footage and photos didn't fit the post (better than unrelated scenery). */
+const BRAND_DARK = 'radial-gradient(60% 40% at 85% 20%,#2563eb 0%,transparent 70%),radial-gradient(60% 45% at 10% 85%,#7c3aed 0%,transparent 70%),#0b1020';
+
 const footageLayer = (m: SceneMedia, id: string, extra = '') =>
-  `<div class="layer" id="${id}" style="overflow:hidden;${extra}"><img id="${id}-v" class="layer" style="width:100%;height:100%;object-fit:cover" ${m.frames ? '' : `src="${esc(m.still ?? '')}"`}></div>`;
+  m.frames || m.still
+    ? `<div class="layer" id="${id}" style="overflow:hidden;${extra}"><img id="${id}-v" class="layer" style="width:100%;height:100%;object-fit:cover" ${m.frames ? '' : `src="${esc(m.still ?? '')}"`}></div>`
+    : `<div class="layer" id="${id}" style="background:${BRAND_DARK};${extra}"></div>`;
 
 const footageRun = (i: number, m: SceneMedia, x = 'v-v') => (m.frames ? `await frame($('${x}'),'f/${i}',Math.min(${m.frames},Math.round(lt*30)+1));` : '');
+
 
 /** One scene's markup and the code that draws it at local time lt. `s` is a fixed clock, so timing scales with the scene's length. */
 function scene(sc: ReelScene, i: number, d: ReelPageData): { html: string; run: string; entry: string } {
@@ -167,7 +173,7 @@ function scene(sc: ReelScene, i: number, d: ReelPageData): { html: string; run: 
   const qr = qrPattern(7);
   const size = textSize(sc.text);
   const pool = d.pool;
-  const pick = (n: number) => (pool.length ? pool[n % pool.length] : '');
+  const pick = (n: number) => (pool.length ? pool[n % pool.length] : undefined);
   switch (sc.type) {
     case 'footage':
       return {
@@ -198,13 +204,13 @@ function scene(sc: ReelScene, i: number, d: ReelPageData): { html: string; run: 
       return {
         entry: 'fade',
         html: `${footageLayer(m, id('v'))}<div class="layer" style="background:linear-gradient(180deg,rgba(0,0,0,.62) 0%,rgba(0,0,0,.05) 48%,rgba(0,0,0,.25) 100%)"></div>${kinetic(sc.text, id('t'), `top:250px;font-size:${Math.min(size, 112)}px`)}
-<div class="wrap" id="${id('ph')}">${phone(`<div class="ui" style="background:#111"><img id="${id('w')}" class="layer" style="width:100%;height:100%;object-fit:cover;filter:brightness(.8)" ${m.frames ? '' : `src="${esc(m.still ?? '')}"`}><div style="position:absolute;left:60px;top:140px;width:298px;height:298px;background:#fff;border-radius:18px;padding:30px;transform:rotate(-2deg)">${qr}</div><svg id="${id('brk')}" style="position:absolute;left:40px;top:120px" width="338" height="338" fill="none" stroke-width="9" stroke-linecap="round"><g id="${id('bc')}" stroke="#fff"><path d="M6 70V6h64M268 6h64v64M332 268v64h-64M70 332H6v-64"/></g></svg></div>
-<div class="ui" id="${id('b')}" style="visibility:hidden;background:#fff;color:#0d0f14"><div style="padding:58px 22px 12px;background:#f2f2f4;text-align:center;font-size:15px;color:#6b7280">${esc(d.site)}</div><div style="padding:26px"><div class="mono" style="font-size:13px;color:#a16207">EVENT ALBUM</div><div style="font-size:38px;font-weight:800;letter-spacing:-.03em;margin-top:6px">Our big day</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:22px">${[0, 1, 2, 3, 4, 5].map((n) => `<div style="position:relative;aspect-ratio:1;border-radius:10px;background:url(${pick(n + 2)}) center/cover"><div id="${id(`k${n}`)}" style="position:absolute;right:6px;bottom:6px;width:30px;height:30px;border-radius:50%;background:#30D158;display:grid;place-items:center;opacity:0">${TICK(16, '#000')}</div></div>`).join('')}</div></div><div class="btn" style="bottom:60px;background:#2563EB;color:#fff">Add your photos</div><div class="tap" id="${id('tap')}" style="left:209px;top:780px"></div></div>`, 0, 0, 1)}</div>`,
+<div class="wrap" id="${id('ph')}">${phone(`<div class="ui" style="background:#111">${m.frames || m.still ? `<img id="${id('w')}" class="layer" style="width:100%;height:100%;object-fit:cover;filter:brightness(.8)" ${m.frames ? '' : `src="${esc(m.still ?? '')}"`}>` : `<div class="layer" style="background:${BRAND_DARK}"></div>`}<div style="position:absolute;left:60px;top:140px;width:298px;height:298px;background:#fff;border-radius:18px;padding:30px;transform:rotate(-2deg)">${qr}</div><svg id="${id('brk')}" style="position:absolute;left:40px;top:120px" width="338" height="338" fill="none" stroke-width="9" stroke-linecap="round"><g id="${id('bc')}" stroke="#fff"><path d="M6 70V6h64M268 6h64v64M332 268v64h-64M70 332H6v-64"/></g></svg></div>
+<div class="ui" id="${id('b')}" style="visibility:hidden;background:#fff;color:#0d0f14"><div style="padding:58px 22px 12px;background:#f2f2f4;text-align:center;font-size:15px;color:#6b7280">${esc(d.site)}</div><div style="padding:26px"><div class="mono" style="font-size:13px;color:#a16207">EVENT ALBUM</div><div style="font-size:38px;font-weight:800;letter-spacing:-.03em;margin-top:6px">Our big day</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:22px">${[0, 1, 2, 3, 4, 5].map((n) => `<div style="position:relative;aspect-ratio:1;border-radius:10px;${bg(pick(n + 2))}"><div id="${id(`k${n}`)}" style="position:absolute;right:6px;bottom:6px;width:30px;height:30px;border-radius:50%;background:#30D158;display:grid;place-items:center;opacity:0">${TICK(16, '#000')}</div></div>`).join('')}</div></div><div class="btn" style="bottom:60px;background:#2563EB;color:#fff">Add your photos</div><div class="tap" id="${id('tap')}" style="left:209px;top:780px"></div></div>`, 0, 0, 1)}</div>`,
         run: `${footageRun(i, m)}${footageRun(i, m, 'w')}const s=lt*4/dur;words($('t'),lt,.1);const u=expo(p(s,.1,.8));place($('ph'),600,mix(2500,1120,u)+Math.sin(lt*1.1)*6,1.14,mix(7,3,u));$('bc').setAttribute('stroke',s>=1.2?'#30D158':'#fff');$('brk').style.transform='scale('+(mix(1.12,1,expo(p(s,.5,1.2)))+Math.sin(p(s,1.2,1.5)*3.14)*.05)+')';$('b').style.visibility=s>=1.85?'inherit':'hidden';$('b').style.transform='translateY('+(1-expo(p(s,1.85,2.3)))*872+'px)';for(let n=0;n<6;n++){const x=spring(p(s,2.35+n*.14,2.75+n*.14));$('k'+n).style.opacity=x>0?1:0;$('k'+n).style.transform='scale('+x+')';}tap($('tap'),s,3.3);`,
       };
     case 'fill': {
       const slots = Array.from({ length: 15 }, (_, n) => `<div class="slot" id="${id(`sl${n}`)}"></div>`).join('');
-      const fly = Array.from({ length: 13 }, (_, n) => `<div class="fly" id="${id(`f${n}`)}" style="background:url(${pick(n)}) center/cover"></div>`).join('');
+      const fly = Array.from({ length: 13 }, (_, n) => `<div class="fly" id="${id(`f${n}`)}" style="${bg(pick(n))}"></div>`).join('');
       return {
         entry: 'circle',
         html: `<div class="layer" style="background:${BRIGHT[1]}"></div>${kinetic(sc.text, id('t'), `top:220px;font-size:${Math.min(size, 104)}px`, true)}<div class="wrap" id="${id('ph')}">${phone(`<div class="ui">${statusBar}<div style="padding:18px 16px 0"><div class="mono" style="font-size:12px;color:#FACC15">EVENT ALBUM</div><div style="font-size:30px;font-weight:700;margin:4px 0 14px">Our big day</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">${slots}</div></div></div>`, 0, 0, 1)}</div>${fly}`,
@@ -212,16 +218,22 @@ function scene(sc: ReelScene, i: number, d: ReelPageData): { html: string; run: 
       };
     }
     case 'compare':
+      // A card with the photo zoomed into its detail: the chat copy (blocky, washed out) on the left, the original on
+      // the right; the divider sweeps in and stays in the middle so both are on screen with big labels.
       return {
         entry: 'slide',
-        html: `<div class="layer" id="${id('z')}" style="transform-origin:50% 40%"><img src="${esc(m.heroChat ?? '')}" class="layer" style="width:100%;height:100%"><div class="layer" id="${id('c')}" style="background:url(${esc(m.hero ?? '')}) center/cover"></div></div><div class="layer" style="background:linear-gradient(180deg,rgba(0,0,0,.8) 0%,rgba(0,0,0,.55) 25%,rgba(0,0,0,0) 45%)"></div><div id="${id('b')}" style="position:absolute;top:0;bottom:0;width:6px;background:#fff;box-shadow:0 0 30px rgba(0,0,0,.5)"><svg style="position:absolute;left:-38px;top:1040px;background:#fff;border-radius:50%" width="82" height="82" viewBox="0 0 82 82" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M32 29L20 41l12 12M50 29l12 12-12 12"/></svg></div><div class="pill" id="${id('l1')}" style="left:72px;top:1230px">CHAT COPY</div><div class="pill" id="${id('l2')}" style="right:150px;top:1230px;background:#30D158;color:#000">ORIGINAL</div>${kinetic(sc.text, id('t'), `top:240px;font-size:${Math.min(size, 112)}px`)}`,
-        run: `const s=lt*3/dur;$('z').style.transform='scale('+mix(1,1.3,cubic(p(s,0,3.2)))+')';words($('t'),lt,.2);const m=cubic(p(s,.5,1.3))*.32+cubic(p(s,1.5,2.5))*.68;const xp=mix(.8,0,m);$('c').style.clipPath='inset(0 0 0 '+xp*100+'%)';$('b').style.left=xp*1080+'px';$('b').style.opacity=1-p(s,2.4,2.6);$('l1').style.opacity=1-p(s,1.5,1.9);$('l2').style.opacity=expo(p(s,.4,.8));`,
+        html: `<div class="layer" style="background:${BRAND_DARK}"></div>${kinetic(sc.text, id('t'), `top:240px;font-size:${Math.min(size, 100)}px`)}
+<div id="${id('card')}" style="position:absolute;left:72px;top:600px;width:936px;height:880px;border-radius:44px;overflow:hidden;box-shadow:0 60px 100px -30px rgba(0,0,0,.7)"><div class="layer" id="${id('z')}" style="transform-origin:50% 45%"><img src="${esc(m.heroChat ?? '')}" class="layer" style="width:100%;height:100%;object-fit:cover;filter:saturate(.75) contrast(.92)"><div class="layer" id="${id('c')}" style="background:url(${esc(m.hero ?? '')}) center/cover"></div></div>
+<div id="${id('b')}" style="position:absolute;top:0;bottom:0;width:8px;margin-left:-4px;background:#fff;box-shadow:0 0 30px rgba(0,0,0,.5)"><svg style="position:absolute;left:-40px;top:396px;background:#fff;border-radius:50%" width="88" height="88" viewBox="0 0 82 82" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M32 29L20 41l12 12M50 29l12 12-12 12"/></svg></div>
+<div class="pill big" id="${id('l1')}" style="left:28px;bottom:28px">CHAT COPY</div><div class="pill big" id="${id('l2')}" style="right:28px;bottom:28px;background:#30D158;color:#000">ORIGINAL</div></div>`,
+        run: `const s=lt*3/dur;words($('t'),lt,.2);const e=expo(p(s,.1,.7));$('card').style.transform='translateY('+mix(140,0,e)+'px) scale('+mix(.94,1,e)+')';$('card').style.opacity=e;$('z').style.transform='scale('+mix(1.55,1.75,p(s,0,3))+')';const xp=mix(1,.5,cubic(p(s,.7,1.7)));$('c').style.clipPath='inset(0 0 0 '+xp*100+'%)';$('b').style.left=xp*936+'px';$('b').style.opacity=p(s,.6,.8);$('l1').style.opacity=expo(p(s,1.2,1.6));$('l2').style.opacity=expo(p(s,1.5,1.9));`,
       };
     case 'end':
+      // Icon and line at the top, the app on a phone in the middle (fully in frame), the button over its lower edge.
       return {
         entry: 'wipe',
-        html: `<div class="layer" style="background:radial-gradient(70% 45% at 80% 15%,#3b82f6 0%,transparent 70%),radial-gradient(70% 45% at 10% 90%,#7c3aed 0%,transparent 70%),#0b1020"></div><img id="${id('i')}" src="${d.icon}" style="position:absolute;left:444px;top:250px;width:192px;height:192px;border-radius:44px;box-shadow:0 30px 70px rgba(0,0,0,.5)">${kinetic(sc.text, id('t'), `top:490px;left:72px;width:936px;text-align:center;font-size:${Math.min(size, 92)}px`)}<div id="${id('c')}" style="position:absolute;left:290px;top:930px;width:500px;height:112px;border-radius:56px;background:#fff;color:#0d0f14;display:grid;place-items:center;font:800 46px Geist;letter-spacing:-.02em">${esc(d.cta)}</div><div id="${id('w')}" style="position:absolute;left:0;right:0;top:1066px;text-align:center;font:500 38px Geist;color:#cbd5e1">${esc(d.site)}</div><div class="wrap" id="${id('ph')}">${phone(screenHtml(sc.screen === 'qr-album' ? 'qr-album' : 'library', { pool }, 3), 0, 0, 1)}</div>`,
-        run: `const s=lt*3/dur;const a=spring(p(s,.2,1));$('i').style.transform='scale('+a+') rotate('+mix(-22,0,a)+'deg)';words($('t'),lt,.5,.05);$('c').style.transform='scale('+spring(p(s,1.1,1.8))+')';$('w').style.opacity=expo(p(s,1.4,1.8));place($('ph'),540,mix(2500,1620,expo(p(s,1,1.8))),.72,0);`,
+        html: `<div class="layer" style="background:radial-gradient(70% 45% at 80% 15%,#3b82f6 0%,transparent 70%),radial-gradient(70% 45% at 10% 90%,#7c3aed 0%,transparent 70%),#0b1020"></div><img id="${id('i')}" src="${d.icon}" style="position:absolute;left:465px;top:210px;width:150px;height:150px;border-radius:36px;box-shadow:0 30px 70px rgba(0,0,0,.5)">${kinetic(sc.text, id('t'), `top:400px;left:72px;width:936px;text-align:center;font-size:${Math.min(size, 84)}px`)}<div class="wrap" id="${id('ph')}">${phone(screenHtml(sc.screen === 'qr-album' ? 'qr-album' : 'library', { pool }, 3), 0, 0, 1)}</div><div id="${id('c')}" style="position:absolute;left:290px;top:1290px;width:500px;height:112px;border-radius:56px;background:#fff;color:#0d0f14;display:grid;place-items:center;font:800 46px Geist;letter-spacing:-.02em;box-shadow:0 30px 60px -10px rgba(0,0,0,.6)">${esc(d.cta)}</div><div id="${id('w')}" style="position:absolute;left:0;right:0;top:1430px;text-align:center;font:500 38px Geist;color:#cbd5e1">${esc(d.site)}</div>`,
+        run: `const s=lt*3/dur;const a=spring(p(s,.2,1));$('i').style.transform='scale('+a+') rotate('+mix(-22,0,a)+'deg)';words($('t'),lt,.5,.05);place($('ph'),540,mix(2400,1060,expo(p(s,.7,1.5)))-Math.sin(lt*.9)*6,.8,0);$('c').style.transform='scale('+spring(p(s,1.2,1.9))+')';$('w').style.opacity=expo(p(s,1.5,1.9));`,
       };
   }
 }
@@ -241,7 +253,7 @@ export function reelHtml(d: ReelPageData): string {
 html,body{background:#000}
 .scene{position:absolute;inset:0;overflow:hidden;visibility:hidden}
 .layer{position:absolute;inset:0}
-.k{position:absolute;left:72px;width:880px;font-family:Geist;font-weight:800;line-height:1.04;letter-spacing:-.045em;color:#fff}
+.k{position:absolute;left:72px;width:880px;font-family:Geist;font-weight:800;line-height:1.04;letter-spacing:-.045em;color:#fff;text-wrap:balance}
 .k.dark{color:#0d0f14}
 .w{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .04em .14em 0;margin-bottom:-.1em}
 .i{display:inline-block}
@@ -257,6 +269,7 @@ html,body{background:#000}
 .fly{position:absolute;left:0;top:0;width:300px;height:300px;border-radius:26px;border:8px solid #fff;box-shadow:0 30px 60px -10px rgba(0,0,0,.45);visibility:hidden}
 .mono{font-family:Plex;font-weight:600;letter-spacing:.08em}
 .pill{position:absolute;padding:12px 22px;border-radius:40px;font:600 30px Plex;letter-spacing:.06em;background:rgba(0,0,0,.6);color:#fff}
+.pill.big{padding:16px 28px;font-size:36px;background:rgba(0,0,0,.72)}
 </style>
 ${html}
 <script>

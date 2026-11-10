@@ -96,7 +96,7 @@ async function clipFrames(v: StockVideo, sceneIndex: number, seconds: number): P
 async function compareStills(src: string, i: number): Promise<{ hero: string; heroChat: string }> {
   const crop = "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)'";
   await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', join(WORK, src), '-vf', `${crop},scale=1080:1920:flags=lanczos`, '-q:v', '2', join(WORK, `hero${i}.jpg`)]);
-  await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', join(WORK, `hero${i}.jpg`), '-vf', 'scale=216:384', '-q:v', '20', join(WORK, `low${i}.jpg`)]);
+  await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', join(WORK, `hero${i}.jpg`), '-vf', 'scale=180:320', '-q:v', '24', join(WORK, `low${i}.jpg`)]);
   await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', join(WORK, `low${i}.jpg`), '-vf', 'scale=1080:1920:flags=bilinear', '-q:v', '5', join(WORK, `chat${i}.jpg`)]);
   return { hero: `hero${i}.jpg`, heroChat: `chat${i}.jpg` };
 }
@@ -132,16 +132,10 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
   rmSync(WORK, { recursive: true, force: true });
   mkdirSync(join(WORK, 'p'), { recursive: true });
   const progress = reelProgress(began);
-  progress('photos');
+  progress('directing');
   const browser = await launchBrowser();
   try {
-    // 1) Photos for phone screens and album tiles, on disk next to the page.
-    const { served, pool, scenes: scenePhotos } = await gatherPhotos(shaped, list, browser);
-    const local = (u: string) => `p/${u.split('/').pop()}.jpg`;
-    for (const [id, f] of served) writeFileSync(join(WORK, 'p', `${id}.jpg`), f.body);
-    const stills = [...scenePhotos.values(), ...pool].map(local);
-
-    // 2) Claude directs; the words and timing stay the script's.
+    // 1) Claude directs; the words and timing stay the script's.
     let plan: ReelScene[] = defaultPlan(shaped, topic, cta);
     const tok = await token();
     if (tok) {
@@ -153,6 +147,18 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
         console.error(JSON.stringify({ directorFailed: (e as Error).message.slice(0, 300) }));
       }
     }
+
+    // 2) Photos from the scenes' own searches (and the post's topic), only ones Claude says fit the post; Pixabay
+    // first, then credited sources. No fitting photo → brand background, never unrelated scenery.
+    progress('photos');
+    const searches = [...new Set([...plan.map((sc) => sc.query).filter((q): q is string => !!q), topic])];
+    const { served, pool, scenes: scenePhotos, credited } = await gatherPhotos(shaped, list, browser, { queries: searches });
+    const local = (u: string) => `p/${u.split('/').pop()}.jpg`;
+    for (const [id, f] of served) writeFileSync(join(WORK, 'p', `${id}.jpg`), f.body);
+    const stillFor = (q?: string) => {
+      const u = (q && scenePhotos.get(q)) ?? scenePhotos.get(topic) ?? [...scenePhotos.values()][0];
+      return u ? local(u) : undefined;
+    };
 
     // 3) Footage, a different clip per scene where there are enough. A scene with nothing to show becomes the phone.
     const ranked = new Map<string, StockVideo[]>();
@@ -174,13 +180,16 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
             return undefined;
           }) };
         }
-        if (!m.frames && stills[0]) m = { still: stills[0] };
-        if (!m.frames && !m.still) plan[i] = { ...sc, type: 'phone' };
+        const still = m.frames ? undefined : stillFor(sc.query);
+        if (still) m = { still };
+        // Opening footage with nothing that fits → the app on a phone; qr-card/scan keep their scene on a brand background.
+        if (!m.frames && !m.still && sc.type === 'footage') plan[i] = { ...sc, type: 'phone' };
         media.push(m);
       } else if (sc.type === 'compare') {
-        if (stills[0]) media.push(await compareStills(stills[0], i));
+        const still = stillFor(sc.query);
+        if (still) media.push(await compareStills(still, i));
         else {
-          plan[i] = { ...sc, type: 'phone' };
+          plan[i] = { ...sc, type: 'phone', screen: 'viewer' };
           media.push({});
         }
       } else media.push({});
@@ -247,7 +256,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
       bytes: body.length,
       lensPhoto: false,
       checkedPersonal: true,
-      rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: 'Made by Lens; footage and photos from Pixabay (Pixabay Content License, no credit needed), looked at by AI first. Look at it when you approve the post.', checkedAt: Date.now(), checkedBy: 'template' },
+      rights: { status: 'cleared', license: 'own', licenseUrl: '', source: '', author: '', credit: '', commercialOk: true, editsOk: true, peopleOrBrands: false, reason: credited.length ? 'Made by Lens; footage from Pixabay, photos from Pixabay and free-licence sites, credited in the post; looked at by AI first. Look at it when you approve the post.' : 'Made by Lens; footage and photos from Pixabay (Pixabay Content License, no credit needed), looked at by AI first. Look at it when you approve the post.', checkedAt: Date.now(), checkedBy: 'template' },
       status: 'ready',
       createdAt: Date.now(),
       createdBy: by,
@@ -259,7 +268,9 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
       ...(score ? { score: score.total, scoreWhy: score.hookWhy } : {}),
     };
     await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
-    await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET reel = :r, reelScore = :s', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score } }));
+    // Credited photos (CC BY from Commons/Openverse) join the post's assets, so Export adds their credit lines.
+    const reelAssets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
+    await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` }, UpdateExpression: 'SET reel = :r, reelScore = :s, assets = :a', ConditionExpression: 'attribute_exists(pk)', ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score, ':a': reelAssets } }));
     const ms = Date.now() - began;
     console.log(JSON.stringify({ reelDone: postId, ms, seconds, bytes: body.length, total: score?.total ?? null }));
     return { seconds, ms };
