@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { photoDayMoments } from '../api/growth-moments';
+import { photoDayMoments, score, SENSITIVE } from '../api/growth-moments';
 import { nextStep } from './growth-chain';
 import { momentBrief } from './growth-moments';
 
@@ -38,4 +38,11 @@ test('party days: Super Bowl Sunday and Oktoberfest on their real dates', () => 
   assert.ok(d.includes('2026-02-08 Super Bowl Sunday parties'));
   assert.ok(d.includes('2026-09-19 Oktoberfest begins'));
   assert.ok(d.includes("2026-12-31 New Year's Eve parties"));
+});
+
+test('moments: mourning and solemn days never; Japan’s Labor Thanksgiving is not Thanksgiving', () => {
+  for (const t of ['Sunday of the Dead', 'Commemoration Day', 'Repentance Day (Saxony)', 'Black Awareness Day', 'Ash Wednesday']) assert.ok(SENSITIVE.test(t), t);
+  assert.ok(!SENSITIVE.test('Christmas party season'));
+  const s = (title: string) => score({ title, kind: 'holiday', day: '2026-11-23', countries: ['JP'], source: 's', url: 'u' });
+  assert.ok(s('Labor Thanksgiving Day') < s('Thanksgiving Day'));
 });

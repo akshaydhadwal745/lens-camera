@@ -37,10 +37,10 @@ type Raw = Omit<Moment, 'id' | 'score' | 'angle' | 'formats' | 'hashtags'> & { p
 
 /** Days we never make marketing content for. */
 export const SENSITIVE =
-  /election|polling|\bvote|referendum|death|died|memorial|remembrance|mourning|martyr|tragedy|attack|disaster|earthquake|flood|cyclone|tsunami|\bwar\b|genocide|holocaust|assassinat|funeral|crash|shooting|riot|bandh|good friday|yom kippur|ashura|muharram|veterans|armistice|partition|9\/11|september 11/i;
+  /election|polling|\bvote|referendum|death|died|memorial|remembrance|mourning|martyr|tragedy|attack|disaster|earthquake|flood|cyclone|tsunami|\bwar\b|genocide|holocaust|assassinat|funeral|crash|shooting|riot|bandh|good friday|yom kippur|\bdead\b|commemoration|repentance|awareness day|all souls|day of prayer|penance|fasting|lent\b|ash wednesday|ashura|muharram|veterans|armistice|partition|9\/11|september 11/i;
 
 const PHOTO_MOMENT =
-  /diwali|deepavali|holi\b|christmas|new year|eid|wedding|halloween|thanksgiving|navratri|durga|ganesh|lohri|pongal|onam|raksha|bandhan|karva|karwa|valentine|mother'?s day|father'?s day|graduation|pride|carnival|fireworks|eclipse|bonfire|guy fawkes|independence day|4th of july|fourth of july|canada day|australia day|hanukkah|chhath?|bhai d[ou]o?j|govardhan|guru nanak|gurpurab|dussehra|baisakhi|vaisakhi|easter|st\.? patrick|lunar new year|chinese new year|world cup|final|friendship|photography day|teachers'? day|children'?s day|cherry blossom|christmas markets|festival and concert|part(y|ies)|super bowl|oktoberfest|garba|concert/i;
+  /diwali|deepavali|holi\b|christmas|new year|eid|wedding|halloween|(?<!labou?r )thanksgiving|navratri|durga|ganesh|lohri|pongal|onam|raksha|bandhan|karva|karwa|valentine|mother'?s day|father'?s day|graduation|pride|carnival|fireworks|eclipse|bonfire|guy fawkes|independence day|4th of july|fourth of july|canada day|australia day|hanukkah|chhath?|bhai d[ou]o?j|govardhan|guru nanak|gurpurab|dussehra|baisakhi|vaisakhi|easter|st\.? patrick|lunar new year|chinese new year|world cup|final|friendship|photography day|teachers'? day|children'?s day|cherry blossom|christmas markets|festival and concert|part(y|ies)|super bowl|oktoberfest|garba|concert/i;
 const NIGHT = /part(y|ies)|concert|garba|oktoberfest|diwali|deepavali|new year|bonfire|guy fawkes|fireworks|independence day|4th of july|fourth of july|canada day|eclipse|meteor|hanukkah|christmas|dev deepawali|lights/i;
 const GATHERING = /part(y|ies)|super bowl|oktoberfest|garba|concert|wedding|christmas|eid|thanksgiving|holi\b|navratri|durga|ganesh|raksha|bandhan|onam|pongal|easter|lohri|bhai d[ou]o?j|chhath?|govardhan|guru nanak|gurpurab|karva|karwa|hanukkah|graduation|mother'?s day|father'?s day|friendship|teachers'? day|children'?s day|christmas markets/i;
 
@@ -353,8 +353,12 @@ export async function pullMoments(trending: (geo: string) => Promise<{ title: st
   } else status.concerts = 'not connected';
 
   const kept = raws.filter((r) => !SENSITIVE.test(r.title));
+  // Minor public holidays of the newer markets (a state's bank holiday, an Advent Sunday) only crowd the feed.
+  const CORE = ['IN', 'US', 'GB', 'AU', 'CA', 'WW'];
+  const shown = kept.filter((r) => r.kind !== 'holiday' || r.countries.some((c) => CORE.includes(c)) || score(r) >= 50);
   status.sensitiveSkipped = String(raws.length - kept.length);
-  for (const m of kept.map(finish)) {
+  status.minorSkipped = String(kept.length - shown.length);
+  for (const m of shown.map(finish)) {
     const last = Date.parse(`${m.ends ?? m.day}T23:59:59Z`);
     // A moment that already has a task keeps its row as it is (the task links to it).
     await ddb
