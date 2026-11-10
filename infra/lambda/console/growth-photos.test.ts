@@ -35,7 +35,12 @@ test('Pixabay: page link, large image, tags as words, licence clears scenery', (
   assert.equal(r.length, 1);
   assert.deepEqual([r[0].w, r[0].h, r[0].title, r[0].author], [1280, 853, 'lake, mountains, sunrise', 'Kanenori']);
   assert.equal(photoRights(r[0]).status, 'cleared');
-  assert.equal(photoRights({ ...r[0], tags: 'woman, portrait' }).status, 'review');
+  // People on Pixabay / Pexels: their licence covers them as b-roll (the photo editor still looks); brands never.
+  const ppl = photoRights({ ...r[0], tags: 'audience, people, stage' });
+  assert.equal(ppl.status, 'cleared');
+  assert.equal(ppl.peopleOrBrands, true);
+  assert.match(ppl.reason, /mood/);
+  assert.equal(photoRights({ ...r[0], tags: 'crowd, logo' }).status, 'review');
   assert.deepEqual(pixabayResults({}), []);
 });
 
@@ -44,7 +49,8 @@ test('Pixabay: search-stuffing tags are ignored, real people tags still count', 
   const candle = hit('candle, black background, samsung wallpaper, iphone wallpaper, mobile wallpaper, flame');
   assert.equal(candle.tags, 'candle, flame');
   assert.equal(photoRights(candle).status, 'cleared');
-  assert.equal(photoRights(hit('wedding, bride, candle')).status, 'review');
+  assert.equal(photoRights(hit('wedding, bride, candle')).status, 'cleared');
+  assert.equal(photoRights(hit('wedding, bride, candle')).peopleOrBrands, true);
 });
 
 test('photo check: found photos need a yes, our own do not; unanswered numbers stay unknown', () => {
@@ -103,11 +109,18 @@ test('score: a photo that does not belong caps the image; the weakest image pull
   assert.equal(postTotal([], 90), 0);
 });
 
-test('Pixabay videos: real footage at 1080p or more, no AI, people or brands, nothing huge', () => {
+test('Pixabay videos: real footage at 1080p or more, no AI or brands (people as b-roll are fine), nothing huge', () => {
   const v = (id: number, tags: string, large: Record<string, unknown> = {}, duration = 15) => ({ id, pageURL: `https://pixabay.com/videos/${id}/`, duration, user: 'a', tags, videos: { large: { url: `https://cdn/${id}.mp4`, width: 1920, height: 1080, size: 9_000_000, thumbnail: `https://cdn/${id}.jpg`, ...large }, medium: { url: `https://cdn/${id}m.mp4`, width: 1280, height: 720, size: 2_000_000, thumbnail: 'https://cdn/m.jpg' } } });
-  const r = videoResults({ hits: [v(1, 'candles, table'), v(2, 'ai generated, table'), v(3, 'bride, candles'), v(4, 'roses', { url: '' }), v(5, 'roses', { size: 90_000_000 }), v(6, 'roses', {}, 2), v(7, 'candle, iphone wallpaper'), v(8, 'door, green screen'), v(9, 'heart, animated, loop')] });
-  assert.deepEqual(r.map((x) => x.id), ['1', '7']);
+  const r = videoResults({ hits: [v(1, 'candles, table'), v(2, 'ai generated, table'), v(3, 'bride, candles'), v(4, 'roses', { url: '' }), v(5, 'roses', { size: 90_000_000 }), v(6, 'roses', {}, 2), v(7, 'candle, iphone wallpaper'), v(8, 'door, green screen'), v(9, 'heart, animated, loop'), v(10, 'crowd, logo')] });
+  assert.deepEqual(r.map((x) => x.id), ['1', '3', '7']);
   assert.equal(r[0].url, 'https://cdn/1.mp4');
   assert.equal(r[0].thumb, 'https://cdn/1.jpg');
   assert.deepEqual(videoResults({}), []);
+});
+
+test('rights: people on a CC licence (Commons, Openverse) still go to a person; Pexels people are b-roll', () => {
+  const f = (license: string, tags: string, source = 'Openverse') => ({ source, sourceUrl: 'https://x/1', url: 'https://x/1.jpg', title: '', tags, author: 'a', license, licenseUrl: '', w: 2000, h: 3000 }) as never;
+  assert.equal(photoRights(f('CC0', 'children on stage')).status, 'review');
+  assert.equal(photoRights(f('Pexels License', 'parents audience clapping', 'Pexels')).status, 'cleared');
+  assert.equal(photoRights(f('Pexels License', 'woman with samsung phone', 'Pexels')).status, 'review');
 });

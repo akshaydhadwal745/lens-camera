@@ -39,9 +39,21 @@ export type Found = {
 };
 export type Photo = Asset & { query?: string; sourceUrl?: string; w?: number; h?: number; looked?: { ok: boolean; why: string; at: number } };
 
-/** Words in a title or tags that mean people or brands are probably in the picture. */
-export const PEOPLE_OR_BRANDS =
-  /\b(portrait|selfie|faces?|man|men|woman|women|girls?|boys?|child|children|kids?|baby|people|persons?|bride|groom|couple|family|friends|singer|artist|band|actor|actress|player|celebrity|model|crowd|audience|fans|logo|brand|trademark|billboard|advert\w*|iphone|samsung|apple|google|pixel)\b/i;
+/** Words in a title or tags that mean people are probably in the picture. */
+export const PEOPLE =
+  /\b(portrait|selfie|faces?|man|men|woman|women|girls?|boys?|child|children|kids?|baby|people|persons?|bride|groom|couple|family|friends|singer|artist|band|actor|actress|player|celebrity|model|crowd|audience|fans|parents?|students?|dancers?)\b/i;
+/** Words that mean a logo, brand or branded product is probably in the picture. */
+export const BRANDS = /\b(logo|brand|trademark|billboard|advert\w*|iphone|samsung|apple|google|pixel)\b/i;
+/** Either of the two (what the rights record calls peopleOrBrands). */
+export const PEOPLE_OR_BRANDS = new RegExp(`${PEOPLE.source}|${BRANDS.source}`, 'i');
+
+/**
+ * Stock sites whose own licence covers people in commercial use (Pexels, Pixabay: no endorsement implied, nobody
+ * shown in a bad light). Owner 2026-11-10 ("think as a real content editor"): people are used the way an editor
+ * uses b-roll, as the moment's mood: a crowd from behind, hands, a stage seen from the audience. Never as a Lens
+ * user, never holding our app, never a close-up of a child. The photo editor (Claude) enforces that by looking.
+ */
+const PEOPLE_OK = new Set(['pexels', 'pixabay']);
 
 /** Paintings, prints, maps and scans are public domain too, but they aren't photos. */
 export const NOT_A_PHOTO = /\b(paintings?|painted|painter|oil on|canvas|drawings?|engraving|etching|lithograph|woodcut|illustrations?|postcards?|posters?|maps?|museum|artworks?|watercolou?r|aquarelle|sketch|scans?|book of|manuscript|fresco|mural|stamps?|coins?|diagram|svg|logo)\b|\b1[5-8]\d\d\b|\b19[0-4]\d\b/i;
@@ -158,7 +170,7 @@ export type StockVideo = { id: string; pageUrl: string; url: string; thumb: stri
 /** Made by AI, or not footage of anything: green screens, animations, effects, motion backgrounds. */
 const NOT_FOR_REELS = /\bai[- ]generated\b|\bai\b|green ?screen|chroma|\banimat|\bvfx\b|\bcgi\b|\b3d\b|motion graphic|\bloop\b|\babstract\b|\bintro\b|\boverlay\b/i;
 
-/** Pixabay's video search → usable clips: real footage only, no people or brands by tags, at least 1080p and not huge
+/** Pixabay's video search → usable clips: real footage only, no brands by tags (people as b-roll are fine), at least 1080p and not huge
  *  (Claude still looks at a frame of each). Landscape is fine: it's cropped to vertical. */
 export function videoResults(json: any): StockVideo[] {
   return ((json?.hits ?? []) as any[])
@@ -167,14 +179,17 @@ export function videoResults(json: any): StockVideo[] {
       const tags = cleanTags(h.tags);
       return { id: String(h.id ?? ''), pageUrl: String(h.pageURL ?? ''), url: String(size?.url ?? ''), thumb: String(size?.thumbnail ?? ''), w: Number(size?.width) || 0, h: Number(size?.height) || 0, duration: Number(h.duration) || 0, author: String(h.user ?? '').slice(0, 120), tags, rawTags: String(h.tags ?? '') };
     })
-    .filter((v) => v.id && v.url && v.thumb && v.duration >= 3 && !NOT_FOR_REELS.test(`${v.rawTags}`) && !PEOPLE_OR_BRANDS.test(v.tags))
+    .filter((v) => v.id && v.url && v.thumb && v.duration >= 3 && !NOT_FOR_REELS.test(`${v.rawTags}`) && !BRANDS.test(v.tags))
     .map(({ rawTags: _r, ...v }) => v);
 }
 
-/** The rights record: the licence decides (growth-rights.ts); people/brands are judged from the words. */
+/** The rights record: the licence decides (growth-rights.ts); people and brands are judged from the words. */
 export function photoRights(f: Found, now = Date.now()): Rights {
-  const people = PEOPLE_OR_BRANDS.test(`${f.title} ${f.tags}`);
-  const v = licenseVerdict(f.license, people);
+  const words = `${f.title} ${f.tags}`;
+  const people = PEOPLE.test(words);
+  const brands = BRANDS.test(words);
+  const broll = people && !brands && PEOPLE_OK.has(licenseKey(f.license));
+  const v = licenseVerdict(f.license, brands || (people && !broll));
   return {
     status: v.status,
     license: f.license,
@@ -184,8 +199,10 @@ export function photoRights(f: Found, now = Date.now()): Rights {
     credit: '',
     commercialOk: v.commercialOk,
     editsOk: v.editsOk,
-    peopleOrBrands: people,
-    reason: `${v.reason}. Found by the content engine; people and brands judged from the photo's title and tags, so look at it when you approve the post.`,
+    peopleOrBrands: people || brands,
+    reason: broll
+      ? `${v.reason}. People appear: the ${f.source} licence allows them in commercial use as long as nobody is shown endorsing Lens or in a bad light, so they are used only as the moment's mood (never as a Lens user, never a close-up of a child). Look at it when you approve the post.`
+      : `${v.reason}. Found by the content engine; people and brands judged from the photo's title and tags, so look at it when you approve the post.`,
     checkedAt: now,
     checkedBy: 'photo-search',
   };
@@ -201,7 +218,7 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
 }
 
 /** Bump when sources change, so cached searches made without them are done again. */
-const SEARCH_VERSION = 5;
+const SEARCH_VERSION = 6;
 
 /** The Pixabay key from SSM (never in code). */
 export async function pixabayKey(): Promise<string | undefined> {
@@ -359,7 +376,7 @@ export const SHEET_SIZE = 12;
 export const PHOTO_CHECK_SYSTEM = `You are the photo editor of a premium consumer app's marketing team. You get one contact sheet of numbered photos and the post they are for. Open the sheet with the Read tool first and judge what you actually see, not any caption. Answer two separate things for every number.
 
 ok: may this photo appear in any of our ads? false if ANY of these is true:
-- A person: any face, group, crowd or recognisable body (we have no model release). A hand alone is fine only if the photo is beautiful.
+- People used wrongly. People ARE welcome as the moment's mood, the way a film editor uses b-roll: a crowd or audience, people seen from behind or at a distance, hands, silhouettes, a candid moment where nobody poses. Reject: anyone posing for or looking into the camera like a stock model, a close-up where one face is the subject, any close-up of a child's face (children only at a distance, from behind, or as hands), anyone holding a phone with a visible brand, anything that shows a person in a bad light.
 - A religious or political ceremony, a place of worship, a protest, a war or disaster, a news or press photo.
 - A logo, brand, product, or readable sign or text.
 - Not a real photo: painting, print, map, satellite image, diagram, screenshot, rendering.
@@ -413,7 +430,7 @@ export const REDO_BELOW = 75;
 export const SCORE_SYSTEM = `You are the toughest creative director at a top consumer-app studio. You judge a finished social post for Lens, a camera and photo-backup app, before it goes out on Instagram, Facebook and X. Open every contact sheet with the Read tool and judge what you actually see. Be honest: most work scores 55 to 80, and 90+ is rare.
 
 For each image score 0 to 100:
-- relates: does everything in the picture clearly belong to what this post and this slide say? Unrelated photo or a phone showing unrelated photos: under 40. Any real person, ceremony, religious or press scene, or a photo that tells a different story: 0.
+- relates: does everything in the picture clearly belong to what this post and this slide say? Unrelated photo or a phone showing unrelated photos: under 40. A person posing for the camera, shown as a Lens user or endorser, a close-up of a child's face, a ceremony, religious or press scene, or a photo that tells a different story: 0. People as the moment's mood (an audience, from behind, hands, candid and not posing) are good: they make it real.
 - clear: can a stranger scrolling on a phone get the point in 2 seconds? Is the text readable at this small size?
 - design: does it look made by a senior designer: one focal point, confident layout, nothing awkward, cropped badly or overlapping?
 score = your overall judgement for the image; it can't be more than 15 above relates.

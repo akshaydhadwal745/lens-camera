@@ -155,7 +155,7 @@ async function writeStep(postId: string, by: string, jobAt: number): Promise<{ c
   try {
     progress('photos');
     const topic = topicQuery(`${post.title} ${post.hook}`);
-    const queries = [...new Set([...written.scenes.filter((s) => s.media === 'photo' || s.media === 'footage').map((s) => s.query).filter(Boolean), topic])];
+    const queries = [...new Set([...written.scenes.filter((s) => s.media === 'photo' || s.media === 'footage').flatMap((s) => [s.query, s.alt ?? '']).filter(Boolean), topic])];
     const list = frames(post, cta);
     const g = await gatherPhotos(post, list, browser, { queries });
     const idOf = (u: string) => u.slice(IMG.length);
@@ -163,7 +163,7 @@ async function writeStep(postId: string, by: string, jobAt: number): Promise<{ c
     const photos = g.kit.map((k) => ({ ref: k.ref, id: idOf(k.url), about: k.about, w: k.w, h: k.h }));
     const stills: Record<number, string> = {};
     for (const s of written.scenes) {
-      const u = (s.query && g.scenes.get(s.query)) ?? g.scenes.get(topic);
+      const u = (s.query && g.scenes.get(s.query)) || (s.alt && g.scenes.get(s.alt)) || g.scenes.get(topic);
       if ((s.media === 'photo' || s.media === 'footage') && u) stills[s.n] = idOf(u);
     }
     progress('footage');
@@ -171,9 +171,13 @@ async function writeStep(postId: string, by: string, jobAt: number): Promise<{ c
     const used = new Set<string>();
     const ranked = new Map<string, StockVideo[]>();
     for (const s of written.scenes.filter((x) => x.media === 'footage')) {
-      const q = s.query || topic;
-      if (!ranked.has(q)) ranked.set(q, await rankFootage(q, postBrief(post) + `\nThis scene: ${s.words} (${s.beat})`, browser));
-      const clip = ranked.get(q)!.find((v) => !used.has(v.id));
+      // The writer's search, then its broader one, then the post's topic: an editor keeps looking.
+      let clip: StockVideo | undefined;
+      for (const q of [...new Set([s.query, s.alt, topic].filter((x): x is string => !!x))]) {
+        if (!ranked.has(q)) ranked.set(q, await rankFootage(q, postBrief(post) + `\nThis scene: ${s.words} (${s.beat})`, browser));
+        clip = ranked.get(q)!.find((v) => !used.has(v.id));
+        if (clip) break;
+      }
       if (clip) {
         used.add(clip.id);
         clips[s.n] = clip;

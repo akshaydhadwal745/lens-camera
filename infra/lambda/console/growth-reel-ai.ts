@@ -17,7 +17,7 @@ import { MAX_SECONDS } from './growth-reel';
 import { readCues, SOUNDS, type Cue } from './growth-sound';
 
 export type Media = 'footage' | 'photo' | 'phone' | 'none';
-export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; screen: Screen };
+export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; alt?: string; screen: Screen };
 export const MOODS = ['upbeat', 'chill', 'emotional', 'energetic', 'warm'] as const;
 export type Mood = (typeof MOODS)[number];
 export type WrittenReel = { angle: string; audience: string; hook: string; mood?: Mood; scenes: WrittenScene[] };
@@ -31,8 +31,9 @@ export const REEL_WRITER_SYSTEM = `You are the creative director of short vertic
 
 How you work:
 1. Find the ONE sharpest pain point this post touches: a real moment from the viewer's life, said the way they would say it. Examples of the level of specificity: "Storage full" popping up in the middle of the best moment of a concert; a wedding's photos scattered across forty guests' WhatsApps; the only good group photo arriving blurry in the chat; a parent's phone too full to take one more video of the baby. Name who feels it (audience).
+   Make them FEEL it before you sell anything: the viewer must see the moment itself (the child on the stage, the friends at the concert, the wedding table at night) and recognise their own life in it. A reel of app screens is a tutorial; nobody shares a tutorial.
 2. Hook (scene 1, under 2 seconds): the pain in the viewer's own words: a punchy line or question that makes them think "that's me". No brand name, no "Introducing", no "Did you know".
-3. One beat per scene, in this arc: the pain → the twist (it doesn't have to be this way) → Lens doing it (show the product proving it) → the payoff feeling → the call to action.
+3. One beat per scene, in this arc: the real moment and its pain (real footage) → the twist (it doesn't have to be this way) → Lens doing it (show the product proving it, briefly) → the payoff feeling (back in the real moment: the memory kept, everyone's photos together) → the call to action.
 4. On-screen words: short and spoken, at most 8 words per scene (the last scene at most 10). Specific, never generic ("Your camera roll, finally safe" not "Manage your storage"). No hashtags, no emoji, no corporate words (seamless, effortless, revolutionary, solution, unlock, elevate, game-changer, next level).
 
 Truth (checked in code; a reel that breaks it is thrown away):
@@ -41,11 +42,11 @@ Truth (checked in code; a reel that breaks it is thrown away):
 - Never "unlimited", "best", "#1", "shot on Lens".
 
 For each scene choose what it shows:
-- footage: real video of a moment (scenery, places, objects, hands at most; never faces, never brands). Give query: 2–4 English words for stock footage that clearly belongs with this beat.
-- photo: one still photo; same query rules.
+- footage: real stock video of the moment. People are welcome the way a film editor uses b-roll: an audience, a crowd, people from behind or at a distance, hands holding phones up, kids on a stage seen from the audience. Never someone posing for the camera, never a close-up of a child, never a phone brand, and never a stranger shown as a Lens user. Give query: 2–4 plain, concrete words a stock site would tag the clip with ("school stage performance", "parents audience clapping", "concert crowd phones", "wedding dance floor"), never abstract words ("memories", "storage", "QR code scanning"). alt: a second, broader search (2–3 words) used if the first finds nothing good.
+- photo: one still photo; same rules for query and alt.
 - phone: the real Lens app on a phone proving the point; choose screen. Screens: library = the photo roll; backup = backup progress; free-space = space freed after backup; storage-full = a full phone (the problem); viewer = one photo open in Lens with a green Safe pill; qr-album = an event album with a QR code guests scan; camera = the Lens camera with Night mode.
 - none: type, colour and shapes only (good for a punchy line).
-Use the phone in at least one scene. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
+Use the phone in 1 or 2 scenes (3 at most): enough to prove the product, not a tutorial. At least 2 scenes are footage or photo of the real moment, usually the hook and the payoff. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
 Scene lengths: 2 to 5 seconds (enough to read the words twice), total 15 to ${MAX_SECONDS} seconds, 4 to 8 scenes.
 mood: the music under it: upbeat (bright pop), chill (lo-fi, relaxed), emotional (piano, heartfelt), energetic (driving electronic), warm (acoustic, friendly).`;
 
@@ -63,8 +64,8 @@ export const REEL_WRITER_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['n', 'seconds', 'words', 'beat', 'media', 'query', 'screen'],
-        properties: { n: { type: 'integer' }, seconds: { type: 'number' }, words: { type: 'string' }, beat: { type: 'string' }, media: { type: 'string', enum: ['footage', 'photo', 'phone', 'none'] }, query: { type: 'string' }, screen: { type: 'string', enum: SCREENS } },
+        required: ['n', 'seconds', 'words', 'beat', 'media', 'query', 'alt', 'screen'],
+        properties: { n: { type: 'integer' }, seconds: { type: 'number' }, words: { type: 'string' }, beat: { type: 'string' }, media: { type: 'string', enum: ['footage', 'photo', 'phone', 'none'] }, query: { type: 'string' }, alt: { type: 'string' }, screen: { type: 'string', enum: SCREENS } },
       },
     },
   },
@@ -109,6 +110,7 @@ export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: st
     beat: String(s.beat ?? '').slice(0, 160),
     media: (['footage', 'photo', 'phone', 'none'] as const).includes(s.media as Media) ? (s.media as Media) : 'none',
     query: String(s.query ?? '').replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 50),
+    alt: String(s.alt ?? '').replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 40),
     screen: (SCREENS as readonly string[]).includes(String(s.screen)) ? (s.screen as Screen) : 'library',
   }));
   const problems: string[] = [];
@@ -116,6 +118,11 @@ export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: st
   if (scenes.some((s) => !s.words)) problems.push('a scene without words');
   const long = scenes.filter((s, i) => s.words.split(/\s+/).length > (i === scenes.length - 1 ? 10 : 8));
   if (long.length) problems.push(`too many words in scene ${long.map((s) => s.n).join(', ')} (8 max, 10 on the last)`);
+  // A real moment, not an app tutorial (owner 2026-11-10: "no images, no emotional connection").
+  const real = scenes.filter((s) => s.media === 'footage' || s.media === 'photo').length;
+  if (scenes.length >= 4 && real < 2) problems.push(`only ${real} scene${real === 1 ? '' : 's'} of real footage or photo (at least 2: the moment itself, usually the hook and the payoff)`);
+  const phones = scenes.filter((s) => s.media === 'phone').length;
+  if (phones > 3) problems.push(`${phones} phone scenes (3 at most: it's a story, not a tutorial)`);
   problems.push(...reelWordProblems(scenes.map((s) => s.words).join(' / ') + ` ${r?.hook ?? ''}`, `${allowed} ${cta}`));
   if (problems.length) return { problems };
   // Fit the total into the reel's limit, keeping every scene readable.
@@ -152,6 +159,7 @@ Craft rules (checked in code; scenes that fail are redesigned or replaced):
 - The words must be readable for most of the scene: get them in within the first 0.8 s and keep them still at least 60% of the scene.
 - One focal point per scene. The phone, when shown, is big (scale ≥ 1.0) and fully readable, not a tiny thumbnail.
 - Vary layout, colour and motion from scene to scene; dark and light scenes may alternate. Scene 1 must stop the scroll within half a second (a strong move, a punch-in, a striking image).
+- Footage and photos of the real moment are the heart of the reel: give them the full frame, put the words in a block above or below the subject (with a scrim), never a small framed thumbnail of the moment.
 - Keep life in long holds: slow push-ins (scale 1 → 1.08) on footage and photos, gentle float on phones.
 
 entry: how the scene comes in over the previous one: cut, whip (fast vertical push with blur), slide, fade, circle (circular reveal), wipe. Use "cut" or "whip" for energy; don't use the same entry three times in a row.

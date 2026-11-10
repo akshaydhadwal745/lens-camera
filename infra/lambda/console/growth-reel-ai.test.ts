@@ -10,7 +10,7 @@ const scene = (n: number, words: string, extra: Record<string, unknown> = {}) =>
 
 test('writer: a good reel is kept and timed to the limit', () => {
   const r = readWrittenReel(
-    { angle: 'Wedding photos scattered across guests', audience: 'couples', hook: 'Where are your wedding photos?', scenes: [scene(1, 'Where are your wedding photos?', { media: 'footage', query: 'wedding table' }), scene(2, 'Forty guests. Forty phones.', { seconds: 9 }), scene(3, 'One QR code on every table', { screen: 'qr-album' }), scene(4, 'Everyone adds. Full quality.'), scene(5, '10 GB free forever. Try Lens free', { seconds: 5 })] },
+    { angle: 'Wedding photos scattered across guests', audience: 'couples', hook: 'Where are your wedding photos?', scenes: [scene(1, 'Where are your wedding photos?', { media: 'footage', query: 'wedding table' }), scene(2, 'Forty guests. Forty phones.', { seconds: 9 }), scene(3, 'One QR code on every table', { screen: 'qr-album' }), scene(4, 'Everyone adds. Full quality.', { media: 'footage', query: 'wedding dance floor', alt: 'wedding party' }), scene(5, '10 GB free forever. Try Lens free', { seconds: 5 })] },
     FACTS,
     'Try Lens free',
   );
@@ -19,6 +19,15 @@ test('writer: a good reel is kept and timed to the limit', () => {
   assert.equal(r.reel!.scenes[1].seconds, 5); // clamped 2–5
   assert.equal(r.reel!.scenes[0].media, 'footage');
   assert.ok(r.reel!.scenes.reduce((a, s) => a + s.seconds, 0) <= 30);
+  assert.equal(r.reel!.scenes[3].alt, 'wedding party');
+});
+
+test('writer: a reel needs the real moment, not an app tutorial', () => {
+  const phones = readWrittenReel({ angle: '', audience: '', hook: '', scenes: [scene(1, 'a'), scene(2, 'b'), scene(3, 'c'), scene(4, 'd'), scene(5, 'e', { media: 'footage', query: 'school stage' })] }, FACTS, 'Try Lens free').problems.join(' | ');
+  assert.match(phones, /only 1 scene of real footage/);
+  assert.match(phones, /5 phone scenes|4 phone scenes/);
+  const ok = readWrittenReel({ angle: '', audience: '', hook: '', scenes: [scene(1, 'a', { media: 'footage', query: 'school stage' }), scene(2, 'b'), scene(3, 'c', { media: 'none' }), scene(4, 'd', { media: 'photo', query: 'parents audience' })] }, FACTS, 'Try Lens free');
+  assert.deepEqual(ok.problems, []);
 });
 
 test('writer: claims, invented numbers, missing features, filler and long lines are rejected', () => {
