@@ -14,7 +14,7 @@ import { renderPost } from './growth-media';
 import { listTasks } from './growth-tasks';
 
 type Make = { images?: string; reel?: string; tries?: number };
-type PostRow = { id: string; status: string; format: string; make?: Make; updatedAt?: number };
+type PostRow = { id: string; status: string; format: string; make?: Make; updatedAt?: number; reel?: { at?: number } };
 
 const JOB_BUSY_MS = 20 * 60_000;
 const REEL_BUSY_MS = 50 * 60_000;
@@ -45,7 +45,8 @@ export function nextStep(
   const open = all.filter((p) => p.make && p.status !== 'published' && p.status !== 'archived');
   const img = open.find((p) => p.make!.images === 'todo');
   if (img && free.render) return { kind: 'images', post: img };
-  const reel = open.find((p) => p.make!.reel === 'todo' && ['done', 'failed'].includes(p.make!.images ?? ''));
+  // A reel someone already made by hand (Make reel) counts: the chain never makes a second one.
+  const reel = open.find((p) => p.make!.reel === 'todo' && !p.reel?.at && ['done', 'failed'].includes(p.make!.images ?? ''));
   if (reel && free.reel) return { kind: 'reel', post: reel };
   return undefined;
 }
