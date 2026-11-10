@@ -19,6 +19,7 @@ import { frames, gatherPhotos, LOOK_MODE, postBrief, renderAssetId, scoreImages,
 import { FITS, pixabayKey, postTotal, sheetPrompt, sheetVerdicts, videoResults, type PostScore, type StockVideo } from './growth-photos';
 import { defaultPlan, DIRECTOR_SCHEMA, DIRECTOR_SYSTEM, directorPrompt, FPS, readPlan, reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { launchBrowser } from './growth-render';
+import { bestStart, findMusic, loudness } from './growth-music';
 import { mixReel, RATE, templateCues, wav, type Cue } from './growth-sound';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
@@ -426,14 +427,18 @@ export async function drawReel(d: {
   };
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `ASSET#${id}`, ...asset } }));
   // Credited photos (CC BY from Commons/Openverse) join the post's assets, so Export adds their credit lines.
-  const reelAssets = [...(post.assets ?? []), ...credited.filter((c) => !(post.assets ?? []).some((a) => a.id === c.id))].slice(0, 20);
+  const withMusic = music && music.asset.rights.license !== 'own' ? [...credited, { id: music.asset.id, role: 'background' }] : credited;
+  // The last reel's track leaves the post's credits when this one uses another.
+  const oldMusic = (post as { reel?: { musicId?: string } }).reel?.musicId;
+  const kept = (post.assets ?? []).filter((a) => a.id !== oldMusic || a.id === music?.asset.id);
+  const reelAssets = [...kept, ...withMusic.filter((c) => !kept.some((a) => a.id === c.id))].slice(0, 20);
   await ddb.send(
     new UpdateCommand({
       TableName: env.table,
       Key: { pk: 'GROWTH', sk: `POST#${postId}` },
       UpdateExpression: `SET reel = :r, reelScore = :s, assets = :a${d.extra ? ', reelScript = :w' : ' REMOVE reelScript'}`,
       ConditionExpression: 'attribute_exists(pk)',
-      ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now() }, ':s': score, ':a': reelAssets, ...(d.extra ? { ':w': d.extra } : {}) },
+      ExpressionAttributeValues: { ':r': { assetId: id, seconds, at: Date.now(), ...(music ? { musicId: music.asset.id } : {}) }, ':s': score, ':a': reelAssets, ...(d.extra ? { ':w': d.extra } : {}) },
     }),
   );
   const ms = Date.now() - began;
@@ -458,10 +463,11 @@ export function planCues(plan: ReelScene[], designed: (Cue[] | undefined)[] = []
 }
 
 /**
- * A licensed track for the mood from the Library (audio assets with a mood, rights cleared; the owner's Pixabay
- * picks), decoded to stereo float32. The same post gets the same track. None in the Library → effects only.
+ * Music for the mood, automatically: tracks already in the Library for that mood (found earlier, or uploaded by a
+ * person with a mood), else found now on Openverse (growth-music.ts). The same post gets the same track. The
+ * loudest stretch is chosen and decoded to stereo float32. Nothing found → effects only.
  */
-async function musicFor(mood: string, postId: string, seconds: number): Promise<{ name: string; pcm: Float32Array } | undefined> {
+async function musicFor(mood: string, postId: string, seconds: number): Promise<{ asset: Asset; name: string; pcm: Float32Array } | undefined> {
   try {
     const items: (Asset & { mood?: string })[] = [];
     let start: Record<string, unknown> | undefined;
@@ -470,19 +476,23 @@ async function musicFor(mood: string, postId: string, seconds: number): Promise<
       items.push(...((r.Items ?? []) as (Asset & { mood?: string })[]));
       start = r.LastEvaluatedKey;
     } while (start);
-    const tracks = items.filter((a) => a.mime.startsWith('audio/') && a.status === 'ready' && a.rights?.status === 'cleared');
-    const fit = tracks.filter((a) => (a.mood ?? a.name).toLowerCase().includes(mood));
-    const pool = fit.length ? fit : tracks;
+    const ours = items.filter((a) => a.mime.startsWith('audio/') && a.status === 'ready' && a.rights?.status === 'cleared' && (a.mood ?? '').toLowerCase() === mood);
+    const pool = ours.length >= 3 ? ours : [...new Map([...ours, ...(await findMusic(mood))].map((a) => [a.id, a])).values()];
     if (!pool.length) return undefined;
     const pick = pool.sort((a, b) => a.id.localeCompare(b.id))[parseInt(postId.slice(0, 6), 16) % pool.length];
     const r = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: pick.key }));
     const src = join(WORK, 'music.in');
     writeFileSync(src, Buffer.from(await r.Body!.transformToByteArray()));
-    // The track's opening, long enough for the reel plus its fade, at one loudness.
-    await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', src, '-ss', '0', '-t', String(seconds + 2), '-ac', '2', '-ar', String(RATE), '-af', 'loudnorm=I=-16', '-f', 'f32le', join(WORK, 'music.f32')]);
+    // Pick the stretch from a small mono copy (8 kHz), then decode just that stretch at full quality.
+    await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', src, '-ac', '1', '-ar', '8000', '-f', 'f32le', join(WORK, 'music.scan')]);
+    const scan = readFileSync(join(WORK, 'music.scan'));
+    const mono = new Float32Array(scan.buffer.slice(scan.byteOffset, scan.byteOffset + Math.floor(scan.length / 4) * 4));
+    const from = bestStart(loudness(mono, 8000), seconds + 1);
+    await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-ss', from.toFixed(2), '-i', src, '-t', String(seconds + 2), '-ac', '2', '-ar', String(RATE), '-af', 'loudnorm=I=-16', '-f', 'f32le', join(WORK, 'music.f32')]);
     const raw = readFileSync(join(WORK, 'music.f32'));
     const n = Math.floor(raw.length / 4);
-    return { name: pick.name, pcm: new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + n * 4)) };
+    console.log(JSON.stringify({ reelMusic: { mood, track: pick.name, from: Math.round(from * 10) / 10, pool: pool.length } }));
+    return { asset: pick, name: pick.name, pcm: new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + n * 4)) };
   } catch (e) {
     console.error(JSON.stringify({ musicFailed: (e as Error).message.slice(0, 200) }));
     return undefined;

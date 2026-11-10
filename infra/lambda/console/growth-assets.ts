@@ -13,7 +13,7 @@ import { creditLine, effectiveStatus, licenseVerdict, type Rights, type RightsSt
 import { log } from './log';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
-export const ASSET_KINDS = ['photo', 'screen-recording', 'video', 'image', 'illustration', 'render'] as const;
+export const ASSET_KINDS = ['photo', 'screen-recording', 'video', 'image', 'illustration', 'render', 'audio'] as const;
 export const ASSET_ROLES = ['media', 'background', 'reference'] as const;
 const TYPES: Record<string, { ext: string; max: number; video: boolean }> = {
   'image/jpeg': { ext: 'jpg', max: 30 * 1024 * 1024, video: false },
@@ -97,7 +97,7 @@ export const hasLensPhoto = (refs: AssetRef[], assets: Map<string, Asset>) => re
 
 /** Credit lines for the post's licensed media. */
 export const credits = (refs: AssetRef[], assets: Map<string, Asset>) =>
-  [...new Set(refs.map((r) => assets.get(r.id)).filter((a): a is Asset => !!a && licensed(a)).map((a) => creditLine(a.rights.author, a.rights.license, a.rights.source)).filter(Boolean))];
+  [...new Set(refs.map((r) => assets.get(r.id)).filter((a): a is Asset => !!a && licensed(a)).map((a) => { const line = creditLine(a.rights.author, a.rights.license, a.rights.source); return line && a.kind === 'audio' ? `Music: "${a.name}" by ${line}` : line; }).filter(Boolean))];
 
 /** A 5-minute link on the Console's own CloudFront (a/, e/ and x/ are served there, signed; see console-stack.ts). */
 export async function viewUrl(key: string) {
