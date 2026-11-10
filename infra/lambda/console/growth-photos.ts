@@ -432,7 +432,7 @@ export const SCORE_SYSTEM = `You are the toughest creative director at a top con
 For each image score 0 to 100:
 - relates: does everything in the picture clearly belong to what this post and this slide say? Unrelated photo or a phone showing unrelated photos: under 40. A person posing for the camera, shown as a Lens user or endorser, a close-up of a child's face, a ceremony, religious or press scene, or a photo that tells a different story: 0. People as the moment's mood (an audience, from behind, hands, candid and not posing) are good: they make it real.
 - clear: can a stranger scrolling on a phone get the point in 2 seconds? Is the text readable at this small size?
-- design: does it look made by a senior designer: one focal point, confident layout, nothing awkward, cropped badly or overlapping?
+- design: does it look made by a senior designer: one focal point, confident layout, nothing awkward, cropped badly or overlapping? Drawn people, hands, cartoon figures or clip-art objects look cheap: under 40.
 score = your overall judgement for the image; it can't be more than 15 above relates.
 why = the main problem in a few plain words, or what works if nothing is wrong. fix = one concrete instruction for the designer, empty if none.
 
