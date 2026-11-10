@@ -251,7 +251,7 @@ export async function renderTemplateReel(postId: string, by: string, jobAt: numb
 }
 
 /** What the reel's scorer is told on top of the post (owner 2026-11-10: "no images, no emotional connection"). */
-export const REEL_SCORE_NOTE = `This is a REEL, judged as a story, not as separate slides. A reel people feel shows the real moment: the event, the place, people in it (as an audience, from behind, hands). A scene that is only an app screen or a graphic, where the real moment would hit harder, scores at most 70. If the whole reel has no real moment at all, hook is at most 55. A phone screen whose photo grid is empty, grey or unrelated to the event: relates under 40.`;
+export const REEL_SCORE_NOTE = `This is a REEL, judged as a story, not as separate slides. A reel people feel shows the real moment: the event, the place, people in it (as an audience, from behind, hands). A scene that is only an app screen or a graphic, where the real moment would hit harder, scores at most 70. If the whole reel has no real moment at all, hook is at most 55. A phone screen whose photo grid is empty, grey or unrelated to the event: relates under 40. Drawn people, hands, cartoon figures or clip-art objects look cheap: design under 40.`;
 
 /** Draw every frame, encode, let Claude score it, save the reel asset and the post. Shared by both reel kinds. */
 export async function drawReel(d: {
