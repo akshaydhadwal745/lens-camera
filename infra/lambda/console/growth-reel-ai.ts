@@ -230,7 +230,8 @@ export function reelSceneHtml(html: string, d: { photos: KitPhoto[]; pool: strin
  * Runs in the reel page for scene i at the moment the page was seeked to: words in the safe zone, readable,
  * clear of the phone and of other words; the icon on the last scene. Returns problems and the visible words.
  */
-export const reelSceneCheck = (i: number, last: boolean) => `(() => {
+export const reelSceneCheck = (i: number, last: boolean, settled = true) => `(() => {
+  const settled = ${settled};
   const root = document.getElementById('s${i}');
   const rr = root.getBoundingClientRect();
   const k = rr.width / 1080;
@@ -265,8 +266,14 @@ export const reelSceneCheck = (i: number, last: boolean) => `(() => {
     const A = lines[a], C = lines[c];
     if (A.el === C.el || A.el.contains(C.el) || C.el.contains(A.el)) continue;
     const ix = Math.min(A.b.right, C.b.right) - Math.max(A.b.left, C.b.left), iy = Math.min(A.b.bottom, C.b.bottom) - Math.max(A.b.top, C.b.top);
-    if (ix > 4 * k && iy > 4 * k) problems.push('words "' + A.t.slice(0, 20) + '" overlap "' + C.t.slice(0, 20) + '"');
+    // Lines of one headline touch a little with a tight line-height; only a real overlap (a quarter of the line) counts.
+    if (ix > 0.25 * Math.min(A.b.width, C.b.width) && iy > 0.25 * Math.min(A.b.height, C.b.height)) problems.push('words "' + A.t.slice(0, 20) + '" overlap "' + C.t.slice(0, 20) + '"');
   }
+  // The drawn size: font-size times any scale the element is shown at.
+  const drawn = (el) => { const r = el.getBoundingClientRect(); const sc = el.offsetWidth ? r.width / el.offsetWidth : 1; return parseFloat(getComputedStyle(el).fontSize) * sc / k; };
+  const biggest = Math.max(0, ...lines.map((l) => drawn(l.el)));
+  if (settled && lines.length && biggest < 80) problems.push('the main words are too small (' + Math.round(biggest) + 'px; make the main words at least 84px)');
+  if (settled) for (const p of phones) if (p.width / k < 380 && p.right > rr.left + 40 && p.left < rr.right - 40) problems.push('the phone is too small to read (' + Math.round(p.width / k) + 'px wide; use scale 1.0 or more)');
   ${last ? `const ic = root.querySelector('.lens-icon'); const ib = ic && ic.getBoundingClientRect(); if (!ib || ib.width < 100 * k) problems.push('the Lens icon is missing or smaller than 120px on the last scene');` : ''}
   return { problems: [...new Set(problems)].slice(0, 8), text: words.join(' ') };
 })()`;
