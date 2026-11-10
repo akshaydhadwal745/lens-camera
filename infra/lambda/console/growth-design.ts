@@ -167,12 +167,12 @@ export function qrPattern(seed: number): string {
   return `<svg viewBox="0 0 ${n} ${n}" width="100%" height="100%" fill="#000" shape-rendering="crispEdges">${cells}</svg>`;
 }
 
-function qrAlbum(pool: string[], seed: number) {
+function qrAlbum(pool: string[], seed: number, title = 'Our big day') {
   const faces = [0, 1, 2, 3].map((i) => `<div style="width:36px;height:36px;border-radius:50%;border:2px solid #000;margin-left:${i ? -10 : 0}px;${bg(pick(pool, seed + 7 + i))}"></div>`).join('');
   return `${statusBar()}
 <div style="padding:14px 22px;text-align:center">
  <div class="mono" style="font-size:11px;color:#FACC15;letter-spacing:.08em;margin-top:6px">EVENT ALBUM</div>
- <div style="font-size:28px;font-weight:700;margin-top:6px">Our big day</div>
+ <div style="font-size:28px;font-weight:700;margin-top:6px">${esc(title)}</div>
  <div style="color:#A1A1A6;font-size:15px;margin-top:4px">Guests scan to add their photos</div>
  <div style="margin:22px auto 0;width:250px;height:250px;background:#fff;border-radius:24px;padding:18px">${qrPattern(seed)}</div>
  <div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:22px">${faces}<span style="font-size:14px;color:#A1A1A6">guests adding photos</span></div>
@@ -195,7 +195,7 @@ function camera(photo: string | undefined) {
 </div>`;
 }
 
-export function screenHtml(s: Screen, d: Pick<Design, 'pool' | 'photo'>, seed = 0): string {
+export function screenHtml(s: Screen, d: Pick<Design, 'pool' | 'photo'> & { title?: string }, seed = 0): string {
   switch (s) {
     case 'library':
       return library(d.pool, seed);
@@ -208,7 +208,7 @@ export function screenHtml(s: Screen, d: Pick<Design, 'pool' | 'photo'>, seed = 
     case 'viewer':
       return viewer(d.photo ?? pick(d.pool, seed));
     case 'qr-album':
-      return qrAlbum(d.pool, seed);
+      return qrAlbum(d.pool, seed, d.title);
     case 'camera':
       return camera(d.photo ?? pick(d.pool, seed));
   }

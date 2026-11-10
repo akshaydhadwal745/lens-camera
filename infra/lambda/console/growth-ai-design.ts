@@ -112,7 +112,7 @@ export function expandKit(html: string, photos: KitPhoto[], icon: string, pool: 
     .replace(/<lens-phone\b([^>]*)>(?:\s*<\/lens-phone>)?/gi, (_, a: string) => {
       const x = attrs(a);
       const screen = (SCREENS as readonly string[]).includes(x.screen) ? (x.screen as Screen) : 'library';
-      return phone(screenHtml(screen, { pool, photo: x.photo ? photo(x.photo) : undefined }, 3), num(x.x, 0), num(x.y, 0), num(x.scale, 1, 0.3, 2.5), num(x.rotate, 0, -30, 30));
+      return phone(screenHtml(screen, { pool, photo: x.photo ? photo(x.photo) : undefined, title: x.title ? x.title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").slice(0, 40) : undefined }, 3), num(x.x, 0), num(x.y, 0), num(x.scale, 1, 0.3, 2.5), num(x.rotate, 0, -30, 30));
     })
     .replace(/<lens-photo\b([^>]*)>(?:\s*<\/lens-photo>)?/gi, (_, a: string) => {
       const x = attrs(a);

@@ -1,0 +1,287 @@
+// AI-written, AI-designed reels (docs/growth/content-engine.md, phase 4; owner 2026-11-10: "it should be dynamic
+// from Claude… engaging, targeting pain points, not generic, cool"). Two Claude passes per reel:
+//   1. the WRITER (creative director) finds the pain point, writes the hook and every scene's on-screen words and
+//      says what each scene shows (real footage, a photo, the app on a phone, or type only);
+//   2. the DESIGNER (motion designer) designs every scene as HTML + CSS with its own @keyframes, from the same
+//      kit of real parts as the image designer plus this scene's footage and a QR card.
+// Code decides what ships: the words are checked against product-facts (no feature we don't have, no number we
+// didn't say, no forbidden claim), the HTML is cleaned (no scripts, no network), every scene is drawn at several
+// moments and checked (text in the safe zone, readable, not over the phone or other text), failing scenes get one
+// fix round and otherwise fall back to a template scene (growth-reel.ts). Rendering stays frame-accurate: the
+// page pauses every CSS animation and sets its time for each frame (no animation runs on its own clock).
+// This file is pure; the job is in growth-video.ts.
+import { expandKit, sanitizeDesign, wordProblems as designWordProblems, type KitPhoto } from './growth-ai-design';
+import { SCREENS, type Screen } from './growth-design';
+import { FORBIDDEN_CLAIMS } from './growth-report';
+import { MAX_SECONDS } from './growth-reel';
+
+export type Media = 'footage' | 'photo' | 'phone' | 'none';
+export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; screen: Screen };
+export type WrittenReel = { angle: string; audience: string; hook: string; scenes: WrittenScene[] };
+export type SceneDesign = { n: number; idea: string; entry: Entry; html: string };
+export const ENTRIES = ['cut', 'whip', 'slide', 'fade', 'circle', 'wipe'] as const;
+export type Entry = (typeof ENTRIES)[number];
+
+// ---------- 1. the writer ----------
+
+export const REEL_WRITER_SYSTEM = `You are the creative director of short vertical videos (Instagram Reels, Facebook Reels, X) for Lens, a camera and photo-backup app (lens.instagrowapp.com). You turn one post idea into a 15–30 second reel that real people stop for, watch to the end, and send to a friend. Generic brand videos fail; specific, felt moments win.
+
+How you work:
+1. Find the ONE sharpest pain point this post touches: a real moment from the viewer's life, said the way they would say it. Examples of the level of specificity: "Storage full" popping up in the middle of the best moment of a concert; a wedding's photos scattered across forty guests' WhatsApps; the only good group photo arriving blurry in the chat; a parent's phone too full to take one more video of the baby. Name who feels it (audience).
+2. Hook (scene 1, under 2 seconds): the pain in the viewer's own words: a punchy line or question that makes them think "that's me". No brand name, no "Introducing", no "Did you know".
+3. One beat per scene, in this arc: the pain → the twist (it doesn't have to be this way) → Lens doing it (show the product proving it) → the payoff feeling → the call to action.
+4. On-screen words: short and spoken, at most 8 words per scene (the last scene at most 10). Specific, never generic ("Your camera roll, finally safe" not "Manage your storage"). No hashtags, no emoji, no corporate words (seamless, effortless, revolutionary, solution, unlock, elevate, game-changer, next level).
+
+Truth (checked in code; a reel that breaks it is thrown away):
+- Show and say only what is in the product facts' Features. Never anything under "Not available".
+- Numbers and prices only exactly as written in the facts or the post.
+- Never "unlimited", "best", "#1", "shot on Lens".
+
+For each scene choose what it shows:
+- footage: real video of a moment (scenery, places, objects, hands at most; never faces, never brands). Give query: 2–4 English words for stock footage that clearly belongs with this beat.
+- photo: one still photo; same query rules.
+- phone: the real Lens app on a phone proving the point; choose screen. Screens: library = the photo roll; backup = backup progress; free-space = space freed after backup; storage-full = a full phone (the problem); viewer = one photo open in Lens with a green Safe pill; qr-album = an event album with a QR code guests scan; camera = the Lens camera with Night mode.
+- none: type, colour and shapes only (good for a punchy line).
+Use the phone in at least one scene. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
+Scene lengths: 2 to 5 seconds (enough to read the words twice), total 15 to ${MAX_SECONDS} seconds, 4 to 8 scenes.`;
+
+export const REEL_WRITER_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['angle', 'audience', 'hook', 'scenes'],
+  properties: {
+    angle: { type: 'string', description: 'the pain point and the twist, one sentence' },
+    audience: { type: 'string' },
+    hook: { type: 'string' },
+    scenes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['n', 'seconds', 'words', 'beat', 'media', 'query', 'screen'],
+        properties: { n: { type: 'integer' }, seconds: { type: 'number' }, words: { type: 'string' }, beat: { type: 'string' }, media: { type: 'string', enum: ['footage', 'photo', 'phone', 'none'] }, query: { type: 'string' }, screen: { type: 'string', enum: SCREENS } },
+      },
+    },
+  },
+} as const;
+
+export const writerPrompt = (brief: string, script: string[], facts: string, cta: string, voice: string) =>
+  `The post (written by our content agent; its idea is approved, your words may be sharper):
+${brief}
+${script.length ? `Its draft script:\n${script.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n` : ''}
+Call to action words for the last scene: "${cta}"
+Brand voice: ${voice || 'confident, warm, plain English'}
+
+Product facts (the only claims allowed):
+${facts || '(not available: show only backup in full quality, freeing phone space, event albums with a QR code, and sharing links)'}`;
+
+const NOT_AVAILABLE = /\b(unlimited|iphone app|ios app|app store|desktop app|mac app|windows app|ai search|ai edit\w*|video calls?|chat feature)\b/i;
+const CORPORATE = /\b(seamless(ly)?|effortless(ly)?|revolutionary|game[- ]changer|next[- ]level|unlock|elevate)\b/i;
+
+/** Problems with words a reel would show (any scene): claims we never make, numbers from nowhere, emoji, filler. */
+export function reelWordProblems(words: string, allowed: string): string[] {
+  const out: string[] = [];
+  const nums = (t: string) => new Set((t.match(/₹?\d[\d,.]*\s*(?:gb|%|x)?/gi) ?? []).map((n) => n.toLowerCase().replace(/[,\s]/g, '')));
+  const ok = nums(allowed);
+  const bad = [...nums(words)].filter((n) => !ok.has(n) && !ok.has(n.replace(/gb$/, '')));
+  if (bad.length) out.push(`numbers that aren't in the post or the product facts: ${bad.slice(0, 4).join(', ')}`);
+  if (FORBIDDEN_CLAIMS.test(words) || /\b(best|number one|shot on lens)\b|#1\b/i.test(words)) out.push('a claim we never make (unlimited, best, #1, shot on Lens)');
+  const na = NOT_AVAILABLE.exec(words);
+  if (na) out.push(`a feature Lens doesn't have: "${na[0]}"`);
+  const corp = CORPORATE.exec(words);
+  if (corp) out.push(`corporate filler: "${corp[0]}"`);
+  if (/\p{Extended_Pictographic}/u.test(words)) out.push('emoji (the font can’t draw them)');
+  if (/#\w/.test(words)) out.push('hashtags on screen');
+  return out;
+}
+
+/** The writer's reel, checked and timed; undefined when it can't be used (then the post's own script is used). */
+export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: string, cta: string): { reel?: WrittenReel; problems: string[] } {
+  const scenes = (r?.scenes ?? []).slice(0, 8).map((s, i) => ({
+    n: i + 1,
+    seconds: Math.max(2, Math.min(5, Number(s.seconds) || 3)),
+    words: String(s.words ?? '').replace(/\s+/g, ' ').trim().slice(0, 90),
+    beat: String(s.beat ?? '').slice(0, 160),
+    media: (['footage', 'photo', 'phone', 'none'] as const).includes(s.media as Media) ? (s.media as Media) : 'none',
+    query: String(s.query ?? '').replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 50),
+    screen: (SCREENS as readonly string[]).includes(String(s.screen)) ? (s.screen as Screen) : 'library',
+  }));
+  const problems: string[] = [];
+  if (scenes.length < 4) problems.push('fewer than 4 scenes');
+  if (scenes.some((s) => !s.words)) problems.push('a scene without words');
+  const long = scenes.filter((s, i) => s.words.split(/\s+/).length > (i === scenes.length - 1 ? 10 : 8));
+  if (long.length) problems.push(`too many words in scene ${long.map((s) => s.n).join(', ')} (8 max, 10 on the last)`);
+  problems.push(...reelWordProblems(scenes.map((s) => s.words).join(' / ') + ` ${r?.hook ?? ''}`, `${allowed} ${cta}`));
+  if (problems.length) return { problems };
+  // Fit the total into the reel's limit, keeping every scene readable.
+  const total = scenes.reduce((a, s) => a + s.seconds, 0);
+  const k = total > MAX_SECONDS ? MAX_SECONDS / total : 1;
+  for (const s of scenes) s.seconds = Math.max(2, Math.floor(s.seconds * k * 10) / 10);
+  return { reel: { angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
+}
+
+// ---------- 2. the designer ----------
+
+export const REEL_DESIGN_SYSTEM = `You are a senior motion designer at a top studio (think Apple product films, Nothing, Linear launch videos), designing the scenes of one vertical reel for Lens, a camera and photo-backup app. The bar: bold, modern, kinetic and premium, a reel people watch twice. Never a template look, never "words on a background", never clip-art.
+
+Every scene is HTML + CSS on a 1080×1920 canvas (position:absolute, px), animated ONLY with CSS @keyframes and the animation property. Time 0 is the start of the scene; all motion must happen within the scene's seconds. Use animation-fill-mode both (or the "both" keyword) so every element shows its first keyframe before it starts. Name keyframes with the scene's prefix (s1-…, s2-…) so scenes never clash. Ease with cubic-bezier for snappy, physical motion (e.g. cubic-bezier(.2,.9,.2,1) for arrivals, overshoot cubic-bezier(.3,1.6,.5,1) for pops). No transitions, no JavaScript.
+
+Kit of REAL parts (use them instead of drawing your own):
+- <lens-phone screen="SCREEN" x="" y="" scale="" rotate="" photo="" title=""></lens-phone> the real Lens app on a phone. 418×872 px at scale 1; x,y = top-left corner. SCREENS: library, backup, free-space, storage-full, viewer, qr-album, camera (see the scene list). title = the event album's name on qr-album (2–4 words, e.g. "Riya & Kabir's wedding"). To animate it, wrap it in your own <div> and animate the div.
+- <lens-photo src="pN" x="" y="" w="" h="" radius="" rotate="" border=""></lens-photo> a checked photo cropped to fill w×h; url(photo:pN) also works as a background-image in your CSS.
+- <lens-footage x="" y="" w="" h="" radius=""></lens-footage> THIS scene's real video clip, cropped to fill (only in scenes that list footage). Full-bleed: x=0 y=0 w=1080 h=1920.
+- <lens-qr-card x="" y="" w="" title=""></lens-qr-card> a printed event-album QR card (white card, title, QR, "Scan to add your photos"); about 0.73×w tall.
+- <lens-icon x="" y="" size=""></lens-icon> the Lens app icon. REQUIRED in the last scene (size ≥ 120).
+- <lens-check size=""></lens-check> a green tick in a circle.
+Fonts: font-family:Geist (300–800) for all words; font-family:Plex (mono 500/600) only for small uppercase labels. Colours: --blue, --yellow, --green #30D158, --red #FF453A, --ink #0d0f14, --paper #f4f4f6. You may draw your own inline <svg> shapes (arrows, underlines, circles, bursts, progress rings) and use any CSS (gradients, blur, clip-path masks, mix-blend-mode, 3D transforms with perspective). Not allowed: <script>, event handlers, <img>/<video>/<iframe>, external URLs, @import, other fonts, emoji.
+
+Words: show the scene's words exactly (you may split them into lines and animate word by word or line by line, colour or underline the key words). You may add at most 3 small label words of your own per scene (e.g. BEFORE, AFTER, LIVE). Nothing else in text.
+
+Craft rules (checked in code; scenes that fail are redesigned or replaced):
+- All words inside x 72–1008 and y 220–1520 (the platforms' buttons cover the rest). Phones, photos and footage may bleed off the edges.
+- Main words at least 84px, weight 700–800, letter-spacing about −0.045em, line-height ~1. Labels at least 34px.
+- Contrast: words on footage or photos need a dark scrim (linear-gradient) or a solid pill/card behind them; --yellow only on dark backgrounds; on light backgrounds use --ink and --blue.
+- Words never over or under the phone or other words (keep 32px apart), at any moment.
+- The words must be readable for most of the scene: get them in within the first 0.8 s and keep them still at least 60% of the scene.
+- One focal point per scene. The phone, when shown, is big (scale ≥ 1.0) and fully readable, not a tiny thumbnail.
+- Vary layout, colour and motion from scene to scene; dark and light scenes may alternate. Scene 1 must stop the scroll within half a second (a strong move, a punch-in, a striking image).
+- Keep life in long holds: slow push-ins (scale 1 → 1.08) on footage and photos, gentle float on phones.
+
+entry: how the scene comes in over the previous one: cut, whip (fast vertical push with blur), slide, fade, circle (circular reveal), wipe. Use "cut" or "whip" for energy; don't use the same entry three times in a row.
+
+For each scene return n, idea (one line), entry, and html (markup inside the scene's canvas; it may start with one <style> block).`;
+
+export const REEL_DESIGN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['scenes'],
+  properties: {
+    scenes: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['n', 'idea', 'entry', 'html'], properties: { n: { type: 'integer' }, idea: { type: 'string' }, entry: { type: 'string', enum: ENTRIES }, html: { type: 'string' } } },
+    },
+  },
+} as const;
+
+export function reelDesignPrompt(reel: WrittenReel, photos: KitPhoto[], footage: Set<number>, brand: { primary: string; accent: string }, site: string, fix?: Map<number, string[]>): string {
+  const todo = reel.scenes.filter((s) => !fix || fix.has(s.n));
+  const scenes = todo.map((s) => {
+    const last = s.n === reel.scenes.length;
+    const has = footage.has(s.n) ? 'footage: yes (<lens-footage>)' : 'footage: none';
+    const problems = fix?.get(s.n);
+    return `Scene ${s.n} · ${s.seconds} s · beat: ${s.beat}\n  words: "${s.words}"\n  shows: ${s.media}${s.media === 'phone' ? ` (screen ${s.screen})` : ''}${s.media === 'photo' || s.media === 'footage' ? ` (${s.query})` : ''} · ${has}${last ? ` · LAST: call to action; include <lens-icon> and the site ${site}` : ''}${problems ? `\n  YOUR LAST DESIGN OF THIS SCENE HAD THESE PROBLEMS, fix them: ${problems.join('; ')}` : ''}`;
+  });
+  const ph = photos.map((p) => `- ${p.ref}: ${p.about.slice(0, 90)} (${p.w}×${p.h})`);
+  return `${fix ? 'Redesign only these scenes' : 'Design every scene'} of this reel.
+The angle: ${reel.angle}
+For: ${reel.audience}
+Brand colours: primary ${brand.primary}, accent ${brand.accent}.
+
+${scenes.join('\n\n')}
+
+Photos you may use (checked: they fit this post; use one where it helps the beat, never to fill space):
+${ph.join('\n') || '- none'}`;
+}
+
+/** Claude's scene designs by scene number (unknown numbers and oversized HTML dropped). */
+export function designsByScene(r: { scenes?: Partial<SceneDesign>[] } | undefined, count: number): Map<number, SceneDesign> {
+  const out = new Map<number, SceneDesign>();
+  for (const d of r?.scenes ?? []) {
+    const n = Number(d.n);
+    if (!Number.isInteger(n) || n < 1 || n > count || typeof d.html !== 'string' || d.html.length > 80_000) continue;
+    out.set(n, { n, idea: String(d.idea ?? '').slice(0, 200), entry: (ENTRIES as readonly string[]).includes(String(d.entry)) ? (d.entry as Entry) : 'cut', html: d.html });
+  }
+  return out;
+}
+
+const attrs = (s: string) => Object.fromEntries([...s.matchAll(/([a-zA-Z][\w-]*)\s*=\s*"([^"]*)"/g)].map((m) => [m[1].toLowerCase(), m[2]]));
+const num = (v: string | undefined, d: number, min = -5000, max = 5000) => {
+  const n = Number(v);
+  return v !== undefined && v !== '' && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d;
+};
+const escAttr = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/**
+ * A scene's HTML, safe and expanded: kit tags become real markup; this scene's footage becomes an <img> the page
+ * steps frame by frame (data-clip), or the brand glow when the scene has no clip.
+ */
+export function reelSceneHtml(html: string, d: { photos: KitPhoto[]; pool: string[]; icon: string; clip?: { dir: string; frames: number }; still?: string; qr: string; brandDark: string }): string {
+  const safe = sanitizeDesign(html)
+    .replace(/<lens-footage\b([^>]*)>(?:\s*<\/lens-footage>)?/gi, (_, a: string) => {
+      const x = attrs(a);
+      const box = `position:absolute;left:${num(x.x, 0)}px;top:${num(x.y, 0)}px;width:${num(x.w, 1080, 10, 4000)}px;height:${num(x.h, 1920, 10, 4000)}px;border-radius:${num(x.radius, 0, 0, 2000)}px;overflow:hidden`;
+      if (d.clip) return `<div class="kit-footage" style="${box}"><img data-clip="${escAttr(d.clip.dir)}" data-n="${d.clip.frames}" style="width:100%;height:100%;object-fit:cover"></div>`;
+      if (d.still) return `<div class="kit-footage" style="${box}"><img src="${escAttr(d.still)}" style="width:100%;height:100%;object-fit:cover"></div>`;
+      return `<div class="kit-footage" style="${box};background:${d.brandDark}"></div>`;
+    })
+    .replace(/<lens-qr-card\b([^>]*)>(?:\s*<\/lens-qr-card>)?/gi, (_, a: string) => {
+      const x = attrs(a);
+      const w = num(x.w, 520, 200, 900);
+      const k = w / 560;
+      const title = escAttr((x.title || 'Our big day').slice(0, 40));
+      return `<div class="kit-qr" style="position:absolute;left:${num(x.x, 260)}px;top:${num(x.y, 600)}px;width:560px;transform:scale(${k.toFixed(3)});transform-origin:0 0;background:#fff;border-radius:34px;box-shadow:0 60px 90px -20px rgba(0,0,0,.6);padding:44px;text-align:center;color:#0d0f14;font-family:Geist"><div style="font:600 22px Plex;letter-spacing:.1em;color:#6b7280">EVENT ALBUM</div><div style="font-size:50px;font-weight:800;letter-spacing:-.03em;margin:10px 0 26px">${title}</div><div style="width:400px;height:400px;margin:0 auto">${d.qr}</div><div style="font-size:26px;font-weight:600;margin-top:28px;color:#374151">Scan to add your photos</div></div>`;
+    })
+  return expandKit(safe, d.photos, d.icon, d.pool);
+}
+
+// ---------- checks ----------
+
+/**
+ * Runs in the reel page for scene i at the moment the page was seeked to: words in the safe zone, readable,
+ * clear of the phone and of other words; the icon on the last scene. Returns problems and the visible words.
+ */
+export const reelSceneCheck = (i: number, last: boolean) => `(() => {
+  const root = document.getElementById('s${i}');
+  const rr = root.getBoundingClientRect();
+  const k = rr.width / 1080;
+  const problems = [];
+  const phones = [...root.querySelectorAll('.phone')].map((e) => e.getBoundingClientRect()).filter((b) => b.width > 40);
+  const lines = [], words = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const t = n.textContent.trim();
+    const el = n.parentElement;
+    if (!t || !el || el.closest('.phone') || el.closest('.kit-qr') || el.closest('style') || el.closest('svg')) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+    let op = 1; for (let e = el; e && e !== root.parentElement; e = e.parentElement) op *= Number(getComputedStyle(e).opacity);
+    if (op < 0.2) continue;
+    const r = document.createRange(); r.selectNodeContents(n);
+    const boxes = [...r.getClientRects()].filter((b) => b.width > 2 && b.height > 2 && b.right > rr.left && b.left < rr.right && b.bottom > rr.top && b.top < rr.bottom);
+    if (!boxes.length) continue;
+    words.push(t);
+    if (parseFloat(cs.fontSize) < 34 && boxes[0].height < 34 * k) problems.push('words "' + t.slice(0, 30) + '" are too small (at least 34px; main words 84px)');
+    for (const b of boxes) {
+      lines.push({ b, el, t });
+      const x0 = (b.left - rr.left) / k, x1 = (b.right - rr.left) / k, y0 = (b.top - rr.top) / k, y1 = (b.bottom - rr.top) / k;
+      if (x0 < 60 || x1 > 1020 || y0 < 200 || y1 > 1540) problems.push('words "' + t.slice(0, 30) + '" are outside the safe area (x 72–1008, y 220–1520)');
+      for (const p of phones) {
+        const ix = Math.min(b.right, p.right) - Math.max(b.left, p.left), iy = Math.min(b.bottom, p.bottom) - Math.max(b.top, p.top);
+        if (ix > 6 * k && iy > 6 * k) problems.push('words "' + t.slice(0, 30) + '" overlap the phone');
+      }
+    }
+  }
+  for (let a = 0; a < lines.length; a++) for (let c = a + 1; c < lines.length; c++) {
+    const A = lines[a], C = lines[c];
+    if (A.el === C.el || A.el.contains(C.el) || C.el.contains(A.el)) continue;
+    const ix = Math.min(A.b.right, C.b.right) - Math.max(A.b.left, C.b.left), iy = Math.min(A.b.bottom, C.b.bottom) - Math.max(A.b.top, C.b.top);
+    if (ix > 4 * k && iy > 4 * k) problems.push('words "' + A.t.slice(0, 20) + '" overlap "' + C.t.slice(0, 20) + '"');
+  }
+  ${last ? `const ic = root.querySelector('.lens-icon'); const ib = ic && ic.getBoundingClientRect(); if (!ib || ib.width < 100 * k) problems.push('the Lens icon is missing or smaller than 120px on the last scene');` : ''}
+  return { problems: [...new Set(problems)].slice(0, 8), text: words.join(' ') };
+})()`;
+
+/** Words seen in a designed scene vs the words it should show (plus up to 3 labels). */
+export function sceneWordProblems(seen: string, words: string, allowed: string): string[] {
+  const out = designWordProblems(seen, `${words} lens instagrowapp com ${allowed}`).filter((p) => !p.startsWith('too many words'));
+  const norm = (t: string) => (t.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map((w) => w.replace(/s$/, ''));
+  const want = new Set(norm(`${words} lens instagrowapp com`));
+  const extra = [...new Set(norm(seen).filter((w) => !want.has(w)))];
+  if (extra.length > 3) out.push(`words that aren't the scene's: ${extra.slice(0, 6).join(', ')} (show the scene's words, at most 3 labels)`);
+  const have = new Set(norm(seen));
+  const missing = [...want].filter((w) => w.length > 2 && !['lens', 'instagrowapp', 'com'].includes(w) && !have.has(w));
+  if (missing.length > Math.max(1, Math.floor(want.size / 4))) out.push(`the scene's words are missing or unreadable at this moment: ${missing.slice(0, 5).join(', ')}`);
+  return out;
+}
+
+export { escAttr };

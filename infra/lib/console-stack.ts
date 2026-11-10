@@ -200,6 +200,9 @@ export class ConsoleStack extends Stack {
     );
     // Content engine: renders, licensed media and their evidence, export zips.
     growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:PutObject', 's3:GetObject'], resources: [content.arnForObjects('a/*'), content.arnForObjects('e/*'), content.arnForObjects('x/*')] }));
+    // A reel runs in steps; each step starts the next one as a fresh call (growth-reel-job.ts). By name pattern, so the
+    // role doesn't depend on the function it belongs to.
+    growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['lambda:InvokeFunction'], resources: [`arn:aws:lambda:${this.region}:${this.account}:function:LensConsole-GrowthAnalyst*`] }));
     growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`] }));
     // Mondays 02:30 UTC (08:00 IST), after the daily Search Console pull.
     new events.Rule(this, 'WeeklyGrowthReport', {

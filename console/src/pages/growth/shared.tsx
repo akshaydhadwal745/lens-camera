@@ -139,6 +139,20 @@ export type Post = {
     total: number;
     images: { label: string; score: number; why: string }[];
   } | null; // the AI creative director's score of the reel
+  /** The reel as Claude wrote it (growth-reel-job.ts): the pain point, the hook and each scene's words. */
+  reelScript?: {
+    angle: string;
+    audience: string;
+    hook: string;
+    scenes: {
+      words: string;
+      seconds: number;
+      shows: string;
+      idea: string;
+      by: "ai" | "template";
+    }[];
+    round: number;
+  } | null;
   score?: {
     total: number;
     hook: number;

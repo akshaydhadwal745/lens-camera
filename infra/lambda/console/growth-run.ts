@@ -3,7 +3,7 @@
 import { finishJob, runDraft, runGrowthReport, runMonthly } from "./growth";
 import { watchCompetitors } from "./growth-competitors";
 import { renderPost } from "./growth-media";
-import { renderReel } from "./growth-video";
+import { renderReel, type ReelStep } from "./growth-reel-job";
 import { runSeoAudit } from "./growth-seo";
 import { indexCoverage } from "../api/search-console";
 
@@ -18,7 +18,7 @@ export async function handler(event: {
   monthly?: boolean;
   month?: string;
   render?: { postId: string };
-  reel?: { postId: string };
+  reel?: { postId: string; step?: ReelStep; jobAt?: number };
 }) {
   if (event.monthly)
     return runMonthly({
@@ -32,9 +32,17 @@ export async function handler(event: {
     const { postId } = event.render;
     return job("render", () => renderPost(postId, event.by ?? "console"));
   }
+  // A reel runs in steps (growth-reel-job.ts); only the last one marks the job finished.
   if (event.reel && typeof event.reel.postId === "string") {
-    const { postId } = event.reel;
-    return job("reel", () => renderReel(postId, event.by ?? "console"));
+    const { postId, step, jobAt } = event.reel;
+    try {
+      const r = await renderReel(postId, event.by ?? "console", step, typeof jobAt === "number" ? jobAt : undefined);
+      if (!r.continued) await finishJob("reel");
+      return r;
+    } catch (e) {
+      await finishJob("reel", (e as Error).message);
+      throw e;
+    }
   }
   if (event.seoAudit)
     return job("seoAudit", async () => {

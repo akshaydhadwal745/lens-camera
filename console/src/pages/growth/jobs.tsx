@@ -25,12 +25,16 @@ export type ReelJob = Job & {
 
 // Rough share of the run each stage takes, so the bar moves at an even pace.
 const STAGES = {
-  photos: [0, 5, "Finding photos"],
-  directing: [5, 12, "Planning the scenes"],
-  footage: [12, 30, "Finding footage"],
-  frames: [30, 90, "Drawing frames"],
-  scoring: [90, 97, "Checking the result"],
-  saving: [97, 100, "Saving"],
+  writing: [0, 8, "Writing the reel"],
+  directing: [0, 8, "Planning the scenes"],
+  photos: [8, 16, "Finding photos that fit"],
+  footage: [16, 26, "Finding footage"],
+  designing: [26, 42, "Designing every scene"],
+  checking: [42, 48, "Checking the design"],
+  frames: [48, 88, "Drawing frames"],
+  scoring: [88, 95, "Scoring the reel"],
+  saving: [95, 100, "Saving"],
+  improving: [0, 30, "Redesigning weak scenes"],
 } as const;
 
 /** "Drawing frames 45%", "Finding footage 3/6", and how far along the whole reel is (0–100). */
@@ -170,7 +174,7 @@ export function AgentBar({
     );
   if (jobs.reel)
     lines.push(
-      `Making a reel · ${reelStage(jobs.reel).label} · ${elapsed((jobs.checkedAt ?? jobs.reel.at) - jobs.reel.at)} so far · usually 5–10 minutes`,
+      `Making a reel · ${reelStage(jobs.reel).label} · ${elapsed((jobs.checkedAt ?? jobs.reel.at) - jobs.reel.at)} so far · usually 20–40 minutes`,
     );
   // No job running, but the last one failed in the past hour: say so (otherwise people just wait).
   const err = jobs.lastError;

@@ -1888,9 +1888,9 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
           if (done.error) setError(done.error);
           break;
         }
-        if (Date.now() - began > 16 * 60_000) {
+        if (Date.now() - began > 55 * 60_000) {
           setError(
-            "Still making the reel after 16 minutes. Check again in a while.",
+            "Still making the reel after 55 minutes. Check again in a while.",
           );
           break;
         }
@@ -1939,11 +1939,11 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
         )}
       </span>
       <span className="muted small">
-        A vertical video (1080×1920, MP4) for Instagram, Facebook and X, made
-        from this post&apos;s script with real footage and motion. No music yet:
-        add sound when you post. Takes about 5–10 minutes and keeps going if you
-        leave this page. Save your edits first; making it again replaces the old
-        one.
+        A vertical video (1080×1920, MP4) for Instagram, Facebook and X. The AI
+        writes it around the pain point of this post, designs and animates every
+        scene, scores the result and redesigns weak scenes once. No music yet:
+        add sound when you post. Takes about 20–40 minutes and keeps going if
+        you leave this page. Making it again replaces the old one.
       </span>
       {running && stage && (
         <div role="status" aria-live="polite">
@@ -1994,6 +1994,25 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
                   </span>
                 )}
               </div>
+              {post.reelScript && (
+                <div className="small">
+                  <div>
+                    <strong>Angle:</strong> {post.reelScript.angle}
+                  </div>
+                  <div className="muted">For: {post.reelScript.audience}</div>
+                  <ol style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+                    {post.reelScript.scenes.map((x, i) => (
+                      <li key={i}>
+                        “{x.words}”{" "}
+                        <span className="muted">
+                          · {x.seconds} s · {x.shows}
+                          {x.by === "template" ? " · template" : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               {post.reelScore?.images.map((x) => (
                 <span key={x.label} className="small">
                   <Chip tone={scoreTone(x.score)}>{x.score}</Chip> {x.label}:{" "}

@@ -11,7 +11,7 @@ export const FPS = 30;
 export const MAX_SECONDS = 30;
 export const SCENE_TYPES = ['footage', 'phone', 'album', 'qr-card', 'scan', 'fill', 'compare', 'end'] as const;
 export type SceneType = (typeof SCENE_TYPES)[number];
-export type ReelScene = { type: SceneType; seconds: number; text: string; query?: string; screen: Screen };
+export type ReelScene = { type: SceneType; seconds: number; text: string; query?: string; screen: Screen; ai?: { html: string; entry: string } };
 type ScriptLine = { seconds?: number; onScreen?: string; visual?: string };
 
 const EVENT = /wedding|event album|guest|qr\b|party|reception|album/i;
@@ -119,7 +119,7 @@ export function readPlan(report: { scenes?: { n: number; type: string; screen: s
 // ---------- the page ----------
 
 export type SceneMedia = { frames?: number; still?: string; hero?: string; heroChat?: string };
-export type ReelPageData = { scenes: ReelScene[]; media: SceneMedia[]; pool: string[]; icon: string; fonts: { geist?: string; plex500?: string; plex600?: string }; cta: string; site: string };
+export type ReelPageData = { scenes: ReelScene[]; media: SceneMedia[]; pool: string[]; icon: string; fonts: { geist?: string; plex500?: string; plex600?: string }; cta: string; site: string; brand?: { primary: string; accent: string } };
 
 const ARROW = '<svg viewBox="0 0 24 24" width=".8em" height=".8em" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.04em"><path d="M4 12h16M13 5l7 7-7 7"/></svg>';
 /** Geist has Latin letters, digits and punctuation: an arrow is drawn, anything else it can't show (emoji) is left out. */
@@ -168,6 +168,8 @@ const footageRun = (i: number, m: SceneMedia, x = 'v-v') => (m.frames ? `await f
 
 /** One scene's markup and the code that draws it at local time lt. `s` is a fixed clock, so timing scales with the scene's length. */
 function scene(sc: ReelScene, i: number, d: ReelPageData): { html: string; run: string; entry: string } {
+  // Designed by Claude (growth-reel-ai.ts): its own markup and CSS animations, stepped by the page's clock.
+  if (sc.ai) return { entry: sc.ai.entry, html: `<div class="ai">${sc.ai.html}</div>`, run: `await ai(${i},lt);` };
   const id = (x: string) => `s${i}-${x}`;
   const m = d.media[i] ?? {};
   const qr = qrPattern(7);
@@ -250,6 +252,9 @@ export function reelHtml(d: ReelPageData): string {
   const list = parts.map((x) => `{start:${x.start},dur:${x.dur},entry:'${x.entry}',run:async(lt,dur,$)=>{${x.run}}}`).join(',\n');
   return `<!doctype html><meta charset="utf-8"><style>${css({ w: 1080, h: 1920, fonts: d.fonts })}
 html,body{background:#000}
+:root{--blue:${d.brand?.primary ?? '#2563EB'};--yellow:${d.brand?.accent ?? '#FACC15'};--green:#30D158;--red:#FF453A;--ink:#0d0f14;--muted:#4a505c;--paper:#f4f4f6}
+.ai{position:absolute;inset:0;overflow:hidden;font-family:Geist,sans-serif;color:var(--ink);background:var(--paper)}
+.check{border-radius:50%;background:#30D158;place-items:center;flex:none}
 .scene{position:absolute;inset:0;overflow:hidden;visibility:hidden}
 .layer{position:absolute;inset:0}
 .k{position:absolute;left:72px;width:880px;font-family:Geist;font-weight:800;line-height:1.04;letter-spacing:-.045em;color:#fff;text-wrap:balance}
@@ -284,6 +289,7 @@ const mix=(a,b,x)=>a+(b-a)*x;
 function words(e,t,start,slow){e.querySelectorAll('.i').forEach((s)=>{const d=start+Number(s.dataset.d)*(slow?slow/.07:1);s.style.transform='translateY('+mix(112,0,expo(p(t,d,d+.55)))+'%)';});}
 function place(e,cx,cy,sc,rot){e.style.transform='translate('+(cx-209)+'px,'+(cy-436)+'px) scale('+sc+') rotate('+(rot||0)+'deg)';}
 function tap(e,t,at){const x=p(t,at-.15,at+.3);e.style.visibility=x>0&&x<1?'inherit':'hidden';e.style.transform='scale('+mix(1.2,.8,Math.sin(x*3.14))+')';e.style.opacity=Math.sin(x*3.14);}
+async function ai(i,lt){const el=document.getElementById('s'+i);for(const a of el.getAnimations({subtree:true})){a.pause();a.currentTime=lt*1000;}for(const im of el.querySelectorAll('img[data-clip]'))await frame(im,im.dataset.clip,Math.min(Number(im.dataset.n),Math.round(lt*30)+1));}
 async function frame(el,dir,n){const src=dir+'/'+String(n).padStart(4,'0')+'.jpg';if(el.getAttribute('src')!==src){el.src=src;await el.decode();}}
 const SC=[${list}];
 const OVER=.5;

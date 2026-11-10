@@ -505,6 +505,7 @@ async function releaseLock(at: number, error?: string) {
 //   GROWTH / JOB#<name>       jobs outside the lock: seoAudit, competitors, render and reel (+ postId) { startedAt, by, finishedAt?, error? }
 
 const JOB_STALE = 15 * 60_000;
+const REEL_STALE = 50 * 60_000;
 export type JobName = 'seoAudit' | 'competitors' | 'render' | 'reel';
 
 export async function markJob(name: JobName, by: string) {
@@ -521,13 +522,14 @@ export async function finishJob(name: JobName, error?: string) {
 export function jobsFrom(run: Record<string, any> | undefined, rows: Partial<Record<JobName, Record<string, any>>>, now = Date.now()) {
   const who = (by: string) => by.replace(/^(draft|monthly):/, '');
   const analyst = run?.at && now - run.at < STALE ? { kind: String(run.by).startsWith('draft:') ? 'draft' : String(run.by).startsWith('monthly:') ? 'monthly' : 'report', by: who(String(run.by)), at: run.at as number, ref: (run.ref as string | undefined) ?? null } : null;
-  const job = (r?: Record<string, any>) => (r?.startedAt && !(r.finishedAt >= r.startedAt) && now - r.startedAt < JOB_STALE ? { at: r.startedAt as number, by: String(r.by ?? '') } : null);
+  const job = (r?: Record<string, any>, stale = JOB_STALE) => (r?.startedAt && !(r.finishedAt >= r.startedAt) && now - r.startedAt < stale ? { at: r.startedAt as number, by: String(r.by ?? '') } : null);
   const r = rows.render;
   const render = job(r) ? { ...job(r)!, postId: String(r!.postId ?? '') } : null;
   const renderDone = r?.finishedAt >= r?.startedAt ? { postId: String(r!.postId ?? ''), at: r!.finishedAt as number, error: (r!.error as string | undefined) ?? null } : null;
   const rl = rows.reel;
-  const reel = job(rl)
-    ? { ...job(rl)!, postId: String(rl!.postId ?? ''), stage: typeof rl!.stage === 'string' && rl!.stageAt >= rl!.startedAt ? rl!.stage : null, step: Number(rl!.step ?? 0), steps: Number(rl!.steps ?? 0) }
+  // A written + designed reel runs in several steps (growth-reel-job.ts), up to about 45 minutes.
+  const reel = job(rl, REEL_STALE)
+    ? { ...job(rl, REEL_STALE)!, postId: String(rl!.postId ?? ''), stage: typeof rl!.stage === 'string' && rl!.stageAt >= rl!.startedAt ? rl!.stage : null, step: Number(rl!.step ?? 0), steps: Number(rl!.steps ?? 0) }
     : null;
   const reelDone = rl?.finishedAt >= rl?.startedAt ? { postId: String(rl!.postId ?? ''), at: rl!.finishedAt as number, error: (rl!.error as string | undefined) ?? null } : null;
   return { analyst, seoAudit: job(rows.seoAudit), competitors: job(rows.competitors), render, renderDone, reel, reelDone, lastError: run?.lastError ? { message: String(run.lastError), at: run.lastErrorAt as number } : null };
