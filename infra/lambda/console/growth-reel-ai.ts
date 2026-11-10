@@ -140,6 +140,8 @@ Kit of REAL parts (use them instead of drawing your own):
 - <lens-check size=""></lens-check> a green tick in a circle.
 Fonts: font-family:Geist (300–800) for all words; font-family:Plex (mono 500/600) only for small uppercase labels. Colours: --blue, --yellow, --green #30D158, --red #FF453A, --ink #0d0f14, --paper #f4f4f6. You may draw your own inline <svg> shapes (arrows, underlines, circles, bursts, progress rings) and use any CSS (gradients, blur, clip-path masks, mix-blend-mode, 3D transforms with perspective). Not allowed: <script>, event handlers, <img>/<video>/<iframe>, external URLs, @import, other fonts, emoji.
 
+Truth in pictures: <lens-phone> is the Lens app on the owner's or host's phone. Guests of an event album never have Lens: when a guest scans or adds photos, show THEIR phone with its own camera or browser, drawn by you (a plain viewfinder with the QR card in it, or a simple browser page "Add your photos"), never a <lens-phone> screen. "Every guest's photos in one album" is the qr-album screen (the event album), not the library.
+
 Words: show the scene's words exactly (you may split them into lines and animate word by word or line by line, colour or underline the key words). You may add at most 3 small label words of your own per scene (e.g. BEFORE, AFTER, LIVE). Nothing else in text.
 
 Craft rules (checked in code; scenes that fail are redesigned or replaced):
