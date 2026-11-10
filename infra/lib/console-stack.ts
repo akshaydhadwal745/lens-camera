@@ -181,6 +181,10 @@ export class ConsoleStack extends Stack {
         CODE_SENDER: `no-reply@${(this.node.tryGetContext('codeDomain') as string | undefined) ?? ''}`,
       },
     });
+    // The developer role (Claude on the owner's PC) can start content jobs (images, reels) to test them.
+    growth.addPermission('DeveloperInvoke', {
+      principal: new iam.ArnPrincipal(`arn:aws:iam::${this.account}:role/lens-developer`),
+    });
     // Reads the whole table (facts); writes only its own GROWTH rows, so even a misled analyst can't
     // touch accounts, sessions or anything else.
     table.grantReadData(growth);
