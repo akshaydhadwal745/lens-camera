@@ -4,7 +4,7 @@
 import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Res } from '../api/lib';
-import type { Moment } from '../api/growth-moments';
+import { SENSITIVE, type Moment } from '../api/growth-moments';
 import { startDraft } from './growth'; // a cycle (growth.ts uses packageDay), fine: both only call at run time
 import { createTask, getTask } from './growth-tasks';
 
@@ -34,7 +34,11 @@ async function rows(): Promise<{ moments: Row[]; meta?: Record<string, any> }> {
 
 /** Moments still ahead (or a season still on), soonest first; best score first on the same day. */
 export function upcoming(all: Row[], today: string): Row[] {
-  return all.filter((m) => (m.ends ?? m.day) >= today).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : b.score - a.score));
+  // Rows from an older pull are hidden by today's rules too (they expire 14 days after their day).
+  const CORE = ['IN', 'US', 'GB', 'AU', 'CA', 'WW'];
+  return all
+    .filter((m) => (m.ends ?? m.day) >= today && !SENSITIVE.test(m.title) && (m.kind !== 'holiday' || m.countries.some((c) => CORE.includes(c)) || m.score >= 50))
+    .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : b.score - a.score));
 }
 
 export async function momentsPage(): Promise<Res> {
