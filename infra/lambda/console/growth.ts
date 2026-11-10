@@ -526,7 +526,9 @@ export function jobsFrom(run: Record<string, any> | undefined, rows: Partial<Rec
   const render = job(r) ? { ...job(r)!, postId: String(r!.postId ?? '') } : null;
   const renderDone = r?.finishedAt >= r?.startedAt ? { postId: String(r!.postId ?? ''), at: r!.finishedAt as number, error: (r!.error as string | undefined) ?? null } : null;
   const rl = rows.reel;
-  const reel = job(rl) ? { ...job(rl)!, postId: String(rl!.postId ?? '') } : null;
+  const reel = job(rl)
+    ? { ...job(rl)!, postId: String(rl!.postId ?? ''), stage: typeof rl!.stage === 'string' && rl!.stageAt >= rl!.startedAt ? rl!.stage : null, step: Number(rl!.step ?? 0), steps: Number(rl!.steps ?? 0) }
+    : null;
   const reelDone = rl?.finishedAt >= rl?.startedAt ? { postId: String(rl!.postId ?? ''), at: rl!.finishedAt as number, error: (rl!.error as string | undefined) ?? null } : null;
   return { analyst, seoAudit: job(rows.seoAudit), competitors: job(rows.competitors), render, renderDone, reel, reelDone, lastError: run?.lastError ? { message: String(run.lastError), at: run.lastErrorAt as number } : null };
 }

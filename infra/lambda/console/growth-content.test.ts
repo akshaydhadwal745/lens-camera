@@ -57,6 +57,16 @@ test('agent jobs: the lock tells what runs (report, draft of a task, monthly), s
   assert.equal(jobsFrom(undefined, { seoAudit: { startedAt: now - 16 * 60_000 } }, now).seoAudit, null);
 });
 
+test('reel jobs: the stage the builder reached, only from this run', () => {
+  const now = 1_000_000_000;
+  const r = jobsFrom(undefined, { reel: { startedAt: now - 60_000, by: 'b', postId: 'p1', stage: 'frames', step: 40, steps: 300, stageAt: now - 1000 } }, now).reel;
+  assert.deepEqual(r, { at: now - 60_000, by: 'b', postId: 'p1', stage: 'frames', step: 40, steps: 300 });
+  // A stage written before this run started (an older run's) is not shown.
+  assert.equal(jobsFrom(undefined, { reel: { startedAt: now - 60_000, by: 'b', postId: 'p1', stage: 'saving', stageAt: now - 90_000 } }, now).reel?.stage, null);
+  assert.equal(jobsFrom(undefined, { reel: { startedAt: now - 60_000, by: 'b', postId: 'p1' } }, now).reel?.stage, null);
+  assert.equal(jobsFrom(undefined, { reel: { startedAt: now - 60_000, finishedAt: now - 10, postId: 'p1', stage: 'saving', stageAt: now - 20 } }, now).reel, null);
+});
+
 test('meta task title names what changes', () => {
   const c = (title: string, description: string) => ({ path: '/', title, description, oldTitle: '', oldDescription: '' });
   assert.equal(what([c('', 'd')]), 'description');

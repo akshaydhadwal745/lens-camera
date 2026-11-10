@@ -101,6 +101,23 @@ async function compareStills(src: string, i: number): Promise<{ hero: string; he
   return { hero: `hero${i}.jpg`, heroChat: `chat${i}.jpg` };
 }
 
+/** Where a reel is (on JOB#reel, read by GET /growth/jobs): a stage, and n of total where it counts. */
+export type ReelStage = 'photos' | 'directing' | 'footage' | 'frames' | 'scoring' | 'saving';
+function reelProgress(began: number) {
+  let last = 0;
+  let lastStage = '';
+  return (stage: ReelStage, step = 0, steps = 0) => {
+    const now = Date.now();
+    // A new stage is written at once; counts at most every 3 s (frames are drawn ~10 a second).
+    if (stage === lastStage && step < steps && now - last < 3000) return;
+    last = now;
+    lastStage = stage;
+    void ddb
+      .send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'JOB#reel' }, UpdateExpression: 'SET stage = :s, step = :n, steps = :t, stageAt = :a', ConditionExpression: 'startedAt <= :b', ExpressionAttributeValues: { ':s': stage, ':n': step, ':t': steps, ':a': now, ':b': began } }))
+      .catch(() => undefined);
+  };
+}
+
 export async function renderReel(postId: string, by: string): Promise<{ seconds: number; ms: number }> {
   const began = Date.now();
   if (!BUCKET) throw new Error('Content storage isn’t set up');
@@ -114,6 +131,8 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
   const topic = list.find((f) => f.query)?.query ?? topicQuery(`${post.title} ${post.hook}`);
   rmSync(WORK, { recursive: true, force: true });
   mkdirSync(join(WORK, 'p'), { recursive: true });
+  const progress = reelProgress(began);
+  progress('photos');
   const browser = await launchBrowser();
   try {
     // 1) Photos for phone screens and album tiles, on disk next to the page.
@@ -126,6 +145,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
     let plan: ReelScene[] = defaultPlan(shaped, topic, cta);
     const tok = await token();
     if (tok) {
+      progress('directing');
       try {
         const { report } = await runClaude<{ scenes: { n: number; type: string; screen: string; query: string }[] }>(directorPrompt(brief, plan), tok, { enabled: [] }, Date.now() + 2 * 60_000, DIRECTOR_MODE);
         plan = readPlan(report, plan, topic);
@@ -139,6 +159,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
     const used = new Set<string>();
     const media: SceneMedia[] = [];
     for (let i = 0; i < plan.length; i++) {
+      progress('footage', i, plan.length);
       const sc = plan[i];
       if (NEEDS_CLIP.includes(sc.type)) {
         const q = sc.query ?? topic;
@@ -184,6 +205,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
       ['-nostdin', '-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-shortest', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out],
       async (stdin) => {
         for (let i = 0; i < total; i++) {
+          progress('frames', i, total);
           if (Date.now() - began > LIMIT_MS) throw new Error('The reel took too long to draw. Try a shorter script.');
           await page.evaluate(`seek(${i / FPS})`);
           const jpg = Buffer.from(await page.screenshot({ type: 'jpeg', quality: 95 }));
@@ -194,6 +216,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
     );
 
     // 5) Claude scores what came out: one frame late in each scene, once its motion has landed.
+    progress('scoring');
     const shots: { label: string; png: Buffer }[] = [];
     let at = 0;
     for (let i = 0; i < plan.length; i++) {
@@ -209,6 +232,7 @@ export async function renderReel(postId: string, by: string): Promise<{ seconds:
     }
 
     // 6) Save.
+    progress('saving');
     const body = readFileSync(out);
     const id = renderAssetId(postId, 'Reel');
     const key = `a/${id}.mp4`;
