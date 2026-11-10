@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { videoResults, fromStock, openverseResults, relevant, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, photoAssetId, photoRights, postTotal, readScores, sheetHtml, sheetPrompt, sheetVerdicts, type Found, type ImageScore, type Photo } from './growth-photos';
+import { unsplashResults, videoResults, fromStock, openverseResults, relevant, PEOPLE_OR_BRANDS, pexelsResults, photoPassed, pixabayResults, photoAssetId, photoRights, postTotal, readScores, sheetHtml, sheetPrompt, sheetVerdicts, type Found, type ImageScore, type Photo } from './growth-photos';
 
 test('Pexels: licence, photographer, size capped at the downloaded width', () => {
   const r = pexelsResults({ photos: [{ url: 'https://www.pexels.com/photo/1/', width: 4000, height: 6000, photographer: 'Ana', alt: 'Snowy mountain peak', src: { large2x: 'https://images.pexels.com/1.jpg' } }] });
@@ -123,4 +123,21 @@ test('rights: people on a CC licence (Commons, Openverse) still go to a person; 
   assert.equal(photoRights(f('CC0', 'children on stage')).status, 'review');
   assert.equal(photoRights(f('Pexels License', 'parents audience clapping', 'Pexels')).status, 'cleared');
   assert.equal(photoRights(f('Pexels License', 'woman with samsung phone', 'Pexels')).status, 'review');
+});
+
+test('Unsplash: page link with referral, sized image, credit and download tracking; people as b-roll', () => {
+  const r = unsplashResults({ results: [
+    { width: 4000, height: 6000, alt_description: 'audience watching a school stage show', urls: { raw: 'https://images.unsplash.com/photo-1?ixid=abc' }, links: { html: 'https://unsplash.com/photos/x1', download_location: 'https://api.unsplash.com/photos/x1/download?ixid=abc' }, user: { name: 'Asha R' } },
+    { width: 800, height: 600, urls: { raw: 'https://images.unsplash.com/photo-2' }, links: { html: 'https://unsplash.com/photos/x2' }, user: { name: 'b' } },
+    { width: 4000, height: 3000, alt_description: 'oil painting of a lake', urls: { raw: 'https://images.unsplash.com/photo-3' }, links: { html: 'https://unsplash.com/photos/x3' }, user: { name: 'c' } },
+  ] });
+  assert.equal(r.length, 1);
+  assert.match(r[0].sourceUrl, /^https:\/\/unsplash\.com\/photos\/x1\?utm_source=/);
+  assert.match(r[0].imageUrl, /ixid=abc&w=1880&q=85&fm=jpg/);
+  assert.deepEqual([r[0].w, r[0].h, r[0].author], [1880, 2820, 'Asha R']);
+  assert.equal(r[0].track, 'https://api.unsplash.com/photos/x1/download?ixid=abc');
+  const rights = photoRights(r[0]);
+  assert.equal(rights.status, 'cleared');
+  assert.equal(rights.peopleOrBrands, true);
+  assert.deepEqual(unsplashResults({}), []);
 });
