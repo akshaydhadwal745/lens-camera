@@ -1963,8 +1963,9 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
       <span className="muted small">
         A vertical video (1080×1920, MP4) for Instagram, Facebook and X. The AI
         writes it around the pain point of this post, designs and animates every
-        scene, scores the result and redesigns weak scenes once. No music yet:
-        add sound when you post. Takes about 20–40 minutes and keeps going if
+        scene, scores the result and redesigns weak scenes once. Sound is
+        included: effects timed to each scene, plus free-licence music picked
+        for the reel's mood (credited in the post's assets). Takes about 20–40 minutes and keeps going if
         you leave this page. Making it again replaces the old one.
       </span>
       {running && stage && (
