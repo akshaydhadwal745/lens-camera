@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { bestStart, openverseTracks } from './growth-music';
 import { mixReel, RATE, readCues, SOUNDS, synth, wav } from './growth-sound';
 import { designsByScene, readWrittenReel, reelDesignPrompt, reelSceneHtml, reelWordProblems, sceneWordProblems, type WrittenReel } from './growth-reel-ai';
 
@@ -89,4 +90,16 @@ test('sound: effects are made in code, cues are checked, the mix is stereo at 48
   const w = wav(m);
   assert.equal(w.toString('ascii', 0, 4), 'RIFF');
   assert.equal(w.readUInt32LE(24), 48000);
+});
+
+test('music: only free licences, instrumental-looking, 1–7 min; the loud stretch starts on a hit', () => {
+  const r = (o: Record<string, unknown>) => ({ foreign_landing_url: 'https://www.jamendo.com/track/1', url: 'https://prod-1.storage.jamendo.com/?trackid=1', title: 'Upbeat Corporate', creator: 'A', license: 'by', license_version: '3.0', license_url: 'x', duration: 100000, genres: ['corporate'], tags: [], provider: 'jamendo', ...o });
+  const got = openverseTracks({ results: [r({}), r({ license: 'by-nc' }), r({ title: 'My song feat. Ann' }), r({ duration: 20000 }), r({ title: 'Rain sound effects' }), r({ license: 'cc0', title: 'Morning' })] });
+  assert.deepEqual(got.map((t) => t.license), ['CC BY 3.0', 'CC0']);
+  const env = new Float32Array(400).fill(0.05);
+  for (let i = 120; i < 400; i++) env[i] = 0.4; // quiet intro, then the song
+  env[121] = 0.9; // a hit right after it starts
+  const s = bestStart(env, 10);
+  assert.ok(s >= 5.9 && s <= 6.2, String(s));
+  assert.equal(bestStart(new Float32Array(10), 10), 0);
 });

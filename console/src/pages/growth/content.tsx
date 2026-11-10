@@ -1076,6 +1076,8 @@ export const useAssets = () =>
 
 function Thumb({ a }: { a: Asset }) {
   if (!a.url) return <div className="gw-thumb empty">Uploading…</div>;
+  if (a.mime.startsWith("audio/"))
+    return <div className="gw-thumb empty">♪ Music</div>;
   return a.mime.startsWith("video/") ? (
     <video className="gw-thumb" src={a.url} muted preload="metadata" />
   ) : (
@@ -1424,7 +1426,14 @@ function AssetPanel({
         </div>
         {error && <div className="notice error">{error}</div>}
         {a.url &&
-          (a.mime.startsWith("video/") ? (
+          (a.mime.startsWith("audio/") ? (
+            <audio
+              src={a.url}
+              controls
+              preload="metadata"
+              style={{ width: "100%" }}
+            />
+          ) : a.mime.startsWith("video/") ? (
             <video className="gw-preview" src={a.url} controls muted />
           ) : (
             <img className="gw-preview" src={a.url} alt={a.name} />
