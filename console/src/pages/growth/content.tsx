@@ -773,6 +773,11 @@ function PostEditor({
             </div>
           </div>
         )}
+        {post &&
+          editable &&
+          !(post.published && Object.keys(post.published).length) && (
+            <Redraft post={post} busy={busy} call={call} />
+          )}
         {post && manager && post.variants?.instagram && (
           <InstagramPublish
             post={post}
@@ -862,6 +867,67 @@ function PostEditor({
         )}
       </aside>
     </>
+  );
+}
+
+/** The agent remakes this one post under today's rules (growth.ts redraftPost); images are remade after. */
+function Redraft({
+  post,
+  busy,
+  call,
+}: {
+  post: Post;
+  busy: boolean;
+  call: (fn: () => Promise<{ post: Post }>) => Promise<void>;
+}) {
+  const [note, setNote] = useState("");
+  const [now] = useState(() => Date.now());
+  const running =
+    !!post.redrafting &&
+    now - post.redrafting < 20 * 60_000 &&
+    !(post.redraftedAt && post.redraftedAt > post.redrafting) &&
+    !(post.redraftError && post.redraftError.at > post.redrafting);
+  return (
+    <div className="gw-callout">
+      <strong>Redraft with the agent</strong>
+      {post.redraftError && (
+        <p className="small">
+          <strong>Last redraft stopped:</strong> {post.redraftError.message}
+        </p>
+      )}
+      {running ? (
+        <span className="small">
+          The agent is rewriting this post… usually 3–6 minutes. Its images are
+          remade after that.
+        </span>
+      ) : (
+        <>
+          <input
+            id="redraft-note"
+            placeholder="What should change? (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <div className="btns">
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() =>
+                void call(() =>
+                  api("POST", `/growth/posts/${post.id}/redraft`, { note }),
+                )
+              }
+            >
+              Redraft
+            </button>
+          </div>
+        </>
+      )}
+      <span className="muted small">
+        Same idea, format and date, written again under today’s rules. It goes
+        back to In review; approval is cleared.
+      </span>
+    </div>
   );
 }
 
