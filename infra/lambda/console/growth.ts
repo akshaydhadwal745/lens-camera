@@ -863,7 +863,8 @@ async function runTextDraft(t: Task, by: string, started: number) {
   return { drafts: drafts.length };
 }
 
-const CONTENT_MODE: Mode = { system: CONTENT_SYSTEM, schema: CONTENT_SCHEMA, toolNames: ['find_in_code', 'read_code', 'audit_page', 'competitor_page'], mode: 'report' };
+// WebSearch / WebFetch: hashtags people use for the topic right now (owner 2026-11-11).
+const CONTENT_MODE: Mode = { system: CONTENT_SYSTEM, schema: CONTENT_SCHEMA, toolNames: ['find_in_code', 'read_code', 'audit_page', 'competitor_page'], mode: 'report', builtins: ['WebSearch', 'WebFetch'] };
 
 /** Social tasks: 1–3 content packages land on the Content board as In review (docs/growth/content-engine.md).
  * The same checks as a person's save run here; problems are shown on the post and block approval. */
