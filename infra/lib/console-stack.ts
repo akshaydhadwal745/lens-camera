@@ -179,8 +179,12 @@ export class ConsoleStack extends Stack {
         CONSOLE_ORIGIN: origin,
         WEB_ORIGIN: (this.node.tryGetContext('webOrigin') as string | undefined) ?? '',
         CODE_SENDER: `no-reply@${(this.node.tryGetContext('codeDomain') as string | undefined) ?? ''}`,
+        // Signed CloudFront links Instagram fetches the reel / images from (growth-instagram.ts).
+        CF_PRIVATE_KEY_PARAM: PRIVATE_KEY_PARAM,
+        CF_KEY_PAIR_ID: fileKey.publicKeyId,
       },
     });
+    growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['ssm:GetParameter'], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PRIVATE_KEY_PARAM}`] }));
     // The developer role (Claude on the owner's PC) can start content jobs (images, reels) to test them.
     growth.addPermission('DeveloperInvoke', {
       principal: new iam.ArnPrincipal(`arn:aws:iam::${this.account}:role/lens-developer`),
