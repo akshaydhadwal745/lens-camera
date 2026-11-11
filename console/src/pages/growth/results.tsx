@@ -42,6 +42,10 @@ type ResultsPage = {
     ourScore: number | null;
     stats: Stats | null;
   }[];
+  sounds: {
+    at: number;
+    styles: { style: string; mood: string; why: string; source: string }[];
+  } | null;
   days: {
     day: string;
     followers: number;
@@ -171,6 +175,27 @@ export function Results() {
             </table>
           </div>
 
+          {r.sounds && r.sounds.styles.length > 0 && (
+            <section className="small">
+              <strong>Sounds trending on Reels this week</strong>{" "}
+              <span className="muted">
+                (reels’ music is searched in these styles first ·{" "}
+                {when(r.sounds.at)})
+              </span>
+              <ul>
+                {r.sounds.styles.map((x) => (
+                  <li key={x.style}>
+                    <a href={x.source} target="_blank" rel="noreferrer">
+                      {x.style}
+                    </a>{" "}
+                    <span className="muted">
+                      ({x.mood}) {x.why}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {r.days.length > 0 && (
             <p className="muted small">
               Account, last {r.days.length} days: followers{" "}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { alignToCuts, bestStart, openverseTracks } from './growth-music';
+import { readStyles } from './growth-sound-trends';
 import { mixReel, RATE, readCues, SOUNDS, synth, wav } from './growth-sound';
 import { fitToVoice, stretchMarks, subChunks, voiceLineProblems, VOICE_MAX_SECONDS, withPunctuation } from './growth-voice';
 import { designsByScene, readWrittenReel, reelDesignPrompt, reelSceneHtml, reelWordProblems, sceneWordProblems, type WrittenReel } from './growth-reel-ai';
@@ -189,4 +190,10 @@ test('hook: scene 1 is a real picture in 7 words at most; 2 phone scenes at most
   assert.match(r({ media: 'phone' }), /scene 1 must show real footage/);
   assert.match(r({ words: 'one two three four five six seven eight' }), /more than 7 words/);
   assert.match(r({}, [{ media: 'phone' }, { media: 'phone' }, { media: 'phone' }]), /3 phone scenes/);
+});
+
+test('sound trends: styles need a known mood, real search words and a source', () => {
+  const got = readStyles({ styles: [{ style: 'Afro house', query: 'afro house instrumental', mood: 'energetic', why: 'x', source: 'https://a' }, { style: 'Phonk', query: 'phonk', mood: 'energetic', why: '', source: 'https://b' }, { style: 'Lo-fi', query: 'lofi piano chill', mood: 'sleepy', why: '', source: 'https://c' }, { style: 'Acoustic', query: 'sped up acoustic!!', mood: 'warm', why: '', source: 'http://d' }] });
+  assert.deepEqual(got.map((s) => s.style), ['Afro house']);
+  assert.deepEqual(readStyles(undefined), []);
 });

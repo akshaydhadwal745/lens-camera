@@ -11,6 +11,7 @@ import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam, json, type Res } from '../api/lib';
 import { runClaude, type Mode } from './growth';
+import { soundTrendsRow } from './growth-sound-trends';
 
 const DAY = 86_400_000;
 export const MIN_POSTS = 3;
@@ -118,10 +119,11 @@ export async function playbookFor(target: Lesson['applyTo']): Promise<string> {
 
 /** GET /growth/results: the playbook, each published post's latest numbers, and the account by day. */
 export async function resultsPage(): Promise<Res> {
-  const [pb, posts, days] = await Promise.all([ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'PLAYBOOK' } })), all('POST#'), all('IGDAY#')]);
+  const [pb, posts, days, sounds] = await Promise.all([ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'PLAYBOOK' } })), all('POST#'), all('IGDAY#'), soundTrendsRow().catch(() => null)]);
   const { pk: _p, sk: _s, ...playbook } = pb.Item ?? {};
   return json(200, {
     playbook: pb.Item ? playbook : null,
+    sounds,
     posts: posts
       .filter((p) => p.published?.instagram)
       .sort((a, b) => Number(b.published.instagram.at) - Number(a.published.instagram.at))
