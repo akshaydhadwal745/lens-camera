@@ -25,7 +25,7 @@ import { designsByScene, readWrittenReel, REEL_DESIGN_SCHEMA, REEL_DESIGN_SYSTEM
 import { launchBrowser } from './growth-render';
 import { clipFrames, decodeMono, drawReel, planCues, rankFootage, reelProgress, renderTemplateReel, SITE, token, WORK } from './growth-video';
 import { RATE, type Cue, type VoiceLine } from './growth-sound';
-import { fitToVoice, LEAD, speak, VOICES, type VoiceKind } from './growth-voice';
+import { fitToVoice, LEAD, speak, VOICE } from './growth-voice';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const REPO = 'akshaydhadwal745/lens-camera';
@@ -52,7 +52,7 @@ type State = {
   designs: Record<number, SceneDesign>;
   failed: number[]; // scenes drawn from a template
   notes?: Record<number, string[]>; // the scorer's notes for scenes to redesign
-  voice?: { kind: VoiceKind; lines: Record<number, number> }; // scene n → spoken seconds (work/vo/<n>.mp3)
+  voice?: { name: string; lines: Record<number, number> }; // scene n → spoken seconds (work/vo/<n>.mp3)
 };
 
 const workKey = (postId: string, f: string) => `x/reel-work/${postId}/${f}`;
@@ -120,12 +120,11 @@ export async function renderReel(postId: string, by: string, step: ReelStep = 'w
  * reel as before (music and effects only); never fails the reel.
  */
 async function recordVoice(postId: string, written: WrittenReel): Promise<State['voice']> {
-  const kind: VoiceKind = written.voice ?? 'global';
   const lines: Record<number, number> = {};
   try {
     for (const s of written.scenes) {
       if (!s.vo) continue;
-      const mp3 = await speak(s.vo, kind);
+      const mp3 = await speak(s.vo, VOICE);
       const file = join(WORK, `vo-${s.n}.mp3`);
       writeFileSync(file, mp3);
       lines[s.n] = Math.round(((await decodeMono(file)).length / RATE) * 100) / 100;
@@ -138,8 +137,8 @@ async function recordVoice(postId: string, written: WrittenReel): Promise<State[
   if (!Object.keys(lines).length) return undefined;
   const fitted = fitToVoice(written.scenes, new Map(Object.entries(lines).map(([n, v]) => [Number(n), v])));
   written.scenes.forEach((s, i) => (s.seconds = fitted[i]));
-  console.log(JSON.stringify({ reelVoice: { voice: VOICES[kind], lines, seconds: fitted } }));
-  return { kind, lines };
+  console.log(JSON.stringify({ reelVoice: { voice: VOICE, lines, seconds: fitted } }));
+  return { name: VOICE, lines };
 }
 
 /** The saved voice lines on the reel's timeline. */
@@ -410,7 +409,7 @@ async function renderStep(postId: string, jobAt: number): Promise<{ continued: b
       cues: planCues(plan, designed),
       mood: written.mood,
       voice: await voiceLines(st),
-      extra: { mood: written.mood ?? null, angle: written.angle, audience: written.audience, hook: written.hook, voiceName: st.voice ? VOICES[st.voice.kind] : null, scenes: written.scenes.map((s) => ({ words: s.words, ...(st.voice?.lines[s.n] ? { vo: s.vo } : {}), seconds: s.seconds, shows: s.media, idea: st.designs[s.n]?.idea ?? '', by: st.failed.includes(s.n) ? 'template' : 'ai' })), round: st.round, at: Date.now() },
+      extra: { mood: written.mood ?? null, angle: written.angle, audience: written.audience, hook: written.hook, voiceName: st.voice ? st.voice.name : null, scenes: written.scenes.map((s) => ({ words: s.words, ...(st.voice?.lines[s.n] ? { vo: s.vo } : {}), seconds: s.seconds, shows: s.media, idea: st.designs[s.n]?.idea ?? '', by: st.failed.includes(s.n) ? 'template' : 'ai' })), round: st.round, at: Date.now() },
     });
   } finally {
     await browser.close();
