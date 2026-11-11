@@ -392,12 +392,13 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
     if (u) scenes.set(q, u);
     if (found && !noCredit(found) && !credited.some((c) => c.id === found.id)) credited.push({ id: found.id, role: 'background' });
   }
-  // Phone screens: an album about a wedding shows wedding photos; general photos only if too few fit (never in a reel,
-  // where credited photos may fill tiles too: the reel's credits go in the post).
+  // Phone screens: an album about a school show shows the show. Photos that fit the post fill them, credited ones too
+  // (their credits go in the post, as in reels; owner 2026-11-11: carousel grids showed flowers and deserts because
+  // credited event photos were left out). General photos only when fewer than 4 fit (never in a reel).
   const general = shuffle(pool.filter((p) => photoPassed(p) && !fitting.includes(p)), post.id);
-  const tiles = only ? fitting : fitting.filter(noCredit);
-  const poolPhotos = only || tiles.length >= 6 ? tiles : [...tiles, ...general];
-  for (const p of only ? poolPhotos.slice(0, 15) : []) if (!noCredit(p) && !credited.some((c) => c.id === p.id)) credited.push({ id: p.id, role: 'background' });
+  const tiles = fitting;
+  const poolPhotos = only || tiles.length >= 4 ? tiles : [...tiles, ...general];
+  for (const p of poolPhotos.slice(0, 15)) if (!noCredit(p) && !credited.some((c) => c.id === p.id)) credited.push({ id: p.id, role: 'background' });
   const poolUrls = (await Promise.all(poolPhotos.slice(0, 15).map(url))).filter((u): u is string => !!u);
   return { served, scenes, pool: poolUrls, credited, dropped, kit };
 }
@@ -430,7 +431,10 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as (PostLike & { title: string }) | undefined;
   if (!post) throw new Error(`Post ${postId} is gone`);
   const brand = await loadBrand();
-  const cta = brand.ctas[0] ?? 'Try Lens free';
+  // The post's own call to action (its Instagram version first), not the brand's default (owner 2026-11-11: the
+  // Children's Day carousel ended on a generic "Try Lens free" instead of "Make an event album").
+  const own = ['instagram', 'facebook', 'x'].map((k) => (post.variants as Record<string, { cta?: string } | undefined> | undefined)?.[k]?.cta?.trim()).find((c) => !!c);
+  const cta = own || (brand.ctas[0] ?? 'Try Lens free');
   const list = frames({ ...post, slides: post.slides ?? [], script: post.script ?? [], variants: post.variants ?? {} }, cta);
   if (!list.length) throw new Error('Nothing to draw: give the post a hook or slides first');
   const font = (name: string) => readFileSync(join(BRAND_DIR, name)).toString('base64');
