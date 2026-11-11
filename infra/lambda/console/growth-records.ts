@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, HttpError, json, Req, Res } from '../api/lib';
-import { assetProblems, credits, hasLensPhoto, loadAssets, readAssetRefs, type Asset } from './growth-assets';
+import { assetProblems, compactCredits, credits, hasLensPhoto, loadAssets, readAssetRefs, type Asset } from './growth-assets';
 import { packageProblems, PLATFORMS, postText, readPackage, type Platform } from './growth-content-rules';
 import { log } from './log';
 
@@ -201,7 +201,7 @@ export async function platformText(p: Record<string, any>, k: Platform): Promise
   const f = postFields({}, p);
   const v = f.variants[k];
   if (!v) throw new Error(`The post has no ${k} version`);
-  const lines = credits(f.assets, await loadAssets(f.assets.map((a) => a.id)));
+  const lines = compactCredits(credits(f.assets, await loadAssets(f.assets.map((a) => a.id))));
   const link = platformLink(k, p.code, f.page);
   const body = postText(v, link, k);
   return { text: lines.length ? `${body}\n\n${lines.join('\n')}` : body, altText: v.altText, link, title: v.title };
@@ -214,7 +214,7 @@ export async function postExport(id: string): Promise<Res> {
   if (!p) throw new HttpError(404, 'No such post');
   const f = postFields({}, p);
   const platforms = Object.keys(f.variants) as Platform[];
-  const lines = credits(f.assets, await loadAssets(f.assets.map((a) => a.id)));
+  const lines = compactCredits(credits(f.assets, await loadAssets(f.assets.map((a) => a.id))));
   return json(200, {
     approved: p.status === 'approved' || p.status === 'scheduled' || p.status === 'published',
     credits: lines,

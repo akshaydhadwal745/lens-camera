@@ -95,6 +95,22 @@ export const hasLensPhoto = (refs: AssetRef[], assets: Map<string, Asset>) => re
   return !!a && a.lensPhoto && a.status === 'ready' && effectiveStatus(a.rights) === 'cleared';
 });
 
+/**
+ * Photo credits from the same site merged into one line ("Photos: A, B and C on Unsplash"), so a caption doesn't
+ * end in a column of names (owner 2026-11-11). Other lines (music, CC BY photos) stay as they are. Pure.
+ */
+export function compactCredits(lines: string[]): string[] {
+  const groups = new Map<string, string[]>();
+  const rest: string[] = [];
+  for (const l of lines) {
+    const m = /^(?:Photo|Image): (.+) on (Unsplash|Pexels|Pixabay)$/.exec(l);
+    if (m) groups.set(m[2], [...(groups.get(m[2]) ?? []), m[1]]);
+    else rest.push(l);
+  }
+  const join = (n: string[]) => (n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]);
+  return [...rest, ...[...groups].map(([site, names]) => `${names.length > 1 ? 'Photos' : 'Photo'}: ${join([...new Set(names)])} on ${site}`)];
+}
+
 /** Credit lines for the post's licensed media. */
 export const credits = (refs: AssetRef[], assets: Map<string, Asset>) =>
   [...new Set(refs.map((r) => assets.get(r.id)).filter((a): a is Asset => !!a && licensed(a)).map((a) => { const line = creditLine(a.rights.author, a.rights.license, a.rights.source); return line && a.kind === 'audio' ? `Music: "${a.name}" by ${line}` : line; }).filter(Boolean))];

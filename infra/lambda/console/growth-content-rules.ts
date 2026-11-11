@@ -64,6 +64,8 @@ export function variantProblems(platform: Platform, format: Format, v: Variant, 
   if (!v.caption.trim()) p.push(`${platform}: write a caption`);
   const len = textLength(postText(v, link, platform), platform);
   if (len > l.caption) p.push(`${platform}: ${len} characters, the limit is ${l.caption}`);
+  // Instagram: people read the first lines, not a manual (owner 2026-11-11, first live post).
+  if (platform === 'instagram' && v.caption.trim().length > 900) p.push(`instagram: the caption is ${v.caption.trim().length} characters; keep it under 900 (hook, a few lines, the call to action)`);
   if (l.title && !v.title.trim()) p.push(`${platform}: add a title`);
   if (l.title && [...v.title].length > l.title) p.push(`${platform}: title is ${[...v.title].length} characters, the limit is ${l.title}`);
   if (v.hashtags.length > l.hashtags) p.push(`${platform}: ${v.hashtags.length} hashtags, use at most ${l.hashtags}`);

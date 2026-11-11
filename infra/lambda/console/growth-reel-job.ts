@@ -246,9 +246,16 @@ async function writeStep(postId: string, by: string, jobAt: number): Promise<{ c
     for (const [id, f] of g.served) await putWork(postId, `p/${id}.jpg`, f.body, f.mime);
     const photos = g.kit.map((k) => ({ ref: k.ref, id: idOf(k.url), about: k.about, w: k.w, h: k.h }));
     const stills: Record<number, string> = {};
+    // Each photo in one scene only (owner 2026-11-11: the same stage photo showed three times).
+    const usedStills = new Set<string>();
     for (const s of written.scenes) {
+      if (s.media !== 'photo' && s.media !== 'footage') continue;
       const u = (s.query && g.scenes.get(s.query)) || (s.alt && g.scenes.get(s.alt)) || g.scenes.get(topic);
-      if ((s.media === 'photo' || s.media === 'footage') && u) stills[s.n] = idOf(u);
+      const id = u && !usedStills.has(idOf(u)) ? idOf(u) : photos.find((p) => !usedStills.has(p.id))?.id;
+      if (id) {
+        stills[s.n] = id;
+        usedStills.add(id);
+      }
     }
     progress('footage');
     const clips: Record<number, StockVideo> = {};
