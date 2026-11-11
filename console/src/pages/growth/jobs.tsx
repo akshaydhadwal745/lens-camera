@@ -27,8 +27,9 @@ export type ReelJob = Job & {
 const STAGES = {
   writing: [0, 8, "Writing the reel"],
   directing: [0, 8, "Planning the scenes"],
-  photos: [8, 16, "Finding photos that fit"],
-  footage: [16, 26, "Finding footage"],
+  voice: [8, 12, "Recording the voice"],
+  photos: [12, 18, "Finding photos that fit"],
+  footage: [18, 26, "Finding footage"],
   designing: [26, 42, "Designing every scene"],
   checking: [42, 48, "Checking the design"],
   frames: [48, 88, "Drawing frames"],

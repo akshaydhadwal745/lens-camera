@@ -1964,8 +1964,8 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
         A vertical video (1080×1920, MP4) for Instagram, Facebook and X. The AI
         writes it around the pain point of this post, designs and animates every
         scene, scores the result and redesigns weak scenes once. Sound is
-        included: effects timed to each scene, plus free-licence music picked
-        for the reel's mood (credited in the post's assets). Takes about 20–40 minutes and keeps going if
+        included: a voiceover (Ruth, or Kajal for India moments), effects timed
+        to each scene, and free-licence music picked for the reel&apos;s mood (credited in the post&apos;s assets). Takes about 20–40 minutes and keeps going if
         you leave this page. Making it again replaces the old one.
       </span>
       {running && stage && (
@@ -2022,7 +2022,12 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
                   <div>
                     <strong>Angle:</strong> {post.reelScript.angle}
                   </div>
-                  <div className="muted">For: {post.reelScript.audience}</div>
+                  <div className="muted">
+                    For: {post.reelScript.audience}
+                    {post.reelScript.voiceName
+                      ? ` · Voice: ${post.reelScript.voiceName}`
+                      : ""}
+                  </div>
                   <ol style={{ margin: "6px 0 0", paddingLeft: 20 }}>
                     {post.reelScript.scenes.map((x, i) => (
                       <li key={i}>
@@ -2031,6 +2036,9 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
                           · {x.seconds} s · {x.shows}
                           {x.by === "template" ? " · template" : ""}
                         </span>
+                        {x.vo ? (
+                          <div className="muted">Voice: “{x.vo}”</div>
+                        ) : null}
                       </li>
                     ))}
                   </ol>

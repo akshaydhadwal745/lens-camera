@@ -15,12 +15,13 @@ import { SCREENS, type Screen } from './growth-design';
 import { FORBIDDEN_CLAIMS } from './growth-report';
 import { MAX_SECONDS } from './growth-reel';
 import { readCues, SOUNDS, type Cue } from './growth-sound';
+import { voiceLineProblems, type VoiceKind } from './growth-voice';
 
 export type Media = 'footage' | 'photo' | 'phone' | 'none';
-export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; alt?: string; screen: Screen };
+export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; alt?: string; screen: Screen; vo?: string };
 export const MOODS = ['upbeat', 'chill', 'emotional', 'energetic', 'warm'] as const;
 export type Mood = (typeof MOODS)[number];
-export type WrittenReel = { angle: string; audience: string; hook: string; mood?: Mood; scenes: WrittenScene[] };
+export type WrittenReel = { angle: string; audience: string; hook: string; mood?: Mood; voice?: VoiceKind; scenes: WrittenScene[] };
 export type SceneDesign = { n: number; idea: string; entry: Entry; html: string; sounds?: Cue[] };
 export const ENTRIES = ['cut', 'whip', 'slide', 'fade', 'circle', 'wipe'] as const;
 export type Entry = (typeof ENTRIES)[number];
@@ -48,14 +49,22 @@ For each scene choose what it shows:
 - none: type, colour and shapes only (good for a punchy line).
 Use the phone in 1 or 2 scenes (3 at most): enough to prove the product, not a tutorial. At least 2 scenes are footage or photo of the real moment, usually the hook and the payoff. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
 Scene lengths: 2 to 5 seconds (enough to read the words twice), total 15 to ${MAX_SECONDS} seconds, 4 to 8 scenes.
+Voiceover (vo, per scene): a warm narrator talks over the reel, like a friend telling you something true over chai, not an ad. It carries the story; the on-screen words are only the key phrase.
+- Sound human: contractions (you've, it's, don't), short sentences, a breath between thoughts, one specific real detail ("the front row", "the second verse", "Nani's phone"). Say it the way people actually talk. Read it out loud in your head: if it sounds like a commercial, rewrite it.
+- Never read the on-screen words out loud. The voice says the feeling or the detail around them (screen "Storage full." → voice "Of course. Right as she walks on.").
+- No ad-speak: never "Are you tired of", "Say goodbye to", "Introducing", "Look no further", "Meet Lens", "game-changer", "don't miss out". No questions that sound like a sales pitch.
+- 3 to 14 words per scene (18 at most); a scene may be silent (empty vo) when the picture says it all. The hook's line is short and lands in the first second. The last scene's line says the call to action in a natural way.
+- The same truth rules as the words on screen.
+voice: "india" only when the moment is celebrated in India (Diwali, Holi, Children's Day in India…); otherwise "global".
 mood: the music under it: upbeat (bright pop), chill (lo-fi, relaxed), emotional (piano, heartfelt), energetic (driving electronic), warm (acoustic, friendly).`;
 
 export const REEL_WRITER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['angle', 'audience', 'hook', 'mood', 'scenes'],
+  required: ['angle', 'audience', 'hook', 'mood', 'voice', 'scenes'],
   properties: {
     mood: { type: 'string', enum: MOODS },
+    voice: { type: 'string', enum: ['global', 'india'], description: 'india only for a moment that is celebrated in India; else global' },
     angle: { type: 'string', description: 'the pain point and the twist, one sentence' },
     audience: { type: 'string' },
     hook: { type: 'string' },
@@ -64,8 +73,8 @@ export const REEL_WRITER_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['n', 'seconds', 'words', 'beat', 'media', 'query', 'alt', 'screen'],
-        properties: { n: { type: 'integer' }, seconds: { type: 'number' }, words: { type: 'string' }, beat: { type: 'string' }, media: { type: 'string', enum: ['footage', 'photo', 'phone', 'none'] }, query: { type: 'string' }, alt: { type: 'string' }, screen: { type: 'string', enum: SCREENS } },
+        required: ['n', 'seconds', 'words', 'beat', 'media', 'query', 'alt', 'screen', 'vo'],
+        properties: { n: { type: 'integer' }, seconds: { type: 'number' }, words: { type: 'string' }, beat: { type: 'string' }, media: { type: 'string', enum: ['footage', 'photo', 'phone', 'none'] }, query: { type: 'string' }, alt: { type: 'string' }, vo: { type: 'string', description: 'the spoken line over this scene, or empty for silence' }, screen: { type: 'string', enum: SCREENS } },
       },
     },
   },
@@ -123,13 +132,21 @@ export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: st
   if (scenes.length >= 4 && real < 2) problems.push(`only ${real} scene${real === 1 ? '' : 's'} of real footage or photo (at least 2: the moment itself, usually the hook and the payoff)`);
   const phones = scenes.filter((s) => s.media === 'phone').length;
   if (phones > 3) problems.push(`${phones} phone scenes (3 at most: it's a story, not a tutorial)`);
+  // The voiceover: human, not a read-out of the screen (owner 2026-11-11).
+  const vos = (r?.scenes ?? []).slice(0, 8).map((x) => String((x as WrittenScene)?.vo ?? '').replace(/\s+/g, ' ').trim().slice(0, 160));
+  scenes.forEach((sc, i) => {
+    (sc as WrittenScene).vo = vos[i] ?? '';
+    for (const p of voiceLineProblems(vos[i] ?? '', sc.words)) problems.push(`scene ${sc.n} voice: ${p}`);
+  });
+  if (vos.filter(Boolean).length < Math.min(3, scenes.length)) problems.push('the voiceover needs a line in at least 3 scenes');
+  problems.push(...reelWordProblems(vos.filter(Boolean).join(' / '), `${allowed} ${cta}`).map((p) => `voice: ${p}`));
   problems.push(...reelWordProblems(scenes.map((s) => s.words).join(' / ') + ` ${r?.hook ?? ''}`, `${allowed} ${cta}`));
   if (problems.length) return { problems };
   // Fit the total into the reel's limit, keeping every scene readable.
   const total = scenes.reduce((a, s) => a + s.seconds, 0);
   const k = total > MAX_SECONDS ? MAX_SECONDS / total : 1;
   for (const s of scenes) s.seconds = Math.max(2, Math.floor(s.seconds * k * 10) / 10);
-  return { reel: { mood: (MOODS as readonly string[]).includes(String(r?.mood)) ? (r!.mood as Mood) : 'upbeat', angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
+  return { reel: { mood: (MOODS as readonly string[]).includes(String(r?.mood)) ? (r!.mood as Mood) : 'upbeat', voice: r?.voice === 'india' ? 'india' : 'global', angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
 }
 
 // ---------- 2. the designer ----------
@@ -182,13 +199,15 @@ export const REEL_DESIGN_SCHEMA = {
   },
 } as const;
 
+const LEAD_S = 0.25;
+
 export function reelDesignPrompt(reel: WrittenReel, photos: KitPhoto[], footage: Set<number>, brand: { primary: string; accent: string }, site: string, fix?: Map<number, string[]>): string {
   const todo = reel.scenes.filter((s) => !fix || fix.has(s.n));
   const scenes = todo.map((s) => {
     const last = s.n === reel.scenes.length;
     const has = footage.has(s.n) ? 'footage: yes (<lens-footage>)' : 'footage: none';
     const problems = fix?.get(s.n);
-    return `Scene ${s.n} · ${s.seconds} s · beat: ${s.beat}\n  words: "${s.words}"\n  shows: ${s.media}${s.media === 'phone' ? ` (screen ${s.screen})` : ''}${s.media === 'photo' || s.media === 'footage' ? ` (${s.query})` : ''} · ${has}${last ? ` · LAST: call to action; include <lens-icon> and the site ${site}` : ''}${problems ? `\n  YOUR LAST DESIGN OF THIS SCENE HAD THESE PROBLEMS, fix them: ${problems.join('; ')}` : ''}`;
+    return `Scene ${s.n} · ${s.seconds} s · beat: ${s.beat}\n  words: "${s.words}"\n${s.vo ? `  the voice says (from ${LEAD_S} s): "${s.vo}" (time the motion to it)\n` : ''}  shows: ${s.media}${s.media === 'phone' ? ` (screen ${s.screen})` : ''}${s.media === 'photo' || s.media === 'footage' ? ` (${s.query})` : ''} · ${has}${last ? ` · LAST: call to action; include <lens-icon> and the site ${site}` : ''}${problems ? `\n  YOUR LAST DESIGN OF THIS SCENE HAD THESE PROBLEMS, fix them: ${problems.join('; ')}` : ''}`;
   });
   const ph = photos.map((p) => `- ${p.ref}: ${p.about.slice(0, 90)} (${p.w}×${p.h})`);
   return `${fix ? 'Redesign only these scenes' : 'Design every scene'} of this reel.

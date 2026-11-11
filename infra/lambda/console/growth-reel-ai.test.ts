@@ -3,10 +3,11 @@ import { test } from 'node:test';
 
 import { bestStart, openverseTracks } from './growth-music';
 import { mixReel, RATE, readCues, SOUNDS, synth, wav } from './growth-sound';
+import { fitToVoice, voiceLineProblems, VOICE_MAX_SECONDS } from './growth-voice';
 import { designsByScene, readWrittenReel, reelDesignPrompt, reelSceneHtml, reelWordProblems, sceneWordProblems, type WrittenReel } from './growth-reel-ai';
 
 const FACTS = 'Full-quality backup. 10 GB free forever. Lens Plus 50 GB for ₹59 a month. Event albums: a QR code guests open.';
-const scene = (n: number, words: string, extra: Record<string, unknown> = {}) => ({ n, seconds: 3, words, beat: 'beat', media: 'phone', query: '', screen: 'library', ...extra }) as unknown as WrittenReel['scenes'][number];
+const scene = (n: number, words: string, extra: Record<string, unknown> = {}) => ({ n, seconds: 3, words, beat: 'beat', media: 'phone', query: '', screen: 'library', vo: 'You know exactly how that feels.', ...extra }) as unknown as WrittenReel['scenes'][number];
 
 test('writer: a good reel is kept and timed to the limit', () => {
   const r = readWrittenReel(
@@ -111,4 +112,42 @@ test('music: only free licences, instrumental-looking, 1–7 min; the loud stret
   const s = bestStart(env, 10);
   assert.ok(s >= 5.9 && s <= 6.2, String(s));
   assert.equal(bestStart(new Float32Array(10), 10), 0);
+});
+
+test('voice: human lines pass; ad-speak, read-outs of the screen and long lines are sent back', () => {
+  assert.deepEqual(voiceLineProblems("Of course. Right as she walks on.", 'Storage full.'), []);
+  assert.match(voiceLineProblems('Are you tired of a full phone?', 'Phone full').join(), /ad-speak/);
+  assert.match(voiceLineProblems('Say goodbye to storage worries', 'x').join(), /ad-speak/);
+  assert.match(voiceLineProblems('One album for the day with one QR code', 'One album for the day. One QR code.').join(), /repeats the on-screen words/);
+  assert.match(voiceLineProblems('a b c d e f g h i j k l m n o p q r s t', 'x').join(), /18 at most/);
+});
+
+test('writer: the voiceover is checked like the words, and the voice is global unless India', () => {
+  const base = [scene(1, 'Storage full.', { media: 'footage', query: 'school stage', vo: 'Right as she walks on stage.' }), scene(2, 'b', { vo: '' }), scene(3, 'c', { media: 'photo', query: 'parents audience', vo: "Forty parents. Forty galleries. You'll never see half." }), scene(4, 'Try Lens free', { vo: 'Sort it tonight. Try Lens free.' })];
+  const ok = readWrittenReel({ angle: '', audience: '', hook: '', voice: 'india', scenes: base }, FACTS, 'Try Lens free');
+  assert.deepEqual(ok.problems, []);
+  assert.equal(ok.reel!.voice, 'india');
+  assert.equal(ok.reel!.scenes[0].vo, 'Right as she walks on stage.');
+  assert.equal(readWrittenReel({ angle: '', audience: '', hook: '', voice: 'x' as never, scenes: base }, FACTS, 'Try Lens free').reel!.voice, 'global');
+  const silent = readWrittenReel({ angle: '', audience: '', hook: '', scenes: base.map((x) => ({ ...x, vo: '' })) }, FACTS, 'Try Lens free');
+  assert.match(silent.problems.join(), /at least 3 scenes/);
+  const claim = readWrittenReel({ angle: '', audience: '', hook: '', scenes: base.map((x, i) => (i === 1 ? { ...x, vo: 'Get 500 GB free, honestly.' } : x)) }, FACTS, 'Try Lens free');
+  assert.match(claim.problems.join(), /voice: numbers/);
+});
+
+test('voice timing: scenes stretch to their lines, the reel stays under the limit, lines are never cut', () => {
+  const sc = [1, 2, 3, 4].map((n) => ({ n, seconds: 3 }));
+  assert.deepEqual(fitToVoice(sc, new Map([[1, 4], [3, 1]])), [4.6, 3, 3, 3]);
+  const long = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ n, seconds: 5 }));
+  const f = fitToVoice(long, new Map(long.map((s) => [s.n, 3.5])));
+  assert.ok(f.reduce((a, b) => a + b, 0) <= VOICE_MAX_SECONDS + 0.05);
+  for (const v of f) assert.ok(v >= 0.25 + 3.5 + 0.35 - 0.05);
+});
+
+test('mix: the voice sits on top and the music ducks under it', () => {
+  const music = new Float32Array(2 * RATE * 2).fill(0.3);
+  const voice = new Float32Array(Math.floor(0.5 * RATE)).fill(0);
+  const m = mixReel(2, [], music, [{ at: 1, pcm: voice }]);
+  const at = (t: number) => Math.abs(m[Math.floor(t * RATE) * 2]);
+  assert.ok(at(1.2) < at(0.6) * 0.4, `${at(1.2)} vs ${at(0.6)}`);
 });
