@@ -867,6 +867,74 @@ const CONTENT_MODE: Mode = { system: CONTENT_SYSTEM, schema: CONTENT_SCHEMA, too
 
 /** Social tasks: 1–3 content packages land on the Content board as In review (docs/growth/content-engine.md).
  * The same checks as a person's save run here; problems are shown on the post and block approval. */
+const brandBlock = (kit: Awaited<ReturnType<typeof loadBrand>>) =>
+  `BRAND KIT\nVoice: ${kit.voice}\nDo: ${kit.dos.join(' | ')}\nDon't: ${kit.donts.join(' | ')}\nCalls to action: ${kit.ctas.join(' | ')}\nHashtags to draw from: ${kit.hashtags.join(' ')}\nPillars: ${kit.pillars.join(', ')}\nLanguages: ${kit.languages.join(', ')}\nFOCUS PLATFORMS (make versions only for these): ${kit.focus.join(', ')}`;
+
+/** POST /growth/posts/<id>/redraft {note?}: the agent remakes this one post (GrowthAnalyst, a few minutes). */
+export async function redraftStart(postId: string, body: Record<string, unknown> | undefined, by: string): Promise<Res> {
+  if (!/^[a-f0-9]{10}$/.test(postId)) throw new HttpError(400, 'Bad post id');
+  const key = { pk: 'GROWTH', sk: `POST#${postId}` };
+  const p = (await ddb.send(new GetCommand({ TableName: env.table, Key: key }))).Item;
+  if (!p) throw new HttpError(404, 'No such post');
+  if (p.published && Object.keys(p.published).length) throw new HttpError(409, 'Already published: make a new post instead');
+  const note = typeof body?.note === 'string' ? body.note.slice(0, 600) : '';
+  const { InvokeCommand, LambdaClient } = await import('@aws-sdk/client-lambda');
+  await new LambdaClient({}).send(new InvokeCommand({ FunctionName: process.env.GROWTH_FUNCTION, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ redraft: { postId, note }, by })) }));
+  const r = await ddb.send(new UpdateCommand({ TableName: env.table, Key: key, UpdateExpression: 'SET redrafting = :t REMOVE redraftError', ExpressionAttributeValues: { ':t': Date.now() }, ReturnValues: 'ALL_NEW' }));
+  const { pk: _p, sk: _s, ...post } = r.Attributes ?? {};
+  return json(202, { post });
+}
+
+/**
+ * Redraft one post (owner 2026-11-11: the first drafts were written under older rules). The content agent remakes
+ * just this package under today's rules: same idea, format, date and platforms, the old version as a reference
+ * ("improve it, don't copy"), its score notes and the person's note. The post goes back to In review with its
+ * approval cleared, and the content chain remakes its images (make.images = todo) and, for a reel, its reel.
+ */
+export async function redraftPost(postId: string, by: string, note = ''): Promise<Record<string, unknown>> {
+  const lockAt = await takeLock(`redraft:${by}`, true, Date.now(), postId);
+  if (lockAt === undefined) return { skipped: 'busy' };
+  const key = { pk: 'GROWTH', sk: `POST#${postId}` };
+  try {
+    const old = (await ddb.send(new GetCommand({ TableName: env.table, Key: key }))).Item;
+    if (!old) throw new Error('No such post');
+    if (old.published && Object.keys(old.published).length) throw new Error('Already published: make a new post instead');
+    const token = await getParam('/lens/growth/claude-token');
+    if (!token) throw new Error('Claude token not set up');
+    rmSync(TOOL_LOG, { force: true });
+    const commit = await fetchCode();
+    const kit = await loadBrand();
+    const t = old.taskId ? await getTask(String(old.taskId)).catch(() => undefined) : undefined;
+    const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), competitorHosts: await competitorHosts().catch(() => []), enabled: [], commit };
+    const before = { format: old.format, hook: old.hook, slides: old.slides, script: old.script, page: old.page, variants: old.variants };
+    const weak = ((old.score?.images ?? old.reelScore?.images ?? []) as { label: string; score: number; why: string; fix: string }[]).filter((x) => x.score < 75).map((x) => `- ${x.label}: ${x.score}/100, ${x.why}${x.fix ? ` Fix: ${x.fix}` : ''}`);
+    const prompt = [
+      t ? draftTask(t) : `TASK\nRemake this content package.`,
+      brandBlock(kit),
+      `REDRAFT ONE PACKAGE. Give exactly 1 package: the same idea, format "${old.format}", website page and platforms as the version below, written fresh under the rules (captions, hooks, slide variety). Improve it; don't copy its sentences.\n\nThe old version:\n${JSON.stringify(before).slice(0, 12000)}${weak.length ? `\n\nWhat the reviewer marked down:\n${weak.join('\n')}` : ''}${note ? `\n\nThe owner's note: ${note.slice(0, 600)}` : ''}`,
+    ].join('\n\n');
+    const { report: d } = await runClaude<ContentDraft>(prompt, token, tools, Date.now() + 12 * 60_000, CONTENT_MODE);
+    const x = (d.packages ?? [])[0];
+    if (!x) throw new Error(`No package. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
+    x.variants = Object.fromEntries(Object.entries(x.variants ?? {}).filter(([k]) => (kit.focus as string[]).includes(k))) as typeof x.variants;
+    const f = postFields({ ...old, ...x, format: old.format, title: x.name || old.title, body: x.why || old.body, status: 'in_review', date: old.date }, old);
+    if (!Object.keys(f.variants).length) throw new Error('The new version has no platform versions');
+    const problems = postProblems(f, old.code);
+    const links = Object.fromEntries(Object.keys(f.variants).map((k) => [k, platformLink(k, old.code, f.page)]));
+    const reel = ['reel', 'short'].includes(f.format);
+    const { approvedBy: _a, approvedAt: _b, renders: _r, renderedAt: _ra, score: _s, redrafting: _rd, redraftError: _re, ...keep } = old;
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...keep, ...f, code: old.code, link: platformLink(f.channel, old.code, f.page), links, problems, status: 'in_review', make: { images: 'todo', reel: reel ? 'todo' : 'none' }, redraftedAt: Date.now(), updatedAt: Date.now(), updatedBy: `agent (redraft for ${by})` } }));
+    await releaseLock(lockAt);
+    console.log(JSON.stringify({ redrafted: postId, format: f.format, problems }));
+    return { redrafted: postId, problems };
+  } catch (e) {
+    const message = (e as Error).message;
+    await ddb.send(new UpdateCommand({ TableName: env.table, Key: key, UpdateExpression: 'SET redraftError = :e REMOVE redrafting', ExpressionAttributeValues: { ':e': { message: message.slice(0, 400), at: Date.now() } } })).catch(() => undefined);
+    await releaseLock(lockAt, `Redraft ${postId}: ${message}`);
+    return { error: message };
+  }
+}
+
 async function runContentDraft(t: Task, by: string, started: number) {
   const token = await getParam('/lens/growth/claude-token');
   if (!token) throw new Error('Claude token not set up');
@@ -876,7 +944,7 @@ async function runContentDraft(t: Task, by: string, started: number) {
   const tools: ToolSetup = { googleToken: await retry(() => googleToken()).catch(() => undefined), competitorHosts: await competitorHosts().catch(() => []), enabled: [], commit };
   const prompt = [
     draftTask(t),
-    `BRAND KIT\nVoice: ${kit.voice}\nDo: ${kit.dos.join(' | ')}\nDon't: ${kit.donts.join(' | ')}\nCalls to action: ${kit.ctas.join(' | ')}\nHashtags to draw from: ${kit.hashtags.join(' ')}\nPillars: ${kit.pillars.join(', ')}\nLanguages: ${kit.languages.join(', ')}\nFOCUS PLATFORMS (make versions only for these): ${kit.focus.join(', ')}`,
+    brandBlock(kit),
   ].join('\n\n');
   const { report: d } = await runClaude<ContentDraft>(prompt, token, tools, started + 12 * 60_000, CONTENT_MODE);
   await saveToolActivity(`draft:${t.id}`, `D-${t.id}`, Date.now());

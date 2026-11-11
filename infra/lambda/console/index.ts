@@ -14,7 +14,7 @@ import { costs } from './costs';
 import { errors } from './errors';
 import { health } from './health';
 import { analytics } from './analytics';
-import { competitorCheck, competitorResearch, growthDraft, jobsPage, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, seoAuditRun } from './growth';
+import { competitorCheck, competitorResearch, growthDraft, jobsPage, monthlyPage, monthlyRun, growthPage, growthRun, growthTools, growthUnwatch, redraftStart, seoAuditRun } from './growth';
 import { calendarPage, ga4Page, integrationsPage, metaRequest } from './growth-content';
 import { competitorSave, competitorsPage } from './growth-competitors';
 import { campaignSave, moneyPage, spendSave } from './growth-money';
@@ -148,6 +148,7 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'PUT /growth/brand') return await allowed('growth.write', () => brandUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'approve' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
       return await allowed('growth.write', () => postApprove(seg[2], email, method === 'DELETE'));
+    if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'redraft' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => redraftStart(seg[2], req.body, email));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'publish' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
       return await allowed('growth.write', () => publishStart(seg[2], req.body, email, method === 'DELETE'));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'export' && seg.length === 4 && method === 'GET') return await allowed('growth', () => postExport(seg[2]));
