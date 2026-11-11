@@ -36,6 +36,9 @@ export const EVERGREEN: { idea: string; pillar: string; page: string }[] = [
   { idea: '10 GB free, forever: what fits in it (years of everyday photos) and why the free plan is enough for most people.', pillar: 'backup', page: '/' },
 ];
 
+/** Religious observances: never picked for automatic posting (a person makes those with "Make content"). */
+export const RELIGIOUS = /\b(puja|pooja|chhat|chhath|eid|ramadan|ramzan|navratri|durga|ganesh|ganpati|guru (nanak|purab|parv)|gurpurab|jayanti|easter|good friday|lent|ash wednesday|yom kippur|rosh hashanah|hanukkah|passover|diwali|deepavali|holi|christmas|mass|ekadashi|shivratri|janmashtami|ram navami|muharram|ashura|baisakhi|vaisakhi|onam|pongal|karva chauth|raksha bandhan|bhai dooj|dhanteras|lohri|makar sankranti|sashthi)\b/i;
+
 /** Today's idea: a strong upcoming moment not used yet, else the next evergreen idea not in the last 10. Pure. */
 export function pickIdea(
   today: string,
@@ -44,7 +47,7 @@ export function pickIdea(
 ): { source: 'moment'; moment: (typeof moments)[number] } | { source: 'evergreen'; idea: (typeof EVERGREEN)[number] } {
   const t0 = Date.parse(`${today}T00:00:00Z`);
   const soon = moments
-    .filter((m) => !m.taskId && m.score >= 65 && ['concert', 'festival', 'match', 'trend', 'season'].includes(m.kind) && !recent.includes(`moment:${m.id}`))
+    .filter((m) => !m.taskId && !RELIGIOUS.test(m.title) && m.score >= 65 && ['concert', 'festival', 'match', 'trend', 'season'].includes(m.kind) && !recent.includes(`moment:${m.id}`))
     .filter((m) => {
       const d = (Date.parse(`${m.day}T00:00:00Z`) - t0) / DAY;
       return d >= 2 && d <= 5;

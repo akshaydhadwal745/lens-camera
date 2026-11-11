@@ -11,6 +11,7 @@ test('daily idea: a strong moment 2–5 days out first, unused; else the next ev
   assert.equal(pickIdea('2026-11-11', [m({ score: 50 })], []).source, 'evergreen');
   assert.equal(pickIdea('2026-11-11', [m({ taskId: 'T-1' })], []).source, 'evergreen');
   assert.equal(pickIdea('2026-11-11', [m({ kind: 'holiday' })], []).source, 'evergreen');
+  assert.equal(pickIdea('2026-11-11', [m({ title: 'Chhat Puja (Pratihar Sashthi/Surya Sashthi)', score: 89 })], []).source, 'evergreen'); // religious: by hand only
   const first = pickIdea('2026-11-11', [], []);
   assert.equal(first.source, 'evergreen');
   const used = `evergreen:${(first as { idea: (typeof EVERGREEN)[number] }).idea.idea.slice(0, 40)}`;
