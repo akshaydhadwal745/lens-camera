@@ -25,6 +25,7 @@ import { brandPage, brandUpdate } from './growth-brand';
 import { momentContent, momentsPage } from './growth-moments';
 import { renderStart, renderZip } from './growth-media';
 import { reelStart } from './growth-video';
+import { publishStart } from './growth-instagram';
 import { partnerSave, postApprove, postExport, postSave, recordDelete } from './growth-records';
 import { growthHousekeeping, liveAnalytics, migrateLegacy, workspace } from './growth-workspace';
 import { taskComment, taskCreate, taskDetail, tasksPage, taskUpdate } from './growth-tasks';
@@ -145,6 +146,8 @@ export async function handler(event: APIGatewayProxyEventV2 | { alerts: true }):
     if (route === 'PUT /growth/brand') return await allowed('growth.write', () => brandUpdate(req, email));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'approve' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
       return await allowed('growth.write', () => postApprove(seg[2], email, method === 'DELETE'));
+    if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'publish' && seg.length === 4 && (method === 'POST' || method === 'DELETE'))
+      return await allowed('growth.write', () => publishStart(seg[2], req.body, email, method === 'DELETE'));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'export' && seg.length === 4 && method === 'GET') return await allowed('growth', () => postExport(seg[2]));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'render' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => renderStart(seg[2], email));
     if (seg[0] === 'growth' && seg[1] === 'posts' && seg[2] && seg[3] === 'reel' && seg.length === 4 && method === 'POST') return await allowed('growth.contribute', () => reelStart(seg[2], email));

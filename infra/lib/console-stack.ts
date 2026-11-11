@@ -213,6 +213,12 @@ export class ConsoleStack extends Stack {
     });
     // The content chain: "Make content" on a moment drafts, then makes images, then the reel, one step per tick
     // (growth-chain.ts). An idle tick is a couple of DynamoDB reads (about $0.20 a month).
+    // Instagram token (growth-instagram.ts): renewed every Sunday; the engine writes only this one parameter.
+    growth.addToRolePolicy(new iam.PolicyStatement({ actions: ['ssm:PutParameter'], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/lens/growth/instagram`] }));
+    new events.Rule(this, 'GrowthInstagramRefresh', {
+      schedule: events.Schedule.cron({ weekDay: 'SUN', hour: '3', minute: '0' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ igRefresh: true }), retryAttempts: 0 })],
+    });
     // Weekly event scout (growth-scout.ts): Claude searches the web for concerts, tours, festivals and parties.
     new events.Rule(this, 'GrowthEventScout', {
       schedule: events.Schedule.cron({ weekDay: 'MON,THU', hour: '2', minute: '30' }),

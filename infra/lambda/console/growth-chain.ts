@@ -11,6 +11,7 @@ import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/li
 import { ddb, env } from '../api/lib';
 import { finishJob, runDraft } from './growth';
 import { renderPost } from './growth-media';
+import { duePublishes } from './growth-instagram';
 import { listTasks } from './growth-tasks';
 
 type Make = { images?: string; reel?: string; tries?: number };
@@ -52,6 +53,9 @@ export function nextStep(
 }
 
 export async function contentChain(): Promise<Record<string, unknown>> {
+  // Scheduled Instagram posts whose time has come go out first (growth-instagram.ts).
+  const published = await duePublishes().catch((e: Error) => (console.error(JSON.stringify({ duePublishesFailed: e.message.slice(0, 200) })), []));
+  if (published.length) return { chain: 'published', posts: published };
   const [tasks, all, running, render, reel] = await Promise.all([listTasks(), posts(), row('RUNNING'), row('JOB#render'), row('JOB#reel')]);
   const free = { analyst: !(running?.at && Date.now() - running.at < JOB_BUSY_MS), render: !busy(render, JOB_BUSY_MS), reel: !busy(reel, REEL_BUSY_MS) };
   const step = nextStep(tasks, all, free);

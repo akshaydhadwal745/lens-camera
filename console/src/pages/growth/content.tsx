@@ -769,6 +769,14 @@ function PostEditor({
             </div>
           </div>
         )}
+        {post && manager && post.variants?.instagram && (
+          <InstagramPublish
+            post={post}
+            busy={busy}
+            approved={approved}
+            call={call}
+          />
+        )}
         {post?.published && Object.keys(post.published).length > 0 && (
           <p className="small">
             Published:{" "}
@@ -850,6 +858,119 @@ function PostEditor({
         )}
       </aside>
     </>
+  );
+}
+
+/** Post to Instagram now, or schedule it (growth-instagram.ts). Only an approved, unchanged post goes out. */
+function InstagramPublish({
+  post,
+  busy,
+  approved,
+  call,
+}: {
+  post: Post;
+  busy: boolean;
+  approved: boolean;
+  call: (fn: () => Promise<{ post: Post }>) => Promise<void>;
+}) {
+  const [when, setWhen] = useState("");
+  const [now] = useState(() => Date.now());
+  const done = post.published?.instagram;
+  const sending =
+    !done &&
+    !!post.publishing?.instagram &&
+    now - post.publishing.instagram < 15 * 60_000 &&
+    !(post.publishError && post.publishError.at > post.publishing.instagram);
+  const at = post.schedule?.instagram;
+  const hasMedia = !!post.reel?.assetId || (post.renders?.length ?? 0) > 0;
+  if (done)
+    return (
+      <p className="small">
+        On Instagram:{" "}
+        <a href={done.url} target="_blank" rel="noreferrer">
+          open the post
+        </a>
+      </p>
+    );
+  return (
+    <div className="gw-callout">
+      <strong>Instagram</strong>
+      {post.publishError && (
+        <p className="small">
+          <strong>Didn’t go out:</strong> {post.publishError.message}
+        </p>
+      )}
+      {!approved ? (
+        <span className="muted small">Approve the post to publish it.</span>
+      ) : !hasMedia ? (
+        <span className="muted small">Make the images or the reel first.</span>
+      ) : sending ? (
+        <span className="small">
+          Posting to Instagram… usually 1–3 minutes. Reopen the post to see the
+          link.
+        </span>
+      ) : post.status === "scheduled" && at ? (
+        <div className="btns">
+          <span className="small">
+            Scheduled for {new Date(at).toLocaleString()}
+          </span>
+          <button
+            className="btn ghost"
+            disabled={busy}
+            onClick={() =>
+              void call(() =>
+                api("DELETE", `/growth/posts/${post.id}/publish`, {
+                  platform: "instagram",
+                }),
+              )
+            }
+          >
+            Cancel schedule
+          </button>
+        </div>
+      ) : (
+        <div className="btns">
+          <button
+            className="btn primary"
+            disabled={busy}
+            onClick={() =>
+              void call(() =>
+                api("POST", `/growth/posts/${post.id}/publish`, {
+                  platform: "instagram",
+                }),
+              )
+            }
+          >
+            Post to Instagram now
+          </button>
+          <input
+            id="ig-when"
+            type="datetime-local"
+            aria-label="Schedule for"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+          />
+          <button
+            className="btn"
+            disabled={busy || !when}
+            onClick={() =>
+              void call(() =>
+                api("POST", `/growth/posts/${post.id}/publish`, {
+                  platform: "instagram",
+                  at: new Date(when).getTime(),
+                }),
+              )
+            }
+          >
+            Schedule
+          </button>
+        </div>
+      )}
+      <span className="muted small">
+        Goes out as the Instagram text from Export (caption, hashtags, link and
+        credits) with the reel, or the images as a carousel.
+      </span>
+    </div>
   );
 }
 
@@ -1825,7 +1946,10 @@ function Moments({ ws }: { ws: Workspace }) {
                       {m.source}
                     </a>
                     {m.dateChecked === false ? (
-                      <> · <strong>date not confirmed: check the link</strong></>
+                      <>
+                        {" "}
+                        · <strong>date not confirmed: check the link</strong>
+                      </>
                     ) : null}
                   </span>
                   <span>
@@ -1969,8 +2093,9 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
         A vertical video (1080×1920, MP4) for Instagram, Facebook and X. The AI
         writes it around the pain point of this post, designs and animates every
         scene, scores the result and redesigns weak scenes once. Sound is
-        included: a voiceover (Ruth, the Lens voice), effects timed
-        to each scene, and free-licence music picked for the reel&apos;s mood (credited in the post&apos;s assets). Takes about 20–40 minutes and keeps going if
+        included: a voiceover (Ruth, the Lens voice), effects timed to each
+        scene, and free-licence music picked for the reel&apos;s mood (credited
+        in the post&apos;s assets). Takes about 20–40 minutes and keeps going if
         you leave this page. Making it again replaces the old one.
       </span>
       {running && stage && (
