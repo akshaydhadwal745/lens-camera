@@ -6,7 +6,7 @@
 // approved by the gate and scheduled for the evening (published as a trial reel while the account is small); anything
 // else stays In review and the owners get an email. The Console switch (Content → Results) turns it off.
 //   GROWTH / AUTOPOST        { on, by, at }  (no row = on)
-//   GROWTH / DAILY#<date>    { taskId, idea, source: moment|evergreen, at }
+//   GROWTH / DAILYREEL#<date>    { taskId, idea, source: moment|evergreen, at }
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
@@ -80,8 +80,8 @@ async function rowsOf(prefix: string): Promise<Record<string, any>[]> {
 export async function dailyContent(now = Date.now()): Promise<Record<string, unknown>> {
   if (!(await autoPostOn())) return { daily: 'off' };
   const today = new Date(now).toISOString().slice(0, 10);
-  if ((await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `DAILY#${today}` } }))).Item) return { daily: 'already made today' };
-  const recent = (await rowsOf('DAILY#')).sort((a, b) => String(b.sk).localeCompare(String(a.sk))).map((r) => String(r.ref ?? ''));
+  if ((await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `DAILYREEL#${today}` } }))).Item) return { daily: 'already made today' };
+  const recent = (await rowsOf('DAILYREEL#')).sort((a, b) => String(b.sk).localeCompare(String(a.sk))).map((r) => String(r.ref ?? ''));
   const moments = (await rowsOf('MOMENT#')) as { id: string; title: string; day: string; score: number; kind: string; taskId?: string; angle?: string }[];
   const pick = pickIdea(today, moments, recent);
   const rule = 'Make exactly ONE package, format reel, for instagram (other platforms only if they are focus platforms). It is posted automatically if it passes the quality checks, so every claim must match the product facts.';
@@ -97,7 +97,7 @@ export async function dailyContent(now = Date.now()): Promise<Record<string, unk
   );
   if (pick.source === 'moment') await ddb.send(new UpdateCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `MOMENT#${pick.moment.id}` }, UpdateExpression: 'SET taskId = :t', ExpressionAttributeValues: { ':t': task.id } }));
   const ref = pick.source === 'moment' ? `moment:${pick.moment.id}` : `evergreen:${pick.idea.idea.slice(0, 40)}`;
-  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `DAILY#${today}`, taskId: task.id, ref, source: pick.source, idea: fields.title, at: now, ttl: Math.floor((now + 120 * DAY) / 1000) } }));
+  await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `DAILYREEL#${today}`, taskId: task.id, ref, source: pick.source, idea: fields.title, at: now, ttl: Math.floor((now + 120 * DAY) / 1000) } }));
   console.log(JSON.stringify({ daily: today, task: task.id, ref }));
   return { daily: today, task: task.id, ref };
 }
@@ -151,6 +151,6 @@ export async function autoPostSet(body: Record<string, unknown> | undefined, by:
 
 /** What the Results tab shows about daily posting. */
 export async function dailyStatus(): Promise<{ on: boolean; recent: { day: string; idea: string; source: string }[] }> {
-  const days = (await rowsOf('DAILY#')).sort((a, b) => String(b.sk).localeCompare(String(a.sk))).slice(0, 7);
-  return { on: await autoPostOn(), recent: days.map((d) => ({ day: String(d.sk).slice(6), idea: String(d.idea ?? ''), source: String(d.source ?? '') })) };
+  const days = (await rowsOf('DAILYREEL#')).sort((a, b) => String(b.sk).localeCompare(String(a.sk))).slice(0, 7);
+  return { on: await autoPostOn(), recent: days.map((d) => ({ day: String(d.sk).slice(10), idea: String(d.idea ?? ''), source: String(d.source ?? '') })) };
 }
