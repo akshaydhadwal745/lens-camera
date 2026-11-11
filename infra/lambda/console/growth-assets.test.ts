@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { assetProblems, credits, hasLensPhoto, readAssetRefs, signatureMatches, type Asset } from './growth-assets';
+import { assetProblems, compactCredits as cc, credits, hasLensPhoto, readAssetRefs, signatureMatches, type Asset } from './growth-assets';
 import { licenseVerdict } from './growth-rights';
 
 const asset = (id: string, o: Partial<Asset> = {}, license = 'own', people = false): Asset => {
@@ -73,4 +73,9 @@ test('credits list licensed media only', () => {
     ['bbbbbbbbbbbb', asset('bbbbbbbbbbbb', {}, 'Unsplash License')],
   ]);
   assert.deepEqual(credits([{ id: 'aaaaaaaaaaaa', role: 'media' }, { id: 'bbbbbbbbbbbb', role: 'background' }], m), ['Photo: Ravi on Unsplash']);
+});
+
+test('credits: photos from one site become one line; music and CC BY lines stay', () => {
+  assert.deepEqual(cc(['Music: "Lucky Acoustic" by Jesse Keller, CC BY 3.0 (https://j)', 'Photo: A on Unsplash', 'Photo: B on Unsplash', 'Photo: C on Unsplash', 'Image: D on Pixabay', 'Ann, CC BY 4.0 (https://c)']), ['Music: "Lucky Acoustic" by Jesse Keller, CC BY 3.0 (https://j)', 'Ann, CC BY 4.0 (https://c)', 'Photos: A, B and C on Unsplash', 'Photo: D on Pixabay']);
+  assert.deepEqual(cc([]), []);
 });

@@ -33,7 +33,7 @@ export const REEL_WRITER_SYSTEM = `You are the creative director of short vertic
 How you work:
 1. Find the ONE sharpest pain point this post touches: a real moment from the viewer's life, said the way they would say it. Examples of the level of specificity: "Storage full" popping up in the middle of the best moment of a concert; a wedding's photos scattered across forty guests' WhatsApps; the only good group photo arriving blurry in the chat; a parent's phone too full to take one more video of the baby. Name who feels it (audience).
    Make them FEEL it before you sell anything: the viewer must see the moment itself (the child on the stage, the friends at the concert, the wedding table at night) and recognise their own life in it. A reel of app screens is a tutorial; nobody shares a tutorial.
-2. Hook (scene 1, under 2 seconds): the pain in the viewer's own words: a punchy line or question that makes them think "that's me". No brand name, no "Introducing", no "Did you know".
+2. Hook (scene 1, under 2.5 seconds, at most 7 words): the first second decides whether anyone watches, so it must break the pattern of their feed. Use one of: a "POV:" line ("POV: storage full as she walks on"); a surprising true number from the facts or the post; the moment of pain caught mid-action; a line that goes against what they expect. Its picture is real footage or a real photo of the moment (never a phone screen, never a title card). No brand name, no "Introducing", no "Did you know", no slow build-up.
 3. One beat per scene, in this arc: the real moment and its pain (real footage) → the twist (it doesn't have to be this way) → Lens doing it (show the product proving it, briefly) → the payoff feeling (back in the real moment: the memory kept, everyone's photos together) → the call to action.
 4. On-screen words: short and spoken, at most 8 words per scene (the last scene at most 10). Specific, never generic ("Your camera roll, finally safe" not "Manage your storage"). No hashtags, no emoji, no corporate words (seamless, effortless, revolutionary, solution, unlock, elevate, game-changer, next level).
 
@@ -47,7 +47,7 @@ For each scene choose what it shows:
 - photo: one still photo; same rules for query and alt.
 - phone: the real Lens app on a phone proving the point; choose screen. Screens: library = the photo roll; backup = backup progress; free-space = space freed after backup; storage-full = a full phone (the problem); viewer = one photo open in Lens with a green Safe pill; qr-album = an event album with a QR code guests scan; camera = the Lens camera with Night mode.
 - none: type, colour and shapes only (good for a punchy line).
-Use the phone in 1 or 2 scenes (3 at most): enough to prove the product, not a tutorial. At least 2 scenes are footage or photo of the real moment, usually the hook and the payoff. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
+Use the phone in 1 or 2 scenes, never more: enough to prove the product, not a tutorial. At least 2 scenes are footage or photo of the real moment, usually the hook and the payoff. Vary what the scenes show. The last scene is the call to action and uses the given CTA words.
 Scene lengths: 2 to 5 seconds (enough to read the words twice), total 15 to ${MAX_SECONDS} seconds, 4 to 8 scenes.
 Voiceover (vo, per scene): a warm narrator talks over the reel, like a friend telling you something true over chai, not an ad. It carries the story; the on-screen words are only the key phrase.
 - Sound human: contractions (you've, it's, don't), short sentences, a breath between thoughts, one specific real detail ("the front row", "the second verse", "Nani's phone"). Say it the way people actually talk. Read it out loud in your head: if it sounds like a commercial, rewrite it.
@@ -130,7 +130,10 @@ export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: st
   const real = scenes.filter((s) => s.media === 'footage' || s.media === 'photo').length;
   if (scenes.length >= 4 && real < 2) problems.push(`only ${real} scene${real === 1 ? '' : 's'} of real footage or photo (at least 2: the moment itself, usually the hook and the payoff)`);
   const phones = scenes.filter((s) => s.media === 'phone').length;
-  if (phones > 3) problems.push(`${phones} phone scenes (3 at most: it's a story, not a tutorial)`);
+  if (phones > 2) problems.push(`${phones} phone scenes (2 at most: it's a story, not a tutorial)`);
+  // The hook: real picture, few words (owner 2026-11-11: the first post's opening didn't stop anyone).
+  if (scenes[0] && scenes[0].media !== 'footage' && scenes[0].media !== 'photo') problems.push('scene 1 must show real footage or a photo of the moment (the hook), not a phone or a title card');
+  if (scenes[0] && scenes[0].words.split(/\s+/).length > 7) problems.push('scene 1 has more than 7 words (the hook must land in a second)');
   // The voiceover: human, not a read-out of the screen (owner 2026-11-11).
   const vos = (r?.scenes ?? []).slice(0, 8).map((x) => String((x as WrittenScene)?.vo ?? '').replace(/\s+/g, ' ').trim().slice(0, 160));
   scenes.forEach((sc, i) => {
@@ -176,7 +179,7 @@ Craft rules (checked in code; scenes that fail are redesigned or replaced):
 - Words never over or under the phone or other words (keep 32px apart), at any moment.
 - The words must be readable for most of the scene: get them in within the first 0.8 s and keep them still at least 60% of the scene.
 - One focal point per scene. The phone, when shown, is big (scale ≥ 1.0) and fully readable, not a tiny thumbnail.
-- Vary layout, colour and motion from scene to scene; dark and light scenes may alternate. Scene 1 must stop the scroll within half a second (a strong move, a punch-in, a striking image).
+- Vary layout, colour and motion from scene to scene; dark and light scenes may alternate. Scene 1 must stop the scroll within half a second: motion from the very first frame (a punch-in on the footage, a hard slam of the words; never a fade-in from black or an empty first frame), the words fully in by 0.4 s.
 - Footage and photos of the real moment are the heart of the reel: give them the full frame, put the words in a block above or below the subject (with a scrim), never a small framed thumbnail of the moment.
 - Loop: the last scene ends on scene 1's look (its footage or photo, or its colours, behind the call to action in the final second), so when the reel starts again it flows on without a jump.
 - Keep life in long holds: slow push-ins (scale 1 → 1.08) on footage and photos, gentle float on phones.

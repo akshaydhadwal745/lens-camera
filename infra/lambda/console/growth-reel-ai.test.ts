@@ -11,7 +11,7 @@ const scene = (n: number, words: string, extra: Record<string, unknown> = {}) =>
 
 test('writer: a good reel is kept and timed to the limit', () => {
   const r = readWrittenReel(
-    { angle: 'Wedding photos scattered across guests', audience: 'couples', hook: 'Where are your wedding photos?', scenes: [scene(1, 'Where are your wedding photos?', { media: 'footage', query: 'wedding table' }), scene(2, 'Forty guests. Forty phones.', { seconds: 9 }), scene(3, 'One QR code on every table', { screen: 'qr-album' }), scene(4, 'Everyone adds. Full quality.', { media: 'footage', query: 'wedding dance floor', alt: 'wedding party' }), scene(5, '10 GB free forever. Try Lens free', { seconds: 5 })] },
+    { angle: 'Wedding photos scattered across guests', audience: 'couples', hook: 'Where are your wedding photos?', scenes: [scene(1, 'Where are your wedding photos?', { media: 'footage', query: 'wedding table' }), scene(2, 'Forty guests. Forty phones.', { seconds: 9 }), scene(3, 'One QR code on every table', { screen: 'qr-album' }), scene(4, 'Everyone adds. Full quality.', { media: 'footage', query: 'wedding dance floor', alt: 'wedding party' }), scene(5, '10 GB free forever. Try Lens free', { seconds: 5, media: 'none' })] },
     FACTS,
     'Try Lens free',
   );
@@ -181,4 +181,12 @@ test('subtitles: punctuation the word marks dropped comes back from the text', (
   assert.equal(withPunctuation(t, 'begging', 34), 'begging,');
   assert.equal(withPunctuation(t, 'right', 41), 'right?');
   assert.equal(withPunctuation(t, 'x'), 'x');
+});
+
+test('hook: scene 1 is a real picture in 7 words at most; 2 phone scenes at most', () => {
+  const r = (first: Record<string, unknown>, extra: Record<string, unknown>[] = []) => readWrittenReel({ angle: '', audience: '', hook: '', scenes: [scene(1, 'POV: storage full as she walks on', { media: 'footage', query: 'school stage', ...first }), scene(2, 'b', { media: 'none' }), scene(3, 'c', { media: 'photo', query: 'audience' }), scene(4, 'd', { media: 'none' }), ...extra.map((e, i) => scene(5 + i, 'e', e))] }, FACTS, 'Try Lens free').problems.join(' | ');
+  assert.equal(r({}), '');
+  assert.match(r({ media: 'phone' }), /scene 1 must show real footage/);
+  assert.match(r({ words: 'one two three four five six seven eight' }), /more than 7 words/);
+  assert.match(r({}, [{ media: 'phone' }, { media: 'phone' }, { media: 'phone' }]), /3 phone scenes/);
 });

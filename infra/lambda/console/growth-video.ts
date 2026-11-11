@@ -261,7 +261,7 @@ export async function renderTemplateReel(postId: string, by: string, jobAt: numb
 }
 
 /** What the reel's scorer is told on top of the post (owner 2026-11-10: "no images, no emotional connection"). */
-export const REEL_SCORE_NOTE = `This is a REEL, judged as a story, not as separate slides. A reel people feel shows the real moment: the event, the place, people in it (as an audience, from behind, hands). A scene that is only an app screen or a graphic, where the real moment would hit harder, scores at most 70. If the whole reel has no real moment at all, hook is at most 55. A phone screen whose photo grid is empty, grey or unrelated to the event: relates under 40. Drawn people, hands, cartoon figures or clip-art objects look cheap: design under 40.`;
+export const REEL_SCORE_NOTE = `This is a REEL, judged as a story, not as separate slides. A reel people feel shows the real moment: the event, the place, people in it (as an audience, from behind, hands). A scene that is only an app screen or a graphic, where the real moment would hit harder, scores at most 70. If the whole reel has no real moment at all, hook is at most 55. A phone screen whose photo grid is empty, grey or unrelated to the event: relates under 40. Scene 1 is captured at its first second: score it as the hook. Would a stranger scrolling past stop on this exact frame? If not (a phone screen, a title card, a calm stock photo with a caption), Scene 1 scores at most 60 and hook at most 60. Drawn people, hands, cartoon figures or clip-art objects look cheap: design under 40.`;
 
 /** Draw every frame, encode, let Claude score it, save the reel asset and the post. Shared by both reel kinds. */
 export async function drawReel(d: {
@@ -354,7 +354,8 @@ export async function drawReel(d: {
   const shots: { label: string; png: Buffer }[] = [];
   let at = 0;
   for (let i = 0; i < plan.length; i++) {
-    await page.evaluate(`seek(${at + plan[i].seconds * 0.85})`);
+    // Scene 1 is judged at its first second (when people decide to stay); the rest once their motion has landed.
+    await page.evaluate(`seek(${at + (i === 0 ? Math.min(1, plan[0].seconds * 0.5) : plan[i].seconds * 0.85)})`);
     shots.push({ label: `Scene ${i + 1}: ${plan[i].text}`.slice(0, 120), png: Buffer.from(await page.screenshot({ type: 'png' })) });
     at += plan[i].seconds;
   }
@@ -486,6 +487,18 @@ export function planCues(plan: ReelScene[], designed: (Cue[] | undefined)[] = []
  * person with a mood), else found now on Openverse (growth-music.ts). The same post gets the same track. The
  * loudest stretch is chosen and decoded to stereo float32. Nothing found → effects only.
  */
+/** The music of the 4 most recent reels of other posts. */
+async function recentMusic(postId: string): Promise<Set<string>> {
+  const rows: { id?: string; reel?: { musicId?: string; at?: number } }[] = [];
+  let start: Record<string, unknown> | undefined;
+  do {
+    const r = await ddb.send(new QueryCommand({ TableName: env.table, KeyConditionExpression: 'pk = :p AND begins_with(sk, :s)', FilterExpression: 'attribute_exists(reel.musicId)', ProjectionExpression: 'id, reel', ExpressionAttributeValues: { ':p': 'GROWTH', ':s': 'POST#' }, ExclusiveStartKey: start }));
+    rows.push(...((r.Items ?? []) as typeof rows));
+    start = r.LastEvaluatedKey;
+  } while (start);
+  return new Set(rows.filter((r) => r.id !== postId).sort((a, b) => Number(b.reel?.at) - Number(a.reel?.at)).slice(0, 4).map((r) => String(r.reel?.musicId)));
+}
+
 async function musicFor(mood: string, postId: string, seconds: number, cuts: number[] = []): Promise<{ asset: Asset; name: string; pcm: Float32Array } | undefined> {
   try {
     const items: (Asset & { mood?: string })[] = [];
@@ -498,7 +511,11 @@ async function musicFor(mood: string, postId: string, seconds: number, cuts: num
     const ours = items.filter((a) => a.mime.startsWith('audio/') && a.status === 'ready' && a.rights?.status === 'cleared' && (a.mood ?? '').toLowerCase() === mood);
     const pool = ours.length >= 3 ? ours : [...new Map([...ours, ...(await findMusic(mood))].map((a) => [a.id, a])).values()];
     if (!pool.length) return undefined;
-    const pick = pool.sort((a, b) => a.id.localeCompare(b.id))[parseInt(postId.slice(0, 6), 16) % pool.length];
+    // Not the track the last few reels used, when there's another (owner 2026-11-11: same music every time).
+    const recent = await recentMusic(postId);
+    const fresh = pool.filter((a) => !recent.has(a.id));
+    const choices = (fresh.length ? fresh : pool).sort((a, b) => a.id.localeCompare(b.id));
+    const pick = choices[parseInt(postId.slice(0, 6), 16) % choices.length];
     const r = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: pick.key }));
     const src = join(WORK, 'music.in');
     writeFileSync(src, Buffer.from(await r.Body!.transformToByteArray()));
