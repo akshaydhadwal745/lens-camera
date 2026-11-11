@@ -13,6 +13,7 @@ import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/li
 
 import { ddb, env, getParam, HttpError, json, Res, s3 } from '../api/lib';
 import { playbookFor } from './growth-brain';
+import { trendQueries } from './growth-sound-trends';
 import { runClaude, type Mode } from './growth';
 import type { Asset } from './growth-assets';
 import { brand as loadBrand } from './growth-brand';
@@ -509,12 +510,16 @@ async function musicFor(mood: string, postId: string, seconds: number, cuts: num
       start = r.LastEvaluatedKey;
     } while (start);
     const ours = items.filter((a) => a.mime.startsWith('audio/') && a.status === 'ready' && a.rights?.status === 'cleared' && (a.mood ?? '').toLowerCase() === mood);
-    const pool = ours.length >= 3 ? ours : [...new Map([...ours, ...(await findMusic(mood))].map((a) => [a.id, a])).values()];
+    // This week's trending styles for the mood first (growth-sound-trends.ts), then the usual mood search.
+    const trend = await trendQueries(mood);
+    const trending = trend.queries.length ? await findMusic(mood, trend.queries) : [];
+    const pool = ours.length >= 3 ? ours : [...new Map([...trending, ...ours, ...(trending.length >= 2 ? [] : await findMusic(mood))].map((a) => [a.id, a])).values()];
     if (!pool.length) return undefined;
     // Not the track the last few reels used, when there's another (owner 2026-11-11: same music every time).
     const recent = await recentMusic(postId);
     const fresh = pool.filter((a) => !recent.has(a.id));
-    const choices = (fresh.length ? fresh : pool).sort((a, b) => a.id.localeCompare(b.id));
+    const hot = fresh.filter((a) => trending.some((t) => t.id === a.id));
+    const choices = (hot.length ? hot : fresh.length ? fresh : pool).sort((a, b) => a.id.localeCompare(b.id));
     const pick = choices[parseInt(postId.slice(0, 6), 16) % choices.length];
     const r = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: pick.key }));
     const src = join(WORK, 'music.in');
@@ -528,7 +533,7 @@ async function musicFor(mood: string, postId: string, seconds: number, cuts: num
     await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-ss', from.toFixed(2), '-i', src, '-t', String(seconds + 2), '-ac', '2', '-ar', String(RATE), '-af', 'loudnorm=I=-16', '-f', 'f32le', join(WORK, 'music.f32')]);
     const raw = readFileSync(join(WORK, 'music.f32'));
     const n = Math.floor(raw.length / 4);
-    console.log(JSON.stringify({ reelMusic: { mood, track: pick.name, from: Math.round(from * 10) / 10, pool: pool.length } }));
+    console.log(JSON.stringify({ reelMusic: { mood, track: pick.name, from: Math.round(from * 10) / 10, pool: pool.length, trending: trending.some((a) => a.id === pick.id) ? trend.styles : [] } }));
     return { asset: pick, name: pick.name, pcm: new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + n * 4)) };
   } catch (e) {
     console.error(JSON.stringify({ musicFailed: (e as Error).message.slice(0, 200) }));

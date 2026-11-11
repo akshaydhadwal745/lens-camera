@@ -106,11 +106,13 @@ async function saveTrack(t: Track, mood: string): Promise<Asset | undefined> {
 const usable = (a: Asset | undefined): a is Asset => !!a && a.status === 'ready' && effectiveStatus(a.rights) === 'cleared' && a.mime.startsWith('audio/');
 
 /** Tracks for a mood: cached for 30 days, else searched and saved (up to 6). Never throws. */
-export async function findMusic(mood: string): Promise<Asset[]> {
+export async function findMusic(mood: string, queries?: string[]): Promise<Asset[]> {
   if (!BUCKET) return [];
   const m = MOOD_QUERIES[mood] ? mood : 'upbeat';
+  // This week's trending styles (growth-sound-trends.ts) search with their own words and cache under their own key.
+  const qs = queries?.length ? queries.slice(0, 4) : MOOD_QUERIES[m];
   try {
-    const sk = `MUSICQ#${m}`;
+    const sk = queries?.length ? `MUSICQ#t:${createHash('sha256').update(qs.join('|')).digest('hex').slice(0, 12)}` : `MUSICQ#${m}`;
     const cached = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk } }))).Item;
     if (cached && cached.v === VERSION && Date.now() - cached.at < 30 * DAY && (cached.ids as string[]).length) {
       const got = await ddb.send(new BatchGetCommand({ RequestItems: { [env.table]: { Keys: (cached.ids as string[]).slice(0, 20).map((id) => ({ pk: 'GROWTH', sk: `ASSET#${id}` })) } } }));
@@ -119,7 +121,7 @@ export async function findMusic(mood: string): Promise<Asset[]> {
     }
     const seen = new Set<string>();
     const found: Track[] = [];
-    for (const q of MOOD_QUERIES[m]) {
+    for (const q of qs) {
       const r = await fetch(`https://api.openverse.org/v1/audio/?${new URLSearchParams({ q, license: 'cc0,pdm,by', category: 'music', page_size: '20', mature: 'false' })}`, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20_000) }).catch(() => undefined);
       if (!r?.ok) continue;
       for (const t of openverseTracks(await r.json())) if (!seen.has(t.sourceUrl) && seen.add(t.sourceUrl)) found.push(t);

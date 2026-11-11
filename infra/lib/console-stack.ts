@@ -223,6 +223,11 @@ export class ConsoleStack extends Stack {
       schedule: events.Schedule.cron({ weekDay: 'SUN', hour: '3', minute: '0' }),
       targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ igRefresh: true }), retryAttempts: 0 })],
     });
+    // Sound trends (growth-sound-trends.ts): Mondays 03:30 UTC, the styles reels' music searches try first.
+    new events.Rule(this, 'GrowthSoundTrends', {
+      schedule: events.Schedule.cron({ weekDay: 'MON', hour: '3', minute: '30' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ soundTrends: true }), retryAttempts: 0 })],
+    });
     // The brain (growth-brain.ts): Mondays 04:00 UTC, after the weekend's results are in.
     new events.Rule(this, 'GrowthBrain', {
       schedule: events.Schedule.cron({ weekDay: 'MON', hour: '4', minute: '0' }),
