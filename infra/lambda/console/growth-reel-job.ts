@@ -97,6 +97,8 @@ async function productFacts(): Promise<string> {
 const loadPost = async (postId: string) => {
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as Post | undefined;
   if (!post) throw new Error(`Post ${postId} is gone`);
+  // What is on Instagram stays as it went out (owner 2026-11-11: a re-render after posting made the Console show other images).
+  if ((post as { published?: Record<string, unknown> }).published?.instagram) throw new Error('Already on Instagram: its images and reel are locked. Make a new post to change them.');
   return { ...post, id: postId, slides: post.slides ?? [], script: post.script ?? [], variants: post.variants ?? {} } as Post;
 };
 

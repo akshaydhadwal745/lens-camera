@@ -448,6 +448,8 @@ export async function renderPost(postId: string, by: string): Promise<{ rendered
   if (!BUCKET) throw new Error('Content storage isn’t set up');
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as (PostLike & { title: string }) | undefined;
   if (!post) throw new Error(`Post ${postId} is gone`);
+  // What is on Instagram stays as it went out (owner 2026-11-11: a re-render after posting made the Console show other images).
+  if ((post as { published?: Record<string, unknown> }).published?.instagram) throw new Error('Already on Instagram: its images and reel are locked. Make a new post to change them.');
   const brand = await loadBrand();
   // The post's own call to action (its Instagram version first), not the brand's default (owner 2026-11-11: the
   // Children's Day carousel ended on a generic "Try Lens free" instead of "Make an event album").
@@ -606,6 +608,7 @@ export async function renderStart(postId: string, by: string): Promise<Res> {
   if (!/^[a-f0-9]{10}$/.test(postId)) throw new HttpError(400, 'Bad post id');
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item;
   if (!post) throw new HttpError(404, 'No such post');
+  if (post.published?.instagram) throw new HttpError(409, 'Already on Instagram: its images and reel are locked. Make a new post to change them.');
   const job = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'JOB#render' } }))).Item;
   if (job && !job.finishedAt && Date.now() - job.startedAt < RENDER_MINUTES * 60_000) throw new HttpError(409, 'Images are already being made for another post. Try again in a minute.');
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: 'JOB#render', startedAt: Date.now(), by, postId } }));
