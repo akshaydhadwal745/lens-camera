@@ -179,6 +179,8 @@ export async function renderTemplateReel(postId: string, by: string, jobAt: numb
   if (!BUCKET) throw new Error('Content storage isn’t set up');
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item as (RenderablePost & { title: string }) | undefined;
   if (!post) throw new Error(`Post ${postId} is gone`);
+  // What is on Instagram stays as it went out (owner 2026-11-11: a re-render after posting made the Console show other images).
+  if ((post as { published?: Record<string, unknown> }).published?.instagram) throw new Error('Already on Instagram: its images and reel are locked. Make a new post to change them.');
   const brand = await loadBrand();
   const cta = brand.ctas[0] ?? 'Try Lens free';
   const shaped = { ...post, id: postId, slides: post.slides ?? [], script: post.script ?? [], variants: post.variants ?? {} };
@@ -548,6 +550,7 @@ export async function reelStart(postId: string, by: string): Promise<Res> {
   if (!/^[a-f0-9]{10}$/.test(postId)) throw new HttpError(400, 'Bad post id');
   const post = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `POST#${postId}` } }))).Item;
   if (!post) throw new HttpError(404, 'No such post');
+  if (post.published?.instagram) throw new HttpError(409, 'Already on Instagram: its images and reel are locked. Make a new post to change them.');
   const job = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: 'JOB#reel' } }))).Item;
   if (job && !job.finishedAt && Date.now() - job.startedAt < REEL_MINUTES * 60_000) throw new HttpError(409, 'A reel is already being made. Try again when it finishes.');
   await ddb.send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: 'JOB#reel', startedAt: Date.now(), by, postId } }));
