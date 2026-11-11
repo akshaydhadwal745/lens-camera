@@ -55,6 +55,7 @@ Voiceover (vo, per scene): a warm narrator talks over the reel, like a friend te
 - No ad-speak: never "Are you tired of", "Say goodbye to", "Introducing", "Look no further", "Meet Lens", "game-changer", "don't miss out". No questions that sound like a sales pitch.
 - 3 to 14 words per scene (18 at most); a scene may be silent (empty vo) when the picture says it all. The hook's line is short and lands in the first second. The last scene's line says the call to action in a natural way.
 - The same truth rules as the words on screen.
+- Make it loop: the last line can lead straight back into the first (scene 1 "She's practised her one line all week." … last "So this time, you just watch her."), so a viewer who keeps watching hears one story.
 mood: the music under it: upbeat (bright pop), chill (lo-fi, relaxed), emotional (piano, heartfelt), energetic (driving electronic), warm (acoustic, friendly).`;
 
 export const REEL_WRITER_SCHEMA = {
@@ -169,7 +170,7 @@ Truth in pictures: <lens-phone> is the Lens app on the owner's or host's phone. 
 Words: show the scene's words exactly (you may split them into lines and animate word by word or line by line, colour or underline the key words). You may add at most 3 small label words of your own per scene (e.g. BEFORE, AFTER, LIVE). Nothing else in text.
 
 Craft rules (checked in code; scenes that fail are redesigned or replaced):
-- All words inside x 72–1008 and y 220–1520 (the platforms' buttons cover the rest). Phones, photos and footage may bleed off the edges.
+- All words inside x 72–1008 and y 220–1320. Keep y 1320–1520 free of words: the voiceover's subtitles are drawn there for you (below that the platforms' buttons cover it). Phones, photos and footage may bleed off the edges.
 - Main words at least 84px, weight 700–800, letter-spacing about −0.045em, line-height ~1. Labels at least 34px.
 - Contrast: words on footage or photos need a dark scrim (linear-gradient) or a solid pill/card behind them; --yellow only on dark backgrounds; on light backgrounds use --ink and --blue.
 - Words never over or under the phone or other words (keep 32px apart), at any moment.
@@ -177,6 +178,7 @@ Craft rules (checked in code; scenes that fail are redesigned or replaced):
 - One focal point per scene. The phone, when shown, is big (scale ≥ 1.0) and fully readable, not a tiny thumbnail.
 - Vary layout, colour and motion from scene to scene; dark and light scenes may alternate. Scene 1 must stop the scroll within half a second (a strong move, a punch-in, a striking image).
 - Footage and photos of the real moment are the heart of the reel: give them the full frame, put the words in a block above or below the subject (with a scrim), never a small framed thumbnail of the moment.
+- Loop: the last scene ends on scene 1's look (its footage or photo, or its colours, behind the call to action in the final second), so when the reel starts again it flows on without a jump.
 - Keep life in long holds: slow push-ins (scale 1 → 1.08) on footage and photos, gentle float on phones.
 
 entry: how the scene comes in over the previous one: cut, whip (fast vertical push with blur), slide, fade, circle (circular reveal), wipe. Use "cut" or "whip" for energy; don't use the same entry three times in a row.
@@ -291,7 +293,7 @@ export const reelSceneCheck = (i: number, last: boolean, settled = true) => `(()
     for (const b of boxes) {
       lines.push({ b, el, t });
       const x0 = (b.left - rr.left) / k, x1 = (b.right - rr.left) / k, y0 = (b.top - rr.top) / k, y1 = (b.bottom - rr.top) / k;
-      if (x0 < 60 || x1 > 1020 || y0 < 200 || y1 > 1540) problems.push('words "' + t.slice(0, 30) + '" are outside the safe area (x 72–1008, y 220–1520)');
+      if (x0 < 60 || x1 > 1020 || y0 < 200 || y1 > 1330) problems.push('words "' + t.slice(0, 30) + '" are outside the safe area (x 72–1008, y 220–1320; the subtitles use 1320–1520)');
       for (const p of phones) {
         const ix = Math.min(b.right, p.right) - Math.max(b.left, p.left), iy = Math.min(b.bottom, p.bottom) - Math.max(b.top, p.top);
         if (ix > 6 * k && iy > 6 * k) problems.push('words "' + t.slice(0, 30) + '" overlap the phone');

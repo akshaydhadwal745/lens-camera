@@ -119,7 +119,7 @@ export function readPlan(report: { scenes?: { n: number; type: string; screen: s
 // ---------- the page ----------
 
 export type SceneMedia = { frames?: number; still?: string; hero?: string; heroChat?: string };
-export type ReelPageData = { scenes: ReelScene[]; media: SceneMedia[]; pool: string[]; icon: string; fonts: { geist?: string; plex500?: string; plex600?: string }; cta: string; site: string; brand?: { primary: string; accent: string } };
+export type ReelPageData = { subs?: { t0: number; t1: number; words: { w: string; t: number }[] }[]; scenes: ReelScene[]; media: SceneMedia[]; pool: string[]; icon: string; fonts: { geist?: string; plex500?: string; plex600?: string }; cta: string; site: string; brand?: { primary: string; accent: string } };
 
 const ARROW = '<svg viewBox="0 0 24 24" width=".8em" height=".8em" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.04em"><path d="M4 12h16M13 5l7 7-7 7"/></svg>';
 /** Geist has Latin letters, digits and punctuation: an arrow is drawn, anything else it can't show (emoji) is left out. */
@@ -276,8 +276,12 @@ html,body{background:#000}
 .cmp{position:absolute;left:72px;width:936px;height:420px;border-radius:36px;overflow:hidden;box-shadow:0 40px 80px -24px rgba(0,0,0,.7)}
 .cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:50% 50%}
 .pill.big{padding:16px 28px;font-size:36px;background:rgba(0,0,0,.72)}
+#sub{position:absolute;left:72px;right:120px;top:1352px;z-index:999;display:flex;justify-content:center;pointer-events:none}
+#sub span{font:800 58px/1.1 Geist,sans-serif;letter-spacing:-.02em;color:#fff;background:rgba(10,12,18,.72);padding:12px 26px 16px;border-radius:22px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+#sub b{font-weight:800;color:#fff}#sub b.on{color:var(--yellow)}
 </style>
 ${html}
+<div id="sub"></div>
 <script>
 const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
 const p=(t,a,b)=>clamp((t-a)/(b-a));
@@ -292,8 +296,10 @@ function tap(e,t,at){const x=p(t,at-.15,at+.3);e.style.visibility=x>0&&x<1?'inhe
 async function ai(i,lt){const el=document.getElementById('s'+i);for(const a of el.getAnimations({subtree:true})){a.pause();a.currentTime=lt*1000;}for(const im of el.querySelectorAll('img[data-clip]'))await frame(im,im.dataset.clip,Math.min(Number(im.dataset.n),Math.round(lt*30)+1));}
 async function frame(el,dir,n){const src=dir+'/'+String(n).padStart(4,'0')+'.jpg';if(el.getAttribute('src')!==src){el.src=src;await el.decode();}}
 const SC=[${list}];
+const SUBS=${JSON.stringify((d.subs ?? []).map((c) => ({ t0: c.t0, t1: c.t1, w: c.words.map((w) => [reelWord(w.w), w.t]) })))};
+function subs(t){const box=document.getElementById('sub');const c=SUBS.find((x)=>t>=x.t0&&t<x.t1);if(!c){box.innerHTML='';return;}box.innerHTML='<span>'+c.w.map(([w,at])=>'<b class="'+(t>=at?'on':'')+'">'+w+'</b>').join(' ')+'</span>';}
 const OVER=.5;
-window.seek=async function(t){for(let i=0;i<SC.length;i++){const c=SC[i],n=SC[i+1],el=document.getElementById('s'+i);const on=t>=c.start&&(!n||t<c.start+c.dur+OVER);el.style.visibility=on?'visible':'hidden';if(!on)continue;const lt=t-c.start;
+window.seek=async function(t){subs(t);for(let i=0;i<SC.length;i++){const c=SC[i],n=SC[i+1],el=document.getElementById('s'+i);const on=t>=c.start&&(!n||t<c.start+c.dur+OVER);el.style.visibility=on?'visible':'hidden';if(!on)continue;const lt=t-c.start;
  const e=expo(p(lt,0,.5));let tf='none',clip='none',op=1,flt='none';
  if(c.entry==='whip')tf='translateY('+(1-e)*1920+'px)';else if(c.entry==='slide')tf='translateX('+(1-e)*1080+'px)';else if(c.entry==='circle')clip='circle('+e*150+'% at 62% 56%)';else if(c.entry==='wipe')clip='inset('+(1-e)*50+'% 0 '+(1-e)*50+'% 0)';else if(c.entry==='fade')op=p(lt,0,.3);
  if(n&&n.entry==='whip'&&t>=n.start){const w=expo(p(t,n.start,n.start+.5));tf='translateY('+(-w*1920)+'px)';flt=w>0&&w<1?'blur('+Math.round(w*(1-w)*80)+'px)':'none';}

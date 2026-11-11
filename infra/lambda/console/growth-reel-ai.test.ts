@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { bestStart, openverseTracks } from './growth-music';
+import { alignToCuts, bestStart, openverseTracks } from './growth-music';
 import { mixReel, RATE, readCues, SOUNDS, synth, wav } from './growth-sound';
-import { fitToVoice, voiceLineProblems, VOICE_MAX_SECONDS } from './growth-voice';
+import { fitToVoice, stretchMarks, subChunks, voiceLineProblems, VOICE_MAX_SECONDS } from './growth-voice';
 import { designsByScene, readWrittenReel, reelDesignPrompt, reelSceneHtml, reelWordProblems, sceneWordProblems, type WrittenReel } from './growth-reel-ai';
 
 const FACTS = 'Full-quality backup. 10 GB free forever. Lens Plus 50 GB for ₹59 a month. Event albums: a QR code guests open.';
@@ -148,4 +148,28 @@ test('mix: the voice sits on top and the music ducks under it', () => {
   const m = mixReel(2, [], music, [{ at: 1, pcm: voice }]);
   const at = (t: number) => Math.abs(m[Math.floor(t * RATE) * 2]);
   assert.ok(at(1.2) < at(0.6) * 0.4, `${at(1.2)} vs ${at(0.6)}`);
+});
+
+test('subtitles: neural word times stretched to the generative clip; 3-word chunks broken at punctuation', () => {
+  const marks = [{ w: "She's", t: 0.2 }, { w: 'practised', t: 0.4 }, { w: 'her', t: 0.9 }, { w: 'one', t: 1.0 }, { w: 'line.', t: 1.2 }, { w: 'All', t: 1.8 }, { w: 'week', t: 2.0 }];
+  const s = stretchMarks(marks, 2.5, 3);
+  assert.equal(s[1].t, 0.48);
+  const c = subChunks(s, 10, 3);
+  assert.deepEqual(c.map((x) => x.words.map((w) => w.w).join(' ')), ["She's practised her", 'one line.', 'All week']);
+  assert.equal(c[0].t0, 10.24);
+  assert.equal(c[0].t1, c[1].t0);
+  assert.equal(c[2].t1, 13.15);
+  assert.deepEqual(subChunks([], 0, 1), []);
+});
+
+test('beat cuts: the music slides (±1 s) so its hits land on the cuts', () => {
+  const env = new Float32Array(400).fill(0.1);
+  // Hits every 0.5 s from 5.3 s on.
+  for (let t = 5.3; t < 20; t += 0.5) env[Math.round(t / 0.05)] = 0.9;
+  const from = alignToCuts(env, 5, [1.0, 2.5, 4.0]);
+  for (const c of [1.0, 2.5, 4.0]) {
+    const at = from + c;
+    assert.ok(Math.abs(((at - 5.3) / 0.5) - Math.round((at - 5.3) / 0.5)) < 0.15, `cut at ${at}`);
+  }
+  assert.equal(alignToCuts(env, 5, []), 5);
 });

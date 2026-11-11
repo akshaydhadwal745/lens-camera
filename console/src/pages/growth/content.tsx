@@ -1727,6 +1727,8 @@ type Moment = {
   formats: string[];
   hashtags: string[];
   taskId?: string;
+  /** Event scout: false when the source page names the event but its date wasn't found on it. */
+  dateChecked?: boolean;
 };
 const KIND_LABEL: Record<Moment["kind"], string> = {
   festival: "Festival",
@@ -1822,6 +1824,9 @@ function Moments({ ws }: { ws: Workspace }) {
                     <a href={m.url} target="_blank" rel="noreferrer">
                       {m.source}
                     </a>
+                    {m.dateChecked === false ? (
+                      <> · <strong>date not confirmed: check the link</strong></>
+                    ) : null}
                   </span>
                   <span>
                     {m.taskId ? (

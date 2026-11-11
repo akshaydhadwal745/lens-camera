@@ -19,7 +19,8 @@ import { frames, gatherPhotos, LOOK_MODE, postBrief, renderAssetId, scoreImages,
 import { FITS, pixabayKey, trackUsed, postTotal, sheetPrompt, sheetVerdicts, videoResults, type PostScore, type StockVideo } from './growth-photos';
 import { defaultPlan, DIRECTOR_SCHEMA, DIRECTOR_SYSTEM, directorPrompt, FPS, readPlan, reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { launchBrowser } from './growth-render';
-import { bestStart, findMusic, loudness } from './growth-music';
+import { alignToCuts, bestStart, findMusic, loudness } from './growth-music';
+import type { SubChunk } from './growth-voice';
 import { mixReel, type VoiceLine, RATE, templateCues, wav, type Cue } from './growth-sound';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
@@ -64,7 +65,7 @@ async function searchVideos(query: string): Promise<StockVideo[]> {
 }
 
 /** Clips for a search, best first: Claude looks at a frame of each with the post in mind. No answer, no clip. */
-export async function rankFootage(query: string, brief: string, browser: Awaited<ReturnType<typeof launchBrowser>>): Promise<StockVideo[]> {
+export async function rankFootage(query: string, brief: string, browser: Awaited<ReturnType<typeof launchBrowser>>, minFit = FITS): Promise<StockVideo[]> {
   const tok = await token();
   if (!tok) return [];
   try {
@@ -88,7 +89,7 @@ export async function rankFootage(query: string, brief: string, browser: Awaited
     console.log(JSON.stringify({ footageLook: query, clips: found.map((v, i) => ({ id: v.id, ...verdicts.get(i) })) }));
     return found
       .map((v, i) => ({ v, r: verdicts.get(i) }))
-      .filter((x) => x.r?.ok && x.r.fit >= FITS)
+      .filter((x) => x.r?.ok && x.r.fit >= minFit)
       .sort((a, b) => (b.r?.fit ?? 0) - (a.r?.fit ?? 0))
       .map((x) => x.v);
   } catch (e) {
@@ -280,6 +281,7 @@ export async function drawReel(d: {
   cues?: Cue[]; // on the reel's timeline; template scenes get theirs from planCues
   mood?: string; // the writer's music mood
   voice?: VoiceLine[]; // the voiceover, on the reel's timeline
+  subs?: SubChunk[]; // its subtitles
 }): Promise<{ seconds: number; ms: number; score: PostScore | null }> {
   const { browser, plan, media, pool, postId, post, by, brief, credited, began, progress, brand, cta } = d;
   // Every frame, one by one (nothing leaves the page).
@@ -293,6 +295,7 @@ export async function drawReel(d: {
     fonts: { geist: font('geist-latin.woff2'), plex500: font('plex-mono-500.ttf'), plex600: font('plex-mono-600.ttf') },
     cta,
     site: SITE,
+    subs: d.subs,
   });
   writeFileSync(join(WORK, 'reel.html'), html);
   const page = await browser.newPage();
@@ -365,7 +368,9 @@ export async function drawReel(d: {
   progress('saving');
   // Sound: the effects on their frames, music under them (ducked), loudness for Reels (about −14 LUFS).
   const cues = d.cues ?? planCues(plan);
-  const music = d.mood ? await musicFor(d.mood, postId, seconds) : undefined;
+  // The cuts, so the music's hits land on them.
+  const cutTimes = plan.slice(0, -1).reduce<number[]>((a, s) => [...a, (a[a.length - 1] ?? 0) + s.seconds], []);
+  const music = d.mood ? await musicFor(d.mood, postId, seconds, cutTimes) : undefined;
   writeFileSync(join(WORK, 'mix.wav'), wav(mixReel(seconds, cues, music?.pcm, d.voice ?? [])));
   await run('ffmpeg', [
     '-nostdin',
@@ -480,7 +485,7 @@ export function planCues(plan: ReelScene[], designed: (Cue[] | undefined)[] = []
  * person with a mood), else found now on Openverse (growth-music.ts). The same post gets the same track. The
  * loudest stretch is chosen and decoded to stereo float32. Nothing found → effects only.
  */
-async function musicFor(mood: string, postId: string, seconds: number): Promise<{ asset: Asset; name: string; pcm: Float32Array } | undefined> {
+async function musicFor(mood: string, postId: string, seconds: number, cuts: number[] = []): Promise<{ asset: Asset; name: string; pcm: Float32Array } | undefined> {
   try {
     const items: (Asset & { mood?: string })[] = [];
     let start: Record<string, unknown> | undefined;
@@ -500,7 +505,8 @@ async function musicFor(mood: string, postId: string, seconds: number): Promise<
     await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', src, '-ac', '1', '-ar', '8000', '-f', 'f32le', join(WORK, 'music.scan')]);
     const scan = readFileSync(join(WORK, 'music.scan'));
     const mono = new Float32Array(scan.buffer.slice(scan.byteOffset, scan.byteOffset + Math.floor(scan.length / 4) * 4));
-    const from = bestStart(loudness(mono, 8000), seconds + 1);
+    const level = loudness(mono, 8000);
+    const from = alignToCuts(level, bestStart(level, seconds + 1), cuts);
     await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-ss', from.toFixed(2), '-i', src, '-t', String(seconds + 2), '-ac', '2', '-ar', String(RATE), '-af', 'loudnorm=I=-16', '-f', 'f32le', join(WORK, 'music.f32')]);
     const raw = readFileSync(join(WORK, 'music.f32'));
     const n = Math.floor(raw.length / 4);

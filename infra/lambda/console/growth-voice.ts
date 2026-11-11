@@ -6,6 +6,8 @@
 // aren't in ap-south-1), keyless through the Lambda role. About 300 characters a reel: well under ₹1.
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 
+export type Word = { w: string; t: number }; // t = seconds from the line's start
+
 /** The Lens voice, on every reel. */
 export const VOICE = 'Ruth';
 
@@ -23,6 +25,47 @@ export async function speak(text: string, voice: string = VOICE): Promise<Buffer
   polly ??= new PollyClient({ region: 'us-east-1' });
   const r = await polly.send(new SynthesizeSpeechCommand({ Engine: 'generative', VoiceId: voice as never, OutputFormat: 'mp3', SampleRate: '24000', TextType: 'text', Text: text.slice(0, 400) }));
   return Buffer.from(await r.AudioStream!.transformToByteArray());
+}
+
+/**
+ * When each word of a line is said, for subtitles. Generative voices give no word timings, so the same line is
+ * asked of Ruth's neural voice (word marks + its audio) and its timings are stretched to the generative clip's
+ * length; subtitles show 2–3 words at a time, so the small differences don't show.
+ */
+export async function wordMarks(text: string, voice: string = VOICE): Promise<{ marks: Word[]; audio: Buffer }> {
+  polly ??= new PollyClient({ region: 'us-east-1' });
+  const base = { Engine: 'neural' as const, VoiceId: voice as never, TextType: 'text' as const, Text: text.slice(0, 400) };
+  const j = await polly.send(new SynthesizeSpeechCommand({ ...base, OutputFormat: 'json', SpeechMarkTypes: ['word'] }));
+  const marks = new TextDecoder()
+    .decode(await j.AudioStream!.transformToByteArray())
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { time: number; type: string; value: string })
+    .filter((m) => m.type === 'word')
+    .map((m) => ({ w: m.value, t: m.time / 1000 }));
+  const a = await polly.send(new SynthesizeSpeechCommand({ ...base, OutputFormat: 'mp3', SampleRate: '24000' }));
+  return { marks, audio: Buffer.from(await a.AudioStream!.transformToByteArray()) };
+}
+
+/** Neural word times → the generative clip's timeline (both clips' lengths in seconds). Pure. */
+export const stretchMarks = (marks: Word[], neural: number, generative: number): Word[] => marks.map((m) => ({ w: m.w, t: Math.round(((m.t * generative) / Math.max(0.1, neural)) * 1000) / 1000 }));
+
+export type SubChunk = { t0: number; t1: number; words: Word[] }; // absolute reel times
+/** Subtitle chunks: up to 3 words, a new chunk after punctuation; each stays until the next begins (or the line ends). Pure. */
+export function subChunks(words: Word[], at: number, lineEnd: number): SubChunk[] {
+  const out: SubChunk[] = [];
+  let cur: Word[] = [];
+  const flush = () => {
+    if (cur.length) out.push({ t0: at + cur[0].t, t1: 0, words: cur.map((w) => ({ w: w.w, t: at + w.t })) });
+    cur = [];
+  };
+  for (const w of words) {
+    cur.push(w);
+    if (cur.length >= 3 || /[.,!?;:…]$/.test(w.w)) flush();
+  }
+  flush();
+  out.forEach((c, i) => (c.t1 = i + 1 < out.length ? out[i + 1].t0 : at + lineEnd + 0.15));
+  return out;
 }
 
 /**

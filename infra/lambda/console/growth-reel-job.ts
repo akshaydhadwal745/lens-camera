@@ -19,13 +19,13 @@ import type { KitPhoto } from './growth-ai-design';
 import { brand as loadBrand } from './growth-brand';
 import { qrPattern, type Screen } from './growth-design';
 import { frames, gatherPhotos, IMG, postBrief, topicQuery, type RenderablePost } from './growth-media';
-import type { StockVideo } from './growth-photos';
+import { FITS, type StockVideo } from './growth-photos';
 import { reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { designsByScene, readWrittenReel, REEL_DESIGN_SCHEMA, REEL_DESIGN_SYSTEM, REEL_WRITER_SCHEMA, REEL_WRITER_SYSTEM, reelDesignPrompt, reelSceneCheck, reelSceneHtml, sceneWordProblems, writerPrompt, type SceneDesign, type WrittenReel } from './growth-reel-ai';
 import { launchBrowser } from './growth-render';
 import { clipFrames, decodeMono, drawReel, planCues, rankFootage, reelProgress, renderTemplateReel, SITE, token, WORK } from './growth-video';
 import { RATE, type Cue, type VoiceLine } from './growth-sound';
-import { fitToVoice, LEAD, speak, VOICE } from './growth-voice';
+import { fitToVoice, LEAD, speak, stretchMarks, subChunks, VOICE, wordMarks, type SubChunk, type Word } from './growth-voice';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const REPO = 'akshaydhadwal745/lens-camera';
@@ -52,7 +52,16 @@ type State = {
   designs: Record<number, SceneDesign>;
   failed: number[]; // scenes drawn from a template
   notes?: Record<number, string[]>; // the scorer's notes for scenes to redesign
-  voice?: { name: string; lines: Record<number, number> }; // scene n → spoken seconds (work/vo/<n>.mp3)
+  voice?: { name: string; lines: Record<number, number>; words?: Record<number, Word[]> }; // scene n → spoken seconds (work/vo/<n>.mp3)
+};
+
+/** Mood b-roll searches (Pixabay video), tried when a footage scene's own searches find nothing. */
+export const MOOD_BROLL: Record<string, string[]> = {
+  upbeat: ['confetti celebration', 'crowd hands up'],
+  energetic: ['concert crowd lights', 'stage lights'],
+  warm: ['fairy lights bokeh', 'hands holding phone'],
+  emotional: ['stage spotlight', 'candles bokeh'],
+  chill: ['city night lights', 'sunset timelapse'],
 };
 
 const workKey = (postId: string, f: string) => `x/reel-work/${postId}/${f}`;
@@ -121,6 +130,7 @@ export async function renderReel(postId: string, by: string, step: ReelStep = 'w
  */
 async function recordVoice(postId: string, written: WrittenReel): Promise<State['voice']> {
   const lines: Record<number, number> = {};
+  const words: Record<number, Word[]> = {};
   try {
     for (const s of written.scenes) {
       if (!s.vo) continue;
@@ -129,6 +139,15 @@ async function recordVoice(postId: string, written: WrittenReel): Promise<State[
       writeFileSync(file, mp3);
       lines[s.n] = Math.round(((await decodeMono(file)).length / RATE) * 100) / 100;
       await putWork(postId, `vo/${s.n}.mp3`, mp3, 'audio/mpeg');
+      // Word times for the subtitles (a line without them just has no subtitles).
+      try {
+        const nm = await wordMarks(s.vo, VOICE);
+        const nf = join(WORK, `vo-${s.n}-n.mp3`);
+        writeFileSync(nf, nm.audio);
+        words[s.n] = stretchMarks(nm.marks, (await decodeMono(nf)).length / RATE, lines[s.n]);
+      } catch (e) {
+        console.error(JSON.stringify({ wordMarksFailed: s.n, message: (e as Error).message.slice(0, 200) }));
+      }
     }
   } catch (e) {
     console.error(JSON.stringify({ voiceFailed: (e as Error).message.slice(0, 300) }));
@@ -138,7 +157,20 @@ async function recordVoice(postId: string, written: WrittenReel): Promise<State[
   const fitted = fitToVoice(written.scenes, new Map(Object.entries(lines).map(([n, v]) => [Number(n), v])));
   written.scenes.forEach((s, i) => (s.seconds = fitted[i]));
   console.log(JSON.stringify({ reelVoice: { voice: VOICE, lines, seconds: fitted } }));
-  return { name: VOICE, lines };
+  return { name: VOICE, lines, words };
+}
+
+/** The voiceover's subtitles on the reel's timeline. */
+function subtitles(st: State): SubChunk[] {
+  if (!st.voice?.words) return [];
+  const out: SubChunk[] = [];
+  let at = 0;
+  for (const s of st.written.scenes) {
+    const w = st.voice.words[s.n];
+    if (w?.length) out.push(...subChunks(w, at + LEAD, st.voice.lines[s.n] ?? 0));
+    at += s.seconds;
+  }
+  return out;
 }
 
 /** The saved voice lines on the reel's timeline. */
@@ -226,6 +258,13 @@ async function writeStep(postId: string, by: string, jobAt: number): Promise<{ c
         if (!ranked.has(q)) ranked.set(q, await rankFootage(q, postBrief(post) + `\nThis scene: ${s.words} (${s.beat})`, browser));
         clip = ranked.get(q)!.find((v) => !used.has(v.id));
         if (clip) break;
+      }
+      // Still nothing: mood b-roll an editor would cut in (moving light, crowds, hands), a little looser on fit.
+      for (const q of MOOD_BROLL[written.mood ?? 'upbeat'] ?? []) {
+        if (clip) break;
+        const k = `broll:${q}`;
+        if (!ranked.has(k)) ranked.set(k, await rankFootage(q, postBrief(post) + `\nThis scene: ${s.words} (${s.beat}). Mood shot: it only has to carry the feeling, not show the exact event.`, browser, FITS - 1));
+        clip = ranked.get(k)!.find((v) => !used.has(v.id));
       }
       if (clip) {
         used.add(clip.id);
@@ -409,6 +448,7 @@ async function renderStep(postId: string, jobAt: number): Promise<{ continued: b
       cues: planCues(plan, designed),
       mood: written.mood,
       voice: await voiceLines(st),
+      subs: subtitles(st),
       extra: { mood: written.mood ?? null, angle: written.angle, audience: written.audience, hook: written.hook, voiceName: st.voice ? st.voice.name : null, scenes: written.scenes.map((s) => ({ words: s.words, ...(st.voice?.lines[s.n] ? { vo: s.vo } : {}), seconds: s.seconds, shows: s.media, idea: st.designs[s.n]?.idea ?? '', by: st.failed.includes(s.n) ? 'template' : 'ai' })), round: st.round, at: Date.now() },
     });
   } finally {

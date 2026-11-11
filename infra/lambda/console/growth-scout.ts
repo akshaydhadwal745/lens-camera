@@ -69,10 +69,10 @@ const KIND: Record<string, MomentKind> = { concert: 'concert', festival: 'festiv
 const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`));
 
 /** Claude's list → candidate moments (pure): real dates in the window, our countries, nothing sensitive, https sources. */
-export function readScouted(r: { events?: Partial<Scouted>[] } | undefined, today: string, days = SCOUT_DAYS): { raw: Raw; sources: string[] }[] {
+export function readScouted(r: { events?: Partial<Scouted>[] } | undefined, today: string, days = SCOUT_DAYS): { raw: Raw; sources: string[]; start: string }[] {
   const last = new Date(Date.parse(`${today}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
   const seen = new Set<string>();
-  const out: { raw: Raw; sources: string[] }[] = [];
+  const out: { raw: Raw; sources: string[]; start: string }[] = [];
   for (const e of (r?.events ?? []).slice(0, 60)) {
     const title = String(e.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
     const start = String(e.start ?? '');
@@ -86,7 +86,7 @@ export function readScouted(r: { events?: Partial<Scouted>[] } | undefined, toda
     seen.add(key);
     const city = String(e.city ?? '').trim().slice(0, 40);
     const named = city && !title.toLowerCase().includes(city.toLowerCase()) ? `${title} (${city})` : title;
-    out.push({ raw: { title: named, kind: KIND[String(e.kind)], day: start < today ? today : start, ...(end > start ? { ends: end } : {}), countries: [country], source: 'Web', url: sources[0] }, sources });
+    out.push({ start, raw: { title: named, kind: KIND[String(e.kind)], day: start < today ? today : start, ...(end > start ? { ends: end } : {}), countries: [country], source: 'Web', url: sources[0] }, sources });
   }
   return out;
 }
@@ -102,15 +102,27 @@ export function nameWords(title: string): string[] {
     .slice(0, 2);
 }
 
-/** A source opens (2xx) and names the event: the check that keeps made-up links out. */
-async function checks(url: string, words: string[]): Promise<boolean> {
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+/** Does a page's text state this day? ISO, "14 November", "November 14", "Nov 14", "14 Nov", 14/11 or 11/14. Pure. */
+export function mentionsDay(text: string, day: string): boolean {
+  const [y, m, d] = day.split('-').map(Number);
+  const t = text.toLowerCase();
+  if (t.includes(day)) return true;
+  const full = MONTHS[m - 1], short = full.slice(0, 3);
+  const dd = `0?${d}(?:st|nd|rd|th)?`;
+  const res = [new RegExp(`\\b${dd}\\s*(?:-\\s*\\d{1,2}\\s*)?(?:${full}|${short})\\b`), new RegExp(`\\b(?:${full}|${short})\\.?\\s+${dd}\\b`), new RegExp(`\\b0?${d}[/.]0?${m}[/.](?:20)?${y % 100}\\b`), new RegExp(`\\b0?${m}[/.]0?${d}[/.](?:20)?${y % 100}\\b`)];
+  return res.some((r) => r.test(t));
+}
+
+/** A source opens (2xx) and names the event (the check that keeps made-up links out); and whether it states the date. */
+async function checks(url: string, words: string[], day: string): Promise<{ ok: boolean; date: boolean }> {
   try {
     const r = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/html,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(15_000) });
-    if (!r.ok) return false;
+    if (!r.ok) return { ok: false, date: false };
     const text = (await r.text()).slice(0, 2_000_000).toLowerCase();
-    return !words.length || words.some((w) => text.includes(w.toLowerCase()));
+    return { ok: !words.length || words.some((w) => text.includes(w.toLowerCase())), date: mentionsDay(text, day) };
   } catch {
-    return false;
+    return { ok: false, date: false };
   }
 }
 
@@ -133,17 +145,20 @@ export async function eventScout(now = Date.now()): Promise<Record<string, unkno
     return { scout: 'failed', message: (e as Error).message.slice(0, 300) };
   }
   const found = readScouted(report, today);
-  const kept: Raw[] = [];
+  const kept: (Raw & { dateChecked: boolean })[] = [];
   for (const f of found) {
     const words = nameWords(f.raw.title);
+    let pick: { url: string; date: boolean } | undefined;
     for (const u of f.sources) {
-      if (await checks(u, words)) {
-        kept.push({ ...f.raw, url: u, source: `Web: ${new URL(u).hostname.replace(/^www\./, '')}` });
-        break;
-      }
+      const c = await checks(u, words, f.start);
+      if (c.ok && (!pick || (c.date && !pick.date))) pick = { url: u, date: c.date };
+      if (pick?.date) break;
     }
+    if (pick) kept.push({ ...f.raw, url: pick.url, source: `Web: ${new URL(pick.url).hostname.replace(/^www\./, '')}`, dateChecked: pick.date });
   }
-  for (const m of kept.map(finish)) {
+  for (const k of kept) {
+    const { dateChecked, ...raw } = k;
+    const m = { ...finish(raw), dateChecked };
     const last = Date.parse(`${m.ends ?? m.day}T23:59:59Z`);
     await ddb
       .send(new PutCommand({ TableName: env.table, Item: { pk: 'GROWTH', sk: `MOMENT#${m.id}`, ...m, at: now, ttl: Math.floor((last + 14 * DAY) / 1000) }, ConditionExpression: 'attribute_not_exists(taskId)' }))
@@ -151,7 +166,7 @@ export async function eventScout(now = Date.now()): Promise<Record<string, unkno
         if (e.name !== 'ConditionalCheckFailedException') throw e;
       });
   }
-  const line = `ok ${kept.length} (${kept.length} of ${found.length} links checked, ${(report.events ?? []).length} found)`;
+  const line = `ok ${kept.length} (${kept.filter((k) => k.dateChecked).length} with the date on the page; ${found.length - kept.length} dropped; ${(report.events ?? []).length} found)`;
   await status(line);
   console.log(JSON.stringify({ eventScout: line, kept: kept.map((k) => `${k.day} ${k.countries[0]} ${k.title}`) }));
   return { scout: line };
