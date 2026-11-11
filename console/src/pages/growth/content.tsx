@@ -564,7 +564,7 @@ function PostEditor({
           ) : IMAGE_FORMATS.includes(v.format) ? (
             <ListEditor
               title={v.format === "carousel" ? "Slides (2–10)" : "Image"}
-              hint="Lens makes the visuals from these notes: on-brand templates, illustrations, real app screens. Never stock photos of people."
+              hint="Lens makes the visuals from these notes: the real app on a phone, before/after, and real photos of the moment found online (people only as mood: an audience from behind, hands; never posing, never a child close-up)."
               rows={v.slides}
               onChange={(rows) => set("slides", rows)}
               blank={{ headline: "", body: "", visual: "" }}
@@ -2290,6 +2290,17 @@ type RenderJobs = {
 
 function Images({ ws, post }: { ws: Workspace; post: Post }) {
   const [n, setN] = useState(0);
+  // Images the content chain will make or is making (after "Make content" or a redraft).
+  const [chainPending, setChainPending] = useState(
+    post.make?.images === "todo" || post.make?.images === "running",
+  );
+  const [since, setSince] = useState(0);
+  // A clock for "started N min ago" (ticks every 10 s while the panel is open).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(t);
+  }, []);
   const lib = useLoad(() => get<{ assets: Asset[] }>("/growth/assets"), [n]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -2330,15 +2341,34 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
     await waitFor(began);
   };
   useEffect(() => {
-    // Opened (or refreshed) while this post's images are being made: pick the job up again.
+    // Opened (or refreshed) while this post's images are being made: pick the job up again. Images the content
+    // chain still has to start: check every 15 s until it starts them, then wait for them like any other job.
     let on = true;
-    void get<RenderJobs>("/growth/jobs").then(
-      (j) => {
-        if (on && j.render?.postId === post.id)
-          void waitFor(j.render.startedAt);
-      },
-      () => undefined,
-    );
+    const look = async () => {
+      for (let i = 0; on && i < 120; i++) {
+        const j = await get<RenderJobs>("/growth/jobs").catch(() => null);
+        if (!on) return;
+        if (j?.render?.postId === post.id) {
+          setSince(j.render.startedAt);
+          await waitFor(j.render.startedAt);
+          setChainPending(false);
+          return;
+        }
+        if (!chainPending) return;
+        const done = j?.renderDone;
+        if (
+          done?.postId === post.id &&
+          post.redraftedAt &&
+          done.at > post.redraftedAt
+        ) {
+          setChainPending(false);
+          setN((x) => x + 1);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 15000));
+      }
+    };
+    void look();
     return () => {
       on = false;
     };
@@ -2364,7 +2394,7 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
         <span>Images</span>
         {can(ws, "growth.contribute") && (
           <button className="btn small" disabled={running} onClick={start}>
-            {running ? "Drawing…" : "Make images"}
+            {running || chainPending ? "Drawing…" : "Make images"}
           </button>
         )}
       </span>
@@ -2376,15 +2406,28 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
         again replaces the old ones.
       </span>
       {error && <p className="notice error">{error}</p>}
+      {(running || chainPending) && (
+        <p className="notice">
+          {since
+            ? `Making new images… started ${elapsed(Math.max(0, now - since))} ago, usually 5–10 minutes.`
+            : "New images are queued: the content chain starts them within 10 minutes, then they take 5–10 minutes."}{" "}
+          You can close this; they keep going.
+        </p>
+      )}
       <Loaded state={lib}>
         {({ assets }) => {
-          const mine = assets
-            .filter(
-              (a) =>
-                a.kind === "render" &&
-                a.postId === post.id &&
-                !a.mime.startsWith("video/"),
-            )
+          const all = assets.filter(
+            (a) =>
+              a.kind === "render" &&
+              a.postId === post.id &&
+              !a.mime.startsWith("video/"),
+          );
+          // Images from before a redraft are the old version: dimmed while the new ones are made, then hidden.
+          const isOld = (a: Asset) =>
+            !!post.redraftedAt && a.createdAt < post.redraftedAt;
+          const pending = running || chainPending;
+          const mine = all
+            .filter((a) => pending || !isOld(a))
             .sort((a, b) =>
               (a.label ?? "").localeCompare(b.label ?? "", undefined, {
                 numeric: true,
@@ -2404,7 +2447,12 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
                   One zip with every image and a note saying which goes where.
                 </span>
               </div>
-              {post.score ? (
+              {pending && mine.some(isOld) ? (
+                <p className="muted small">
+                  Showing the old version (before the redraft). It is replaced
+                  when the new images are ready.
+                </p>
+              ) : post.score ? (
                 <p className="small">
                   <Chip tone={scoreTone(post.score.total)}>
                     Post score {post.score.total}/100
@@ -2428,6 +2476,7 @@ function Images({ ws, post }: { ws: Workspace; post: Post }) {
                   <a
                     key={a.id}
                     className="gw-card"
+                    style={isOld(a) ? { opacity: 0.45 } : undefined}
                     href={a.url}
                     target="_blank"
                     rel="noreferrer"
