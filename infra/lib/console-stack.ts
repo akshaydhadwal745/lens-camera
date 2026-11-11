@@ -223,6 +223,11 @@ export class ConsoleStack extends Stack {
       schedule: events.Schedule.cron({ weekDay: 'SUN', hour: '3', minute: '0' }),
       targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ igRefresh: true }), retryAttempts: 0 })],
     });
+    // Daily reel (growth-daily.ts): 02:00 UTC (07:30 IST); the content chain makes it, the quality gate posts it at 18:30 IST.
+    new events.Rule(this, 'GrowthDaily', {
+      schedule: events.Schedule.cron({ hour: '2', minute: '0' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ dailyContent: true }), retryAttempts: 0 })],
+    });
     // Sound trends (growth-sound-trends.ts): Mondays 03:30 UTC, the styles reels' music searches try first.
     new events.Rule(this, 'GrowthSoundTrends', {
       schedule: events.Schedule.cron({ weekDay: 'MON', hour: '3', minute: '30' }),

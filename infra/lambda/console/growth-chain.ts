@@ -11,6 +11,7 @@ import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/li
 import { ddb, env } from '../api/lib';
 import { finishJob, runDraft } from './growth';
 import { renderPost } from './growth-media';
+import { autoGate } from './growth-daily';
 import { igStats } from './growth-ig-stats';
 import { duePublishes } from './growth-instagram';
 import { listTasks } from './growth-tasks';
@@ -57,6 +58,8 @@ export async function contentChain(): Promise<Record<string, unknown>> {
   // Scheduled Instagram posts whose time has come go out first (growth-instagram.ts).
   const published = await duePublishes().catch((e: Error) => (console.error(JSON.stringify({ duePublishesFailed: e.message.slice(0, 200) })), []));
   if (published.length) return { chain: 'published', posts: published };
+  // Daily reels that are ready: the quality gate approves and schedules them, or holds them (growth-daily.ts).
+  await autoGate().catch((e: Error) => console.error(JSON.stringify({ autoGateFailed: e.message.slice(0, 200) })));
   // Results of what's already out (cheap HTTP reads; never blocks the content steps).
   await igStats().catch((e: Error) => console.error(JSON.stringify({ igStatsFailed: e.message.slice(0, 200) })));
   const [tasks, all, running, render, reel] = await Promise.all([listTasks(), posts(), row('RUNNING'), row('JOB#render'), row('JOB#reel')]);
