@@ -20,7 +20,7 @@ import { FITS, pixabayKey, trackUsed, postTotal, sheetPrompt, sheetVerdicts, vid
 import { defaultPlan, DIRECTOR_SCHEMA, DIRECTOR_SYSTEM, directorPrompt, FPS, readPlan, reelHtml, type ReelScene, type SceneMedia } from './growth-reel';
 import { launchBrowser } from './growth-render';
 import { bestStart, findMusic, loudness } from './growth-music';
-import { mixReel, RATE, templateCues, wav, type Cue } from './growth-sound';
+import { mixReel, type VoiceLine, RATE, templateCues, wav, type Cue } from './growth-sound';
 
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const BRAND_DIR = process.env.GROWTH_BRAND_DIR ?? join(__dirname, 'brand');
@@ -43,6 +43,14 @@ function run(cmd: string, args: string[], input?: (stdin: NodeJS.WritableStream)
         reject(e);
       });
   });
+}
+
+/** Any audio file → mono float32 at the mix rate (for the voiceover). */
+export async function decodeMono(file: string): Promise<Float32Array> {
+  const out = `${file}.f32`;
+  await run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-i', file, '-ac', '1', '-ar', String(RATE), '-f', 'f32le', out]);
+  const raw = readFileSync(out);
+  return new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + Math.floor(raw.length / 4) * 4));
 }
 
 export const token = async () => (process.env.GROWTH_AI_DESIGN === 'off' ? undefined : await getParam('/lens/growth/claude-token').catch(() => undefined));
@@ -137,7 +145,7 @@ async function compareStills(src: string, i: number): Promise<{ hero: string; he
 }
 
 /** Where a reel is (on JOB#reel, read by GET /growth/jobs): a stage, and n of total where it counts. */
-export type ReelStage = 'writing' | 'photos' | 'directing' | 'footage' | 'designing' | 'checking' | 'frames' | 'scoring' | 'saving' | 'improving';
+export type ReelStage = 'writing' | 'voice' | 'photos' | 'directing' | 'footage' | 'designing' | 'checking' | 'frames' | 'scoring' | 'saving' | 'improving';
 /** Writes only while JOB#reel is still this run's (a newer Make reel replaces the row with a new startedAt). */
 export function reelProgress(jobAt: number) {
   let last = 0;
@@ -271,6 +279,7 @@ export async function drawReel(d: {
   extra?: Record<string, unknown>;
   cues?: Cue[]; // on the reel's timeline; template scenes get theirs from planCues
   mood?: string; // the writer's music mood
+  voice?: VoiceLine[]; // the voiceover, on the reel's timeline
 }): Promise<{ seconds: number; ms: number; score: PostScore | null }> {
   const { browser, plan, media, pool, postId, post, by, brief, credited, began, progress, brand, cta } = d;
   // Every frame, one by one (nothing leaves the page).
@@ -357,7 +366,7 @@ export async function drawReel(d: {
   // Sound: the effects on their frames, music under them (ducked), loudness for Reels (about −14 LUFS).
   const cues = d.cues ?? planCues(plan);
   const music = d.mood ? await musicFor(d.mood, postId, seconds) : undefined;
-  writeFileSync(join(WORK, 'mix.wav'), wav(mixReel(seconds, cues, music?.pcm)));
+  writeFileSync(join(WORK, 'mix.wav'), wav(mixReel(seconds, cues, music?.pcm, d.voice ?? [])));
   await run('ffmpeg', [
     '-nostdin',
     '-loglevel',

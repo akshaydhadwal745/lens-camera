@@ -146,8 +146,10 @@ export type Post = {
     angle: string;
     audience: string;
     hook: string;
+    voiceName?: string | null;
     scenes: {
       words: string;
+      vo?: string;
       seconds: number;
       shows: string;
       idea: string;

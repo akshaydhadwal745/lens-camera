@@ -2,7 +2,7 @@
 // made here in code, so they have no licence to track and land on the exact frame of the motion they belong to:
 // the designer lists cues per scene (whoosh when a scene whips in, pop when the phone lands, tick on a green check,
 // shutter on a photo, impact on the call to action, riser into a reveal). Music (licensed tracks from the owner's
-// Pixabay picks) is mixed under them and ducked whenever an effect plays. The result is one 48 kHz stereo WAV that
+// Pixabay picks) is mixed under them and ducked whenever an effect plays, and much more under the voiceover. The result is one 48 kHz stereo WAV that
 // growth-video.ts muxes with the frames; ffmpeg's loudnorm then brings it to about −14 LUFS (Reels / Shorts level).
 // Pure: no I/O.
 
@@ -165,12 +165,26 @@ export function readCues(raw: unknown, seconds: number): Cue[] {
 
 /**
  * The reel's sound: effects at their times, music (if any) under them, ducked by 7 dB around each effect and
- * faded in and out. `music` is interleaved stereo float32 at RATE (decoded by ffmpeg). Returns stereo float32.
+ * faded in and out. `music` is interleaved stereo float32 at RATE (decoded by ffmpeg). `voice` = spoken lines,
+ * mono float32 at RATE, each starting at `at` seconds: the voice sits on top, the music drops to about a quarter
+ * under it (a broadcast-style duck, 80 ms down, 300 ms back) and effects to 60%. Returns stereo float32.
  */
-export function mixReel(seconds: number, cues: Cue[], music?: Float32Array): Float32Array {
+export type VoiceLine = { at: number; pcm: Float32Array };
+export function mixReel(seconds: number, cues: Cue[], music?: Float32Array, voice: VoiceLine[] = []): Float32Array {
   const n = Math.ceil(seconds * RATE);
   const sfx = new Float32Array(n);
   const duck = new Float32Array(n).fill(1);
+  const vo = new Float32Array(n);
+  const under = new Float32Array(n).fill(1); // music under the voice
+  for (const l of voice) {
+    const at = Math.max(0, Math.floor(l.at * RATE));
+    for (let i = 0; i < l.pcm.length && at + i < n; i++) vo[at + i] += l.pcm[i];
+    const down = Math.floor(0.08 * RATE), back = Math.floor(0.3 * RATE);
+    for (let i = Math.max(0, at - down); i < Math.min(n, at + l.pcm.length + back); i++) {
+      const g = i < at ? 1 - 0.75 * ((i - (at - down)) / down) : i > at + l.pcm.length ? 0.25 + 0.75 * ((i - at - l.pcm.length) / back) : 0.25;
+      under[i] = Math.min(under[i], g);
+    }
+  }
   cues.forEach((c, k) => {
     const s = synth(c.kind, k + 1);
     const at = Math.floor(c.t * RATE);
@@ -191,13 +205,14 @@ export function mixReel(seconds: number, cues: Cue[], music?: Float32Array): Flo
     if (music && music.length >= 2) {
       const j = (i * 2) % (music.length - (music.length % 2));
       const f = Math.min(1, i / fadeIn, (n - i) / fadeOut);
-      m = music[j] * 0.55 * duck[i] * f;
-      mr = music[j + 1] * 0.55 * duck[i] * f;
+      m = music[j] * 0.55 * duck[i] * under[i] * f;
+      mr = music[j + 1] * 0.55 * duck[i] * under[i] * f;
     }
     // Effects a touch wider than mono: the right channel 0.4 ms later.
     const d = Math.max(0, i - 19);
-    out[i * 2] = soft(m + sfx[i]);
-    out[i * 2 + 1] = soft(mr + sfx[d]);
+    const fx = 0.6 + 0.4 * under[i];
+    out[i * 2] = soft(m + sfx[i] * fx + vo[i]);
+    out[i * 2 + 1] = soft(mr + sfx[d] * fx + vo[i]);
   }
   return out;
 }
