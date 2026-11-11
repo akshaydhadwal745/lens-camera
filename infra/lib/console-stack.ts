@@ -219,6 +219,11 @@ export class ConsoleStack extends Stack {
       schedule: events.Schedule.cron({ weekDay: 'SUN', hour: '3', minute: '0' }),
       targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ igRefresh: true }), retryAttempts: 0 })],
     });
+    // The brain (growth-brain.ts): Mondays 04:00 UTC, after the weekend's results are in.
+    new events.Rule(this, 'GrowthBrain', {
+      schedule: events.Schedule.cron({ weekDay: 'MON', hour: '4', minute: '0' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ brain: true }), retryAttempts: 0 })],
+    });
     // Weekly event scout (growth-scout.ts): Claude searches the web for concerts, tours, festivals and parties.
     new events.Rule(this, 'GrowthEventScout', {
       schedule: events.Schedule.cron({ weekDay: 'MON,THU', hour: '2', minute: '30' }),

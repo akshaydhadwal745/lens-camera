@@ -16,6 +16,7 @@ import {
   type Workspace,
 } from "./shared";
 import { elapsed, reelStage, type ReelJob } from "./jobs";
+import { Results } from "./results";
 
 type Limit = {
   caption: number;
@@ -96,9 +97,9 @@ function postText(v: PostVariant, link: string, platform: string) {
 // ---------- the studio ----------
 
 export function ContentStudio({ ws }: { ws: Workspace }) {
-  const [tab, setTab] = useState<"posts" | "calendar" | "moments" | "library">(
-    "posts",
-  );
+  const [tab, setTab] = useState<
+    "posts" | "calendar" | "moments" | "results" | "library"
+  >("posts");
   const [edit, setEdit] = useState<Post | "new" | null>(null);
   const [archived, setArchived] = useState(false);
   const kit = useLoad(() => get<BrandPage>("/growth/brand"), []);
@@ -114,6 +115,7 @@ export function ContentStudio({ ws }: { ws: Workspace }) {
                 ["posts", "Posts"],
                 ["calendar", "Calendar"],
                 ["moments", "Moments"],
+                ["results", "Results"],
                 ["library", "Library"],
               ] as const
             ).map(([k, label]) => (
@@ -140,6 +142,8 @@ export function ContentStudio({ ws }: { ws: Workspace }) {
         <Library ws={ws} />
       ) : tab === "moments" ? (
         <Moments ws={ws} />
+      ) : tab === "results" ? (
+        <Results />
       ) : tab === "calendar" ? (
         <CalendarGrid ws={ws} onOpen={setEdit} />
       ) : (
@@ -890,6 +894,31 @@ function InstagramPublish({
         <a href={done.url} target="_blank" rel="noreferrer">
           open the post
         </a>
+        {post.stats?.instagram ? (
+          <>
+            <br />
+            <span className="muted">
+              After {post.stats.instagram.ageHours} h:{" "}
+              {post.stats.instagram.views} views · {post.stats.instagram.reach}{" "}
+              reached
+              {post.stats.instagram.avgWatchSec !== undefined
+                ? ` · watched ${post.stats.instagram.avgWatchSec} s on average${post.stats.instagram.watchedPct !== undefined ? ` (${post.stats.instagram.watchedPct}% of the reel)` : ""}`
+                : ""}{" "}
+              · {post.stats.instagram.likes} likes ·{" "}
+              {post.stats.instagram.comments} comments ·{" "}
+              {post.stats.instagram.shares} shares ·{" "}
+              {post.stats.instagram.saved} saves
+            </span>
+          </>
+        ) : (
+          <>
+            <br />
+            <span className="muted">
+              Numbers appear 1 hour after posting, then at 1, 3, 7, 14 and 28
+              days.
+            </span>
+          </>
+        )}
       </p>
     );
   return (

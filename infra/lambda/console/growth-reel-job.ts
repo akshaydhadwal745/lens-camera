@@ -14,6 +14,7 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, s3 } from '../api/lib';
+import { playbookFor } from './growth-brain';
 import { runClaude, type Mode } from './growth';
 import type { KitPhoto } from './growth-ai-design';
 import { brand as loadBrand } from './growth-brand';
@@ -208,11 +209,13 @@ async function writeStep(postId: string, by: string, jobAt: number): Promise<{ c
   const brief = postBrief(post);
   const script = (post.script ?? []).map((s) => String(s.onScreen ?? '')).filter(Boolean);
   const allowed = `${brief} ${script.join(' ')} ${facts}`;
+  // What real results taught us (the brain's playbook; empty until there is one).
+  const learned = await playbookFor('writer');
   let written: WrittenReel | undefined;
   let problems: string[] = [];
   for (let attempt = 0; attempt < 2 && !written; attempt++) {
     try {
-      const prompt = writerPrompt(brief, script, facts, cta, brand.voice ?? '') + (problems.length ? `\n\nYOUR LAST VERSION WAS REJECTED: ${problems.join('; ')}. Write it again.` : '');
+      const prompt = writerPrompt(brief, script, facts, cta, brand.voice ?? '') + learned + (problems.length ? `\n\nYOUR LAST VERSION WAS REJECTED: ${problems.join('; ')}. Write it again.` : '');
       const { report } = await runClaude<Partial<WrittenReel>>(prompt, tok, { enabled: [] }, Date.now() + 3 * 60_000, WRITER_MODE);
       const r = readWrittenReel(report, allowed, cta);
       written = r.reel;
@@ -340,7 +343,7 @@ async function designStep(postId: string, jobAt: number): Promise<{ continued: b
   const ask = async (fix?: Map<number, string[]>) => {
     if (!tok) return new Map<number, SceneDesign>();
     try {
-      const { report } = await runClaude<{ scenes: Partial<SceneDesign>[] }>(reelDesignPrompt(st.written, kitOf(st), footage, colours, SITE, fix), tok, { enabled: [] }, Date.now() + 7 * 60_000, DESIGN_MODE);
+      const { report } = await runClaude<{ scenes: Partial<SceneDesign>[] }>(reelDesignPrompt(st.written, kitOf(st), footage, colours, SITE, fix) + (await playbookFor('designer')), tok, { enabled: [] }, Date.now() + 7 * 60_000, DESIGN_MODE);
       return designsByScene(report, st.written.scenes.length, (n) => st.written.scenes[n - 1]?.seconds ?? 5);
     } catch (e) {
       console.error(JSON.stringify({ reelDesignFailed: (e as Error).message.slice(0, 300) }));

@@ -12,6 +12,7 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, env, getParam, HttpError, json, Res, s3 } from '../api/lib';
+import { playbookFor } from './growth-brain';
 import { runClaude, type Mode } from './growth';
 import type { Asset } from './growth-assets';
 import { brand as loadBrand } from './growth-brand';
@@ -360,7 +361,7 @@ export async function drawReel(d: {
   let score: PostScore | null = null;
   if (Date.now() - began < 13.5 * 60_000) {
     const sheetPage = await browser.newPage();
-    const s = await scoreImages(sheetPage, shots, `${brief}\n\n${REEL_SCORE_NOTE}`).finally(() => sheetPage.close());
+    const s = await scoreImages(sheetPage, shots, `${brief}\n\n${REEL_SCORE_NOTE}${await playbookFor('scorer')}`).finally(() => sheetPage.close());
     if (s) score = { total: postTotal(s.images, s.hook), hook: s.hook, hookWhy: s.hookWhy, images: s.images, redone: 0, at: Date.now() };
   }
 

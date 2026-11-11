@@ -188,6 +188,7 @@ export type Post = {
   reel?: { assetId: string; seconds?: number } | null;
   renders?: { assetId: string; label: string; w: number; h: number }[];
   schedule?: Record<string, number>;
+  stats?: Record<string, { at: number; ageHours: number; views: number; reach: number; likes: number; comments: number; shares: number; saved: number; avgWatchSec?: number; watchedPct?: number }>;
   publishing?: Record<string, number>;
   publishError?: { platform: string; message: string; at: number };
   approvedBy?: string;
