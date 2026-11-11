@@ -246,7 +246,8 @@ type ToolSetup = { googleToken?: string; writeToken?: string; bingKey?: string; 
 
 /** What a run asks of Claude: its instructions, output schema and tool list (the weekly report by default). */
 /** `readsFiles`: Claude may open local files (the Read tool), used to look at images. */
-export type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft'; readsFiles?: boolean };
+/** builtins: Claude Code's own tools this call may use (e.g. WebSearch, WebFetch for the event scout). */
+export type Mode = { system: string; schema: object; toolNames: string[]; mode: 'report' | 'draft'; readsFiles?: boolean; builtins?: string[] };
 const REPORT_MODE: Mode = { system: ANALYST_SYSTEM, schema: REPORT_SCHEMA, toolNames: TOOL_NAMES, mode: 'report' };
 
 /** A call that failed because the account is out of usage (or the token was refused): worth trying the other one. */
@@ -325,12 +326,12 @@ function runClaudeOnce<T = AiReport>(prompt: string, token: string, tools: ToolS
   const args = [
     '-p',
     '--tools',
-    mode.readsFiles ? 'Read' : '',
+    [...(mode.readsFiles ? ['Read'] : []), ...(mode.builtins ?? [])].join(','),
     '--strict-mcp-config',
     '--mcp-config',
     mcp,
     '--allowedTools',
-    [...mode.toolNames.map((t) => `mcp__growth__${t}`), ...(mode.readsFiles ? ['Read'] : [])].join(','),
+    [...mode.toolNames.map((t) => `mcp__growth__${t}`), ...(mode.readsFiles ? ['Read'] : []), ...(mode.builtins ?? [])].join(','),
     '--no-session-persistence',
     '--output-format',
     'json',

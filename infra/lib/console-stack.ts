@@ -213,6 +213,11 @@ export class ConsoleStack extends Stack {
     });
     // The content chain: "Make content" on a moment drafts, then makes images, then the reel, one step per tick
     // (growth-chain.ts). An idle tick is a couple of DynamoDB reads (about $0.20 a month).
+    // Weekly event scout (growth-scout.ts): Claude searches the web for concerts, tours, festivals and parties.
+    new events.Rule(this, 'GrowthEventScout', {
+      schedule: events.Schedule.cron({ weekDay: 'MON,THU', hour: '2', minute: '30' }),
+      targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ eventScout: true }), retryAttempts: 0 })],
+    });
     new events.Rule(this, 'GrowthContentChain', {
       schedule: events.Schedule.rate(Duration.minutes(10)),
       targets: [new targets.LambdaFunction(growth, { event: events.RuleTargetInput.fromObject({ contentChain: true }), retryAttempts: 0 })],
