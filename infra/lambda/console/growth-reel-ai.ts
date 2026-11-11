@@ -53,7 +53,7 @@ Voiceover (vo, per scene): a warm narrator talks over the reel, like a friend te
 - Sound human: contractions (you've, it's, don't), short sentences, a breath between thoughts, one specific real detail ("the front row", "the second verse", "Nani's phone"). Say it the way people actually talk. Read it out loud in your head: if it sounds like a commercial, rewrite it.
 - Never read the on-screen words out loud. The voice says the feeling or the detail around them (screen "Storage full." → voice "Of course. Right as she walks on.").
 - No ad-speak: never "Are you tired of", "Say goodbye to", "Introducing", "Look no further", "Meet Lens", "game-changer", "don't miss out". No questions that sound like a sales pitch.
-- 3 to 14 words per scene (18 at most); a scene may be silent (empty vo) when the picture says it all. The hook's line is short and lands in the first second. The last scene's line says the call to action in a natural way.
+- 3 to 14 words per scene (18 at most); a scene may be silent (empty vo) when the picture says it all. The hook's line is short and lands in the first second. The last scene's line says the call to action in a natural way, and may end with a follow ask that gives a reason ("Follow for more phone-photo fixes."); never "please like and subscribe" or begging.
 - The same truth rules as the words on screen.
 - Make it loop: the last line can lead straight back into the first (scene 1 "She's practised her one line all week." … last "So this time, you just watch her."), so a viewer who keeps watching hears one story.
 mood: the music under it: upbeat (bright pop), chill (lo-fi, relaxed), emotional (piano, heartfelt), energetic (driving electronic), warm (acoustic, friendly).`;
@@ -169,6 +169,8 @@ Fonts: font-family:Geist (300–800) for all words; font-family:Plex (mono 500/6
 Never draw illustrations: no people, faces, hands, fingers, bodies, children, animals, or drawn objects (lamps, bags, stages, curtains, furniture, food). Clip-art and cartoon figures look cheap. Drawn shapes are only abstract: lines, arrows, underlines, rings, bursts, light, glows, grids. When a scene has no footage or photo, make it type-led: big bold words, colour and light, and the real product parts from the kit.
 
 Truth in pictures: <lens-phone> is the Lens app on the owner's or host's phone. Guests of an event album never have Lens: when a guest scans or adds photos, show THEIR phone with its own camera or browser, drawn by you as a plain phone outline with no hand (a viewfinder with the QR card in it, or a simple browser page "Add your photos"), never a <lens-phone> screen. "Every guest's photos in one album" is the qr-album screen (the event album), not the library.
+
+The last scene may add a small FOLLOW FOR MORE label (it counts as label words).
 
 Words: show the scene's words exactly (you may split them into lines and animate word by word or line by line, colour or underline the key words). You may add at most 3 small label words of your own per scene (e.g. BEFORE, AFTER, LIVE). Nothing else in text.
 
