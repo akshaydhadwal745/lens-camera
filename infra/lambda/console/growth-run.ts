@@ -2,6 +2,7 @@
 // weekly from EventBridge, or on demand from the Console (POST /growth/run).
 import { eventScout } from "./growth-scout";
 import { publishInstagram, refreshInstagram } from "./growth-instagram";
+import { runBrain } from "./growth-brain";
 import { finishJob, runDraft, runGrowthReport, runMonthly } from "./growth";
 import { watchCompetitors } from "./growth-competitors";
 import { contentChain } from "./growth-chain";
@@ -26,6 +27,7 @@ export async function handler(event: {
   eventScout?: boolean;
   publish?: { postId: string; platform?: string };
   igRefresh?: boolean;
+  brain?: boolean;
 }) {
   if (event.monthly)
     return runMonthly({
@@ -38,6 +40,7 @@ export async function handler(event: {
   if (event.contentChain) return contentChain();
   if (event.eventScout) return eventScout();
   if (event.igRefresh) return refreshInstagram();
+  if (event.brain) return runBrain();
   if (event.publish && typeof event.publish.postId === "string") return publishInstagram(event.publish.postId, event.by ?? "console");
   // Content images: no Claude, so outside the analyst lock (one render at a time, see renderStart).
   if (event.render && typeof event.render.postId === "string") {
