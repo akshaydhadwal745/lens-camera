@@ -949,8 +949,10 @@ async function runContentDraft(t: Task, by: string, started: number) {
   ].join('\n\n');
   const { report: d } = await runClaude<ContentDraft>(prompt, token, tools, started + 12 * 60_000, CONTENT_MODE);
   await saveToolActivity(`draft:${t.id}`, `D-${t.id}`, Date.now());
-  const packages = (d.packages ?? []).slice(0, 3);
-  if (!packages.length) throw new Error(`No content. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
+  const spec = (t.spec ?? {}) as { onlyFormat?: string; auto?: boolean };
+  // Daily reels (growth-daily.ts): exactly one package of the asked format.
+  const packages = spec.onlyFormat ? (d.packages ?? []).filter((x) => x.format === spec.onlyFormat).slice(0, 1) : (d.packages ?? []).slice(0, 3);
+  if (!packages.length) throw new Error(`No ${spec.onlyFormat ? `${spec.onlyFormat} ` : ''}content. Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
   const saved: { id: string; name: string; format: string; problems: string[] }[] = [];
   for (const x of packages) {
     // Only the focus platforms (brand kit), whatever the agent wrote.
@@ -963,7 +965,7 @@ async function runContentDraft(t: Task, by: string, started: number) {
     const links = Object.fromEntries(Object.keys(f.variants).map((k) => [k, platformLink(k, code, f.page)]));
     // "Make content" on a moment makes everything: images for every package, a reel for reels (growth-chain.ts).
     const make = (t.spec as { makeAll?: boolean } | undefined)?.makeAll ? { make: { images: 'todo', reel: ['reel', 'short'].includes(f.format) ? 'todo' : 'none' } } : {};
-    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...f, ...make, code, link: platformLink(f.channel, code, f.page), links, problems, published: {}, createdAt: Date.now(), createdBy: 'agent', updatedAt: Date.now(), updatedBy: 'agent', pk: 'GROWTH', sk: `POST#${id}`, id } }));
+    await ddb.send(new PutCommand({ TableName: env.table, Item: { ...f, ...make, ...(spec.auto ? { auto: true } : {}), code, link: platformLink(f.channel, code, f.page), links, problems, published: {}, createdAt: Date.now(), createdBy: 'agent', updatedAt: Date.now(), updatedBy: 'agent', pk: 'GROWTH', sk: `POST#${id}`, id } }));
     saved.push({ id, name: f.title, format: f.format, problems });
   }
   if (!saved.length) throw new Error(`No usable packages (no platform versions). Agent said: ${String(d.notes ?? '').slice(0, 300)}`);
@@ -974,7 +976,8 @@ async function runContentDraft(t: Task, by: string, started: number) {
   ].filter(Boolean).join('\n');
   const reviewer = t.reviewer || (by.includes('@') ? by : '');
   await systemUpdate(t.id, { status: 'in_review', reviewer, spec: { ...(t.spec ?? {}), posts: saved.map((x) => x.id) } }, note);
-  await sendToOwners(`Content ready for review: ${t.title.slice(0, 80)}`, `${note.slice(0, 3000)}\n\nReview and approve: ${CONSOLE}/growth/ws/social\n\nNothing is published until you approve it.`).catch(() => {});
+  // Daily reels don't ask for a review: the quality gate posts them or emails when it holds one.
+  if (!spec.auto) await sendToOwners(`Content ready for review: ${t.title.slice(0, 80)}`, `${note.slice(0, 3000)}\n\nReview and approve: ${CONSOLE}/growth/ws/social\n\nNothing is published until you approve it.`).catch(() => {});
   return { packages: saved.length };
 }
 

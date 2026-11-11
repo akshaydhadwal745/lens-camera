@@ -4,6 +4,7 @@ import { eventScout } from "./growth-scout";
 import { publishInstagram, refreshInstagram } from "./growth-instagram";
 import { runBrain } from "./growth-brain";
 import { runSoundTrends } from "./growth-sound-trends";
+import { dailyContent } from "./growth-daily";
 import { redraftPost } from "./growth";
 import { finishJob, runDraft, runGrowthReport, runMonthly } from "./growth";
 import { watchCompetitors } from "./growth-competitors";
@@ -31,6 +32,7 @@ export async function handler(event: {
   igRefresh?: boolean;
   brain?: boolean;
   soundTrends?: boolean;
+  dailyContent?: boolean;
   redraft?: { postId: string; note?: string };
 }) {
   if (event.monthly)
@@ -46,6 +48,7 @@ export async function handler(event: {
   if (event.igRefresh) return refreshInstagram();
   if (event.brain) return runBrain();
   if (event.soundTrends) return runSoundTrends();
+  if (event.dailyContent) return dailyContent();
   if (event.redraft && typeof event.redraft.postId === "string") return redraftPost(event.redraft.postId, event.by ?? "console", event.redraft.note ?? "");
   if (event.publish && typeof event.publish.postId === "string") return publishInstagram(event.publish.postId, event.by ?? "console");
   // Content images: no Claude, so outside the analyst lock (one render at a time, see renderStart).

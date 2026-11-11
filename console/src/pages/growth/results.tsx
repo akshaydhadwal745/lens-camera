@@ -1,6 +1,6 @@
 // Results (docs/growth/content-engine.md, "the brain"): what happened to our Instagram posts, and what the weekly
 // brain learned from it. GET /growth/results (growth-brain.ts).
-import { get } from "../../api";
+import { api, get } from "../../api";
 import { Loaded, useLoad, when } from "../../ui";
 import { Chip } from "./shared";
 
@@ -42,6 +42,10 @@ type ResultsPage = {
     ourScore: number | null;
     stats: Stats | null;
   }[];
+  daily: {
+    on: boolean;
+    recent: { day: string; idea: string; source: string }[];
+  } | null;
   sounds: {
     at: number;
     styles: { style: string; mood: string; why: string; source: string }[];
@@ -68,6 +72,39 @@ export function Results() {
     <Loaded state={state}>
       {(r) => (
         <div className="gw-results">
+          {r.daily && (
+            <section className="gw-callout">
+              <span className="gw-row">
+                <strong>Daily reel: {r.daily.on ? "on" : "off"}</strong>
+                <button
+                  className="btn small"
+                  onClick={() =>
+                    void api("PUT", "/growth/autopost", {
+                      on: !r.daily!.on,
+                    }).then(state.reload, (e: Error) => alert(e.message))
+                  }
+                >
+                  {r.daily.on ? "Turn off" : "Turn on"}
+                </button>
+              </span>
+              <span className="muted small">
+                Every morning one reel is made from a strong upcoming moment or
+                an evergreen idea. If it scores at least 60 with nothing to fix
+                it is approved and posted at 6:30 pm IST as a trial reel;
+                otherwise it waits In review and you get an email.
+              </span>
+              {r.daily.recent.length > 0 && (
+                <ul className="small">
+                  {r.daily.recent.map((d) => (
+                    <li key={d.day}>
+                      {d.day}: {d.idea}{" "}
+                      <span className="muted">({d.source})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
           <section className="gw-callout">
             <strong>What the brain learned</strong>
             {!r.playbook ? (
