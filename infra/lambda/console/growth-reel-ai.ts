@@ -15,13 +15,13 @@ import { SCREENS, type Screen } from './growth-design';
 import { FORBIDDEN_CLAIMS } from './growth-report';
 import { MAX_SECONDS } from './growth-reel';
 import { readCues, SOUNDS, type Cue } from './growth-sound';
-import { voiceLineProblems, type VoiceKind } from './growth-voice';
+import { voiceLineProblems } from './growth-voice';
 
 export type Media = 'footage' | 'photo' | 'phone' | 'none';
 export type WrittenScene = { n: number; seconds: number; words: string; beat: string; media: Media; query: string; alt?: string; screen: Screen; vo?: string };
 export const MOODS = ['upbeat', 'chill', 'emotional', 'energetic', 'warm'] as const;
 export type Mood = (typeof MOODS)[number];
-export type WrittenReel = { angle: string; audience: string; hook: string; mood?: Mood; voice?: VoiceKind; scenes: WrittenScene[] };
+export type WrittenReel = { angle: string; audience: string; hook: string; mood?: Mood; scenes: WrittenScene[] };
 export type SceneDesign = { n: number; idea: string; entry: Entry; html: string; sounds?: Cue[] };
 export const ENTRIES = ['cut', 'whip', 'slide', 'fade', 'circle', 'wipe'] as const;
 export type Entry = (typeof ENTRIES)[number];
@@ -55,16 +55,14 @@ Voiceover (vo, per scene): a warm narrator talks over the reel, like a friend te
 - No ad-speak: never "Are you tired of", "Say goodbye to", "Introducing", "Look no further", "Meet Lens", "game-changer", "don't miss out". No questions that sound like a sales pitch.
 - 3 to 14 words per scene (18 at most); a scene may be silent (empty vo) when the picture says it all. The hook's line is short and lands in the first second. The last scene's line says the call to action in a natural way.
 - The same truth rules as the words on screen.
-voice: "india" only when the moment is celebrated in India (Diwali, Holi, Children's Day in India…); otherwise "global".
 mood: the music under it: upbeat (bright pop), chill (lo-fi, relaxed), emotional (piano, heartfelt), energetic (driving electronic), warm (acoustic, friendly).`;
 
 export const REEL_WRITER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['angle', 'audience', 'hook', 'mood', 'voice', 'scenes'],
+  required: ['angle', 'audience', 'hook', 'mood', 'scenes'],
   properties: {
     mood: { type: 'string', enum: MOODS },
-    voice: { type: 'string', enum: ['global', 'india'], description: 'india only for a moment that is celebrated in India; else global' },
     angle: { type: 'string', description: 'the pain point and the twist, one sentence' },
     audience: { type: 'string' },
     hook: { type: 'string' },
@@ -146,7 +144,7 @@ export function readWrittenReel(r: Partial<WrittenReel> | undefined, allowed: st
   const total = scenes.reduce((a, s) => a + s.seconds, 0);
   const k = total > MAX_SECONDS ? MAX_SECONDS / total : 1;
   for (const s of scenes) s.seconds = Math.max(2, Math.floor(s.seconds * k * 10) / 10);
-  return { reel: { mood: (MOODS as readonly string[]).includes(String(r?.mood)) ? (r!.mood as Mood) : 'upbeat', voice: r?.voice === 'india' ? 'india' : 'global', angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
+  return { reel: { mood: (MOODS as readonly string[]).includes(String(r?.mood)) ? (r!.mood as Mood) : 'upbeat', angle: String(r?.angle ?? '').slice(0, 300), audience: String(r?.audience ?? '').slice(0, 160), hook: String(r?.hook ?? scenes[0].words).slice(0, 120), scenes }, problems: [] };
 }
 
 // ---------- 2. the designer ----------

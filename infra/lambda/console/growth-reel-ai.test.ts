@@ -122,13 +122,11 @@ test('voice: human lines pass; ad-speak, read-outs of the screen and long lines 
   assert.match(voiceLineProblems('a b c d e f g h i j k l m n o p q r s t', 'x').join(), /18 at most/);
 });
 
-test('writer: the voiceover is checked like the words, and the voice is global unless India', () => {
+test('writer: the voiceover is checked like the words', () => {
   const base = [scene(1, 'Storage full.', { media: 'footage', query: 'school stage', vo: 'Right as she walks on stage.' }), scene(2, 'b', { vo: '' }), scene(3, 'c', { media: 'photo', query: 'parents audience', vo: "Forty parents. Forty galleries. You'll never see half." }), scene(4, 'Try Lens free', { vo: 'Sort it tonight. Try Lens free.' })];
-  const ok = readWrittenReel({ angle: '', audience: '', hook: '', voice: 'india', scenes: base }, FACTS, 'Try Lens free');
+  const ok = readWrittenReel({ angle: '', audience: '', hook: '', scenes: base }, FACTS, 'Try Lens free');
   assert.deepEqual(ok.problems, []);
-  assert.equal(ok.reel!.voice, 'india');
   assert.equal(ok.reel!.scenes[0].vo, 'Right as she walks on stage.');
-  assert.equal(readWrittenReel({ angle: '', audience: '', hook: '', voice: 'x' as never, scenes: base }, FACTS, 'Try Lens free').reel!.voice, 'global');
   const silent = readWrittenReel({ angle: '', audience: '', hook: '', scenes: base.map((x) => ({ ...x, vo: '' })) }, FACTS, 'Try Lens free');
   assert.match(silent.problems.join(), /at least 3 scenes/);
   const claim = readWrittenReel({ angle: '', audience: '', hook: '', scenes: base.map((x, i) => (i === 1 ? { ...x, vo: 'Get 500 GB free, honestly.' } : x)) }, FACTS, 'Try Lens free');

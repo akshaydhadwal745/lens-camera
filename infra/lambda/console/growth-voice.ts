@@ -1,13 +1,13 @@
 // Reel voiceover (docs/growth/content-engine.md; owner 2026-11-11: "a real editor would add voice over", "catchy,
 // not just repeating the AI lines but a real human kind of transcript"). The writer gives each scene a spoken line
-// (`vo`); Amazon Polly's generative voices say it (Ruth, US English, is the Lens voice; India-only moments use
-// Kajal, Indian English). Each scene is stretched to fit its line before it is designed, so the voice never runs
+// (`vo`); Amazon Polly's generative voice Ruth (US English) says it: one Lens voice for every reel (owner
+// 2026-11-11: "we chose Ruth"). Each scene is stretched to fit its line before it is designed, so the voice never runs
 // over a cut, and the music ducks under the voice in growth-sound.ts. Polly runs in us-east-1 (generative voices
 // aren't in ap-south-1), keyless through the Lambda role. About 300 characters a reel: well under ₹1.
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 
-export const VOICES = { global: 'Ruth', india: 'Kajal' } as const;
-export type VoiceKind = keyof typeof VOICES;
+/** The Lens voice, on every reel. */
+export const VOICE = 'Ruth';
 
 /** The longest a scene may get to fit its line, and the reel's limit with a voice (a little more room to speak). */
 export const SCENE_MAX = 7;
@@ -19,9 +19,9 @@ export const TAIL = 0.35;
 let polly: PollyClient | undefined;
 
 /** One line spoken by a Polly generative voice → MP3 (24 kHz). */
-export async function speak(text: string, voice: VoiceKind): Promise<Buffer> {
+export async function speak(text: string, voice: string = VOICE): Promise<Buffer> {
   polly ??= new PollyClient({ region: 'us-east-1' });
-  const r = await polly.send(new SynthesizeSpeechCommand({ Engine: 'generative', VoiceId: VOICES[voice], OutputFormat: 'mp3', SampleRate: '24000', TextType: 'text', Text: text.slice(0, 400) }));
+  const r = await polly.send(new SynthesizeSpeechCommand({ Engine: 'generative', VoiceId: voice as never, OutputFormat: 'mp3', SampleRate: '24000', TextType: 'text', Text: text.slice(0, 400) }));
   return Buffer.from(await r.AudioStream!.transformToByteArray());
 }
 

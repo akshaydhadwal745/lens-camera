@@ -1964,7 +1964,7 @@ function Reel({ ws, post }: { ws: Workspace; post: Post }) {
         A vertical video (1080×1920, MP4) for Instagram, Facebook and X. The AI
         writes it around the pain point of this post, designs and animates every
         scene, scores the result and redesigns weak scenes once. Sound is
-        included: a voiceover (Ruth, or Kajal for India moments), effects timed
+        included: a voiceover (Ruth, the Lens voice), effects timed
         to each scene, and free-licence music picked for the reel&apos;s mood (credited in the post&apos;s assets). Takes about 20–40 minutes and keeps going if
         you leave this page. Making it again replaces the old one.
       </span>
