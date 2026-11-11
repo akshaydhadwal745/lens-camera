@@ -140,6 +140,8 @@ function design(list: Frame[], visuals: string[], all: string, firstVisual: stri
     if (fr.style === 'cta') return { ...fr, layout: 'cta', screen: 'library' };
     if (fr.style === 'cover') {
       const thumb = fr.w / fr.h > 1.5 && fr.label.startsWith('YouTube');
+      // A cover whose note is a photo is the photo (full-bleed, the hook over it), not a phone with a guessed screen.
+      if (cover.layout === 'moment') return { ...fr, layout: 'moment', screen: screenFor(`${fr.headline} ${fr.body}`, 'viewer'), query: cover.query ?? topic };
       return { ...fr, layout: thumb ? 'moment' : 'hero', screen: thumb && coverScreen === 'library' ? 'viewer' : coverScreen, query: cover.query ?? topic };
     }
     const v = parseVisual(visuals[i] ?? '');
@@ -358,7 +360,8 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
     if (a?.origin === 'discovered') dropped.push(r.id);
     else if (!own && a && a.kind !== 'render' && a.mime.startsWith('image/') && a.status === 'ready' && a.rights.status === 'cleared' && (r.role === 'background' || (r.role === 'media' && a.rights.license === 'own'))) own = a;
   }
-  const queries = only ? [...new Set(only.queries.filter(Boolean))] : [...new Set(list.map((f) => f.query).filter((x): x is string => !!x))];
+  // A carousel also searches the post's topic, so its phone screens have enough photos of the event itself.
+  const queries = only ? [...new Set(only.queries.filter(Boolean))] : [...new Set([...list.map((f) => f.query).filter((x): x is string => !!x), topicQuery(`${post.title} ${post.hook}`)])];
   const landscape = (q: string) => !only && list.some((f) => f.query === q && f.w > f.h);
   const options = new Map<string, Photo[]>();
   if (!own) for (const q of queries) options.set(q, await findPhotos(q, 10, landscape(q) ? 'landscape' : 'portrait'));
@@ -396,8 +399,9 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
   // (their credits go in the post, as in reels; owner 2026-11-11: carousel grids showed flowers and deserts because
   // credited event photos were left out). General photos only when fewer than 4 fit (never in a reel).
   const general = shuffle(pool.filter((p) => photoPassed(p) && !fitting.includes(p)), post.id);
-  const tiles = fitting;
-  const poolPhotos = only || tiles.length >= 4 ? tiles : [...tiles, ...general];
+  // A thumbnail in a grid only has to be clearly from this kind of event: one point looser than a scene photo.
+  const tiles = only ? fitting : [...new Map([...options.values()].flat().filter((p) => photoPassed(p) && (fits.get(p.id) ?? 0) >= FITS - 1).map((p) => [p.id, p])).values()].sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0));
+  const poolPhotos = only || tiles.length >= 3 ? tiles : [...tiles, ...general];
   for (const p of poolPhotos.slice(0, 15)) if (!noCredit(p) && !credited.some((c) => c.id === p.id)) credited.push({ id: p.id, role: 'background' });
   const poolUrls = (await Promise.all(poolPhotos.slice(0, 15).map(url))).filter((u): u is string => !!u);
   return { served, scenes, pool: poolUrls, credited, dropped, kit };
