@@ -61,3 +61,10 @@ test('reading input keeps only known platforms and clamps scene seconds', () => 
   assert.equal(p.script[0].seconds, 30);
   assert.equal(p.realPhoto, false);
 });
+
+test('post text: the call to action is not repeated when the caption already says it', () => {
+  const base: Variant = { caption: 'Every photo in one album. Make an event album for your next party. Link in bio.', hashtags: ['#a'], cta: 'Make an event album for your next party', title: '', altText: '' };
+  const t = postText(base, 'https://x', 'instagram');
+  assert.equal(t.match(/Make an event album/g)?.length, 1);
+  assert.match(postText({ ...base, caption: 'Every photo in one album.' }, 'https://x', 'instagram'), /\n\nMake an event album for your next party/);
+});

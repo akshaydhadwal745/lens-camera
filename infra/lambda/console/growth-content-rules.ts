@@ -44,7 +44,10 @@ export function postText(v: Variant, link: string, platform: Platform): string {
   const tags = v.hashtags.join(' ');
   // Instagram captions can't hold a clickable link: point to the profile link instead.
   const linkLine = platform === 'instagram' ? '' : link;
-  return [v.caption.trim(), v.cta.trim(), linkLine, tags].filter(Boolean).join('\n\n');
+  // A caption that already ends on the call to action doesn't get it twice.
+  const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const cta = v.cta.trim() && norm(v.caption).includes(norm(v.cta)) ? '' : v.cta.trim();
+  return [v.caption.trim(), cta, linkLine, tags].filter(Boolean).join('\n\n');
 }
 
 /** Length as the platform counts it: X shortens every link to 23 characters (t.co). */
