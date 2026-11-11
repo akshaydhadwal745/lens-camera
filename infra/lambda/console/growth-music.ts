@@ -165,6 +165,30 @@ export function bestStart(envelope: Float32Array, seconds: number, frame = 0.05)
   return Math.max(0, at * frame - 0.02);
 }
 
+/**
+ * Cuts on the beat (owner 2026-11-11, "real editing"): the scene lengths are fixed by the voiceover, so the
+ * music moves instead. Within ±1 s of `start`, the offset whose strongest hits (rises in loudness) fall on the
+ * reel's cuts. `cuts` = seconds from the reel's start; `envelope` as in bestStart. Pure.
+ */
+export function alignToCuts(envelope: Float32Array, start: number, cuts: number[], frame = 0.05): number {
+  if (!cuts.length || envelope.length < 3) return start;
+  const onset = new Float32Array(envelope.length);
+  for (let i = 1; i < envelope.length; i++) onset[i] = Math.max(0, envelope[i] - envelope[i - 1]);
+  const hit = (t: number) => {
+    const i = Math.round(t / frame);
+    return Math.max(onset[i - 1] ?? 0, onset[i] ?? 0, onset[i + 1] ?? 0);
+  };
+  let best = start, bestScore = -1;
+  for (let d = -1; d <= 1.0001; d += frame) {
+    const from = start + d;
+    if (from < 0) continue;
+    // A small pull towards the loudest stretch, so a tie keeps it.
+    const score = cuts.reduce((a, c) => a + hit(from + c), 0) - Math.abs(d) * 1e-4;
+    if (score > bestScore) { bestScore = score; best = from; }
+  }
+  return Math.round(best * 100) / 100;
+}
+
 /** Loudness per 50 ms frame from mono float32 at `rate`. */
 export function loudness(mono: Float32Array, rate: number, frame = 0.05): Float32Array {
   const n = Math.floor(mono.length / (rate * frame));

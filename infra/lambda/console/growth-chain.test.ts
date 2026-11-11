@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { photoDayMoments, score, SENSITIVE } from '../api/growth-moments';
 import { nextStep } from './growth-chain';
 import { momentBrief } from './growth-moments';
-import { nameWords, readScouted } from './growth-scout';
+import { mentionsDay, nameWords, readScouted } from './growth-scout';
 
 const free = { analyst: true, render: true, reel: true };
 
@@ -62,4 +62,9 @@ test('scout: real dates in the window, our countries, nothing sensitive, https s
   assert.equal(got[2].raw.kind, 'match');
   assert.deepEqual(nameWords('Coldplay Music of the Spheres (Mumbai)'), ['Coldplay', 'Spheres']);
   assert.deepEqual(readScouted(undefined, '2026-11-11'), []);
+});
+
+test('scout date check: the page must state the start day in a common form', () => {
+  for (const t of ['Sat, 14 Nov 2026 · Bengaluru', 'November 14, 2026', 'on 14th November', '14-16 November', 'Date: 14/11/2026', '2026-11-14T19:00']) assert.ok(mentionsDay(t, '2026-11-14'), t);
+  for (const t of ['15 November 2026', 'November 2026 tour', 'Nov 4', '114 November']) assert.ok(!mentionsDay(t, '2026-11-14'), t);
 });
