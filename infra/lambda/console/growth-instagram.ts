@@ -24,6 +24,8 @@ const API = 'https://graph.instagram.com/v23.0';
 const PARAM = '/lens/growth/instagram';
 const BUCKET = process.env.GROWTH_CONTENT_BUCKET ?? '';
 const TMP = '/tmp/ig';
+/** Reels go out as trial reels (non-followers first) while the account has fewer followers than this. */
+export const TRIAL_BELOW = 1000;
 
 type IgConf = { token: string; userId: string; username: string; savedAt: number; refreshedAt: number | null };
 type Render = { assetId: string; label: string; w: number; h: number };
@@ -126,10 +128,27 @@ export async function publishInstagram(postId: string, by: string): Promise<Reco
     if (!plan) throw new Error('Nothing to post yet: make the images or the reel first.');
     const caption = igCaption((await platformText(p, 'instagram')).text);
     let container: string;
+    let trial = false;
     if (plan.kind === 'reel') {
       const a = (await ddb.send(new GetCommand({ TableName: env.table, Key: { pk: 'GROWTH', sk: `ASSET#${plan.assetId}` } }))).Item;
       if (!a?.key) throw new Error('The reel file is missing');
-      container = String((await call('POST', `${c.userId}/media`, { media_type: 'REELS', video_url: await cdn(String(a.key), 7200), caption, share_to_feed: 'true' }, c.token)).id);
+      // Trial reel while the account is small (owner 2026-11-11: 0 followers, 3 views): Instagram shows it to
+      // non-followers first and shares it to followers on its own if it performs (graduation SS_PERFORMANCE).
+      // If Instagram refuses the trial, the reel goes out as a normal one.
+      const base = { media_type: 'REELS', video_url: await cdn(String(a.key), 7200), caption, share_to_feed: 'true' };
+      const followers = Number((await call('GET', 'me', { fields: 'followers_count' }, c.token).catch(() => ({ followers_count: 0 }))).followers_count) || 0;
+      trial = followers < TRIAL_BELOW;
+      container = trial
+        ? String(
+            (
+              await call('POST', `${c.userId}/media`, { ...base, trial_params: JSON.stringify({ graduation_strategy: 'SS_PERFORMANCE' }) }, c.token).catch((e: Error) => {
+                console.error(JSON.stringify({ igTrialRefused: e.message.slice(0, 200) }));
+                trial = false;
+                return call('POST', `${c.userId}/media`, base, c.token);
+              })
+            ).id,
+          )
+        : String((await call('POST', `${c.userId}/media`, base, c.token)).id);
       await ready(container, c.token, 9 * 60_000);
     } else if (plan.kind === 'image') {
       container = String((await call('POST', `${c.userId}/media`, { image_url: await jpegUrl(postId, 0, plan.renders[0].assetId), caption }, c.token)).id);
@@ -150,7 +169,7 @@ export async function publishInstagram(postId: string, by: string): Promise<Reco
         Key: key,
         UpdateExpression: 'SET published = :v, schedule = :sc, #s = :pub, publishedAt = if_not_exists(publishedAt, :at), updatedAt = :at REMOVE publishError, publishing',
         ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':v': { ...(p.published ?? {}), instagram: { url: permalink || `https://www.instagram.com/${c.username}/`, at, how: 'auto', mediaId, kind: plan.kind, by } }, ':sc': without(p.schedule, 'instagram'), ':pub': 'published', ':at': at },
+        ExpressionAttributeValues: { ':v': { ...(p.published ?? {}), instagram: { url: permalink || `https://www.instagram.com/${c.username}/`, at, how: 'auto', mediaId, kind: plan.kind, by, ...(trial ? { trial: true } : {}) } }, ':sc': without(p.schedule, 'instagram'), ':pub': 'published', ':at': at },
       }),
     );
     console.log(JSON.stringify({ igPublished: postId, kind: plan.kind, mediaId, permalink }));
