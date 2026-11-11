@@ -102,6 +102,15 @@ export function screenFor(text: string, fallback: Screen = 'library'): Screen {
   return SCREEN_WORDS.find(([re]) => re.test(text))?.[1] ?? fallback;
 }
 
+/** Extra searches for a carousel's phone-screen grids, by topic: more angles of the same kind of event. */
+export const TILE_QUERIES: [RegExp, string[]][] = [
+  [/children'?s day|school|annual day|kids|sports day/i, ['kids dance performance', 'children performing stage', 'school annual function']],
+  [/wedding|marriage|shaadi|reception/i, ['wedding guests dancing', 'wedding reception lights']],
+  [/concert|festival|gig|music/i, ['concert crowd phones', 'festival crowd lights']],
+  [/party|parties|birthday|new year/i, ['party friends dancing', 'birthday party celebration']],
+  [/diwali|holi|christmas|eid/i, ['festival celebration family lights', 'festive decorations night']],
+];
+
 /** Scene photos to look for, by topic: the moment itself (people as b-roll are fine on Pexels / Pixabay). */
 const TOPICS: [RegExp, string][] = [
   [/children'?s day|school|annual day|kids|sports day/i, 'school stage performance'],
@@ -361,7 +370,9 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
     else if (!own && a && a.kind !== 'render' && a.mime.startsWith('image/') && a.status === 'ready' && a.rights.status === 'cleared' && (r.role === 'background' || (r.role === 'media' && a.rights.license === 'own'))) own = a;
   }
   // A carousel also searches the post's topic, so its phone screens have enough photos of the event itself.
-  const queries = only ? [...new Set(only.queries.filter(Boolean))] : [...new Set([...list.map((f) => f.query).filter((x): x is string => !!x), topicQuery(`${post.title} ${post.hook}`)])];
+  const about = `${post.title} ${post.hook}`;
+  const tileQs = only ? [] : (TILE_QUERIES.find(([re]) => re.test(about))?.[1] ?? []);
+  const queries = only ? [...new Set(only.queries.filter(Boolean))] : [...new Set([...list.map((f) => f.query).filter((x): x is string => !!x), topicQuery(about), ...tileQs])];
   const landscape = (q: string) => !only && list.some((f) => f.query === q && f.w > f.h);
   const options = new Map<string, Photo[]>();
   if (!own) for (const q of queries) options.set(q, await findPhotos(q, 10, landscape(q) ? 'landscape' : 'portrait'));
@@ -400,8 +411,11 @@ export async function gatherPhotos(post: PostLike & { title: string }, list: Fra
   // credited event photos were left out). General photos only when fewer than 4 fit (never in a reel).
   const general = shuffle(pool.filter((p) => photoPassed(p) && !fitting.includes(p)), post.id);
   // A thumbnail in a grid only has to be clearly from this kind of event: one point looser than a scene photo.
-  const tiles = only ? fitting : [...new Map([...options.values()].flat().filter((p) => photoPassed(p) && (fits.get(p.id) ?? 0) >= FITS - 1).map((p) => [p.id, p])).values()].sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0));
+  const atLeast = (n: number) => [...new Map([...options.values()].flat().filter((p) => photoPassed(p) && (fits.get(p.id) ?? 0) >= n).map((p) => [p.id, p])).values()].sort((a, b) => (fits.get(b.id) ?? 0) - (fits.get(a.id) ?? 0));
+  // Steps: photos that clearly fit; then near misses of the same kind (crowds, stages, audiences); scenery last.
+  const tiles = only ? fitting : atLeast(FITS - 1).length >= 3 ? atLeast(FITS - 1) : atLeast(FITS - 2);
   const poolPhotos = only || tiles.length >= 3 ? tiles : [...tiles, ...general];
+  console.log(JSON.stringify({ tiles: tiles.length, fromGeneral: Math.max(0, Math.min(15, poolPhotos.length) - tiles.length) }));
   for (const p of poolPhotos.slice(0, 15)) if (!noCredit(p) && !credited.some((c) => c.id === p.id)) credited.push({ id: p.id, role: 'background' });
   const poolUrls = (await Promise.all(poolPhotos.slice(0, 15).map(url))).filter((u): u is string => !!u);
   return { served, scenes, pool: poolUrls, credited, dropped, kit };
