@@ -1,5 +1,6 @@
 // GrowthAnalyst Lambda entry (container image with the Claude Code CLI, infra/growth-image):
 // weekly from EventBridge, or on demand from the Console (POST /growth/run).
+import { eventScout } from "./growth-scout";
 import { finishJob, runDraft, runGrowthReport, runMonthly } from "./growth";
 import { watchCompetitors } from "./growth-competitors";
 import { contentChain } from "./growth-chain";
@@ -21,6 +22,7 @@ export async function handler(event: {
   render?: { postId: string };
   reel?: { postId: string; step?: ReelStep; jobAt?: number };
   contentChain?: boolean;
+  eventScout?: boolean;
 }) {
   if (event.monthly)
     return runMonthly({
@@ -31,6 +33,7 @@ export async function handler(event: {
   if (event.competitors) return job("competitors", () => watchCompetitors());
   // One step of the content chain (growth-chain.ts): draft, images or reel for "Make content" moments.
   if (event.contentChain) return contentChain();
+  if (event.eventScout) return eventScout();
   // Content images: no Claude, so outside the analyst lock (one render at a time, see renderStart).
   if (event.render && typeof event.render.postId === "string") {
     const { postId } = event.render;

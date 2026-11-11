@@ -28,7 +28,10 @@ async function rows(): Promise<{ moments: Row[]; meta?: Record<string, any> }> {
     out.push(...(r.Items ?? []));
     start = r.LastEvaluatedKey;
   } while (start);
-  const meta = out.find((i) => i.sk === 'MOMENTS');
+  const pulled = out.find((i) => i.sk === 'MOMENTS');
+  // The weekly event scout (growth-scout.ts) keeps its own status row; the page shows both.
+  const scout = out.find((i) => i.sk === 'MOMENTS-SCOUT');
+  const meta = pulled || scout ? { ...pulled, sources: { ...(pulled?.sources ?? {}), ...(scout?.sources ?? {}) } } : undefined;
   return { moments: out.filter((i) => String(i.sk).startsWith('MOMENT#')) as Row[], meta };
 }
 

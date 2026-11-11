@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { photoDayMoments, score, SENSITIVE } from '../api/growth-moments';
 import { nextStep } from './growth-chain';
 import { momentBrief } from './growth-moments';
+import { nameWords, readScouted } from './growth-scout';
 
 const free = { analyst: true, render: true, reel: true };
 
@@ -51,4 +52,14 @@ test('chain: a post whose reel was made by hand gets no second reel', () => {
   const p = { id: 'a', status: 'in_review', format: 'reel', make: { images: 'done', reel: 'todo' }, reel: { at: 1 } };
   assert.equal(nextStep([], [p], { analyst: true, render: true, reel: true }), undefined);
   assert.equal(nextStep([], [{ ...p, reel: undefined }], { analyst: true, render: true, reel: true })?.kind, 'reel');
+});
+
+test('scout: real dates in the window, our countries, nothing sensitive, https sources; names checked on the page', () => {
+  const ev = (o: Record<string, unknown>) => ({ title: 'Coldplay Music of the Spheres', kind: 'concert', start: '2026-12-05', end: '2026-12-05', city: 'Mumbai', country: 'IN', why: 'stadium show', sources: ['https://in.bookmyshow.com/events/coldplay'], ...o });
+  const got = readScouted({ events: [ev({}), ev({ start: '2027-03-01' }), ev({ country: 'XX' }), ev({ title: 'Memorial concert for flood victims' }), ev({ sources: ['http://x.com', 'nope'] }), ev({ start: '12/05/2026' }), ev({}), ev({ title: 'Sunburn Festival', kind: 'festival', start: '2026-12-27', end: '2026-12-29', city: 'Goa', sources: ['https://sunburn.in'] }), ev({ title: 'IPL style final', kind: 'sports' })] }, '2026-11-11');
+  assert.deepEqual(got.map((g) => g.raw.title), ['Coldplay Music of the Spheres (Mumbai)', 'Sunburn Festival (Goa)', 'IPL style final (Mumbai)']);
+  assert.equal(got[1].raw.ends, '2026-12-29');
+  assert.equal(got[2].raw.kind, 'match');
+  assert.deepEqual(nameWords('Coldplay Music of the Spheres (Mumbai)'), ['Coldplay', 'Spheres']);
+  assert.deepEqual(readScouted(undefined, '2026-11-11'), []);
 });
