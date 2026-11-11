@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { alignToCuts, bestStart, openverseTracks } from './growth-music';
 import { mixReel, RATE, readCues, SOUNDS, synth, wav } from './growth-sound';
-import { fitToVoice, stretchMarks, subChunks, voiceLineProblems, VOICE_MAX_SECONDS } from './growth-voice';
+import { fitToVoice, stretchMarks, subChunks, voiceLineProblems, VOICE_MAX_SECONDS, withPunctuation } from './growth-voice';
 import { designsByScene, readWrittenReel, reelDesignPrompt, reelSceneHtml, reelWordProblems, sceneWordProblems, type WrittenReel } from './growth-reel-ai';
 
 const FACTS = 'Full-quality backup. 10 GB free forever. Lens Plus 50 GB for ₹59 a month. Event albums: a QR code guests open.';
@@ -172,4 +172,13 @@ test('beat cuts: the music slides (±1 s) so its hits land on the cuts', () => {
     assert.ok(Math.abs(((at - 5.3) / 0.5) - Math.round((at - 5.3) / 0.5)) < 0.15, `cut at ${at}`);
   }
   assert.equal(alignToCuts(env, 5, []), 5);
+});
+
+test('subtitles: punctuation the word marks dropped comes back from the text', () => {
+  const t = "Open the browser. Nobody's begging, right?";
+  assert.equal(withPunctuation(t, 'browser', 16), 'browser.');
+  assert.equal(withPunctuation(t, "Nobody's", 26), "Nobody's");
+  assert.equal(withPunctuation(t, 'begging', 34), 'begging,');
+  assert.equal(withPunctuation(t, 'right', 41), 'right?');
+  assert.equal(withPunctuation(t, 'x'), 'x');
 });

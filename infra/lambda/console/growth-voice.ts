@@ -40,11 +40,22 @@ export async function wordMarks(text: string, voice: string = VOICE): Promise<{ 
     .decode(await j.AudioStream!.transformToByteArray())
     .split('\n')
     .filter(Boolean)
-    .map((l) => JSON.parse(l) as { time: number; type: string; value: string })
+    .map((l) => JSON.parse(l) as { time: number; type: string; value: string; end?: number })
     .filter((m) => m.type === 'word')
-    .map((m) => ({ w: m.value, t: m.time / 1000 }));
+    .map((m) => ({ w: withPunctuation(text, m.value, m.end), t: m.time / 1000 }));
   const a = await polly.send(new SynthesizeSpeechCommand({ ...base, OutputFormat: 'mp3', SampleRate: '24000' }));
   return { marks, audio: Buffer.from(await a.AudioStream!.transformToByteArray()) };
+}
+
+/**
+ * Polly's word marks drop punctuation ("browser" for "browser."); put back what follows the word in the text
+ * (`end` = the mark's end offset, in bytes, which equals characters for plain English), so chunks break at
+ * sentence ends. Pure.
+ */
+export function withPunctuation(text: string, word: string, end?: number): string {
+  if (end === undefined) return word;
+  const after = /^[.,!?;:…'’"”)]+/.exec(Buffer.from(text, 'utf8').subarray(end).toString('utf8'));
+  return after ? word + after[0].replace(/['’"”)]/g, '') : word;
 }
 
 /** Neural word times → the generative clip's timeline (both clips' lengths in seconds). Pure. */

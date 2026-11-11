@@ -276,9 +276,9 @@ html,body{background:#000}
 .cmp{position:absolute;left:72px;width:936px;height:420px;border-radius:36px;overflow:hidden;box-shadow:0 40px 80px -24px rgba(0,0,0,.7)}
 .cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:50% 50%}
 .pill.big{padding:16px 28px;font-size:36px;background:rgba(0,0,0,.72)}
-#sub{position:absolute;left:72px;right:120px;top:1352px;z-index:999;display:flex;justify-content:center;pointer-events:none}
-#sub span{font:800 58px/1.1 Geist,sans-serif;letter-spacing:-.02em;color:#fff;background:rgba(10,12,18,.72);padding:12px 26px 16px;border-radius:22px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-#sub b{font-weight:800;color:#fff}#sub b.on{color:var(--yellow)}
+#sub{position:absolute!important;left:72px!important;right:120px!important;top:1352px!important;z-index:999!important;display:flex!important;justify-content:center!important;pointer-events:none;transform:none!important}
+#sub>span{display:inline-block!important;font:800 60px/1.1 Geist,sans-serif!important;letter-spacing:-.02em!important;color:#fff!important;background:rgba(10,12,18,.78)!important;padding:12px 26px 16px!important;border-radius:22px!important;text-align:center!important;box-shadow:0 10px 30px rgba(0,0,0,.35)!important;text-shadow:0 2px 6px rgba(0,0,0,.6)!important;opacity:1!important;transform:none!important}
+#sub b{font-weight:800!important;color:#fff!important;background:none!important}#sub b.on{color:var(--yellow)!important}
 </style>
 ${html}
 <div id="sub"></div>
