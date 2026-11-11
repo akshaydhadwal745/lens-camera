@@ -196,6 +196,17 @@ export async function postApprove(id: string, by: string, undo = false): Promise
   return json(200, { post: item });
 }
 
+/** One platform's finished text: the caption, hashtags, link line and credit lines (what Export shows and the publisher posts). */
+export async function platformText(p: Record<string, any>, k: Platform): Promise<{ text: string; altText: string; link: string; title: string }> {
+  const f = postFields({}, p);
+  const v = f.variants[k];
+  if (!v) throw new Error(`The post has no ${k} version`);
+  const lines = credits(f.assets, await loadAssets(f.assets.map((a) => a.id)));
+  const link = platformLink(k, p.code, f.page);
+  const body = postText(v, link, k);
+  return { text: lines.length ? `${body}\n\n${lines.join('\n')}` : body, altText: v.altText, link, title: v.title };
+}
+
 /** GET /growth/posts/<id>/export: ready-to-paste text per platform, for posting by hand. */
 export async function postExport(id: string): Promise<Res> {
   if (!/^[a-f0-9]{10}$/.test(id)) throw new HttpError(400, 'Bad id');

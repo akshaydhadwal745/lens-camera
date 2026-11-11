@@ -185,6 +185,11 @@ export type Post = {
   links?: Record<string, string>;
   problems?: string[];
   published?: Record<string, { url: string; at: number; how: string }>;
+  reel?: { assetId: string; seconds?: number } | null;
+  renders?: { assetId: string; label: string; w: number; h: number }[];
+  schedule?: Record<string, number>;
+  publishing?: Record<string, number>;
+  publishError?: { platform: string; message: string; at: number };
   approvedBy?: string;
   approvedAt?: number;
   createdBy?: string;
