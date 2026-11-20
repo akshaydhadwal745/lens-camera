@@ -982,6 +982,9 @@ async function runContentDraft(t: Task, by: string, started: number) {
 }
 
 /** The draft run (GrowthAnalyst Lambda): fresh code copy → Claude edits it → checks → PR → task In review. */
+/** Failed drafts the content chain tries before it stops and blocks the task. */
+export const MAX_DRAFT_TRIES = 3;
+
 export async function runDraft(opts: { taskId: string; by: string; lockAt?: number }) {
   const lockAt = opts.lockAt ?? (await takeLock(`draft:${opts.by}`, true, Date.now(), opts.taskId));
   if (lockAt === undefined) return { skipped: true };
@@ -1026,9 +1029,15 @@ export async function runDraft(opts: { taskId: string; by: string; lockAt?: numb
   } catch (e) {
     const message = (e as Error).message ?? String(e);
     console.error('growth draft failed', e);
-    await systemUpdate(id, { status: 'ready' }, `Draft stopped: ${message.slice(0, 600)}`).catch(() => {});
+    // The content chain (by "agent") retries a failed draft every 10 minutes; after MAX_DRAFT_TRIES in a row (a removed
+    // or exhausted Claude token fails every time) the task is Blocked until a person retries it.
+    const cur = await getTask(id).catch(() => undefined);
+    const tries = opts.by === 'agent' ? (Number((cur?.spec as Record<string, unknown> | undefined)?.draftTries) || 0) + 1 : 0;
+    const stop = tries >= MAX_DRAFT_TRIES;
+    const spec = cur?.spec ? { ...cur.spec, draftTries: tries } : undefined;
+    await systemUpdate(id, stop ? { status: 'blocked', blockedBy: `Stopped after ${tries} failed tries: ${message.slice(0, 200)}`, ...(spec ? { spec } : {}) } : { status: 'ready', ...(spec ? { spec } : {}) }, `Draft stopped${tries ? ` (try ${tries} of ${MAX_DRAFT_TRIES})` : ''}: ${message.slice(0, 600)}`).catch(() => {});
     await releaseLock(lockAt, `Draft ${id}: ${message}`);
-    await sendToOwners('Lens growth agent could not draft a change', `Task ${id} stopped:\n\n${message.slice(0, 600)}\n\nTry again from ${CONSOLE}/growth/tasks?task=${id}`).catch(() => {});
+    if (!tries || stop) await sendToOwners('Lens growth agent could not draft a change', `Task ${id} stopped${stop ? ` after ${tries} tries; it is Blocked and will not run again by itself` : ''}:\n\n${message.slice(0, 600)}\n\nFix the cause (for example the Claude token), then set it back to Ready from ${CONSOLE}/growth/tasks?task=${id}`).catch(() => {});
     return { error: message };
   }
 }

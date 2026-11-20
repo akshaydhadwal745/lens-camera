@@ -275,7 +275,9 @@ export async function taskUpdate(id: string, req: Req, by: string, role: Role): 
   // Priority follows ICE unless a lead set it explicitly.
   if (f.priority === undefined && (f.impact || f.confidence || f.effortHours !== undefined)) f.priority = priorityOf(f.impact ?? t.impact, f.confidence ?? t.confidence, f.effortHours ?? t.effortHours);
   const now = Date.now();
-  const next: Task = { ...t, ...f, status: to, updatedAt: now, ...(to === 'done' && t.status !== 'done' ? { doneAt: now } : {}), ...(to === 'measured' ? { measuredAt: now } : {}) };
+  // A person moving a blocked task back to Ready starts the agent's draft tries over (growth.ts MAX_DRAFT_TRIES).
+  const reset = t.status === 'blocked' && to === 'ready' && t.spec && 'draftTries' in t.spec ? { spec: { ...t.spec, draftTries: 0 } } : {};
+  const next: Task = { ...t, ...f, ...reset, status: to, updatedAt: now, ...(to === 'done' && t.status !== 'done' ? { doneAt: now } : {}), ...(to === 'measured' ? { measuredAt: now } : {}) };
   const changes = Object.fromEntries(Object.keys({ ...f, status: to }).filter((k) => JSON.stringify((t as any)[k]) !== JSON.stringify((next as any)[k])).map((k) => [k, [(t as any)[k], (next as any)[k]]])) as Record<string, [unknown, unknown]>;
   if (!Object.keys(changes).length) return json(200, { task: t });
   await saveTask(next);
